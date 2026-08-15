@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChatPage } from './components/chat/ChatPage';
 import { MemoriesPage } from './components/memories/MemoriesPage';
+import { Character } from './components/characters/Character';
+import { signalCharacters } from './components/characters/characterConfig';
 import type { Memory, Message } from './types';
 import { isSameMonthDay } from './utils/dates';
 import { loadMemories, loadMessages, saveMemories, saveMessages } from './utils/storage';
@@ -82,19 +84,21 @@ function App() {
 
 function AuthFlow({ step, setStep }: { step: Exclude<Access, 'app'>; setStep: (value: Access) => void }) {
   const [code, setCode] = useState('');
+  const [connected, setConnected] = useState(false);
   if (step === 'connect') {
+    if (connected) return <div className="app-shell auth-shell connect-success"><Wordmark /><Character mood="love" size="hero" /><div><p className="overline">WE ARE CONNECTED</p><h1>우리 사이가<br />연결됐어요 <span>💜</span></h1><p>이제 둘만의 공간을<br />함께 만들어보세요.</p></div><button className="primary" onClick={() => setStep('app')}>사이 시작하기</button></div>;
     return (
       <div className="app-shell auth-shell">
         <Wordmark />
-        <div className="connect-visual"><div className="person">민</div><span>사이</span><div className="person pale">?</div></div>
+        <div className="connect-character"><Character mood="default" size="medium" /></div>
         <div className="auth-card">
           <p className="overline">ONLY FOR TWO</p><h1>우리 사이를<br />연결해요</h1>
           <p>초대 코드를 공유하거나, 받은 코드를 입력하세요.</p>
           <div className="invite-code"><span>내 초대 코드</span><strong>SAI-2406</strong><button onClick={() => navigator.clipboard?.writeText('SAI-2406')}><Copy size={14} /> 복사</button></div>
           <div className="divider"><span>또는</span></div>
           <label>받은 초대 코드<input value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} placeholder="예: SAI-1234" /></label>
-          <button className="primary" onClick={() => setStep('app')} disabled={!code}>연결하고 시작하기</button>
-          <button className="text-button" onClick={() => setStep('app')}>데모로 둘러보기</button>
+          <button className="primary" onClick={() => setConnected(true)} disabled={!code}>우리 사이 연결하기</button>
+          <button className="text-button" onClick={() => setConnected(true)}>연결 화면 미리보기</button>
         </div>
         <div className="privacy"><LockKeyhole size={14} /> 코드는 한 번만 사용할 수 있어요</div>
       </div>
@@ -104,7 +108,7 @@ function AuthFlow({ step, setStep }: { step: Exclude<Access, 'app'>; setStep: (v
   const signup = step === 'signup';
   return (
     <div className="app-shell auth-shell">
-      <div className="auth-hero"><Wordmark /><div className="window-mark"><span /><span /></div><h1>우리 사이의 이야기가<br />머무는 작은 창구</h1><p>대화하고, 기억하고,<br />둘만의 시간을 이어가요.</p></div>
+      <div className="auth-hero"><Wordmark /><Character mood="default" size="medium" /><h1>사이</h1><b>우리 둘만의 공간</b><p>너와 나 사이의 모든 순간을 담는<br />둘만의 작은 창구예요.</p></div>
       <form className="auth-card" onSubmit={(event) => { event.preventDefault(); setStep(signup ? 'connect' : 'app'); }}>
         <p className="overline">{signup ? 'WELCOME TO SAI' : 'WELCOME BACK'}</p><h2>{signup ? '사이를 시작해볼까요?' : '다시 만나 반가워요'}</h2>
         {signup && <label>이름<input required placeholder="이름을 입력하세요" /></label>}
@@ -130,19 +134,25 @@ function HomePage({ coupleDay, anniversaries, memories, onNavigate, onOpenMemory
   const nearest = anniversaries[0];
   const latestMemory = memories[0];
   const onThisDay = memories.find((memory) => isSameMonthDay(memory.date));
+  const [signal, setSignal] = useState<{ label: string; mood: (typeof signalCharacters)[keyof typeof signalCharacters] }>();
+  const signals = [{ key: 'miss', label: '보고 싶어', icon: '💜' }, { key: 'love', label: '사랑해', icon: '💕' }, { key: 'hug', label: '안아줘', icon: '🤗' }, { key: 'cheer', label: '힘내', icon: '✨' }] as const;
+  const sendSignal = (item: typeof signals[number]) => { setSignal({ label: item.label, mood: signalCharacters[item.key] }); window.setTimeout(() => setSignal(undefined), 2400); };
   return (
     <div className="page home-page">
       <Header />
-      <section className="hero"><p className="hero-kicker">2024. 06. 01부터</p><h1>민준 <span>×</span> 서연</h1><p className="hero-day">우리의 <strong>{coupleDay}번째 날</strong></p><span className="d-day">D+{coupleDay}</span></section>
+      <section className="hero character-hero"><div className="hero-copy"><p className="hero-kicker">2024. 06. 01부터</p><h1>민준 <span>×</span> 서연</h1><p className="hero-day">우리의 <strong>{coupleDay}번째 날</strong></p><span className="d-day">D+{coupleDay}</span></div><Character mood={signal?.mood ?? 'default'} size="hero" /><p className="hero-message">오늘도 우리 사이 <span>💜</span></p></section>
+      <section className="section daily-sai"><SectionHead eyebrow="OUR MOOD" title="오늘의 사이" action="내 기분 남기기" onClick={() => setSignal({ label: '기분 좋아', mood: 'cheer' })} /><div className="mood-card"><div><Character kind="sa" size="small" /><b>민준</b><span>기분 좋아 😊</span></div><span className="mood-line">사이</span><div><Character kind="i" size="small" /><b>서연</b><span>평온해 😌</span></div></div></section>
+      <section className="section quick-signals"><div className="section-head"><div><small>QUICK SIGNAL</small><h2>마음을 톡 보내볼까요?</h2></div></div><div>{signals.map((item) => <button key={item.key} onClick={() => sendSignal(item)}><span>{item.icon}</span>{item.label}</button>)}</div></section>
       <section className="section anniversary-preview">
         <SectionHead eyebrow="NEXT MOMENT" title="다가오는 우리 날" action="모두 보기" onClick={() => onNavigate('anniversary')} />
-        {nearest ? <button className="next-card" onClick={() => onNavigate('anniversary')}><div className="event-icon">{nearest.icon}</div><div><span>{formatDate(nearest.date)}</span><h3>{nearest.title}</h3><strong>{daysUntil(nearest.date)}일 남았어요</strong></div><ChevronRight size={20} /></button> : <button className="empty-card" onClick={() => onNavigate('anniversary')}><Plus size={18} />우리만의 특별한 날을 등록해보세요</button>}
+        {nearest ? <button className="next-card character-next" onClick={() => onNavigate('anniversary')}><div className="event-icon">{nearest.icon}</div><div><span>{formatDate(nearest.date)}</span><h3>{nearest.title}</h3><strong>{daysUntil(nearest.date)}일 남았어요</strong></div><Character mood="anniversary" size="small" /><ChevronRight size={20} /></button> : <button className="empty-card" onClick={() => onNavigate('anniversary')}><Character mood="anniversary" size="small" /><span>우리만의 특별한 날을 등록해보세요</span><Plus size={18} /></button>}
         <div className="mini-events">{anniversaries.slice(1, 3).map((event) => <button key={event.id} onClick={() => onNavigate('anniversary')}><span>{event.icon} {event.title}</span><b>D-{daysUntil(event.date)}</b></button>)}</div>
       </section>
-      {onThisDay && <section className="section on-this-day"><SectionHead eyebrow="ON THIS DAY" title="1년 전 오늘" action="열어보기" onClick={() => onOpenMemory(onThisDay.id)} /><button onClick={() => onOpenMemory(onThisDay.id)}><img src={onThisDay.images[0]} alt="" /><div><h3>{onThisDay.title}</h3><p>{onThisDay.description}</p></div><ChevronRight size={18} /></button></section>}
+      {onThisDay && <section className="section on-this-day"><SectionHead eyebrow="ON THIS DAY" title="1년 전 오늘 ✨" action="열어보기" onClick={() => onOpenMemory(onThisDay.id)} /><button onClick={() => onOpenMemory(onThisDay.id)}><img src={onThisDay.images[0]} alt="" /><div><h3>{onThisDay.title}</h3><p>{onThisDay.description}</p></div><Character mood="memory" size="avatar" /><ChevronRight size={18} /></button></section>}
       {latestMemory && <section className="section"><SectionHead eyebrow="OUR MOMENTS" title="최근 추억" action="전체 보기" onClick={() => onNavigate('memories')} /><button className="memory-feature" onClick={() => onOpenMemory(latestMemory.id)}><img src={latestMemory.images[0]} alt={latestMemory.title} /><div className="image-shade" /><div className="memory-copy"><span>{latestMemory.date.replaceAll('-', '. ')}</span><h3>{latestMemory.title}</h3><p>{latestMemory.description}</p></div><span className="round-button"><Image size={18} /></span></button></section>}
       <section className="section"><SectionHead eyebrow="JUST NOW" title="최근 메시지" action="채팅 열기" onClick={() => onNavigate('chat')} /><button className="recent-message" onClick={() => onNavigate('chat')}><div className="avatar">서</div><div><div><b>서연</b><span>오후 8:46</span></div><p>그럼 조금 있다가 전화하자!</p></div><ChevronRight size={19} /></button></section>
       <div className="privacy"><LockKeyhole size={14} /> 이 공간은 오직 두 사람에게만 보여요</div>
+      {signal && <div className="signal-toast" role="status"><Character mood={signal.mood} size="avatar" /><span>서연에게 “{signal.label}”를 보냈어요 💜</span></div>}
     </div>
   );
 }
@@ -152,7 +162,7 @@ function SectionHead({ eyebrow, title, action, onClick }: { eyebrow: string; tit
 }
 
 function AnniversaryPage({ coupleDay, anniversaries }: { coupleDay: number; anniversaries: Anniversary[] }) {
-  return <div className="page"><Header title="기념일" /><div className="title-block"><small>OUR DAYS</small><h1>함께 기다리는 날</h1><p>둘 사이의 소중한 시간을 잊지 않도록.</p></div><div className="anniversary-card"><div className="rings"><Heart fill="currentColor" /></div><span>우리의 시간</span><strong>{coupleDay}번째 날</strong><p>2024. 06. 01부터 · D+{coupleDay}</p></div><div className="section-head upcoming"><h2>다가오는 기념일</h2><button><Plus size={16} />추가</button></div><div className="event-list">{anniversaries.map((event) => <button className="event" key={event.id}><div className="event-icon">{event.icon}</div><div><b>{event.title}</b><span>{formatDate(event.date)}</span></div><em>D-{daysUntil(event.date)}</em><ChevronRight size={17} /></button>)}</div></div>;
+  return <div className="page"><Header title="기념일" /><div className="title-block"><small>OUR DAYS</small><h1>함께 기다리는 날</h1><p>둘 사이의 소중한 시간을 잊지 않도록.</p></div><div className="anniversary-card"><Character mood="anniversary" size="small" /><div><span>우리의 시간</span><strong>{coupleDay}번째 날</strong><p>2024. 06. 01부터 · D+{coupleDay}</p></div></div><div className="section-head upcoming"><h2>다가오는 기념일</h2><button><Plus size={16} />추가</button></div>{anniversaries.length ? <div className="event-list">{anniversaries.map((event) => <button className="event" key={event.id}><div className="event-icon">{event.icon}</div><div><b>{event.title}</b><span>{formatDate(event.date)}</span></div><em>D-{daysUntil(event.date)}</em><ChevronRight size={17} /></button>)}</div> : <div className="character-empty"><Character mood="anniversary" size="medium" /><h3>우리만의 특별한 날을<br />등록해보세요.</h3><button><Plus size={17} />기념일 추가</button></div>}</div>;
 }
 
 function BottomNav({ tab, setTab }: { tab: Tab; setTab: (tab: Tab) => void }) {

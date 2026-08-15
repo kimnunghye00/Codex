@@ -2,6 +2,7 @@ import { Bookmark, CornerUpLeft, Image as ImageIcon } from 'lucide-react';
 import type { Message } from '../../types';
 import { messageTime } from '../../utils/dates';
 import { ReactionPicker } from './ReactionPicker';
+import { Character } from '../characters/Character';
 
 export function ChatBubble({ message, reply, active, highlighted, onAction, onReact, onReply, onSave, onImage, onJump }: {
   message: Message; reply?: Message; active: boolean; highlighted: boolean;
@@ -10,7 +11,7 @@ export function ChatBubble({ message, reply, active, highlighted, onAction, onRe
 }) {
   const mine = message.sender === 'me';
   return <div id={`message-${message.id}`} className={`bubble-row ${mine ? 'mine' : ''} ${highlighted ? 'highlighted' : ''}`}>
-    {!mine && <div className="avatar tiny">서</div>}
+    {!mine && <div className="character-avatar tiny"><Character kind="i" size="avatar" /></div>}
     <div className="message-wrap">
       {active && <><ReactionPicker onSelect={onReact} /><div className="message-actions"><button onClick={onReply}><CornerUpLeft size={14} />답장</button><button onClick={onSave}>{message.saved ? <Bookmark size={14} fill="currentColor" /> : <Bookmark size={14} />} {message.saved ? '저장 취소' : '추억으로 저장'}</button></div></>}
       <button type="button" className="bubble" onClick={(event) => { event.stopPropagation(); onAction(); }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); onAction(); }}>
