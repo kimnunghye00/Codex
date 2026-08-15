@@ -24,8 +24,6 @@ npm run dev
 - 과거 같은 날짜의 추억을 홈에 보여주는 `1년 전 오늘`
 - 전체 기념일과 남은 날짜 목록
 - 모바일 하단 탭 내비게이션과 데스크톱 앱 프레임
-- 수달 캐릭터 `사(SA)`와 `이(I)`를 활용한 브랜드 Hero, 상태·빈 화면, 연결 완료 경험
-- 데모 토스트와 캐릭터 상태 매핑을 포함한 빠른 신호 UI 및 `오늘의 사이` 기분 영역
 
 현재 인증·초대는 핵심 경험 검증을 위한 클라이언트 데모입니다. 채팅과 추억은 브라우저 `localStorage`에 저장되지만, 실제 계정 간 동기화와 서버 기반 실시간 통신은 백엔드 연동이 필요합니다.
 
@@ -35,19 +33,13 @@ npm run dev
 src/
 ├── components/
 │   ├── chat/     # 채팅 버블, 작성창, 반응 선택과 채팅 화면
-│   ├── characters/ # 캐릭터 렌더러와 상태별 asset 설정
 │   └── memories/ # 추억 카드, 폼, 상세 화면과 목록
-├── assets/characters/ # 사, 이, 커플 캐릭터 SVG placeholder
 ├── utils/        # 날짜 표시와 localStorage 저장 어댑터
 ├── App.tsx       # 앱 화면 전환, 홈과 기념일
 ├── types.ts      # 채팅과 추억 도메인 타입
 ├── main.tsx      # React 진입점
 └── styles.css    # 사이 브랜드 디자인 토큰과 반응형 스타일
 ```
-
-## 캐릭터 asset 교체
-
-현재 캐릭터는 외부 이미지를 사용하지 않는 교체 가능한 SVG placeholder입니다. 실제 PNG/WebP가 준비되면 `src/assets/characters/sa`, `src/assets/characters/i`, `src/assets/characters/couple`에 추가하고 `src/components/characters/characterConfig.ts`의 import만 변경하면 됩니다. 상태별 파일명은 `couple-love`, `couple-miss`, `couple-hug`, `couple-cheer`, `couple-anniversary`, `couple-memory` 형식을 사용합니다.
 
 ## 보안 설계 (백엔드 연동 시 필수)
 
