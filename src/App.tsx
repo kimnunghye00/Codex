@@ -1,21 +1,29 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { ChatPage } from './components/chat/ChatPage';
+import { MemoriesPage } from './components/memories/MemoriesPage';
+import type { Memory, Message } from './types';
+import { isSameMonthDay } from './utils/dates';
+import { loadMemories, loadMessages, saveMemories, saveMessages } from './utils/storage';
 import {
-  Bell, CalendarDays, Camera, ChevronRight, Copy, Heart, Home,
-  Image, LockKeyhole, MessageCircle, MoreHorizontal, Plus, Send, Settings,
+  Bell, CalendarDays, ChevronRight, Copy, Heart, Home,
+  Image, LockKeyhole, MessageCircle, Plus, Settings,
 } from 'lucide-react';
 
 type Tab = 'home' | 'chat' | 'memories' | 'anniversary';
 type Access = 'login' | 'signup' | 'connect' | 'app';
-type Memory = { id: number; date: string; title: string; note: string; image: string };
-type Message = { id: number; text: string; mine: boolean; time: string };
 type Anniversary = { id: number; icon: string; title: string; date: Date; recurring?: boolean };
 
 const DAY = 86_400_000;
 const startDate = new Date(2024, 5, 1);
 const initialMemories: Memory[] = [
-  { id: 1, date: '8월 11일', title: '여름날의 산책', note: '노을이 예뻤던 한강에서', image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=900&q=80' },
-  { id: 2, date: '8월 3일', title: '우리의 작은 휴가', note: '비가 와도 좋았던 하루', image: 'https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=900&q=80' },
-  { id: 3, date: '7월 20일', title: '좋아하는 카페', note: '다음엔 창가 자리에 앉자', image: 'https://images.unsplash.com/photo-1445116572660-236099ec97a0?auto=format&fit=crop&w=900&q=80' },
+  { id: 1, date: '2026-08-11', title: '여름날의 산책', description: '노을이 예뻤던 한강에서 오래 걸었던 날.', images: ['https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=900&q=80'], location: '강릉 경포해변', tags: ['여행', '산책'], createdBy: 'me', favorite: true },
+  { id: 2, date: '2026-08-03', title: '우리의 작은 휴가', description: '비가 와도 좋았던 하루.', images: ['https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=900&q=80'], location: '제주', tags: ['여행'], createdBy: 'partner' },
+  { id: 3, date: '2025-08-15', title: '서울숲에서', description: '처음 같이 피크닉 갔던 날. 그늘 아래서 오래 이야기했다.', images: ['https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80'], location: '서울숲', tags: ['피크닉', '오늘의추억'], createdBy: 'me' },
+];
+const initialMessages: Message[] = [
+  { id: 1, sender: 'partner', type: 'text', text: '오늘 하루는 어땠어?', timestamp: '2026-08-14T20:42:00', read: true },
+  { id: 2, sender: 'me', type: 'text', text: '바빴지만 이제 네 목소리 들으면 괜찮을 것 같아', timestamp: '2026-08-14T20:45:00', read: true, reactions: [{ emoji: '❤️', by: 'partner' }] },
+  { id: 3, sender: 'partner', type: 'text', text: '그럼 조금 있다가 전화하자!', timestamp: '2026-08-15T20:46:00', read: true },
 ];
 
 function atMidnight(date = new Date()) {
@@ -50,27 +58,21 @@ function formatDate(date: Date) {
 function App() {
   const [access, setAccess] = useState<Access>('login');
   const [tab, setTab] = useState<Tab>('home');
-  const [messages, setMessages] = useState<Message[]>([
-    { id: 1, text: '오늘 하루는 어땠어?', mine: false, time: '오후 8:42' },
-    { id: 2, text: '바빴지만 이제 네 목소리 들으면 괜찮을 것 같아', mine: true, time: '오후 8:45' },
-    { id: 3, text: '그럼 조금 있다가 전화하자!', mine: false, time: '오후 8:46' },
-  ]);
-  const [draft, setDraft] = useState('');
+  const [messages, setMessages] = useState<Message[]>(() => loadMessages(initialMessages));
+  const [memories, setMemories] = useState<Memory[]>(() => loadMemories(initialMemories));
+  const [memoryToOpen, setMemoryToOpen] = useState<number>();
   const coupleDay = useMemo(() => Math.floor((atMidnight().getTime() - startDate.getTime()) / DAY) + 1, []);
   const anniversaries = useMemo(() => upcomingAnniversaries(), []);
-  const send = () => {
-    if (!draft.trim()) return;
-    setMessages((items) => [...items, { id: Date.now(), text: draft.trim(), mine: true, time: '지금' }]);
-    setDraft('');
-  };
+  useEffect(() => saveMessages(messages), [messages]);
+  useEffect(() => saveMemories(memories), [memories]);
 
   if (access !== 'app') return <AuthFlow step={access} setStep={setAccess} />;
   return (
     <div className="app-shell">
       <main>
-        {tab === 'home' && <HomePage coupleDay={coupleDay} anniversaries={anniversaries} onNavigate={setTab} />}
-        {tab === 'chat' && <ChatPage messages={messages} draft={draft} setDraft={setDraft} send={send} />}
-        {tab === 'memories' && <MemoriesPage />}
+        {tab === 'home' && <HomePage coupleDay={coupleDay} anniversaries={anniversaries} memories={memories} onNavigate={setTab} onOpenMemory={(id) => { setMemoryToOpen(id); setTab('memories'); }} />}
+        {tab === 'chat' && <ChatPage Header={Header} messages={messages} setMessages={setMessages} />}
+        {tab === 'memories' && <MemoriesPage Header={Header} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} onClearInitial={() => setMemoryToOpen(undefined)} />}
         {tab === 'anniversary' && <AnniversaryPage coupleDay={coupleDay} anniversaries={anniversaries} />}
       </main>
       <BottomNav tab={tab} setTab={setTab} />
@@ -124,8 +126,10 @@ function Header({ title }: { title?: string }) {
   return <header className="topbar"><div className="brand"><Wordmark />{title && <span className="page-title">{title}</span>}</div><div className="header-actions"><button aria-label="알림"><Bell size={20} /><i /></button><button aria-label="설정"><Settings size={20} /></button></div></header>;
 }
 
-function HomePage({ coupleDay, anniversaries, onNavigate }: { coupleDay: number; anniversaries: Anniversary[]; onNavigate: (tab: Tab) => void }) {
+function HomePage({ coupleDay, anniversaries, memories, onNavigate, onOpenMemory }: { coupleDay: number; anniversaries: Anniversary[]; memories: Memory[]; onNavigate: (tab: Tab) => void; onOpenMemory: (id: number) => void }) {
   const nearest = anniversaries[0];
+  const latestMemory = memories[0];
+  const onThisDay = memories.find((memory) => isSameMonthDay(memory.date));
   return (
     <div className="page home-page">
       <Header />
@@ -135,7 +139,8 @@ function HomePage({ coupleDay, anniversaries, onNavigate }: { coupleDay: number;
         {nearest ? <button className="next-card" onClick={() => onNavigate('anniversary')}><div className="event-icon">{nearest.icon}</div><div><span>{formatDate(nearest.date)}</span><h3>{nearest.title}</h3><strong>{daysUntil(nearest.date)}일 남았어요</strong></div><ChevronRight size={20} /></button> : <button className="empty-card" onClick={() => onNavigate('anniversary')}><Plus size={18} />우리만의 특별한 날을 등록해보세요</button>}
         <div className="mini-events">{anniversaries.slice(1, 3).map((event) => <button key={event.id} onClick={() => onNavigate('anniversary')}><span>{event.icon} {event.title}</span><b>D-{daysUntil(event.date)}</b></button>)}</div>
       </section>
-      <section className="section"><SectionHead eyebrow="OUR MOMENTS" title="최근 추억" action="전체 보기" onClick={() => onNavigate('memories')} /><button className="memory-feature" onClick={() => onNavigate('memories')}><img src={initialMemories[0].image} alt="여름 바다의 추억" /><div className="image-shade" /><div className="memory-copy"><span>{initialMemories[0].date}</span><h3>{initialMemories[0].title}</h3><p>{initialMemories[0].note}</p></div><span className="round-button"><Image size={18} /></span></button></section>
+      {onThisDay && <section className="section on-this-day"><SectionHead eyebrow="ON THIS DAY" title="1년 전 오늘" action="열어보기" onClick={() => onOpenMemory(onThisDay.id)} /><button onClick={() => onOpenMemory(onThisDay.id)}><img src={onThisDay.images[0]} alt="" /><div><h3>{onThisDay.title}</h3><p>{onThisDay.description}</p></div><ChevronRight size={18} /></button></section>}
+      {latestMemory && <section className="section"><SectionHead eyebrow="OUR MOMENTS" title="최근 추억" action="전체 보기" onClick={() => onNavigate('memories')} /><button className="memory-feature" onClick={() => onOpenMemory(latestMemory.id)}><img src={latestMemory.images[0]} alt={latestMemory.title} /><div className="image-shade" /><div className="memory-copy"><span>{latestMemory.date.replaceAll('-', '. ')}</span><h3>{latestMemory.title}</h3><p>{latestMemory.description}</p></div><span className="round-button"><Image size={18} /></span></button></section>}
       <section className="section"><SectionHead eyebrow="JUST NOW" title="최근 메시지" action="채팅 열기" onClick={() => onNavigate('chat')} /><button className="recent-message" onClick={() => onNavigate('chat')}><div className="avatar">서</div><div><div><b>서연</b><span>오후 8:46</span></div><p>그럼 조금 있다가 전화하자!</p></div><ChevronRight size={19} /></button></section>
       <div className="privacy"><LockKeyhole size={14} /> 이 공간은 오직 두 사람에게만 보여요</div>
     </div>
@@ -144,14 +149,6 @@ function HomePage({ coupleDay, anniversaries, onNavigate }: { coupleDay: number;
 
 function SectionHead({ eyebrow, title, action, onClick }: { eyebrow: string; title: string; action: string; onClick: () => void }) {
   return <div className="section-head"><div><small>{eyebrow}</small><h2>{title}</h2></div><button onClick={onClick}>{action}<ChevronRight size={15} /></button></div>;
-}
-
-function ChatPage({ messages, draft, setDraft, send }: { messages: Message[]; draft: string; setDraft: (value: string) => void; send: () => void }) {
-  return <div className="page full-page"><Header title="대화" /><div className="chat-profile"><div className="avatar large">서</div><div><b>서연</b><span><i /> 지금 함께 있어요</span></div><button aria-label="대화 메뉴"><MoreHorizontal /></button></div><div className="messages"><div className="date-chip">오늘</div>{messages.map((message) => <div className={`bubble-row ${message.mine ? 'mine' : ''}`} key={message.id}>{!message.mine && <div className="avatar tiny">서</div>}<div className="bubble">{message.text}<time>{message.time}</time></div></div>)}</div><div className="composer"><button aria-label="사진 추가"><Plus /></button><input value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && send()} placeholder="메시지를 입력하세요" /><button className="send" onClick={send} aria-label="보내기"><Send size={18} /></button></div></div>;
-}
-
-function MemoriesPage() {
-  return <div className="page"><Header title="추억" /><div className="title-block"><small>BETWEEN US</small><h1>우리 사이의 순간들</h1><p>오래 기억하고 싶은 날을 차곡차곡 남겨요.</p></div><div className="memory-grid">{initialMemories.map((memory, index) => <article className={index === 0 ? 'wide' : ''} key={memory.id}><img src={memory.image} alt={memory.title} /><div className="image-shade" /><div><span>{memory.date}</span><h3>{memory.title}</h3>{index === 0 && <p>{memory.note}</p>}</div></article>)}</div><button className="fab"><Camera size={18} /> 추억 남기기</button></div>;
 }
 
 function AnniversaryPage({ coupleDay, anniversaries }: { coupleDay: number; anniversaries: Anniversary[] }) {
