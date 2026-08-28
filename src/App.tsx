@@ -1,16 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChatPage } from './components/chat/ChatPage';
 import { MemoriesPage } from './components/memories/MemoriesPage';
+import { AccountSettings } from './components/auth/AccountSettings';
+import { AuthFlow, Wordmark } from './components/auth/AuthFlow';
+import { auth } from './lib/firebase';
+import { onAuthStateChanged, type User } from 'firebase/auth';
 import type { Memory, Message } from './types';
 import { isSameMonthDay } from './utils/dates';
 import { loadMemories, loadMessages, saveMemories, saveMessages } from './utils/storage';
 import {
-  Bell, CalendarDays, ChevronRight, Copy, Heart, Home,
+  Bell, CalendarDays, ChevronRight, Heart, Home,
   Image, LockKeyhole, MessageCircle, Plus, Settings,
 } from 'lucide-react';
 
 type Tab = 'home' | 'chat' | 'memories' | 'anniversary';
-type Access = 'login' | 'signup' | 'connect' | 'app';
 type Anniversary = { id: number; icon: string; title: string; date: Date; recurring?: boolean };
 
 const DAY = 86_400_000;
@@ -56,83 +59,49 @@ function formatDate(date: Date) {
 }
 
 function App() {
-  const [access, setAccess] = useState<Access>('login');
+  const [user, setUser] = useState<User | null>(auth.currentUser);
+  const [authReady, setAuthReady] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('home');
   const [messages, setMessages] = useState<Message[]>(() => loadMessages(initialMessages));
   const [memories, setMemories] = useState<Memory[]>(() => loadMemories(initialMemories));
   const [memoryToOpen, setMemoryToOpen] = useState<number>();
   const coupleDay = useMemo(() => Math.floor((atMidnight().getTime() - startDate.getTime()) / DAY) + 1, []);
   const anniversaries = useMemo(() => upcomingAnniversaries(), []);
+  useEffect(() => onAuthStateChanged(auth, (nextUser) => { setUser(nextUser); setAuthReady(true); }), []);
   useEffect(() => saveMessages(messages), [messages]);
   useEffect(() => saveMemories(memories), [memories]);
 
-  if (access !== 'app') return <AuthFlow step={access} setStep={setAccess} />;
+  if (!authReady) return <div className="app-shell auth-loading"><Wordmark /><div className="loading-mark" /><p>MELUNI를 준비하고 있어요</p></div>;
+  if (!user) return <AuthFlow />;
+  const AppHeader = ({ title }: { title?: string }) => <Header title={title} onSettings={() => setSettingsOpen(true)} />;
   return (
-    <div className="app-shell">
-      <main>
-        {tab === 'home' && <HomePage coupleDay={coupleDay} anniversaries={anniversaries} memories={memories} onNavigate={setTab} onOpenMemory={(id) => { setMemoryToOpen(id); setTab('memories'); }} />}
-        {tab === 'chat' && <ChatPage Header={Header} messages={messages} setMessages={setMessages} />}
-        {tab === 'memories' && <MemoriesPage Header={Header} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} onClearInitial={() => setMemoryToOpen(undefined)} />}
-        {tab === 'anniversary' && <AnniversaryPage coupleDay={coupleDay} anniversaries={anniversaries} />}
-      </main>
-      <BottomNav tab={tab} setTab={setTab} />
-    </div>
-  );
-}
-
-function AuthFlow({ step, setStep }: { step: Exclude<Access, 'app'>; setStep: (value: Access) => void }) {
-  const [code, setCode] = useState('');
-  if (step === 'connect') {
-    return (
-      <div className="app-shell auth-shell">
-        <Wordmark />
-        <div className="connect-visual"><div className="person">민</div><span>MU</span><div className="person pale">?</div></div>
-        <div className="auth-card">
-          <p className="overline">ONLY FOR TWO</p><h1>우리 둘을<br />연결해요</h1>
-          <p>초대 코드를 공유하거나, 받은 코드를 입력하세요.</p>
-          <div className="invite-code"><span>내 초대 코드</span><strong>MU-2406</strong><button onClick={() => navigator.clipboard?.writeText('MU-2406')}><Copy size={14} /> 복사</button></div>
-          <div className="divider"><span>또는</span></div>
-          <label>받은 초대 코드<input value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} placeholder="예: MU-1234" /></label>
-          <button className="primary" onClick={() => setStep('app')} disabled={!code}>연결하고 시작하기</button>
-          <button className="text-button" onClick={() => setStep('app')}>데모로 둘러보기</button>
-        </div>
-        <div className="privacy"><LockKeyhole size={14} /> 코드는 한 번만 사용할 수 있어요</div>
+    <>
+      <div className="app-shell">
+        <main>
+          {tab === 'home' && <HomePage coupleDay={coupleDay} anniversaries={anniversaries} memories={memories} onNavigate={setTab} onOpenMemory={(id) => { setMemoryToOpen(id); setTab('memories'); }} onSettings={() => setSettingsOpen(true)} />}
+          {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} />}
+          {tab === 'memories' && <MemoriesPage Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} onClearInitial={() => setMemoryToOpen(undefined)} />}
+          {tab === 'anniversary' && <AnniversaryPage coupleDay={coupleDay} anniversaries={anniversaries} onSettings={() => setSettingsOpen(true)} />}
+        </main>
+        <BottomNav tab={tab} setTab={setTab} />
       </div>
-    );
-  }
-
-  const signup = step === 'signup';
-  return (
-    <div className="app-shell auth-shell">
-      <div className="auth-hero"><Wordmark /><div className="window-mark"><span /><span /></div><h1>우리 둘의 이야기가<br />머무는 작은 공간</h1><p>대화하고, 기억하고,<br />둘만의 시간을 이어가요.</p></div>
-      <form className="auth-card" onSubmit={(event) => { event.preventDefault(); setStep(signup ? 'connect' : 'app'); }}>
-        <p className="overline">{signup ? 'WELCOME TO MELUNI' : 'WELCOME BACK'}</p><h2>{signup ? '우리의 공간을 시작해볼까요?' : '다시 만나 반가워요'}</h2>
-        {signup && <label>이름<input required placeholder="이름을 입력하세요" /></label>}
-        <label>이메일<input required type="email" placeholder="hello@example.com" /></label>
-        <label>비밀번호<input required type="password" minLength={6} placeholder="6자 이상 입력하세요" /></label>
-        <button className="primary" type="submit">{signup ? '가입하고 연결하기' : '로그인'}</button>
-        <p className="switch">{signup ? '이미 계정이 있나요?' : 'MELUNI가 처음인가요?'} <button type="button" onClick={() => setStep(signup ? 'login' : 'signup')}>{signup ? '로그인' : '회원가입'}</button></p>
-        <button className="text-button" type="button" onClick={() => setStep('connect')}>초대 코드 화면 미리보기</button>
-      </form>
-    </div>
+      {settingsOpen && <AccountSettings user={user} onClose={() => setSettingsOpen(false)} />}
+    </>
   );
 }
 
-function Wordmark() {
-  return <div className="wordmark"><strong>MELUNI.</strong><span>ME + U</span></div>;
+function Header({ title, onSettings }: { title?: string; onSettings: () => void }) {
+  return <header className="topbar"><div className="brand"><Wordmark />{title && <span className="page-title">{title}</span>}</div><div className="header-actions"><button aria-label="알림"><Bell size={20} /><i /></button><button aria-label="설정" onClick={onSettings}><Settings size={20} /></button></div></header>;
 }
 
-function Header({ title }: { title?: string }) {
-  return <header className="topbar"><div className="brand"><Wordmark />{title && <span className="page-title">{title}</span>}</div><div className="header-actions"><button aria-label="알림"><Bell size={20} /><i /></button><button aria-label="설정"><Settings size={20} /></button></div></header>;
-}
-
-function HomePage({ coupleDay, anniversaries, memories, onNavigate, onOpenMemory }: { coupleDay: number; anniversaries: Anniversary[]; memories: Memory[]; onNavigate: (tab: Tab) => void; onOpenMemory: (id: number) => void }) {
+function HomePage({ coupleDay, anniversaries, memories, onNavigate, onOpenMemory, onSettings }: { coupleDay: number; anniversaries: Anniversary[]; memories: Memory[]; onNavigate: (tab: Tab) => void; onOpenMemory: (id: number) => void; onSettings: () => void }) {
   const nearest = anniversaries[0];
   const latestMemory = memories[0];
   const onThisDay = memories.find((memory) => isSameMonthDay(memory.date));
   return (
     <div className="page home-page">
-      <Header />
+      <Header onSettings={onSettings} />
       <section className="hero"><p className="hero-kicker">2024. 06. 01부터</p><h1>민준 <span>×</span> 서연</h1><p className="hero-day">우리의 <strong>{coupleDay}번째 날</strong></p><span className="d-day">D+{coupleDay}</span></section>
       <section className="section anniversary-preview">
         <SectionHead eyebrow="NEXT MOMENT" title="다가오는 우리 날" action="모두 보기" onClick={() => onNavigate('anniversary')} />
@@ -151,8 +120,8 @@ function SectionHead({ eyebrow, title, action, onClick }: { eyebrow: string; tit
   return <div className="section-head"><div><small>{eyebrow}</small><h2>{title}</h2></div><button onClick={onClick}>{action}<ChevronRight size={15} /></button></div>;
 }
 
-function AnniversaryPage({ coupleDay, anniversaries }: { coupleDay: number; anniversaries: Anniversary[] }) {
-  return <div className="page"><Header title="기념일" /><div className="title-block"><small>OUR DAYS</small><h1>함께 기다리는 날</h1><p>우리 둘의 소중한 시간을 잊지 않도록.</p></div><div className="anniversary-card"><div className="rings"><Heart fill="currentColor" /></div><span>우리의 시간</span><strong>{coupleDay}번째 날</strong><p>2024. 06. 01부터 · D+{coupleDay}</p></div><div className="section-head upcoming"><h2>다가오는 기념일</h2><button><Plus size={16} />추가</button></div><div className="event-list">{anniversaries.map((event) => <button className="event" key={event.id}><div className="event-icon">{event.icon}</div><div><b>{event.title}</b><span>{formatDate(event.date)}</span></div><em>D-{daysUntil(event.date)}</em><ChevronRight size={17} /></button>)}</div></div>;
+function AnniversaryPage({ coupleDay, anniversaries, onSettings }: { coupleDay: number; anniversaries: Anniversary[]; onSettings: () => void }) {
+  return <div className="page"><Header title="기념일" onSettings={onSettings} /><div className="title-block"><small>OUR DAYS</small><h1>함께 기다리는 날</h1><p>우리 둘의 소중한 시간을 잊지 않도록.</p></div><div className="anniversary-card"><div className="rings"><Heart fill="currentColor" /></div><span>우리의 시간</span><strong>{coupleDay}번째 날</strong><p>2024. 06. 01부터 · D+{coupleDay}</p></div><div className="section-head upcoming"><h2>다가오는 기념일</h2><button><Plus size={16} />추가</button></div><div className="event-list">{anniversaries.map((event) => <button className="event" key={event.id}><div className="event-icon">{event.icon}</div><div><b>{event.title}</b><span>{formatDate(event.date)}</span></div><em>D-{daysUntil(event.date)}</em><ChevronRight size={17} /></button>)}</div></div>;
 }
 
 function BottomNav({ tab, setTab }: { tab: Tab; setTab: (tab: Tab) => void }) {
