@@ -86,13 +86,13 @@ function AuthFlow({ step, setStep }: { step: Exclude<Access, 'app'>; setStep: (v
     return (
       <div className="app-shell auth-shell">
         <Wordmark />
-        <div className="connect-visual"><div className="person">민</div><span>사이</span><div className="person pale">?</div></div>
+        <div className="connect-visual"><div className="person">민</div><span>MU</span><div className="person pale">?</div></div>
         <div className="auth-card">
-          <p className="overline">ONLY FOR TWO</p><h1>우리 사이를<br />연결해요</h1>
+          <p className="overline">ONLY FOR TWO</p><h1>우리 둘을<br />연결해요</h1>
           <p>초대 코드를 공유하거나, 받은 코드를 입력하세요.</p>
-          <div className="invite-code"><span>내 초대 코드</span><strong>SAI-2406</strong><button onClick={() => navigator.clipboard?.writeText('SAI-2406')}><Copy size={14} /> 복사</button></div>
+          <div className="invite-code"><span>내 초대 코드</span><strong>MU-2406</strong><button onClick={() => navigator.clipboard?.writeText('MU-2406')}><Copy size={14} /> 복사</button></div>
           <div className="divider"><span>또는</span></div>
-          <label>받은 초대 코드<input value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} placeholder="예: SAI-1234" /></label>
+          <label>받은 초대 코드<input value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} placeholder="예: MU-1234" /></label>
           <button className="primary" onClick={() => setStep('app')} disabled={!code}>연결하고 시작하기</button>
           <button className="text-button" onClick={() => setStep('app')}>데모로 둘러보기</button>
         </div>
@@ -104,14 +104,14 @@ function AuthFlow({ step, setStep }: { step: Exclude<Access, 'app'>; setStep: (v
   const signup = step === 'signup';
   return (
     <div className="app-shell auth-shell">
-      <div className="auth-hero"><Wordmark /><div className="window-mark"><span /><span /></div><h1>우리 사이의 이야기가<br />머무는 작은 창구</h1><p>대화하고, 기억하고,<br />둘만의 시간을 이어가요.</p></div>
+      <div className="auth-hero"><Wordmark /><div className="window-mark"><span /><span /></div><h1>우리 둘의 이야기가<br />머무는 작은 공간</h1><p>대화하고, 기억하고,<br />둘만의 시간을 이어가요.</p></div>
       <form className="auth-card" onSubmit={(event) => { event.preventDefault(); setStep(signup ? 'connect' : 'app'); }}>
-        <p className="overline">{signup ? 'WELCOME TO SAI' : 'WELCOME BACK'}</p><h2>{signup ? '사이를 시작해볼까요?' : '다시 만나 반가워요'}</h2>
+        <p className="overline">{signup ? 'WELCOME TO MELUNI' : 'WELCOME BACK'}</p><h2>{signup ? '우리의 공간을 시작해볼까요?' : '다시 만나 반가워요'}</h2>
         {signup && <label>이름<input required placeholder="이름을 입력하세요" /></label>}
         <label>이메일<input required type="email" placeholder="hello@example.com" /></label>
         <label>비밀번호<input required type="password" minLength={6} placeholder="6자 이상 입력하세요" /></label>
         <button className="primary" type="submit">{signup ? '가입하고 연결하기' : '로그인'}</button>
-        <p className="switch">{signup ? '이미 계정이 있나요?' : '사이가 처음인가요?'} <button type="button" onClick={() => setStep(signup ? 'login' : 'signup')}>{signup ? '로그인' : '회원가입'}</button></p>
+        <p className="switch">{signup ? '이미 계정이 있나요?' : 'MELUNI가 처음인가요?'} <button type="button" onClick={() => setStep(signup ? 'login' : 'signup')}>{signup ? '로그인' : '회원가입'}</button></p>
         <button className="text-button" type="button" onClick={() => setStep('connect')}>초대 코드 화면 미리보기</button>
       </form>
     </div>
@@ -119,7 +119,7 @@ function AuthFlow({ step, setStep }: { step: Exclude<Access, 'app'>; setStep: (v
 }
 
 function Wordmark() {
-  return <div className="wordmark"><strong>사이.</strong><span>너와 나 사이</span></div>;
+  return <div className="wordmark"><strong>MELUNI.</strong><span>ME + U</span></div>;
 }
 
 function Header({ title }: { title?: string }) {
@@ -152,7 +152,7 @@ function SectionHead({ eyebrow, title, action, onClick }: { eyebrow: string; tit
 }
 
 function AnniversaryPage({ coupleDay, anniversaries }: { coupleDay: number; anniversaries: Anniversary[] }) {
-  return <div className="page"><Header title="기념일" /><div className="title-block"><small>OUR DAYS</small><h1>함께 기다리는 날</h1><p>둘 사이의 소중한 시간을 잊지 않도록.</p></div><div className="anniversary-card"><div className="rings"><Heart fill="currentColor" /></div><span>우리의 시간</span><strong>{coupleDay}번째 날</strong><p>2024. 06. 01부터 · D+{coupleDay}</p></div><div className="section-head upcoming"><h2>다가오는 기념일</h2><button><Plus size={16} />추가</button></div><div className="event-list">{anniversaries.map((event) => <button className="event" key={event.id}><div className="event-icon">{event.icon}</div><div><b>{event.title}</b><span>{formatDate(event.date)}</span></div><em>D-{daysUntil(event.date)}</em><ChevronRight size={17} /></button>)}</div></div>;
+  return <div className="page"><Header title="기념일" /><div className="title-block"><small>OUR DAYS</small><h1>함께 기다리는 날</h1><p>우리 둘의 소중한 시간을 잊지 않도록.</p></div><div className="anniversary-card"><div className="rings"><Heart fill="currentColor" /></div><span>우리의 시간</span><strong>{coupleDay}번째 날</strong><p>2024. 06. 01부터 · D+{coupleDay}</p></div><div className="section-head upcoming"><h2>다가오는 기념일</h2><button><Plus size={16} />추가</button></div><div className="event-list">{anniversaries.map((event) => <button className="event" key={event.id}><div className="event-icon">{event.icon}</div><div><b>{event.title}</b><span>{formatDate(event.date)}</span></div><em>D-{daysUntil(event.date)}</em><ChevronRight size={17} /></button>)}</div></div>;
 }
 
 function BottomNav({ tab, setTab }: { tab: Tab; setTab: (tab: Tab) => void }) {
