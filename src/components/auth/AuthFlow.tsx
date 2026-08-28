@@ -16,6 +16,12 @@ const errorMessage = (error: unknown) => {
   const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
   const messages: Record<string, string> = {
     'auth/invalid-phone-number': '휴대전화 번호를 다시 확인해 주세요.',
+    'auth/operation-not-allowed': '현재 국가에서는 SMS 인증이 허용되지 않았어요. Firebase의 SMS 리전 설정을 확인해 주세요.',
+    'auth/unauthorized-domain': '현재 실행 중인 주소가 Firebase에 승인되지 않았어요. 승인된 앱 주소에서 다시 시도해 주세요.',
+    'auth/captcha-check-failed': '보안 확인에 실패했어요. 페이지를 새로고침한 뒤 다시 시도해 주세요.',
+    'auth/invalid-app-credential': 'SMS 보안 확인이 만료됐어요. 페이지를 새로고침한 뒤 다시 시도해 주세요.',
+    'auth/missing-recaptcha-token': 'SMS 보안 확인을 시작하지 못했어요. 페이지를 새로고침한 뒤 다시 시도해 주세요.',
+    'auth/billing-not-enabled': '실제 SMS를 보내려면 Firebase 결제 설정이 필요해요.',
     'auth/too-many-requests': '요청이 너무 많아요. 잠시 후 다시 시도해 주세요.',
     'auth/quota-exceeded': '오늘 사용할 수 있는 SMS 인증 횟수를 초과했어요.',
     'auth/invalid-verification-code': '인증번호가 올바르지 않아요.',
@@ -24,7 +30,8 @@ const errorMessage = (error: unknown) => {
     'auth/invalid-credential': '이메일 또는 비밀번호가 올바르지 않아요.',
     'auth/user-disabled': '사용이 중지된 계정이에요.',
   };
-  return messages[code] ?? '처리 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
+  const fallback = '처리 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
+  return messages[code] ?? (import.meta.env.DEV && code ? `${fallback} (${code})` : fallback);
 };
 
 const normalizeKoreanPhone = (value: string) => {
