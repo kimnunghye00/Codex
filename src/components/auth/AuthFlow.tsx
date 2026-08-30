@@ -12,7 +12,6 @@ import {
 import { auth } from '../../lib/firebase';
 
 type Mode = 'login' | 'signup-phone' | 'signup-code' | 'signup-password';
-
 type FirebaseLikeError = { code?: string; message?: string };
 
 const normalizeKoreanPhone = (value: string) => {
@@ -59,10 +58,13 @@ export function Wordmark() {
 }
 
 export function AuthFlow() {
-  const [mode, setMode] = useState<Mode>('login');
+  const pendingPhoneUser = auth.currentUser?.phoneNumber && !auth.currentUser.providerData.some((provider) => provider.providerId === 'password')
+    ? auth.currentUser
+    : undefined;
+  const [mode, setMode] = useState<Mode>(pendingPhoneUser ? 'signup-password' : 'login');
   const [identifier, setIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState(pendingPhoneUser?.phoneNumber ?? '');
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
@@ -72,7 +74,7 @@ export function AuthFlow() {
   const [notice, setNotice] = useState('');
   const confirmation = useRef<ConfirmationResult | undefined>(undefined);
   const verifier = useRef<RecaptchaVerifier | undefined>(undefined);
-  const verifiedPhoneUser = useRef<User | undefined>(undefined);
+  const verifiedPhoneUser = useRef<User | undefined>(pendingPhoneUser);
 
   const clearMessages = () => { setError(''); setNotice(''); };
   const changeMode = (next: Mode) => { clearMessages(); setMode(next); };
@@ -131,6 +133,7 @@ export function AuthFlow() {
     try {
       const result = await confirmation.current.confirm(code);
       verifiedPhoneUser.current = result.user;
+      setPhone(result.user.phoneNumber ?? phone);
       changeMode('signup-password');
     } catch (cause) {
       setError(messageFor(cause));
@@ -148,6 +151,7 @@ export function AuthFlow() {
     try {
       const credential = EmailAuthProvider.credential(phoneLoginEmail(phone), password);
       await linkWithCredential(verifiedPhoneUser.current, credential);
+      window.location.reload();
     } catch (cause) {
       setError(messageFor(cause));
     } finally {
@@ -175,7 +179,7 @@ export function AuthFlow() {
     </div>
 
     <form className="auth-card" onSubmit={submit}>
-      {mode !== 'login' && <button className="auth-back" type="button" onClick={() => changeMode(mode === 'signup-phone' ? 'login' : mode === 'signup-code' ? 'signup-phone' : 'signup-code')}><ArrowLeft size={16} /> 이전</button>}
+      {mode !== 'login' && mode !== 'signup-password' && <button className="auth-back" type="button" onClick={() => changeMode(mode === 'signup-phone' ? 'login' : 'signup-phone')}><ArrowLeft size={16} /> 이전</button>}
 
       {mode === 'login' && <>
         <p className="overline">WELCOME BACK</p>
