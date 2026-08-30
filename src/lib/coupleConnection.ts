@@ -29,21 +29,42 @@ function makeCode() {
   return value;
 }
 
+// 실제 연결 완료로 인정하려면 아래 조건을 모두 만족해야 합니다.
+// 1) 내 users 문서에 coupleId + partnerUid가 있음
+// 2) couples 문서에 정확히 두 사용자가 모두 포함됨
+// 3) 상대방 users 문서도 같은 coupleId를 가지며 partnerUid가 나를 가리킴
+// 이전 실패로 한쪽만 저장된 반쪽 연결은 null로 처리합니다.
 export async function getRealCoupleConnection(uid: string): Promise<RealCoupleConnection | null> {
   const userSnap = await getDoc(doc(db, 'users', uid));
   if (!userSnap.exists()) return null;
-  const coupleId = String(userSnap.data()?.coupleId ?? '');
-  if (!coupleId || isTestCouple(coupleId)) return null;
+
+  const userData = userSnap.data();
+  const coupleId = String(userData?.coupleId ?? '');
+  const expectedPartnerUid = String(userData?.partnerUid ?? '');
+  if (!coupleId || !expectedPartnerUid || isTestCouple(coupleId)) return null;
 
   const coupleSnap = await getDoc(doc(db, 'couples', coupleId));
   if (!coupleSnap.exists() || coupleSnap.data()?.testMode) return null;
-  const memberUids = (coupleSnap.data()?.memberUids ?? []) as string[];
-  const partnerUid = memberUids.find((memberUid) => memberUid !== uid);
-  if (!partnerUid) return null;
 
-  const partnerSnap = await getDoc(doc(db, 'users', partnerUid));
-  const partnerProfile = partnerSnap.exists() ? (partnerSnap.data()?.profile as UserProfile | undefined) ?? null : null;
-  return { coupleId, partnerUid, partnerProfile };
+  const memberUids = (coupleSnap.data()?.memberUids ?? []) as string[];
+  if (memberUids.length !== 2 || !memberUids.includes(uid) || !memberUids.includes(expectedPartnerUid)) return null;
+
+  const partnerUid = memberUids.find((memberUid) => memberUid !== uid);
+  if (!partnerUid || partnerUid !== expectedPartnerUid) return null;
+
+  try {
+    const partnerSnap = await getDoc(doc(db, 'users', partnerUid));
+    if (!partnerSnap.exists()) return null;
+    const partnerData = partnerSnap.data();
+    if (String(partnerData?.coupleId ?? '') !== coupleId) return null;
+    if (String(partnerData?.partnerUid ?? '') !== uid) return null;
+
+    const partnerProfile = (partnerData?.profile as UserProfile | undefined) ?? null;
+    return { coupleId, partnerUid, partnerProfile };
+  } catch {
+    // Firestore 규칙상 아직 상대방 문서를 읽을 수 없다면 연결 완료 전 상태입니다.
+    return null;
+  }
 }
 
 export async function createCoupleInvite(uid: string, ownerName: string): Promise<CoupleInvite> {
@@ -76,14 +97,15 @@ export async function createCoupleInvite(uid: string, ownerName: string): Promis
   throw new Error('invite-create-failed');
 }
 
-// 초대받은 사람은 커플을 직접 만들지 않고, 초대 문서에 연결 요청만 남깁니다.
-// 따라서 다른 사용자의 users 문서를 건드리지 않습니다.
+// 초대받은 사람은 커플을 직접 만들지 않고 초대 문서에 연결 요청만 남깁니다.
 export async function connectWithInviteCode(uid: string, displayName: string, rawCode: string) {
+  const existing = await getRealCoupleConnection(uid);
+  if (existing) throw new Error('already-connected');
+
   const code = normalizeCode(rawCode);
   if (!/^ROUTE-[A-Z2-9]{6}$/.test(code)) throw new Error('invalid-code');
 
   const inviteRef = doc(db, 'coupleInvites', code);
-  const currentUserRef = doc(db, 'users', uid);
 
   return runTransaction(db, async (transaction) => {
     const inviteSnap = await transaction.get(inviteRef);
@@ -95,10 +117,8 @@ export async function connectWithInviteCode(uid: string, displayName: string, ra
     const ownerUid = String(invite.ownerUid ?? '');
     if (!ownerUid || ownerUid === uid) throw new Error('self-invite');
 
-    const currentSnap = await transaction.get(currentUserRef);
-    const currentCoupleId = String(currentSnap.data()?.coupleId ?? '');
-    if (currentCoupleId && !isTestCouple(currentCoupleId)) throw new Error('already-connected');
-
+    // 과거 실패로 남은 내 coupleId는 여기서 연결 완료로 보지 않습니다.
+    // 실제 연결 여부는 위 getRealCoupleConnection()에서 이미 검증했습니다.
     transaction.update(inviteRef, {
       status: 'requested',
       joinerUid: uid,
@@ -110,8 +130,11 @@ export async function connectWithInviteCode(uid: string, displayName: string, ra
   });
 }
 
-// 초대한 사람만 자기 권한으로 커플 문서를 만들고 자기 users 문서를 갱신합니다.
+// 초대한 사람이 요청을 감지하면 커플 문서를 만들고 자기 users 문서를 갱신합니다.
 export async function finalizeInviteAsOwner(uid: string, ownerName: string, rawCode: string): Promise<RealCoupleConnection | null> {
+  const existing = await getRealCoupleConnection(uid);
+  if (existing) return existing;
+
   const code = normalizeCode(rawCode);
   if (!/^ROUTE-[A-Z2-9]{6}$/.test(code)) return null;
 
@@ -136,10 +159,6 @@ export async function finalizeInviteAsOwner(uid: string, ownerName: string, rawC
     const joinerName = String(invite.joinerName ?? '상대방');
     if (!joinerUid || joinerUid === uid) return null;
 
-    const ownerSnap = await transaction.get(ownerUserRef);
-    const ownerCoupleId = String(ownerSnap.data()?.coupleId ?? '');
-    if (ownerCoupleId && !isTestCouple(ownerCoupleId)) throw new Error('already-connected');
-
     const coupleRef = doc(collection(db, 'couples'));
     const coupleId = coupleRef.id;
 
@@ -152,10 +171,12 @@ export async function finalizeInviteAsOwner(uid: string, ownerName: string, rawC
       },
       createdBy: uid,
       testMode: false,
+      status: 'pending-joiner',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
 
+    // 예전 반쪽 coupleId가 있어도 새 요청으로 자기 문서를 덮어쓸 수 있습니다.
     transaction.set(ownerUserRef, {
       coupleId,
       partnerUid: joinerUid,
@@ -172,7 +193,8 @@ export async function finalizeInviteAsOwner(uid: string, ownerName: string, rawC
   });
 
   if (!result?.coupleId || !result.partnerUid) return null;
-  return getRealCoupleConnection(uid);
+  // 상대방도 자기 users 문서를 갱신하기 전이므로 아직 완전 연결로 인정하지 않습니다.
+  return null;
 }
 
 // 초대받은 사람은 초대가 승인된 뒤 자기 users 문서만 갱신합니다.
@@ -195,6 +217,7 @@ export async function completeJoinerConnection(uid: string, rawCode: string): Pr
     updatedAt: serverTimestamp(),
   }, { merge: true });
 
+  // 양쪽 users 문서가 모두 동일한 관계를 가지게 된 뒤에만 여기서 성공합니다.
   return getRealCoupleConnection(uid);
 }
 
