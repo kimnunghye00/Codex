@@ -133,7 +133,7 @@ function App() {
     let cancelled = false;
     const check = () => void getRealCoupleConnection(user.uid).then((next) => { if (!cancelled) setConnection(next); }).catch(() => { if (!cancelled) setConnection(null); });
     check();
-    const timer = window.setInterval(check, 4000);
+    const timer = window.setInterval(check, 3000);
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [user?.uid]);
 
@@ -183,7 +183,7 @@ function App() {
   return <>
     <div className="app-shell"><main>
       {tab === 'home' && <HomePage profile={profile} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} memories={memories} messages={messages} onNavigate={setTab} onOpenMemory={(id) => { setMemoryToOpen(id); setTab('memories'); }} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
-      {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} />}
+      {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} connection={connection} />}
       {tab === 'memories' && <MemoriesPage Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} onClearInitial={() => setMemoryToOpen(undefined)} />}
       {tab === 'location' && <LocationPage Header={AppHeader} onActivity={(title, detail) => addActivity({ actor: 'me', kind: 'location', title, detail })} />}
       {tab === 'anniversary' && <AnniversaryPage connected={Boolean(connection)} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} onSaveStartDate={saveStartDate} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
@@ -209,7 +209,7 @@ function HomePage({ connection, relationshipStartDate, coupleDay, anniversaries,
   return <div className="page home-page home-dashboard">
     <Header onSettings={onSettings} onNotifications={onNotifications} unreadCount={unreadCount} />
     <div className="home-dashboard-grid">
-      <button className="home-map-card" type="button" aria-label="우리의 지도 열기">
+      <button className="home-map-card" type="button" aria-label="우리의 지도 열기" onClick={() => onNavigate('location')}>
         <div className="home-map-grid-lines" /><span className="home-map-road road-a" /><span className="home-map-road road-b" /><span className="home-map-river" />
         <span className="home-map-place place-office">ROUTE</span><span className="home-map-place place-cafe">카페</span><span className="home-map-place place-park">공원</span>
         <div className="home-location-status"><MapPin size={16} /><span><b>{connection ? `${partnerName} · 위치 공유` : '상대방 연결 전'}</b><small>{connection ? '최근 위치를 확인해보세요' : '설정에서 상대방을 연결해 주세요'}</small></span></div>
