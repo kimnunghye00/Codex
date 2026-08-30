@@ -1,5 +1,5 @@
 export type ActivityActor = 'me' | 'partner' | 'system';
-export type ActivityKind = 'chat' | 'memory' | 'profile' | 'couple' | 'anniversary' | 'system';
+export type ActivityKind = 'chat' | 'memory' | 'profile' | 'couple' | 'anniversary' | 'location' | 'system';
 
 export type AppNotification = {
   id: string;
