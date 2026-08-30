@@ -13,7 +13,6 @@ type CoupleConnectProps = {
   user: User;
   profile: UserProfile;
   onConnected: (connection: RealCoupleConnection) => void;
-  onSkip: () => void;
 };
 
 function messageFor(error: unknown) {
@@ -30,7 +29,7 @@ function messageFor(error: unknown) {
   return messages[code] ?? '연결 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
 }
 
-export function CoupleConnect({ user, profile, onConnected, onSkip }: CoupleConnectProps) {
+export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps) {
   const [mode, setMode] = useState<'choose' | 'invite' | 'join'>('choose');
   const [inviteCode, setInviteCode] = useState('');
   const [joinCode, setJoinCode] = useState('');
@@ -134,10 +133,9 @@ export function CoupleConnect({ user, profile, onConnected, onSkip }: CoupleConn
 
       {error && <p className="couple-connect-error" role="alert">{error}</p>}
 
-      <div className="couple-connect-footer">
-        {mode !== 'choose' ? <button type="button" onClick={() => { setError(''); setMode('choose'); }}>이전</button> : <span />}
-        <button type="button" className="couple-skip" onClick={onSkip}>나중에 연결하고 둘러보기</button>
-      </div>
+      {mode !== 'choose' && <div className="couple-connect-footer">
+        <button type="button" onClick={() => { setError(''); setMode('choose'); }}>이전</button>
+      </div>}
     </main>
   </div>;
 }
