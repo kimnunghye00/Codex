@@ -96,7 +96,7 @@ function App() {
         </main>
         <BottomNav tab={tab} setTab={setTab} />
       </div>
-      {settingsOpen && <AccountSettings user={user} onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && <AccountSettings user={user} profile={profile} onProfileChange={setProfile} onClose={() => setSettingsOpen(false)} />}
     </>
   );
 }
