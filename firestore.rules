@@ -25,7 +25,6 @@ service cloud.firestore {
     match /users/{uid} {
       allow create: if signedIn() && request.auth.uid == uid;
       allow read: if signedIn() && (request.auth.uid == uid || sharesCoupleWith(uid));
-      // 각 사용자는 자기 사용자 문서만 수정합니다. 상대방 문서를 대신 수정하지 않습니다.
       allow update: if signedIn() && request.auth.uid == uid;
       allow delete: if false;
     }
@@ -33,16 +32,33 @@ service cloud.firestore {
     match /coupleInvites/{code} {
       allow get: if signedIn();
       allow list: if false;
+
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.status == 'open';
-      allow update: if signedIn()
-        && resource.data.status == 'open'
-        && request.resource.data.status == 'used'
-        && request.resource.data.usedBy == request.auth.uid
-        && request.resource.data.coupleId != null
-        && request.auth.uid in getAfter(/databases/$(database)/documents/couples/$(request.resource.data.coupleId)).data.memberUids
-        && resource.data.ownerUid in getAfter(/databases/$(database)/documents/couples/$(request.resource.data.coupleId)).data.memberUids;
+
+      allow update: if signedIn() && (
+        (
+          resource.data.status == 'open'
+          && request.resource.data.status == 'requested'
+          && request.resource.data.ownerUid == resource.data.ownerUid
+          && request.resource.data.ownerName == resource.data.ownerName
+          && request.resource.data.code == resource.data.code
+          && request.resource.data.expiresAt == resource.data.expiresAt
+          && request.resource.data.joinerUid == request.auth.uid
+          && request.auth.uid != resource.data.ownerUid
+        )
+        ||
+        (
+          resource.data.status == 'requested'
+          && resource.data.ownerUid == request.auth.uid
+          && request.resource.data.status == 'accepted'
+          && request.resource.data.ownerUid == resource.data.ownerUid
+          && request.resource.data.joinerUid == resource.data.joinerUid
+          && request.resource.data.coupleId != null
+        )
+      );
+
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
     }
 
@@ -50,6 +66,7 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.testMode == false
         && request.resource.data.memberUids.size() == 2
+        && request.auth.uid == request.resource.data.createdBy
         && request.auth.uid in request.resource.data.memberUids;
       allow read, update: if memberOf(coupleId);
       allow delete: if false;
