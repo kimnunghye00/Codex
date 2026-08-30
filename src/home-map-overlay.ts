@@ -88,74 +88,75 @@ export function openHomeMap() {
 
   void loadNaverMaps().then((naver) => {
     const center = new naver.maps.LatLng(37.5666103, 126.9783882);
-    map = new naver.maps.Map(mapElement, {
-      center,
-      zoom: 15,
-      gl: true,
-      zoomControl: true,
-      zoomControlOptions: { position: naver.maps.Position.TOP_RIGHT },
+
+    requestAnimationFrame(() => {
+      map = new naver.maps.Map(mapElement, {
+        center,
+        zoom: 15,
+        gl: false,
+        zoomControl: true,
+        zoomControlOptions: { position: naver.maps.Position.TOP_RIGHT },
+      });
+
+      const refreshSize = () => {
+        if (!map) return;
+        naver.maps.Event.trigger(map, 'resize');
+      };
+
+      window.setTimeout(refreshSize, 60);
+      window.setTimeout(refreshSize, 180);
+      resizeObserver = new ResizeObserver(refreshSize);
+      resizeObserver.observe(mapElement);
+
+      const uid = auth.currentUser?.uid ?? '';
+      const visits = uid ? loadLocationVisits(uid) : [];
+
+      if (!visits.length) {
+        status.textContent = '아직 저장된 위치 기록이 없어요.';
+        return;
+      }
+
+      const points = visits.map((visit) => new naver.maps.LatLng(visit.latitude, visit.longitude));
+      if (points.length > 1) {
+        const path = new naver.maps.Polyline({
+          map,
+          path: points,
+          strokeColor: '#FF6F61',
+          strokeWeight: 5,
+          strokeOpacity: 0.8,
+        });
+        mapOverlays.push(path);
+      }
+
+      visits.forEach((visit, index) => {
+        const current = index === 0 && !visit.leftAt;
+        const marker = new naver.maps.Marker({
+          map,
+          position: points[index],
+          icon: {
+            content: markerHtml(current),
+            anchor: { x: current ? 10 : 8, y: current ? 10 : 8 },
+          },
+        });
+        const info = new naver.maps.InfoWindow({
+          content: `<div style="padding:10px 12px;font-size:12px;line-height:1.45"><strong>${escapeHtml(visit.placeName || '위치 기록')}</strong><br><span>${escapeHtml(formatVisit(visit))}</span></div>`,
+          borderWidth: 0,
+          backgroundColor: '#fff',
+        });
+        naver.maps.Event.addListener(marker, 'click', () => info.open(map as NaverMap, marker));
+        mapOverlays.push(marker);
+      });
+
+      if (points.length === 1) {
+        map.setCenter(points[0]);
+        map.setZoom(17);
+      } else {
+        const bounds = new naver.maps.LatLngBounds();
+        points.forEach((point) => bounds.extend(point));
+        map.fitBounds(bounds, { top: 46, right: 46, bottom: 46, left: 46 });
+      }
+      status.remove();
     });
-
-    const refreshSize = () => {
-      if (!map) return;
-      naver.maps.Event.trigger(map, 'resize');
-      map.setCenter(center);
-    };
-
-    requestAnimationFrame(refreshSize);
-    window.setTimeout(refreshSize, 120);
-    window.setTimeout(refreshSize, 350);
-    resizeObserver = new ResizeObserver(() => refreshSize());
-    resizeObserver.observe(mapElement);
-
-    const uid = auth.currentUser?.uid ?? '';
-    const visits = uid ? loadLocationVisits(uid) : [];
-
-    if (!visits.length) {
-      status.textContent = '아직 저장된 위치 기록이 없어요.';
-      return;
-    }
-
-    const points = visits.map((visit) => new naver.maps.LatLng(visit.latitude, visit.longitude));
-    if (points.length > 1) {
-      const path = new naver.maps.Polyline({
-        map,
-        path: points,
-        strokeColor: '#FF6F61',
-        strokeWeight: 5,
-        strokeOpacity: 0.8,
-      });
-      mapOverlays.push(path);
-    }
-
-    visits.forEach((visit, index) => {
-      const current = index === 0 && !visit.leftAt;
-      const marker = new naver.maps.Marker({
-        map,
-        position: points[index],
-        icon: {
-          content: markerHtml(current),
-          anchor: { x: current ? 10 : 8, y: current ? 10 : 8 },
-        },
-      });
-      const info = new naver.maps.InfoWindow({
-        content: `<div style="padding:10px 12px;font-size:12px;line-height:1.45"><strong>${escapeHtml(visit.placeName || '위치 기록')}</strong><br><span>${escapeHtml(formatVisit(visit))}</span></div>`,
-        borderWidth: 0,
-        backgroundColor: '#fff',
-      });
-      naver.maps.Event.addListener(marker, 'click', () => info.open(map as NaverMap, marker));
-      mapOverlays.push(marker);
-    });
-
-    if (points.length === 1) {
-      map.setCenter(points[0]);
-      map.setZoom(17);
-    } else {
-      const bounds = new naver.maps.LatLngBounds();
-      points.forEach((point) => bounds.extend(point));
-      map.fitBounds(bounds, { top: 46, right: 46, bottom: 46, left: 46 });
-    }
-    status.remove();
   }).catch((error) => {
     console.error('[ROUTE NAVER map]', error);
     status.textContent = String(import.meta.env.VITE_NAVER_MAP_CLIENT_ID ?? '').trim()
