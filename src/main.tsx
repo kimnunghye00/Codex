@@ -12,5 +12,7 @@ import './home-simple.css';
 import './home-dashboard.css';
 import './more.css';
 import './route-brand.css';
+import './route-themes.css';
+import './route-themes';
 
 createRoot(document.getElementById('root')!).render(<StrictMode><Root /></StrictMode>);
