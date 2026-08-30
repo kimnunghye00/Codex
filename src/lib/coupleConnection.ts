@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, getDoc, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import type { UserProfile } from '../utils/profile';
 
@@ -93,13 +93,10 @@ export async function connectWithInviteCode(uid: string, displayName: string, ra
     const ownerUid = String(invite.ownerUid ?? '');
     if (!ownerUid || ownerUid === uid) throw new Error('self-invite');
 
-    // The joining user may read their own document, but not the inviter's profile
-    // before the couple exists. The inviter's name is already safely stored on the invite.
     const currentSnap = await transaction.get(currentUserRef);
     const currentCoupleId = String(currentSnap.data()?.coupleId ?? '');
     if (currentCoupleId && !isTestCouple(currentCoupleId)) throw new Error('already-connected');
 
-    const ownerUserRef = doc(db, 'users', ownerUid);
     const coupleRef = doc(collection(db, 'couples'));
     const coupleId = coupleRef.id;
     const ownerName = String(invite.ownerName ?? '상대방');
@@ -117,12 +114,35 @@ export async function connectWithInviteCode(uid: string, displayName: string, ra
       updatedAt: serverTimestamp(),
     });
 
-    transaction.set(ownerUserRef, { coupleId, partnerUid: uid, updatedAt: serverTimestamp() }, { merge: true });
+    // 연결을 요청한 사람은 자기 문서만 수정합니다.
     transaction.set(currentUserRef, { coupleId, partnerUid: ownerUid, updatedAt: serverTimestamp() }, { merge: true });
+    // 초대한 사람은 자신의 화면에서 이 초대가 사용된 것을 감지한 뒤 자기 문서를 직접 갱신합니다.
     transaction.set(inviteRef, { status: 'used', usedBy: uid, coupleId, usedAt: serverTimestamp() }, { merge: true });
 
     return { coupleId, partnerUid: ownerUid, partnerName: ownerName };
   });
+}
+
+export async function completeInviteOwnerConnection(uid: string, rawCode: string): Promise<RealCoupleConnection | null> {
+  const code = normalizeCode(rawCode);
+  if (!/^ROUTE-[A-Z2-9]{6}$/.test(code)) return null;
+
+  const inviteSnap = await getDoc(doc(db, 'coupleInvites', code));
+  if (!inviteSnap.exists()) return null;
+  const invite = inviteSnap.data();
+  if (String(invite.ownerUid ?? '') !== uid || invite.status !== 'used') return null;
+
+  const coupleId = String(invite.coupleId ?? '');
+  const partnerUid = String(invite.usedBy ?? '');
+  if (!coupleId || !partnerUid) return null;
+
+  await setDoc(doc(db, 'users', uid), {
+    coupleId,
+    partnerUid,
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+
+  return getRealCoupleConnection(uid);
 }
 
 export async function refreshInvite(code: string): Promise<CoupleInvite | null> {
