@@ -20,6 +20,7 @@ const themes: RouteTheme[] = [
 
 const validTheme = (value: string | null) => themes.some((theme) => theme.id === value) ? value! : DEFAULT_THEME;
 const activeTheme = () => validTheme(localStorage.getItem(STORAGE_KEY));
+const themeById = (id: string) => themes.find((theme) => theme.id === id) ?? themes[0];
 
 function applyTheme(id: string) {
   const next = validTheme(id);
@@ -27,12 +28,14 @@ function applyTheme(id: string) {
   localStorage.setItem(STORAGE_KEY, next);
 }
 
-function makeThemeButton(theme: RouteTheme, activeId: string, onSelect: (id: string) => void) {
+function makeThemeButton(theme: RouteTheme, selectedId: string, onSelect: (id: string) => void) {
   const button = document.createElement('button');
   button.type = 'button';
-  button.className = `route-theme-option${theme.id === activeId ? ' active' : ''}`;
+  button.className = `route-theme-option${theme.id === selectedId ? ' active' : ''}`;
   button.dataset.routeThemeOption = theme.id;
-  button.setAttribute('aria-pressed', String(theme.id === activeId));
+  button.setAttribute('aria-pressed', String(theme.id === selectedId));
+  button.style.setProperty('--option-primary', theme.primary);
+  button.style.setProperty('--option-accent', theme.accent);
 
   const swatch = document.createElement('span');
   swatch.className = 'route-theme-swatch';
@@ -60,7 +63,7 @@ function makeThemeButton(theme: RouteTheme, activeId: string, onSelect: (id: str
 
   const check = document.createElement('span');
   check.className = 'route-theme-check';
-  check.textContent = theme.id === activeId ? '✓' : '';
+  check.textContent = theme.id === selectedId ? '✓' : '';
   check.setAttribute('aria-hidden', 'true');
 
   button.append(swatch, copy, check);
@@ -68,14 +71,68 @@ function makeThemeButton(theme: RouteTheme, activeId: string, onSelect: (id: str
   return button;
 }
 
-function closeThemeSheet() {
+function makePreview(theme: RouteTheme) {
+  const preview = document.createElement('div');
+  preview.className = 'route-theme-preview';
+  preview.setAttribute('aria-live', 'polite');
+
+  const phone = document.createElement('div');
+  phone.className = 'route-theme-preview-phone';
+
+  const top = document.createElement('div');
+  top.className = 'route-theme-preview-top';
+  const brand = document.createElement('strong');
+  brand.textContent = 'ROUTE.';
+  const dots = document.createElement('span');
+  dots.textContent = '●  ●';
+  top.append(brand, dots);
+
+  const hero = document.createElement('div');
+  hero.className = 'route-theme-preview-hero';
+  const heroSmall = document.createElement('small');
+  heroSmall.textContent = 'OUR ROUTE';
+  const heroTitle = document.createElement('b');
+  heroTitle.textContent = '우리의 오늘';
+  const heroCopy = document.createElement('span');
+  heroCopy.textContent = '선택한 테마가 이런 느낌으로 적용돼요.';
+  hero.append(heroSmall, heroTitle, heroCopy);
+
+  const row = document.createElement('div');
+  row.className = 'route-theme-preview-row';
+  const card = document.createElement('div');
+  card.className = 'route-theme-preview-card';
+  card.innerHTML = '<small>우리의 시간</small><b>D+821</b><span>2024.06.01부터</span>';
+  const action = document.createElement('div');
+  action.className = 'route-theme-preview-action';
+  action.innerHTML = '<span>♥</span><b>최근 추억</b>';
+  row.append(card, action);
+
+  const nav = document.createElement('div');
+  nav.className = 'route-theme-preview-nav';
+  nav.innerHTML = '<span class="active">⌂<small>홈</small></span><span>♡<small>추억</small></span><span>○<small>채팅</small></span><span>⌖<small>위치</small></span>';
+
+  phone.append(top, hero, row, nav);
+  preview.append(phone);
+  updatePreview(preview, theme);
+  return preview;
+}
+
+function updatePreview(preview: HTMLElement, theme: RouteTheme) {
+  preview.style.setProperty('--preview-primary', theme.primary);
+  preview.style.setProperty('--preview-accent', theme.accent);
+  preview.style.setProperty('--preview-accent-soft', `color-mix(in srgb, ${theme.accent} 24%, white)`);
+  preview.dataset.previewTheme = theme.id;
+  preview.setAttribute('aria-label', `${theme.name} 테마 미리보기`);
+}
+
+function removeThemeSheet() {
   document.querySelector('.route-theme-overlay')?.remove();
   document.body.classList.remove('route-theme-sheet-open');
 }
 
 function openThemeSheet() {
-  closeThemeSheet();
-  const selected = activeTheme();
+  removeThemeSheet();
+  let pendingId = activeTheme();
 
   const overlay = document.createElement('div');
   overlay.className = 'route-theme-overlay';
@@ -93,6 +150,13 @@ function openThemeSheet() {
 
   const header = document.createElement('div');
   header.className = 'route-theme-sheet-header';
+
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'route-theme-sheet-close';
+  close.setAttribute('aria-label', '선택한 테마 적용하고 닫기');
+  close.textContent = '×';
+
   const heading = document.createElement('div');
   const eyebrow = document.createElement('small');
   eyebrow.textContent = 'ROUTE THEME';
@@ -100,46 +164,56 @@ function openThemeSheet() {
   title.id = 'route-theme-sheet-title';
   title.textContent = '테마 선택';
   const description = document.createElement('p');
-  description.textContent = '원하는 컬러 조합을 선택하면 앱 전체에 바로 적용돼요.';
+  description.textContent = '테마를 눌러 미리 확인한 뒤, X 또는 바깥 화면을 누르면 적용돼요.';
   heading.append(eyebrow, title, description);
+  header.append(close, heading);
 
-  const close = document.createElement('button');
-  close.type = 'button';
-  close.className = 'route-theme-sheet-close';
-  close.setAttribute('aria-label', '테마 선택 닫기');
-  close.textContent = '×';
-  close.addEventListener('click', closeThemeSheet);
-  header.append(heading, close);
-
+  const preview = makePreview(themeById(pendingId));
   const options = document.createElement('div');
   options.className = 'route-theme-sheet-options';
 
-  const selectTheme = (id: string) => {
-    applyTheme(id);
-    closeThemeSheet();
+  const updateSelectedState = () => {
+    const selectedTheme = themeById(pendingId);
+    updatePreview(preview, selectedTheme);
+    options.querySelectorAll<HTMLButtonElement>('[data-route-theme-option]').forEach((button) => {
+      const isActive = button.dataset.routeThemeOption === pendingId;
+      button.classList.toggle('active', isActive);
+      button.setAttribute('aria-pressed', String(isActive));
+      const check = button.querySelector<HTMLElement>('.route-theme-check');
+      if (check) check.textContent = isActive ? '✓' : '';
+    });
   };
-  options.append(...themes.map((theme) => makeThemeButton(theme, selected, selectTheme)));
+
+  const selectTheme = (id: string) => {
+    pendingId = validTheme(id);
+    updateSelectedState();
+  };
+  options.append(...themes.map((theme) => makeThemeButton(theme, pendingId, selectTheme)));
 
   const note = document.createElement('p');
   note.className = 'route-theme-sheet-note';
-  note.textContent = 'Navy + Coral이 ROUTE의 기본 테마입니다.';
+  note.textContent = '선택만으로는 아직 적용되지 않아요 · 창을 닫으면 적용됩니다.';
 
-  sheet.append(handle, header, options, note);
-  overlay.append(sheet);
-  document.body.append(overlay);
-  document.body.classList.add('route-theme-sheet-open');
+  const commitAndClose = () => {
+    applyTheme(pendingId);
+    removeThemeSheet();
+    document.removeEventListener('keydown', onKeyDown);
+  };
 
-  overlay.addEventListener('click', (event) => {
-    if (event.target === overlay) closeThemeSheet();
+  close.addEventListener('click', commitAndClose);
+  overlay.addEventListener('pointerdown', (event) => {
+    if (event.target === overlay) commitAndClose();
   });
 
   const onKeyDown = (event: KeyboardEvent) => {
-    if (event.key === 'Escape') {
-      closeThemeSheet();
-      document.removeEventListener('keydown', onKeyDown);
-    }
+    if (event.key === 'Escape') commitAndClose();
   };
   document.addEventListener('keydown', onKeyDown);
+
+  sheet.append(handle, header, preview, options, note);
+  overlay.append(sheet);
+  document.body.append(overlay);
+  document.body.classList.add('route-theme-sheet-open');
   close.focus();
 }
 
