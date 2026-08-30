@@ -21,9 +21,9 @@ function aiReplyFor(text: string) {
   return `응, 확인했어. “${value.slice(0, 28)}${value.length > 28 ? '…' : ''}”`;
 }
 
-function TypingIndicator({ ai }: { ai: boolean }) {
+function TypingIndicator({ ai, initial }: { ai: boolean; initial: string }) {
   return <div className="typing-row" aria-label="상대방이 입력 중입니다">
-    <div className="avatar tiny">{ai ? <Bot size={14} /> : '상'}</div>
+    <div className="avatar tiny">{ai ? <Bot size={14} /> : initial}</div>
     <div className="typing-bubble" aria-hidden="true"><span /><span /><span /></div>
   </div>;
 }
@@ -128,9 +128,9 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
       {messages.map((message, index) => {
         const date = new Date(message.timestamp).toDateString();
         const previousDate = index > 0 ? new Date(messages[index - 1].timestamp).toDateString() : '';
-        return <div key={message.id}>{date !== previousDate && <div className="date-chip">{messageDateLabel(message.timestamp)}</div>}<ChatBubble message={message} reply={message.replyTo ? byId.get(message.replyTo) : undefined} active={active === message.id} highlighted={highlighted === message.id} onAction={() => setActive(active === message.id ? undefined : message.id)} onReact={(emoji) => react(message.id, emoji)} onReply={() => { setReplyTo(message.id); setActive(undefined); }} onSave={() => { setMessages((items) => items.map((item) => item.id === message.id ? { ...item, saved: !item.saved } : item)); setActive(undefined); }} onImage={setLightbox} onJump={jump} /></div>;
+        return <div key={message.id}>{date !== previousDate && <div className="date-chip">{messageDateLabel(message.timestamp)}</div>}<ChatBubble message={message} reply={message.replyTo ? byId.get(message.replyTo) : undefined} partnerName={partnerName} partnerInitial={partnerInitial} active={active === message.id} highlighted={highlighted === message.id} onAction={() => setActive(active === message.id ? undefined : message.id)} onReact={(emoji) => react(message.id, emoji)} onReply={() => { setReplyTo(message.id); setActive(undefined); }} onSave={() => { setMessages((items) => items.map((item) => item.id === message.id ? { ...item, saved: !item.saved } : item)); setActive(undefined); }} onImage={setLightbox} onJump={jump} /></div>;
       })}
-      {aiTyping && <TypingIndicator ai={usingAiPartner} />}
+      {aiTyping && <TypingIndicator ai={usingAiPartner} initial={partnerInitial} />}
       <div ref={bottomRef} />
     </div>
     <ChatComposer draft={draft} reply={replyTo ? byId.get(replyTo) : undefined} onDraft={setDraft} onSend={send} onImage={sendImage} onCancelReply={() => setReplyTo(undefined)} />
