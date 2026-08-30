@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import type { User } from 'firebase/auth';
 import type { UserProfile } from '../../utils/profile';
 import {
+  completeInviteOwnerConnection,
   connectWithInviteCode,
   createCoupleInvite,
   getRealCoupleConnection,
@@ -28,8 +29,8 @@ function messageFor(error: unknown) {
     'invite-used': '이미 사용된 초대 코드예요.',
     'invite-expired': '초대 코드가 만료됐어요. 새 코드를 만들어 주세요.',
     'self-invite': '내가 만든 초대 코드는 내 계정에서 사용할 수 없어요.',
-    'permission-denied': 'Firebase 권한 설정 때문에 초대 코드를 만들 수 없어요. Firestore 규칙을 먼저 배포해 주세요.',
-    'firestore/permission-denied': 'Firebase 권한 설정 때문에 초대 코드를 만들 수 없어요. Firestore 규칙을 먼저 배포해 주세요.',
+    'permission-denied': 'Firebase 권한 설정 때문에 연결할 수 없어요. Firestore 규칙을 다시 배포해 주세요.',
+    'firestore/permission-denied': 'Firebase 권한 설정 때문에 연결할 수 없어요. Firestore 규칙을 다시 배포해 주세요.',
     'unavailable': 'Firebase에 연결할 수 없어요. 네트워크 연결을 확인해 주세요.',
     'firestore/unavailable': 'Firebase에 연결할 수 없어요. 네트워크 연결을 확인해 주세요.',
   };
@@ -46,12 +47,17 @@ export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      void getRealCoupleConnection(user.uid).then((connection) => {
+      const check = inviteCode
+        ? completeInviteOwnerConnection(user.uid, inviteCode)
+        : getRealCoupleConnection(user.uid);
+      void check.then((connection) => {
         if (connection) onConnected(connection);
-      }).catch(() => undefined);
-    }, 4000);
+      }).catch((cause) => {
+        console.warn('[ROUTE couple poll]', cause);
+      });
+    }, 2500);
     return () => window.clearInterval(timer);
-  }, [onConnected, user.uid]);
+  }, [inviteCode, onConnected, user.uid]);
 
   const makeInvite = async () => {
     setBusy(true);
