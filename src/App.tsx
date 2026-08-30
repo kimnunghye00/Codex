@@ -89,7 +89,7 @@ function App() {
     <>
       <div className="app-shell">
         <main>
-          {tab === 'home' && <HomePage coupleDay={coupleDay} anniversaries={anniversaries} memories={memories} onNavigate={setTab} onOpenMemory={(id) => { setMemoryToOpen(id); setTab('memories'); }} onSettings={() => setSettingsOpen(true)} />}
+          {tab === 'home' && <HomePage profile={profile} coupleDay={coupleDay} anniversaries={anniversaries} memories={memories} onNavigate={setTab} onOpenMemory={(id) => { setMemoryToOpen(id); setTab('memories'); }} onSettings={() => setSettingsOpen(true)} />}
           {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} />}
           {tab === 'memories' && <MemoriesPage Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} onClearInitial={() => setMemoryToOpen(undefined)} />}
           {tab === 'anniversary' && <AnniversaryPage coupleDay={coupleDay} anniversaries={anniversaries} onSettings={() => setSettingsOpen(true)} />}
@@ -105,14 +105,14 @@ function Header({ title, onSettings }: { title?: string; onSettings: () => void 
   return <header className="topbar"><div className="brand"><Wordmark />{title && <span className="page-title">{title}</span>}</div><div className="header-actions"><button aria-label="알림"><Bell size={20} /><i /></button><button aria-label="설정" onClick={onSettings}><Settings size={20} /></button></div></header>;
 }
 
-function HomePage({ coupleDay, anniversaries, memories, onNavigate, onOpenMemory, onSettings }: { coupleDay: number; anniversaries: Anniversary[]; memories: Memory[]; onNavigate: (tab: Tab) => void; onOpenMemory: (id: number) => void; onSettings: () => void }) {
+function HomePage({ profile, coupleDay, anniversaries, memories, onNavigate, onOpenMemory, onSettings }: { profile: UserProfile; coupleDay: number; anniversaries: Anniversary[]; memories: Memory[]; onNavigate: (tab: Tab) => void; onOpenMemory: (id: number) => void; onSettings: () => void }) {
   const nearest = anniversaries[0];
   const latestMemory = memories[0];
   const onThisDay = memories.find((memory) => isSameMonthDay(memory.date));
   return (
     <div className="page home-page">
       <Header onSettings={onSettings} />
-      <section className="hero"><p className="hero-kicker">2024. 06. 01부터</p><h1>민준 <span>×</span> 서연</h1><p className="hero-day">우리의 <strong>{coupleDay}번째 날</strong></p><span className="d-day">D+{coupleDay}</span></section>
+      <section className="hero"><p className="hero-kicker">2024. 06. 01부터</p><h1>{profile.name} <span>×</span> 서연</h1><p className="hero-day">우리의 <strong>{coupleDay}번째 날</strong></p><span className="d-day">D+{coupleDay}</span></section>
       <section className="section anniversary-preview">
         <SectionHead eyebrow="NEXT MOMENT" title="다가오는 우리 날" action="모두 보기" onClick={() => onNavigate('anniversary')} />
         {nearest ? <button className="next-card" onClick={() => onNavigate('anniversary')}><div className="event-icon">{nearest.icon}</div><div><span>{formatDate(nearest.date)}</span><h3>{nearest.title}</h3><strong>{daysUntil(nearest.date)}일 남았어요</strong></div><ChevronRight size={20} /></button> : <button className="empty-card" onClick={() => onNavigate('anniversary')}><Plus size={18} />우리만의 특별한 날을 등록해보세요</button>}
