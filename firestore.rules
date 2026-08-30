@@ -22,24 +22,11 @@ service cloud.firestore {
         && request.auth.uid in get(/databases/$(database)/documents/couples/$(coupleId)).data.memberUids;
     }
 
-    function isUnlinkedOrTestCouple(data) {
-      return data.coupleId == null
-        || (data.coupleId is string && data.coupleId.matches('^test-.*'));
-    }
-
     match /users/{uid} {
       allow create: if signedIn() && request.auth.uid == uid;
       allow read: if signedIn() && (request.auth.uid == uid || sharesCoupleWith(uid));
-      allow update: if signedIn() && (
-        request.auth.uid == uid
-        || (
-          isUnlinkedOrTestCouple(resource.data)
-          && request.resource.data.coupleId != null
-          && request.resource.data.partnerUid == request.auth.uid
-          && request.auth.uid in getAfter(/databases/$(database)/documents/couples/$(request.resource.data.coupleId)).data.memberUids
-          && uid in getAfter(/databases/$(database)/documents/couples/$(request.resource.data.coupleId)).data.memberUids
-        )
-      );
+      // 각 사용자는 자기 사용자 문서만 수정합니다. 상대방 문서를 대신 수정하지 않습니다.
+      allow update: if signedIn() && request.auth.uid == uid;
       allow delete: if false;
     }
 
@@ -53,7 +40,9 @@ service cloud.firestore {
         && resource.data.status == 'open'
         && request.resource.data.status == 'used'
         && request.resource.data.usedBy == request.auth.uid
-        && request.resource.data.coupleId != null;
+        && request.resource.data.coupleId != null
+        && request.auth.uid in getAfter(/databases/$(database)/documents/couples/$(request.resource.data.coupleId)).data.memberUids
+        && resource.data.ownerUid in getAfter(/databases/$(database)/documents/couples/$(request.resource.data.coupleId)).data.memberUids;
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
     }
 
