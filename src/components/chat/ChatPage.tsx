@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { auth } from '../../lib/firebase';
 import { AI_TEST_PARTNER_NAME, loadLocalAiPartner } from '../../lib/coupleData';
-import { getRealCoupleConnection, type RealCoupleConnection } from '../../lib/coupleConnection';
+import type { RealCoupleConnection } from '../../lib/coupleConnection';
 import { sendCoupleMessage, subscribeCoupleMessages } from '../../lib/chatRealtime';
 import type { Message } from '../../types';
 import { messageDateLabel } from '../../utils/dates';
@@ -13,15 +13,12 @@ import { ChatComposer } from './ChatComposer';
 function aiReplyFor(text: string) {
   const value = text.trim();
   const lower = value.toLowerCase();
-
   if (!value) return '응, 듣고 있어.';
   if (/안녕|하이|hello|hi/.test(lower)) return '안녕! 이제 ROUTE 안에서도 대화 테스트를 할 수 있어 😊';
-  if (/별명/.test(value)) return '별명 기능도 같이 확인해보자. 내가 지어준 별명이 홈 화면과 설정에 같은 이름으로 보이는지 확인해줘.';
-  if (/오류|에러|버그|안돼|안 돼|문제/.test(value)) return '어디에서 문제가 생겼는지 알려줘. 어떤 버튼을 눌렀는지와 화면에 보이는 문구를 같이 확인해보자.';
-  if (/테스트/.test(value)) return '좋아. 메시지 전송, 답장, 반응, 이미지 같은 기능을 하나씩 테스트해보자.';
-  if (/고마워|감사/.test(value)) return '천만에 😊 계속 같이 테스트해보자.';
-  if (value.endsWith('?') || value.endsWith('？')) return `지금은 앱 내부 테스트 응답 모드라 복잡한 답변은 제한돼 있어. 그래도 “${value.slice(0, 22)}${value.length > 22 ? '…' : ''}”에 대한 대화 흐름은 정상적으로 테스트할 수 있어.`;
-  return `응, 확인했어. “${value.slice(0, 28)}${value.length > 28 ? '…' : ''}”라고 보냈네. 지금 메시지 왕복은 정상적으로 동작하고 있어.`;
+  if (/별명/.test(value)) return '별명 기능도 같이 확인해보자.';
+  if (/오류|에러|버그|안돼|안 돼|문제/.test(value)) return '어디에서 문제가 생겼는지 알려줘.';
+  if (/테스트/.test(value)) return '좋아. 메시지 전송부터 확인해보자.';
+  return `응, 확인했어. “${value.slice(0, 28)}${value.length > 28 ? '…' : ''}”`;
 }
 
 function TypingIndicator({ ai }: { ai: boolean }) {
@@ -31,62 +28,43 @@ function TypingIndicator({ ai }: { ai: boolean }) {
   </div>;
 }
 
-export function ChatPage({ Header, messages, setMessages }: { Header: ({ title }: { title?: string }) => React.ReactNode; messages: Message[]; setMessages: React.Dispatch<React.SetStateAction<Message[]>> }) {
+export function ChatPage({ Header, messages, setMessages, connection }: {
+  Header: ({ title }: { title?: string }) => React.ReactNode;
+  messages: Message[];
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
+  connection: RealCoupleConnection | null;
+}) {
   const [draft, setDraft] = useState('');
   const [replyTo, setReplyTo] = useState<number>();
   const [active, setActive] = useState<number>();
   const [lightbox, setLightbox] = useState<string>();
   const [highlighted, setHighlighted] = useState<number>();
   const [aiTyping, setAiTyping] = useState(false);
-  const [realConnection, setRealConnection] = useState<RealCoupleConnection | null>(null);
-  const [realPartnerName, setRealPartnerName] = useState('상대방');
   const [syncError, setSyncError] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
   const aiTimerRef = useRef<number>();
   const byId = useMemo(() => new Map(messages.map((message) => [message.id, message])), [messages]);
   const currentUid = auth.currentUser?.uid;
   const aiPartner = currentUid ? loadLocalAiPartner(currentUid) : null;
-  const usingAiPartner = Boolean(aiPartner?.connected && !realConnection);
-  const partnerName = realConnection
-    ? realPartnerName
-    : aiPartner?.connected
-      ? aiPartner.displayName || AI_TEST_PARTNER_NAME
-      : realPartnerName;
+  const usingAiPartner = Boolean(aiPartner?.connected && !connection);
+  const partnerName = connection?.partnerProfile?.nickname?.trim()
+    || connection?.partnerProfile?.name?.trim()
+    || (usingAiPartner ? aiPartner?.displayName || AI_TEST_PARTNER_NAME : '상대방');
   const partnerInitial = partnerName.trim().charAt(0) || '상';
 
   useEffect(() => {
-    if (!currentUid) return;
-    let cancelled = false;
-    let unsubscribe: (() => void) | undefined;
-
-    void getRealCoupleConnection(currentUid).then((connection) => {
-      if (cancelled) return;
-      setRealConnection(connection);
-      if (!connection) return;
-
-      setRealPartnerName(connection.partnerProfile?.nickname?.trim() || connection.partnerProfile?.name?.trim() || '상대방');
-      setSyncError('');
-      unsubscribe = subscribeCoupleMessages(
-        connection.coupleId,
-        currentUid,
-        (cloudMessages) => {
-          if (!cancelled) setMessages(cloudMessages);
-        },
-        (cause) => {
-          console.error('[ROUTE realtime chat]', cause);
-          if (!cancelled) setSyncError('실시간 대화를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.');
-        },
-      );
-    }).catch((cause) => {
-      console.warn('[ROUTE couple chat connection]', cause);
-      if (!cancelled) setRealConnection(null);
-    });
-
-    return () => {
-      cancelled = true;
-      unsubscribe?.();
-    };
-  }, [currentUid, setMessages]);
+    if (!connection || !currentUid) return;
+    setSyncError('');
+    return subscribeCoupleMessages(
+      connection.coupleId,
+      currentUid,
+      setMessages,
+      (cause) => {
+        console.error('[ROUTE realtime chat]', cause);
+        setSyncError('실시간 대화를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.');
+      },
+    );
+  }, [connection?.coupleId, currentUid, setMessages]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages.length, aiTyping]);
   useEffect(() => () => { if (aiTimerRef.current) window.clearTimeout(aiTimerRef.current); }, []);
@@ -95,48 +73,27 @@ export function ChatPage({ Header, messages, setMessages }: { Header: ({ title }
     if (!usingAiPartner) return;
     setAiTyping(true);
     if (aiTimerRef.current) window.clearTimeout(aiTimerRef.current);
-    const typingMs = Math.min(2400, Math.max(900, 700 + text.length * 35));
     aiTimerRef.current = window.setTimeout(() => {
-      setMessages((items) => [...items, {
-        id: Date.now() + 1,
-        sender: 'partner',
-        type: 'text',
-        text: aiReplyFor(text),
-        timestamp: new Date().toISOString(),
-        read: true,
-        replyTo: replyTarget,
-      }]);
+      setMessages((items) => [...items, { id: Date.now() + 1, sender: 'partner', type: 'text', text: aiReplyFor(text), timestamp: new Date().toISOString(), read: true, replyTo: replyTarget }]);
       setAiTyping(false);
-    }, typingMs);
+    }, Math.min(2400, Math.max(900, 700 + text.length * 35)));
   };
 
   const send = () => {
     const text = draft.trim();
     if (!text || !currentUid) return;
     const messageId = Date.now();
-    const currentReplyTo = replyTo;
-    const message: Message = {
-      id: messageId,
-      sender: 'me',
-      type: 'text',
-      text,
-      timestamp: new Date().toISOString(),
-      read: usingAiPartner,
-      replyTo: currentReplyTo,
-    };
-
+    const message: Message = { id: messageId, sender: 'me', type: 'text', text, timestamp: new Date().toISOString(), read: usingAiPartner, replyTo };
     setMessages((items) => [...items, message]);
     setDraft('');
     setReplyTo(undefined);
-
-    if (realConnection) {
-      void sendCoupleMessage(realConnection.coupleId, currentUid, message).catch((cause) => {
+    if (connection) {
+      void sendCoupleMessage(connection.coupleId, currentUid, message).catch((cause) => {
         console.error('[ROUTE send realtime chat]', cause);
         setSyncError('메시지를 상대방에게 전송하지 못했어요. 연결 상태를 확인해 주세요.');
       });
       return;
     }
-
     queueAiReply(text, messageId);
   };
 
@@ -147,19 +104,10 @@ export function ChatPage({ Header, messages, setMessages }: { Header: ({ title }
       const imageUrl = String(reader.result);
       const message: Message = { id: messageId, sender: 'me', type: 'image', imageUrl, timestamp: new Date().toISOString(), read: usingAiPartner, replyTo };
       setMessages((items) => [...items, message]);
-
-      if (realConnection && currentUid) {
-        if (imageUrl.length < 700_000) {
-          void sendCoupleMessage(realConnection.coupleId, currentUid, message).catch((cause) => {
-            console.error('[ROUTE send realtime image]', cause);
-            setSyncError('사진 전송에 실패했어요. 사진 저장소 연결은 다음 단계에서 보강할게요.');
-          });
-        } else {
-          setSyncError('큰 사진은 아직 상대방에게 동기화되지 않아요. 사진 저장소 연결 후 지원할 예정이에요.');
-        }
-      } else if (usingAiPartner) {
-        queueAiReply('이미지를 보냈어', messageId);
-      }
+      if (connection && currentUid) {
+        if (imageUrl.length < 700_000) void sendCoupleMessage(connection.coupleId, currentUid, message).catch(() => setSyncError('사진 전송에 실패했어요.'));
+        else setSyncError('큰 사진은 아직 상대방에게 동기화되지 않아요.');
+      } else if (usingAiPartner) queueAiReply('이미지를 보냈어', messageId);
     };
     reader.readAsDataURL(file);
     setReplyTo(undefined);
@@ -172,10 +120,7 @@ export function ChatPage({ Header, messages, setMessages }: { Header: ({ title }
     <Header title="대화" />
     <div className="chat-profile">
       <div className="avatar large">{usingAiPartner ? <Bot size={22} /> : partnerInitial}</div>
-      <div>
-        <b>{partnerName}</b>
-        <span className={aiTyping ? 'chat-status typing' : 'chat-status'}><i /> {aiTyping ? '입력 중...' : realConnection ? '실시간 연결됨' : usingAiPartner ? 'AI 테스트 파트너 · 연결됨' : '상대방 연결 대기'}</span>
-      </div>
+      <div><b>{partnerName}</b><span className={aiTyping ? 'chat-status typing' : 'chat-status'}><i /> {aiTyping ? '입력 중...' : connection ? '실시간 연결됨' : usingAiPartner ? 'AI 테스트 파트너 · 연결됨' : '상대방 연결 대기'}</span></div>
       <button aria-label="대화 메뉴"><MoreHorizontal /></button>
     </div>
     {syncError && <p className="chat-sync-error" role="alert">{syncError}</p>}
@@ -183,8 +128,7 @@ export function ChatPage({ Header, messages, setMessages }: { Header: ({ title }
       {messages.map((message, index) => {
         const date = new Date(message.timestamp).toDateString();
         const previousDate = index > 0 ? new Date(messages[index - 1].timestamp).toDateString() : '';
-        const divider = date !== previousDate;
-        return <div key={message.id}>{divider && <div className="date-chip">{messageDateLabel(message.timestamp)}</div>}<ChatBubble message={message} reply={message.replyTo ? byId.get(message.replyTo) : undefined} active={active === message.id} highlighted={highlighted === message.id} onAction={() => setActive(active === message.id ? undefined : message.id)} onReact={(emoji) => react(message.id, emoji)} onReply={() => { setReplyTo(message.id); setActive(undefined); }} onSave={() => { setMessages((items) => items.map((item) => item.id === message.id ? { ...item, saved: !item.saved } : item)); setActive(undefined); }} onImage={setLightbox} onJump={jump} /></div>;
+        return <div key={message.id}>{date !== previousDate && <div className="date-chip">{messageDateLabel(message.timestamp)}</div>}<ChatBubble message={message} reply={message.replyTo ? byId.get(message.replyTo) : undefined} active={active === message.id} highlighted={highlighted === message.id} onAction={() => setActive(active === message.id ? undefined : message.id)} onReact={(emoji) => react(message.id, emoji)} onReply={() => { setReplyTo(message.id); setActive(undefined); }} onSave={() => { setMessages((items) => items.map((item) => item.id === message.id ? { ...item, saved: !item.saved } : item)); setActive(undefined); }} onImage={setLightbox} onJump={jump} /></div>;
       })}
       {aiTyping && <TypingIndicator ai={usingAiPartner} />}
       <div ref={bottomRef} />
