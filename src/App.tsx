@@ -24,7 +24,7 @@ import {
   Image, MapPin, MapPinned, MessageCircle, Plus, Settings,
 } from 'lucide-react';
 
-type Tab = 'home' | 'chat' | 'memories' | 'location' | 'anniversary';
+type Tab = 'home' | 'chat' | 'memories' | 'location' | 'anniversary' | 'more';
 type Anniversary = { id: number; icon: string; title: string; date: Date; recurring?: boolean };
 
 const DAY = 86_400_000;
@@ -191,6 +191,7 @@ function App() {
           {tab === 'memories' && <MemoriesPage Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} onClearInitial={() => setMemoryToOpen(undefined)} />}
           {tab === 'location' && <LocationPage Header={AppHeader} onActivity={(title, detail) => addActivity({ actor: 'me', kind: 'location', title, detail })} />}
           {tab === 'anniversary' && <AnniversaryPage coupleDay={coupleDay} anniversaries={anniversaries} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
+          {tab === 'more' && <MorePage onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
         </main>
         <BottomNav tab={tab} setTab={setTab} />
       </div>
@@ -268,8 +269,12 @@ function AnniversaryPage({ coupleDay, anniversaries, onSettings, onNotifications
   return <div className="page"><Header title="기념일" onSettings={onSettings} onNotifications={onNotifications} unreadCount={unreadCount} /><div className="title-block"><small>OUR DAYS</small><h1>함께 기다리는 날</h1><p>우리 둘의 소중한 시간을 잊지 않도록.</p></div><div className="anniversary-card"><div className="rings"><Heart fill="currentColor" /></div><span>우리의 시간</span><strong>{coupleDay}번째 날</strong><p>2024. 06. 01부터 · D+{coupleDay}</p></div><div className="section-head upcoming"><h2>다가오는 기념일</h2><button><Plus size={16} />추가</button></div><div className="event-list">{anniversaries.map((event) => <button className="event" key={event.id}><div className="event-icon">{event.icon}</div><div><b>{event.title}</b><span>{formatDate(event.date)}</span></div><em>D-{daysUntil(event.date)}</em><ChevronRight size={17} /></button>)}</div></div>;
 }
 
+function MorePage({ onSettings, onNotifications, unreadCount }: { onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
+  return <div className="page"><Header title="더보기" onSettings={onSettings} onNotifications={onNotifications} unreadCount={unreadCount} /><div className="title-block"><small>MORE</small><h1>더보기</h1><p>계정과 앱 설정을 관리할 수 있어요.</p></div><div className="event-list"><button className="event" type="button" onClick={onSettings}><div className="event-icon"><Settings size={20} /></div><div><b>계정 및 프로필 설정</b><span>내 정보와 계정 설정을 관리해요</span></div><ChevronRight size={17} /></button><button className="event" type="button" onClick={onNotifications}><div className="event-icon"><Bell size={20} /></div><div><b>알림</b><span>최근 알림을 확인해요</span></div>{unreadCount > 0 && <em>{unreadCount}</em>}<ChevronRight size={17} /></button></div></div>;
+}
+
 function BottomNav({ tab, setTab }: { tab: Tab; setTab: (tab: Tab) => void }) {
-  const items: [Tab, string, typeof Home][] = [['home', '홈', Home], ['memories', '추억', Image], ['chat', '채팅', MessageCircle], ['location', '위치', MapPinned], ['anniversary', '더보기', Ellipsis]];
+  const items: [Tab, string, typeof Home][] = [['home', '홈', Home], ['memories', '추억', Image], ['chat', '채팅', MessageCircle], ['location', '위치', MapPinned], ['more', '더보기', Ellipsis]];
   return <nav className="bottom-nav" aria-label="주요 메뉴">{items.map(([id, label, Icon]) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}><span className="nav-icon"><Icon size={21} strokeWidth={tab === id ? 2.4 : 1.8} /></span><span>{label}</span></button>)}</nav>;
 }
 
