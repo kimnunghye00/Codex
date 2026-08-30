@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChatPage } from './components/chat/ChatPage';
 import { MemoriesPage } from './components/memories/MemoriesPage';
+import { LocationPage } from './components/location/LocationPage';
 import { AccountSettings } from './components/auth/AccountSettings';
 import { AuthFlow, Wordmark } from './components/auth/AuthFlow';
 import { ProfileSetup } from './components/auth/ProfileSetup';
@@ -20,10 +21,10 @@ import {
 } from './utils/notifications';
 import {
   Bell, CalendarDays, ChevronRight, Heart, Home,
-  Image, LockKeyhole, MessageCircle, Plus, Settings,
+  Image, LockKeyhole, MapPinned, MessageCircle, Plus, Settings,
 } from 'lucide-react';
 
-type Tab = 'home' | 'chat' | 'memories' | 'anniversary';
+type Tab = 'home' | 'chat' | 'memories' | 'location' | 'anniversary';
 type Anniversary = { id: number; icon: string; title: string; date: Date; recurring?: boolean };
 
 const DAY = 86_400_000;
@@ -188,6 +189,7 @@ function App() {
           {tab === 'home' && <HomePage profile={profile} coupleDay={coupleDay} anniversaries={anniversaries} memories={memories} onNavigate={setTab} onOpenMemory={(id) => { setMemoryToOpen(id); setTab('memories'); }} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
           {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} />}
           {tab === 'memories' && <MemoriesPage Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} onClearInitial={() => setMemoryToOpen(undefined)} />}
+          {tab === 'location' && <LocationPage Header={AppHeader} onActivity={(title, detail) => addActivity({ actor: 'me', kind: 'location', title, detail })} />}
           {tab === 'anniversary' && <AnniversaryPage coupleDay={coupleDay} anniversaries={anniversaries} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
         </main>
         <BottomNav tab={tab} setTab={setTab} />
@@ -236,7 +238,7 @@ function AnniversaryPage({ coupleDay, anniversaries, onSettings, onNotifications
 }
 
 function BottomNav({ tab, setTab }: { tab: Tab; setTab: (tab: Tab) => void }) {
-  const items: [Tab, string, typeof Home][] = [['home', '홈', Home], ['chat', '채팅', MessageCircle], ['memories', '추억', Image], ['anniversary', '기념일', CalendarDays]];
+  const items: [Tab, string, typeof Home][] = [['home', '홈', Home], ['chat', '채팅', MessageCircle], ['memories', '추억', Image], ['location', '위치', MapPinned], ['anniversary', '기념일', CalendarDays]];
   return <nav className="bottom-nav" aria-label="주요 메뉴">{items.map(([id, label, Icon]) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}><span className="nav-icon"><Icon size={21} strokeWidth={tab === id ? 2.4 : 1.8} /></span><span>{label}</span></button>)}</nav>;
 }
 
