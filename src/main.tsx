@@ -14,5 +14,6 @@ import './more.css';
 import './route-brand.css';
 import './route-themes.css';
 import './route-themes';
+import './close-standard.css';
 
 createRoot(document.getElementById('root')!).render(<StrictMode><Root /></StrictMode>);
