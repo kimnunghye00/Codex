@@ -39,39 +39,34 @@ export function loadNaverMaps() {
     if (ready?.maps) return resolve(ready);
 
     const clientId = String(import.meta.env.VITE_NAVER_MAP_CLIENT_ID ?? '').trim();
-    if (!clientId) {
-      reject(new Error('VITE_NAVER_MAP_CLIENT_ID is missing'));
-      return;
-    }
+    if (!clientId) return reject(new Error('VITE_NAVER_MAP_CLIENT_ID is missing'));
 
-    const existing = document.getElementById(NAVER_MAP_SCRIPT_ID) as HTMLScriptElement | null;
-    if (existing) {
-      existing.addEventListener('load', () => {
-        const loaded = naverApi();
-        if (loaded?.maps) resolve(loaded);
-        else reject(new Error('NAVER Maps failed to initialize'));
-      }, { once: true });
-      existing.addEventListener('error', () => reject(new Error('NAVER Maps failed to load')), { once: true });
-      return;
-    }
+    const oldScript = document.getElementById(NAVER_MAP_SCRIPT_ID) as HTMLScriptElement | null;
+    if (oldScript && !naverApi()?.maps) oldScript.remove();
 
     const previousAuthFailure = (window as typeof window & { navermap_authFailure?: () => void }).navermap_authFailure;
     (window as typeof window & { navermap_authFailure?: () => void }).navermap_authFailure = () => {
       previousAuthFailure?.();
+      document.getElementById(NAVER_MAP_SCRIPT_ID)?.remove();
       reject(new Error('NAVER Maps authentication failed'));
     };
 
     const script = document.createElement('script');
     script.id = NAVER_MAP_SCRIPT_ID;
     script.async = true;
-    script.defer = true;
-    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(clientId)}&submodules=gl`;
+    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(clientId)}`;
     script.onload = () => {
       const loaded = naverApi();
       if (loaded?.maps) resolve(loaded);
-      else reject(new Error('NAVER Maps failed to initialize'));
+      else {
+        script.remove();
+        reject(new Error('NAVER Maps failed to initialize'));
+      }
     };
-    script.onerror = () => reject(new Error('NAVER Maps failed to load'));
+    script.onerror = () => {
+      script.remove();
+      reject(new Error('NAVER Maps failed to load'));
+    };
     document.head.appendChild(script);
   });
 }
