@@ -1,4 +1,4 @@
-import { Clock3, LocateFixed, MapPin, Navigation, PauseCircle, ShieldCheck } from 'lucide-react';
+import { Clock3, LocateFixed, MapPin, Navigation, PauseCircle, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type React from 'react';
 import { auth } from '../../lib/firebase';
@@ -11,7 +11,7 @@ import {
   saveLocationVisits,
   type LocationVisit,
 } from '../../utils/location';
-import { loadNaverMaps, naverApi, type NaverMap, type NaverOverlay } from '../../utils/naverMaps';
+import { loadNaverMaps, naverApi, naverMapDiagnostic, type NaverMap, type NaverOverlay } from '../../utils/naverMaps';
 
 const MIN_MOVE_METERS = 120;
 
@@ -34,6 +34,19 @@ function markerHtml(current: boolean) {
   return `<div style="width:${size}px;height:${size}px;border:3px solid #fff;border-radius:50%;background:${color};box-shadow:0 3px 10px #0003"></div>`;
 }
 
+function mapErrorMessage(error: unknown) {
+  const code = error instanceof Error ? error.message : String(error);
+  const diagnostic = naverMapDiagnostic();
+  if (code === 'NAVER_MAP_AUTH_FAILED') {
+    return `네이버 지도 인증이 거부됐어요. NAVER Cloud의 Web 서비스 URL에 ${diagnostic.origin} 을 등록해 주세요.`;
+  }
+  if (code === 'NAVER_MAP_LOAD_TIMEOUT') return '네이버 지도 서버 응답이 늦어요. 네트워크를 확인한 뒤 다시 시도해 주세요.';
+  if (code === 'NAVER_MAP_SCRIPT_FAILED') return '네이버 지도 SDK를 불러오지 못했어요. 네트워크 또는 브라우저 차단 여부를 확인해 주세요.';
+  if (code === 'NAVER_MAP_INIT_FAILED') return '네이버 지도 SDK는 받았지만 초기화에 실패했어요. 다시 불러오기를 눌러 주세요.';
+  if (code === 'NAVER_CLIENT_ID_MISSING') return '네이버 지도 Client ID를 찾지 못했어요.';
+  return `네이버 지도를 불러오지 못했어요. 현재 Web 서비스 URL: ${diagnostic.origin}`;
+}
+
 export function LocationPage({ Header, onActivity }: {
   Header: ({ title }: { title?: string }) => React.ReactNode;
   onActivity?: (title: string, detail?: string) => void;
@@ -44,6 +57,8 @@ export function LocationPage({ Header, onActivity }: {
   const [status, setStatus] = useState('위치 공유를 켜면 이동 기록을 만들어요.');
   const [tracking, setTracking] = useState(false);
   const [mapStatus, setMapStatus] = useState('네이버 지도를 불러오는 중이에요…');
+  const [mapFailed, setMapFailed] = useState(false);
+  const [mapAttempt, setMapAttempt] = useState(0);
   const watchId = useRef<number>();
   const mapElement = useRef<HTMLDivElement>(null);
   const mapRef = useRef<NaverMap>();
@@ -60,24 +75,34 @@ export function LocationPage({ Header, onActivity }: {
 
   useEffect(() => {
     let cancelled = false;
+    setMapFailed(false);
+    setMapStatus('네이버 지도를 불러오는 중이에요…');
+
     void loadNaverMaps().then((naver) => {
       if (cancelled || !mapElement.current || mapRef.current) return;
+      const rect = mapElement.current.getBoundingClientRect();
+      if (rect.width < 20 || rect.height < 20) throw new Error('NAVER_MAP_CONTAINER_EMPTY');
+
       mapRef.current = new naver.maps.Map(mapElement.current, {
         center: new naver.maps.LatLng(37.5666103, 126.9783882),
         zoom: 15,
         zoomControl: true,
         zoomControlOptions: { position: naver.maps.Position.TOP_RIGHT },
       });
-      window.setTimeout(() => {
-        if (mapRef.current) naver.maps.Event.trigger(mapRef.current, 'resize');
-      }, 120);
+
+      const resize = () => {
+        if (!mapRef.current) return;
+        naver.maps.Event.trigger(mapRef.current, 'resize');
+        mapRef.current.setCenter(new naver.maps.LatLng(37.5666103, 126.9783882));
+      };
+      window.requestAnimationFrame(() => window.requestAnimationFrame(resize));
+      window.setTimeout(resize, 350);
       setMapStatus(visits.length ? '' : '위치 기록이 생기면 방문한 장소가 지도에 표시돼요.');
     }).catch((error) => {
-      console.error('[ROUTE NAVER location map]', error);
+      console.error('[ROUTE NAVER location map]', error, naverMapDiagnostic());
       if (!cancelled) {
-        setMapStatus(String(import.meta.env.VITE_NAVER_MAP_CLIENT_ID ?? '').trim()
-          ? '네이버 지도를 불러오지 못했어요. 현재 Codespaces Web 서비스 URL을 확인해 주세요.'
-          : '네이버 지도 Client ID가 아직 설정되지 않았어요.');
+        setMapFailed(true);
+        setMapStatus(mapErrorMessage(error));
       }
     });
 
@@ -88,7 +113,7 @@ export function LocationPage({ Header, onActivity }: {
       mapRef.current?.destroy?.();
       mapRef.current = undefined;
     };
-  }, []);
+  }, [mapAttempt]);
 
   useEffect(() => {
     const naver = naverApi();
@@ -194,7 +219,7 @@ export function LocationPage({ Header, onActivity }: {
     <Header title="위치" />
     <section className="location-map-card" aria-label="네이버 이동 지도">
       <div ref={mapElement} className="location-real-map" />
-      {mapStatus && <div className="location-map-status"><MapPin size={18} /><span>{mapStatus}</span></div>}
+      {mapStatus && <div className={`location-map-status ${mapFailed ? 'failed' : ''}`}><MapPin size={18} /><span>{mapStatus}</span>{mapFailed && <button type="button" onClick={() => setMapAttempt((value) => value + 1)}><RefreshCw size={14} />다시 불러오기</button>}</div>}
       <div className="location-map-caption"><strong>우리의 이동 지도</strong><span>{visits.length ? `${visits.length}개의 위치 기록` : '아직 기록 없음'}</span></div>
     </section>
     <section className={`location-share-card ${sharing ? 'active' : ''}`}>
