@@ -9,7 +9,7 @@ import { onAuthStateChanged, type User } from 'firebase/auth';
 import type { Memory, Message } from './types';
 import { isSameMonthDay } from './utils/dates';
 import { loadMemories, loadMessages, saveMemories, saveMessages } from './utils/storage';
-import { loadProfile, type UserProfile } from './utils/profile';
+import { displayName, loadProfile, type UserProfile } from './utils/profile';
 import {
   Bell, CalendarDays, ChevronRight, Heart, Home,
   Image, LockKeyhole, MessageCircle, Plus, Settings,
@@ -112,7 +112,7 @@ function HomePage({ profile, coupleDay, anniversaries, memories, onNavigate, onO
   return (
     <div className="page home-page">
       <Header onSettings={onSettings} />
-      <section className="hero"><p className="hero-kicker">2024. 06. 01부터</p><h1>{profile.name} <span>×</span> 서연</h1><p className="hero-day">우리의 <strong>{coupleDay}번째 날</strong></p><span className="d-day">D+{coupleDay}</span></section>
+      <section className="hero"><p className="hero-kicker">2024. 06. 01부터</p><h1>{displayName(profile)} <span>×</span> 서연</h1><p className="hero-day">우리의 <strong>{coupleDay}번째 날</strong></p><span className="d-day">D+{coupleDay}</span></section>
       <section className="section anniversary-preview">
         <SectionHead eyebrow="NEXT MOMENT" title="다가오는 우리 날" action="모두 보기" onClick={() => onNavigate('anniversary')} />
         {nearest ? <button className="next-card" onClick={() => onNavigate('anniversary')}><div className="event-icon">{nearest.icon}</div><div><span>{formatDate(nearest.date)}</span><h3>{nearest.title}</h3><strong>{daysUntil(nearest.date)}일 남았어요</strong></div><ChevronRight size={20} /></button> : <button className="empty-card" onClick={() => onNavigate('anniversary')}><Plus size={18} />우리만의 특별한 날을 등록해보세요</button>}
