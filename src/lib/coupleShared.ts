@@ -34,7 +34,7 @@ export async function savePartnerNickname(coupleId: string, targetUid: string, n
   const value = nickname.trim();
   if (!targetUid || value.length < 1 || value.length > 12) throw new Error('invalid-partner-nickname');
   await setDoc(doc(db, 'couples', coupleId), {
-    [`nicknames.${targetUid}`]: value,
+    nicknames: { [targetUid]: value },
     updatedAt: serverTimestamp(),
   }, { merge: true });
 }
