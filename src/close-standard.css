@@ -5,14 +5,16 @@
 .account-settings,
 .memory-form,
 .notification-panel,
-.route-theme-sheet {
+.route-theme-sheet,
+.home-map-overlay-panel {
   position: relative;
 }
 
 .account-settings > header,
 .memory-form > header,
 .notification-panel > header,
-.route-theme-sheet-header {
+.route-theme-sheet-header,
+.home-map-overlay-panel > header {
   position: relative;
   padding-right: 68px !important;
 }
@@ -20,7 +22,8 @@
 .account-settings > header > button[aria-label='닫기'],
 .memory-form > header > button[aria-label='닫기'],
 .notification-panel .notification-close,
-.route-theme-sheet .route-theme-sheet-close {
+.route-theme-sheet .route-theme-sheet-close,
+.home-map-overlay-panel .home-map-overlay-close {
   position: absolute !important;
   top: 12px !important;
   right: 12px !important;
@@ -50,7 +53,8 @@
   display: block !important;
 }
 
-.route-theme-sheet .route-theme-sheet-close {
+.route-theme-sheet .route-theme-sheet-close,
+.home-map-overlay-panel .home-map-overlay-close {
   font-size: 28px !important;
   font-weight: 300 !important;
 }
@@ -86,7 +90,8 @@
   .account-settings > header,
   .memory-form > header,
   .notification-panel > header,
-  .route-theme-sheet-header {
+  .route-theme-sheet-header,
+  .home-map-overlay-panel > header {
     padding-right: 64px !important;
   }
 }
