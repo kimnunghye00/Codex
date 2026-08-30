@@ -93,20 +93,16 @@ export async function connectWithInviteCode(uid: string, displayName: string, ra
     const ownerUid = String(invite.ownerUid ?? '');
     if (!ownerUid || ownerUid === uid) throw new Error('self-invite');
 
-    const ownerUserRef = doc(db, 'users', ownerUid);
-    const [ownerSnap, currentSnap] = await Promise.all([
-      transaction.get(ownerUserRef),
-      transaction.get(currentUserRef),
-    ]);
-
-    const ownerCoupleId = String(ownerSnap.data()?.coupleId ?? '');
+    // The joining user may read their own document, but not the inviter's profile
+    // before the couple exists. The inviter's name is already safely stored on the invite.
+    const currentSnap = await transaction.get(currentUserRef);
     const currentCoupleId = String(currentSnap.data()?.coupleId ?? '');
-    if (ownerCoupleId && !isTestCouple(ownerCoupleId)) throw new Error('owner-already-connected');
     if (currentCoupleId && !isTestCouple(currentCoupleId)) throw new Error('already-connected');
 
+    const ownerUserRef = doc(db, 'users', ownerUid);
     const coupleRef = doc(collection(db, 'couples'));
     const coupleId = coupleRef.id;
-    const ownerName = String(invite.ownerName ?? ownerSnap.data()?.profile?.name ?? '상대방');
+    const ownerName = String(invite.ownerName ?? '상대방');
 
     transaction.set(coupleRef, {
       id: coupleId,
