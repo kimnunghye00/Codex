@@ -1,4 +1,4 @@
-.home-dashboard { width: 100%; min-width: 0; max-width: 100%; padding-bottom: 98px; overflow-x: hidden; }
+.home-dashboard { width: 100%; min-width: 0; max-width: 100%; height: calc(100dvh - 88px); min-height: 0; padding-bottom: 0; overflow: hidden; }
 .home-dashboard .topbar { margin-bottom: 8px; }
 .home-dashboard-grid { width: 100%; min-width: 0; max-width: 100%; display: grid; grid-template-columns: minmax(0, 1.18fr) minmax(0, .82fr); gap: 12px; align-items: stretch; overflow: hidden; }
 .home-map-card,
@@ -53,6 +53,14 @@
 .home-chat-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .home-chat-copy b { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; }
 .home-chat-copy small { width: 100%; max-width: 100%; margin-top: 3px; overflow: hidden; color: var(--text-secondary); font-size: 9px; white-space: nowrap; text-overflow: ellipsis; }
+
+/* More page is also a fixed, single-screen tab. */
+.page:has(> .topbar + .title-block + .event-list) {
+  height: calc(100dvh - 88px);
+  min-height: 0;
+  padding-bottom: 0;
+  overflow: hidden;
+}
 
 /* Keep the complete two-column dashboard inside the actual mobile viewport. */
 @media (max-width: 480px) {
