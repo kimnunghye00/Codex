@@ -7,6 +7,24 @@ import { AuthFlow } from './AuthFlow';
 
 const steps = ['이름', '생년월일', '성별', '프로필 사진'];
 
+const normalizeBirthDate = (value: string) => {
+  const digits = value.replace(/\D/g, '').slice(0, 8);
+  if (digits.length < 5) return digits;
+  if (digits.length < 7) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6)}`;
+};
+
+const isValidBirthDate = (value: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  const today = new Date();
+  return date.getFullYear() === year
+    && date.getMonth() === month - 1
+    && date.getDate() === day
+    && date <= today;
+};
+
 export function ProfileSetup({ user, onComplete }: { user: User; onComplete: (profile: UserProfile) => void }) {
   const hasPassword = user.providerData.some((provider) => provider.providerId === 'password');
   const [step, setStep] = useState(0);
@@ -16,18 +34,19 @@ export function ProfileSetup({ user, onComplete }: { user: User; onComplete: (pr
   const [photoDataUrl, setPhotoDataUrl] = useState('');
   const [error, setError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
-  const age = useMemo(() => birthDate ? calculateAge(birthDate) : 0, [birthDate]);
+  const birthDateValid = isValidBirthDate(birthDate);
+  const age = useMemo(() => birthDateValid ? calculateAge(birthDate) : 0, [birthDate, birthDateValid]);
 
   if (user.phoneNumber && !hasPassword) return <AuthFlow />;
 
   const canContinue = step === 0 ? name.trim().length >= 2
-    : step === 1 ? Boolean(birthDate) && age > 0
+    : step === 1 ? birthDateValid && age > 0
       : step === 2 ? Boolean(gender)
         : true;
 
   const next = () => {
     setError('');
-    if (!canContinue) return setError('필수 정보를 입력해 주세요.');
+    if (!canContinue) return setError(step === 1 ? '생년월일 8자리를 정확히 입력해 주세요.' : '필수 정보를 입력해 주세요.');
     if (step < 3) return setStep((current) => current + 1);
     const profile: UserProfile = {
       name: name.trim(),
@@ -37,7 +56,7 @@ export function ProfileSetup({ user, onComplete }: { user: User; onComplete: (pr
       completedAt: new Date().toISOString(),
     };
     saveProfile(user.uid, profile);
-    void syncUserProfile(user.uid, profile).catch((cause) => console.warn('[MELUNI profile cloud sync]', cause));
+    void syncUserProfile(user.uid, profile).catch((cause) => console.warn('[ROUTE profile cloud sync]', cause));
     onComplete(profile);
   };
 
@@ -55,7 +74,7 @@ export function ProfileSetup({ user, onComplete }: { user: User; onComplete: (pr
 
   return <div className="app-shell onboarding-shell">
     <header className="onboarding-header">
-      <div className="wordmark"><strong>MELUNI.</strong><span>ME + U</span></div>
+      <div className="wordmark"><strong>ROUTE.</strong></div>
       <span>{step + 1} / 4</span>
     </header>
 
@@ -67,16 +86,16 @@ export function ProfileSetup({ user, onComplete }: { user: User; onComplete: (pr
       {step === 0 && <section>
         <p className="overline">PROFILE SETUP</p>
         <h1>어떻게 불러드릴까요?</h1>
-        <p className="onboarding-copy">MELUNI에서 사용할 이름을 입력해 주세요.</p>
+        <p className="onboarding-copy">ROUTE에서 사용할 이름을 입력해 주세요.</p>
         <label>이름<input autoFocus type="text" maxLength={20} value={name} onChange={(e) => setName(e.target.value)} placeholder="이름을 입력하세요" /></label>
       </section>}
 
       {step === 1 && <section>
         <p className="overline">BIRTHDAY</p>
         <h1>생년월일을 알려주세요</h1>
-        <p className="onboarding-copy">나이는 생년월일을 기준으로 자동 계산돼요.</p>
-        <label>생년월일<input type="date" value={birthDate} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setBirthDate(e.target.value)} /></label>
-        {birthDate && <div className="age-preview"><span>현재 나이</span><strong>만 {age}세</strong></div>}
+        <p className="onboarding-copy">숫자 8자리로 입력해 주세요. 나이는 자동 계산돼요.</p>
+        <label>생년월일<input autoFocus type="text" inputMode="numeric" autoComplete="bday" maxLength={10} value={birthDate} onChange={(e) => setBirthDate(normalizeBirthDate(e.target.value))} placeholder="예: 1998-12-25" /></label>
+        {birthDateValid && <div className="age-preview"><span>현재 나이</span><strong>만 {age}세</strong></div>}
       </section>}
 
       {step === 2 && <section>
