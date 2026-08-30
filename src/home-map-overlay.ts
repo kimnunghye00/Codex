@@ -66,8 +66,10 @@ export function openHomeMap() {
 
   let map: NaverMap | undefined;
   let mapOverlays: NaverOverlay[] = [];
+  let resizeObserver: ResizeObserver | undefined;
 
   const closeOverlay = () => {
+    resizeObserver?.disconnect();
     mapOverlays.forEach((item) => item.setMap(null));
     mapOverlays = [];
     map?.destroy?.();
@@ -93,6 +95,18 @@ export function openHomeMap() {
       zoomControl: true,
       zoomControlOptions: { position: naver.maps.Position.TOP_RIGHT },
     });
+
+    const refreshSize = () => {
+      if (!map) return;
+      naver.maps.Event.trigger(map, 'resize');
+      map.setCenter(center);
+    };
+
+    requestAnimationFrame(refreshSize);
+    window.setTimeout(refreshSize, 120);
+    window.setTimeout(refreshSize, 350);
+    resizeObserver = new ResizeObserver(() => refreshSize());
+    resizeObserver.observe(mapElement);
 
     const uid = auth.currentUser?.uid ?? '';
     const visits = uid ? loadLocationVisits(uid) : [];
@@ -174,7 +188,5 @@ function handleHomeMapKeyboard(event: KeyboardEvent) {
   openHomeMap();
 }
 
-// React가 홈 화면을 다시 렌더링해도 이벤트가 끊기지 않도록
-// 개별 카드가 아니라 document 캡처 단계에서 홈 지도 클릭을 직접 처리한다.
 document.addEventListener('click', handleHomeMapClick, true);
 document.addEventListener('keydown', handleHomeMapKeyboard, true);
