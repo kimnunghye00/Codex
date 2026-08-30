@@ -7,6 +7,7 @@ import {
   signInWithEmailAndPassword,
   signInWithPhoneNumber,
   type ConfirmationResult,
+  type User,
 } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
 
@@ -69,9 +70,9 @@ export function AuthFlow() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const confirmation = useRef<ConfirmationResult>();
-  const verifier = useRef<RecaptchaVerifier>();
-  const verifiedPhoneUser = useRef<Awaited<ReturnType<ConfirmationResult['confirm']>>['user']>();
+  const confirmation = useRef<ConfirmationResult | undefined>(undefined);
+  const verifier = useRef<RecaptchaVerifier | undefined>(undefined);
+  const verifiedPhoneUser = useRef<User | undefined>(undefined);
 
   const clearMessages = () => { setError(''); setNotice(''); };
   const changeMode = (next: Mode) => { clearMessages(); setMode(next); };
@@ -147,7 +148,6 @@ export function AuthFlow() {
     try {
       const credential = EmailAuthProvider.credential(phoneLoginEmail(phone), password);
       await linkWithCredential(verifiedPhoneUser.current, credential);
-      // 현재 사용자는 이미 전화번호 인증으로 로그인되어 있으므로 App이 프로필 설정 화면으로 이동한다.
     } catch (cause) {
       setError(messageFor(cause));
     } finally {
