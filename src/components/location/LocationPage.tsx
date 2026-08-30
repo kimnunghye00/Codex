@@ -11,75 +11,9 @@ import {
   saveLocationVisits,
   type LocationVisit,
 } from '../../utils/location';
+import { loadNaverMaps, naverApi, type NaverMap, type NaverOverlay } from '../../utils/naverMaps';
 
 const MIN_MOVE_METERS = 120;
-const LEAFLET_SCRIPT_ID = 'meluni-leaflet-script';
-const LEAFLET_STYLE_ID = 'meluni-leaflet-style';
-
-type LeafletMap = {
-  remove: () => void;
-  invalidateSize: () => void;
-  fitBounds: (bounds: unknown, options?: unknown) => void;
-  setView: (latLng: [number, number], zoom: number) => void;
-};
-
-type LeafletLayerGroup = {
-  clearLayers: () => void;
-  addTo: (map: LeafletMap) => LeafletLayerGroup;
-};
-
-type LeafletApi = {
-  map: (element: HTMLElement, options?: unknown) => LeafletMap;
-  tileLayer: (url: string, options?: unknown) => { addTo: (map: LeafletMap) => unknown };
-  layerGroup: () => LeafletLayerGroup;
-  marker: (latLng: [number, number], options?: unknown) => { addTo: (group: LeafletLayerGroup) => unknown; bindPopup: (html: string) => unknown };
-  circleMarker: (latLng: [number, number], options?: unknown) => { addTo: (group: LeafletLayerGroup) => { bindPopup: (html: string) => unknown } };
-  polyline: (latLngs: [number, number][], options?: unknown) => { addTo: (group: LeafletLayerGroup) => unknown };
-  latLngBounds: (latLngs: [number, number][]) => unknown;
-};
-
-function leafletApi() {
-  return (window as typeof window & { L?: LeafletApi }).L;
-}
-
-function loadLeaflet() {
-  return new Promise<LeafletApi>((resolve, reject) => {
-    const ready = leafletApi();
-    if (ready) return resolve(ready);
-
-    if (!document.getElementById(LEAFLET_STYLE_ID)) {
-      const link = document.createElement('link');
-      link.id = LEAFLET_STYLE_ID;
-      link.rel = 'stylesheet';
-      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-      link.crossOrigin = '';
-      document.head.appendChild(link);
-    }
-
-    const existing = document.getElementById(LEAFLET_SCRIPT_ID) as HTMLScriptElement | null;
-    if (existing) {
-      existing.addEventListener('load', () => {
-        const loaded = leafletApi();
-        if (loaded) resolve(loaded);
-        else reject(new Error('Leaflet failed to initialize'));
-      }, { once: true });
-      existing.addEventListener('error', () => reject(new Error('Leaflet failed to load')), { once: true });
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.id = LEAFLET_SCRIPT_ID;
-    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-    script.crossOrigin = '';
-    script.onload = () => {
-      const loaded = leafletApi();
-      if (loaded) resolve(loaded);
-      else reject(new Error('Leaflet failed to initialize'));
-    };
-    script.onerror = () => reject(new Error('Leaflet failed to load'));
-    document.body.appendChild(script);
-  });
-}
 
 function timeText(value?: string) {
   if (!value) return '현재';
@@ -94,6 +28,12 @@ function escapeHtml(value: string) {
   return value.replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character] ?? character));
 }
 
+function markerHtml(current: boolean) {
+  const color = current ? '#FF6F61' : '#1F2A44';
+  const size = current ? 20 : 16;
+  return `<div style="width:${size}px;height:${size}px;border:3px solid #fff;border-radius:50%;background:${color};box-shadow:0 3px 10px #0003"></div>`;
+}
+
 export function LocationPage({ Header, onActivity }: {
   Header: ({ title }: { title?: string }) => React.ReactNode;
   onActivity?: (title: string, detail?: string) => void;
@@ -103,11 +43,11 @@ export function LocationPage({ Header, onActivity }: {
   const [visits, setVisits] = useState<LocationVisit[]>(() => uid ? loadLocationVisits(uid) : []);
   const [status, setStatus] = useState('위치 공유를 켜면 이동 기록을 만들어요.');
   const [tracking, setTracking] = useState(false);
-  const [mapStatus, setMapStatus] = useState('지도를 불러오는 중이에요…');
+  const [mapStatus, setMapStatus] = useState('네이버 지도를 불러오는 중이에요…');
   const watchId = useRef<number>();
   const mapElement = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<LeafletMap>();
-  const visitLayerRef = useRef<LeafletLayerGroup>();
+  const mapRef = useRef<NaverMap>();
+  const overlaysRef = useRef<NaverOverlay[]>([]);
 
   const stopWatching = (announce = true) => {
     if (watchId.current !== undefined) navigator.geolocation.clearWatch(watchId.current);
@@ -120,65 +60,86 @@ export function LocationPage({ Header, onActivity }: {
 
   useEffect(() => {
     let cancelled = false;
-    let resizeObserver: ResizeObserver | undefined;
-
-    void loadLeaflet().then((L) => {
-      if (cancelled || !mapElement.current) return;
-      if (!mapRef.current) {
-        const map = L.map(mapElement.current, { zoomControl: true, attributionControl: true });
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          maxZoom: 19,
-          attribution: '&copy; OpenStreetMap contributors',
-        }).addTo(map);
-        map.setView([37.5665, 126.978], 12);
-        mapRef.current = map;
-        visitLayerRef.current = L.layerGroup().addTo(map);
-        resizeObserver = new ResizeObserver(() => map.invalidateSize());
-        resizeObserver.observe(mapElement.current);
-      }
+    void loadNaverMaps().then((naver) => {
+      if (cancelled || !mapElement.current || mapRef.current) return;
+      mapRef.current = new naver.maps.Map(mapElement.current, {
+        center: new naver.maps.LatLng(37.5666103, 126.9783882),
+        zoom: 15,
+        gl: true,
+        zoomControl: true,
+        zoomControlOptions: { position: naver.maps.Position.TOP_RIGHT },
+      });
       setMapStatus(visits.length ? '' : '위치 기록이 생기면 방문한 장소가 지도에 표시돼요.');
-    }).catch(() => {
-      if (!cancelled) setMapStatus('지도를 불러오지 못했어요. 인터넷 연결을 확인해 주세요.');
+    }).catch((error) => {
+      console.error('[ROUTE NAVER location map]', error);
+      if (!cancelled) {
+        setMapStatus(String(import.meta.env.VITE_NAVER_MAP_CLIENT_ID ?? '').trim()
+          ? '네이버 지도를 불러오지 못했어요. Web 서비스 URL을 확인해 주세요.'
+          : '네이버 지도 Client ID가 아직 설정되지 않았어요.');
+      }
     });
 
     return () => {
       cancelled = true;
-      resizeObserver?.disconnect();
+      overlaysRef.current.forEach((overlay) => overlay.setMap(null));
+      overlaysRef.current = [];
+      mapRef.current?.destroy?.();
+      mapRef.current = undefined;
     };
   }, []);
 
   useEffect(() => {
-    const L = leafletApi();
+    const naver = naverApi();
     const map = mapRef.current;
-    const layer = visitLayerRef.current;
-    if (!L || !map || !layer) return;
+    if (!naver?.maps || !map) return;
 
-    layer.clearLayers();
+    overlaysRef.current.forEach((overlay) => overlay.setMap(null));
+    overlaysRef.current = [];
+
     if (!visits.length) {
-      map.setView([37.5665, 126.978], 12);
+      map.setCenter(new naver.maps.LatLng(37.5666103, 126.9783882));
+      map.setZoom(15);
       setMapStatus('위치 기록이 생기면 방문한 장소가 지도에 표시돼요.');
       return;
     }
 
-    const points = visits.map((visit) => [visit.latitude, visit.longitude] as [number, number]);
-    if (points.length > 1) L.polyline(points, { color: '#6f63df', weight: 4, opacity: 0.55 }).addTo(layer);
+    const points = visits.map((visit) => new naver.maps.LatLng(visit.latitude, visit.longitude));
+    if (points.length > 1) {
+      overlaysRef.current.push(new naver.maps.Polyline({
+        map,
+        path: points,
+        strokeColor: '#FF6F61',
+        strokeWeight: 5,
+        strokeOpacity: 0.76,
+      }));
+    }
 
     visits.forEach((visit, index) => {
-      const popup = `<strong>${escapeHtml(visit.placeName || '위치 기록')}</strong><br>${escapeHtml(dayText(visit.arrivedAt))} · ${escapeHtml(timeText(visit.arrivedAt))}`;
-      L.circleMarker([visit.latitude, visit.longitude], {
-        radius: index === 0 && !visit.leftAt ? 9 : 7,
-        color: index === 0 && !visit.leftAt ? '#5b5bd6' : '#ffffff',
-        weight: 3,
-        fillColor: index === 0 && !visit.leftAt ? '#5b5bd6' : '#8b86d9',
-        fillOpacity: 1,
-      }).addTo(layer).bindPopup(popup);
+      const current = index === 0 && !visit.leftAt;
+      const marker = new naver.maps.Marker({
+        map,
+        position: points[index],
+        icon: { content: markerHtml(current) },
+      });
+      const popup = new naver.maps.InfoWindow({
+        content: `<div style="padding:10px 12px;font-size:12px;line-height:1.45"><strong>${escapeHtml(visit.placeName || '위치 기록')}</strong><br>${escapeHtml(dayText(visit.arrivedAt))} · ${escapeHtml(timeText(visit.arrivedAt))}</div>`,
+        borderWidth: 0,
+        backgroundColor: '#fff',
+      });
+      naver.maps.Event.addListener(marker, 'click', () => popup.open(map, marker));
+      overlaysRef.current.push(marker);
     });
 
-    if (points.length === 1) map.setView(points[0], 16);
-    else map.fitBounds(L.latLngBounds(points), { padding: [28, 28], maxZoom: 16 });
+    if (points.length === 1) {
+      map.setCenter(points[0]);
+      map.setZoom(17);
+    } else {
+      const bounds = new naver.maps.LatLngBounds();
+      points.forEach((point) => bounds.extend(point));
+      map.fitBounds(bounds, { top: 34, right: 34, bottom: 34, left: 34 });
+    }
     setMapStatus('');
-    window.setTimeout(() => map.invalidateSize(), 50);
-  }, [visits, mapRef.current]);
+  }, [visits]);
 
   const persistVisits = (next: LocationVisit[]) => {
     setVisits(next);
@@ -246,20 +207,23 @@ export function LocationPage({ Header, onActivity }: {
   };
 
   const focusVisit = (visit: LocationVisit) => {
-    mapRef.current?.setView([visit.latitude, visit.longitude], 16);
+    const naver = naverApi();
+    if (!naver?.maps || !mapRef.current) return;
+    mapRef.current.setCenter(new naver.maps.LatLng(visit.latitude, visit.longitude));
+    mapRef.current.setZoom(17);
   };
 
   return <div className="page location-page">
     <Header title="위치" />
 
-    <section className="location-map-card" aria-label="실제 이동 지도">
+    <section className="location-map-card" aria-label="네이버 이동 지도">
       <div ref={mapElement} className="location-real-map" />
       {mapStatus && <div className="location-map-status"><MapPin size={18} /><span>{mapStatus}</span></div>}
       <div className="location-map-caption"><strong>우리의 이동 지도</strong><span>{visits.length ? `${visits.length}개의 위치 기록` : '아직 기록 없음'}</span></div>
     </section>
 
     <section className={`location-share-card ${sharing ? 'active' : ''}`}>
-      <div className="location-share-head"><span><LocateFixed size={21} /></span><div><strong>{sharing ? '내 위치 공유 중' : '내 위치 공유 꺼짐'}</strong><small>{tracking ? '현재 MELUNI가 위치 변화를 확인하고 있어요.' : status}</small></div></div>
+      <div className="location-share-head"><span><LocateFixed size={21} /></span><div><strong>{sharing ? '내 위치 공유 중' : '내 위치 공유 꺼짐'}</strong><small>{tracking ? '현재 ROUTE가 위치 변화를 확인하고 있어요.' : status}</small></div></div>
       <div className="location-actions">
         {!sharing ? <button className="primary" type="button" onClick={startWatching}><Navigation size={16} />위치 공유 시작</button> : <>
           {!tracking && <button className="primary" type="button" onClick={startWatching}><LocateFixed size={16} />다시 추적</button>}
@@ -271,7 +235,7 @@ export function LocationPage({ Header, onActivity }: {
 
     <section className="location-history">
       <div className="location-section-head"><div><small>TIMELINE</small><h2>최근 다녀온 곳</h2></div><span>{visits.length}곳</span></div>
-      {!visits.length ? <div className="location-empty"><MapPin size={24} /><strong>아직 위치 기록이 없어요</strong><p>위치 공유를 시작하고 이동하면 실제 지도 위에 방문 장소가 자동으로 쌓여요.</p></div> : <div className="location-list">{visits.map((visit, index) => <button type="button" key={visit.id} className="location-visit" onClick={() => focusVisit(visit)}>
+      {!visits.length ? <div className="location-empty"><MapPin size={24} /><strong>아직 위치 기록이 없어요</strong><p>위치 공유를 시작하고 이동하면 네이버 지도 위에 방문 장소가 자동으로 쌓여요.</p></div> : <div className="location-list">{visits.map((visit, index) => <button type="button" key={visit.id} className="location-visit" onClick={() => focusVisit(visit)}>
         <div className="location-rail"><i className={index === 0 && !visit.leftAt ? 'live' : ''} />{index < visits.length - 1 && <span />}</div>
         <div className="location-visit-copy"><small>{dayText(visit.arrivedAt)}</small><strong>{visit.placeName || '위치 기록'}</strong><p><Clock3 size={13} /> {timeText(visit.arrivedAt)} 도착 · {visit.leftAt ? `${timeText(visit.leftAt)} 이동` : '현재 머무는 중'}</p><em>정확도 약 {Math.round(visit.accuracy)}m · 눌러서 지도에서 보기</em></div>
       </button>)}</div>}
