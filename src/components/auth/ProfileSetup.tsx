@@ -2,6 +2,7 @@ import { Camera, Check, ChevronLeft, ChevronRight, UserRound } from 'lucide-reac
 import { useMemo, useRef, useState } from 'react';
 import type { User } from 'firebase/auth';
 import { calculateAge, saveProfile, type Gender, type UserProfile } from '../../utils/profile';
+import { syncUserProfile } from '../../lib/coupleData';
 import { AuthFlow } from './AuthFlow';
 
 const steps = ['이름', '생년월일', '성별', '프로필 사진'];
@@ -36,6 +37,7 @@ export function ProfileSetup({ user, onComplete }: { user: User; onComplete: (pr
       completedAt: new Date().toISOString(),
     };
     saveProfile(user.uid, profile);
+    void syncUserProfile(user.uid, profile).catch((cause) => console.warn('[MELUNI profile cloud sync]', cause));
     onComplete(profile);
   };
 
