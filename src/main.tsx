@@ -5,5 +5,6 @@ import './styles.css';
 import './auth-onboarding.css';
 import './nickname.css';
 import './ai-test.css';
+import './chat-typing.css';
 
 createRoot(document.getElementById('root')!).render(<StrictMode><Root /></StrictMode>);
