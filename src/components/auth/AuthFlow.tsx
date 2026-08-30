@@ -6,6 +6,7 @@ import {
   linkWithCredential,
   signInWithEmailAndPassword,
   signInWithPhoneNumber,
+  updatePassword,
   type ConfirmationResult,
   type User,
 } from 'firebase/auth';
@@ -13,6 +14,8 @@ import { auth } from '../../lib/firebase';
 
 type Mode = 'login' | 'signup-phone' | 'signup-code' | 'signup-password';
 type FirebaseLikeError = { code?: string; message?: string };
+
+export const SIGNUP_PENDING_KEY = 'meluni-signup-pending';
 
 const normalizeKoreanPhone = (value: string) => {
   const digits = value.trim().replace(/[^\d+]/g, '');
@@ -43,8 +46,8 @@ const messageFor = (error: unknown) => {
     'auth/invalid-verification-code': '인증번호가 올바르지 않아요.',
     'auth/code-expired': '인증번호가 만료됐어요. 다시 받아주세요.',
     'auth/weak-password': '비밀번호는 6자 이상으로 설정해 주세요.',
-    'auth/email-already-in-use': '이미 가입된 휴대폰 번호예요. 로그인해 주세요.',
-    'auth/credential-already-in-use': '이미 가입된 휴대폰 번호예요. 로그인해 주세요.',
+    'auth/email-already-in-use': '이미 가입된 휴대폰 번호예요.',
+    'auth/credential-already-in-use': '이미 가입된 휴대폰 번호예요.',
     'auth/invalid-credential': '아이디 또는 비밀번호가 올바르지 않아요.',
     'auth/user-not-found': '가입된 계정을 찾을 수 없어요.',
     'auth/wrong-password': '비밀번호가 올바르지 않아요.',
@@ -58,9 +61,8 @@ export function Wordmark() {
 }
 
 export function AuthFlow() {
-  const pendingPhoneUser = auth.currentUser?.phoneNumber && !auth.currentUser.providerData.some((provider) => provider.providerId === 'password')
-    ? auth.currentUser
-    : undefined;
+  const signupPending = localStorage.getItem(SIGNUP_PENDING_KEY) === '1';
+  const pendingPhoneUser = signupPending && auth.currentUser?.phoneNumber ? auth.currentUser : undefined;
   const [mode, setMode] = useState<Mode>(pendingPhoneUser ? 'signup-password' : 'login');
   const [identifier, setIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -77,7 +79,11 @@ export function AuthFlow() {
   const verifiedPhoneUser = useRef<User | undefined>(pendingPhoneUser);
 
   const clearMessages = () => { setError(''); setNotice(''); };
-  const changeMode = (next: Mode) => { clearMessages(); setMode(next); };
+  const changeMode = (next: Mode) => {
+    clearMessages();
+    if (next === 'login') localStorage.removeItem(SIGNUP_PENDING_KEY);
+    setMode(next);
+  };
 
   const destroyVerifier = () => {
     try { verifier.current?.clear(); } catch { /* already cleared */ }
@@ -131,11 +137,15 @@ export function AuthFlow() {
     clearMessages();
     setBusy(true);
     try {
+      // Firebase의 전화번호 인증 완료 순간 로그인 상태가 되므로,
+      // 먼저 이 플래그를 저장해 Root가 회원가입 화면을 유지하게 한다.
+      localStorage.setItem(SIGNUP_PENDING_KEY, '1');
       const result = await confirmation.current.confirm(code);
       verifiedPhoneUser.current = result.user;
       setPhone(result.user.phoneNumber ?? phone);
       changeMode('signup-password');
     } catch (cause) {
+      localStorage.removeItem(SIGNUP_PENDING_KEY);
       setError(messageFor(cause));
     } finally {
       setBusy(false);
@@ -143,14 +153,27 @@ export function AuthFlow() {
   };
 
   const finishSignup = async () => {
-    if (!verifiedPhoneUser.current) return changeMode('signup-phone');
+    const user = verifiedPhoneUser.current ?? auth.currentUser ?? undefined;
+    if (!user) return changeMode('signup-phone');
     clearMessages();
     if (password.length < 6) return setError('비밀번호는 6자 이상으로 설정해 주세요.');
     if (password !== passwordConfirm) return setError('비밀번호가 서로 달라요.');
     setBusy(true);
     try {
-      const credential = EmailAuthProvider.credential(phoneLoginEmail(phone), password);
-      await linkWithCredential(verifiedPhoneUser.current, credential);
+      const hasPasswordLogin = user.providerData.some((provider) => provider.providerId === 'password');
+      if (hasPasswordLogin) {
+        // 개발 중 이미 만들어 둔 동일 전화번호 계정도 회원가입 흐름을 끝까지 테스트할 수 있게
+        // 최근 SMS 인증을 근거로 기존 비밀번호를 새 값으로 갱신한다.
+        await updatePassword(user, password);
+      } else {
+        const credential = EmailAuthProvider.credential(phoneLoginEmail(phone), password);
+        await linkWithCredential(user, credential);
+      }
+
+      // 과거 개발 버전에서 같은 Firebase uid로 저장된 로컬 프로필이 있으면
+      // 새 회원가입에서 프로필 설정이 건너뛰어지므로 제거한다.
+      localStorage.removeItem(`meluni-profile:${user.uid}`);
+      localStorage.removeItem(SIGNUP_PENDING_KEY);
       window.location.reload();
     } catch (cause) {
       setError(messageFor(cause));
