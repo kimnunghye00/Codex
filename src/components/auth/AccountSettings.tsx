@@ -1,4 +1,4 @@
-import { Camera, CheckCircle2, Heart, LogOut, Mail, UserRound, X } from 'lucide-react';
+import { Bot, Camera, CheckCircle2, Heart, LogOut, Mail, UserRound, X } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import {
   EmailAuthProvider,
@@ -9,6 +9,7 @@ import {
   type User,
 } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
+import { connectAiTestPartner, syncUserProfile } from '../../lib/coupleData';
 import {
   calculateAge,
   displayName,
@@ -48,11 +49,19 @@ export function AccountSettings({ user, profile, onProfileChange, onClose }: {
   const [gender, setGender] = useState<Gender>(profile.gender);
   const [photoDataUrl, setPhotoDataUrl] = useState(profile.photoDataUrl ?? '');
   const [profileFeedback, setProfileFeedback] = useState('');
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiFeedback, setAiFeedback] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const age = useMemo(() => birthDate ? calculateAge(birthDate) : 0, [birthDate]);
   const nicknameState = nicknameChangeState(profile);
   const hasEmail = user.providerData.some((provider) => provider.providerId === 'password');
   const loginEmail = user.email?.endsWith('@login.meluni.app') ? null : user.email;
+
+  const syncProfile = (next: UserProfile) => {
+    saveProfile(user.uid, next);
+    onProfileChange(next);
+    void syncUserProfile(user.uid, next).catch((cause) => console.warn('[MELUNI profile cloud sync]', cause));
+  };
 
   const linkEmail = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -89,8 +98,7 @@ export function AccountSettings({ user, profile, onProfileChange, onClose }: {
     if (name.trim().length < 2) return setProfileFeedback('이름을 2자 이상 입력해 주세요.');
     if (!birthDate || age <= 0) return setProfileFeedback('생년월일을 확인해 주세요.');
     const next: UserProfile = { ...profile, name: name.trim(), birthDate, gender, photoDataUrl: photoDataUrl || undefined };
-    saveProfile(user.uid, next);
-    onProfileChange(next);
+    syncProfile(next);
     setProfileFeedback('프로필을 저장했어요.');
     setProfileOpen(false);
   };
@@ -102,12 +110,26 @@ export function AccountSettings({ user, profile, onProfileChange, onClose }: {
     if (!nicknameState.canChange) return setNicknameFeedback(`내가 직접 바꾸는 별명은 ${nicknameState.daysLeft}일 뒤에 다시 변경할 수 있어요.`);
     try {
       const next = setSelfNickname(profile, trimmed);
-      saveProfile(user.uid, next);
-      onProfileChange(next);
+      syncProfile(next);
       setNicknameFeedback('별명을 바꿨어요. 다음 직접 변경은 30일 뒤에 가능해요.');
       setNicknameOpen(false);
     } catch {
       setNicknameFeedback('아직 별명을 직접 바꿀 수 있는 기간이 아니에요.');
+    }
+  };
+
+  const connectAi = async () => {
+    setAiBusy(true);
+    setAiFeedback('');
+    try {
+      await syncUserProfile(user.uid, profile);
+      await connectAiTestPartner(user.uid, displayName(profile));
+      setAiFeedback('AI 테스트 파트너를 연결했어요. 이제 커플 데이터를 Firestore에서 함께 테스트할 준비가 됐어요.');
+    } catch (cause) {
+      console.error('[MELUNI AI partner connect]', cause);
+      setAiFeedback('Firestore 연결을 완료하지 못했어요. Firebase에서 Firestore Database를 먼저 생성해 주세요.');
+    } finally {
+      setAiBusy(false);
     }
   };
 
@@ -158,6 +180,13 @@ export function AccountSettings({ user, profile, onProfileChange, onClose }: {
         <label>비밀번호 확인<input required type="password" autoComplete="new-password" minLength={6} value={confirm} onChange={(event) => setConfirm(event.target.value)} placeholder="한 번 더 입력하세요" /></label>
         <button className="primary" type="submit" disabled={busy || !email.trim() || password.length < 6 || confirm.length < 6}>{busy ? '등록 중...' : '이메일 등록하고 인증받기'}</button>
       </form>}
+
+      <section className="ai-test-card">
+        <div><Bot size={20} /><span><strong>AI 테스트 파트너</strong><small>실제 상대방 기능을 만들기 전에 MELUNI의 커플 동작을 함께 테스트해요.</small></span></div>
+        <button type="button" className="nickname-edit-button" disabled={aiBusy} onClick={() => void connectAi()}>{aiBusy ? '연결 중...' : 'AI 테스트 파트너 연결'}</button>
+        {aiFeedback && <p className="account-feedback">{aiFeedback}</p>}
+      </section>
+
       {feedback && <p className="account-feedback">{feedback}</p>}
       <button className="logout-button" onClick={() => void signOut(auth)}><LogOut size={17} />로그아웃</button>
     </div>
