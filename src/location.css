@@ -1,11 +1,15 @@
 .location-page { height: calc(100dvh - 88px); min-height: 0; display: flex; flex-direction: column; gap: 9px; padding-bottom: 10px; overflow: hidden; }
 .location-page .topbar { flex: 0 0 auto; }
 .location-map-card { position: relative; flex: 0 0 248px; min-height: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 22px; background: #eef0f5; box-shadow: 0 8px 24px #30305a0a; }
-.location-real-map { width: 100%; height: 100%; z-index: 1; }
+.location-real-map { position: absolute; inset: 0; width: 100%; height: 100%; min-width: 100%; min-height: 100%; z-index: 1; }
 .location-real-map .leaflet-control-attribution { font-size: 7px; }
 .location-real-map .leaflet-control-zoom a { color: #555465; }
 .location-map-status { position: absolute; z-index: 500; inset: 50% auto auto 50%; min-width: 210px; max-width: calc(100% - 36px); display: flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 12px; transform: translate(-50%, -50%); border: 1px solid #ffffffcc; border-radius: 14px; color: #636271; background: #fffffff0; box-shadow: 0 7px 22px #25253618; backdrop-filter: blur(10px); font-size: 9px; text-align: center; }
 .location-map-status svg { flex: 0 0 auto; color: var(--primary); }
+.location-map-status.failed { width: min(330px, calc(100% - 28px)); min-width: 0; flex-wrap: wrap; padding: 12px 14px; }
+.location-map-status.failed span { flex: 1 1 220px; line-height: 1.45; word-break: keep-all; }
+.location-map-status.failed button { min-height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 11px; border: 0; border-radius: 10px; color: #fff; background: var(--primary); font-size: 9px; font-weight: 800; }
+.location-map-status.failed button svg { color: currentColor; }
 .location-map-caption { position: absolute; z-index: 500; top: 11px; left: 11px; display: flex; flex-direction: column; padding: 8px 10px; border: 1px solid #ffffffb8; border-radius: 13px; background: #ffffffea; box-shadow: 0 6px 18px #25253612; backdrop-filter: blur(10px); pointer-events: none; }
 .location-map-caption strong { color: #34333f; font-size: 10px; }
 .location-map-caption span { margin-top: 2px; color: #8b8995; font-size: 8px; }
