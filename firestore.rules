@@ -22,13 +22,19 @@ service cloud.firestore {
         && request.auth.uid in get(/databases/$(database)/documents/couples/$(coupleId)).data.memberUids;
     }
 
+    function isUnlinkedOrTestCouple(data) {
+      return data.coupleId == null
+        || (data.coupleId is string && data.coupleId.matches('^test-.*'));
+    }
+
     match /users/{uid} {
       allow create: if signedIn() && request.auth.uid == uid;
       allow read: if signedIn() && (request.auth.uid == uid || sharesCoupleWith(uid));
       allow update: if signedIn() && (
         request.auth.uid == uid
         || (
-          request.resource.data.coupleId != null
+          isUnlinkedOrTestCouple(resource.data)
+          && request.resource.data.coupleId != null
           && request.resource.data.partnerUid == request.auth.uid
           && request.auth.uid in getAfter(/databases/$(database)/documents/couples/$(request.resource.data.coupleId)).data.memberUids
           && uid in getAfter(/databases/$(database)/documents/couples/$(request.resource.data.coupleId)).data.memberUids
@@ -46,7 +52,8 @@ service cloud.firestore {
       allow update: if signedIn()
         && resource.data.status == 'open'
         && request.resource.data.status == 'used'
-        && request.resource.data.usedBy == request.auth.uid;
+        && request.resource.data.usedBy == request.auth.uid
+        && request.resource.data.coupleId != null;
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
     }
 
