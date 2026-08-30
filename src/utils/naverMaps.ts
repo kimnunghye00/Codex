@@ -13,6 +13,7 @@ export type NaverInfoWindow = { open: (map: NaverMap, anchor: NaverOverlay) => v
 
 type NaverEventApi = {
   addListener: (target: unknown, eventName: string, handler: () => void) => unknown;
+  trigger: (target: unknown, eventName: string, payload?: unknown) => void;
 };
 
 type NaverMapsNamespace = {
