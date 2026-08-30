@@ -2,10 +2,12 @@ import { Camera, Check, ChevronLeft, ChevronRight, UserRound } from 'lucide-reac
 import { useMemo, useRef, useState } from 'react';
 import type { User } from 'firebase/auth';
 import { calculateAge, saveProfile, type Gender, type UserProfile } from '../../utils/profile';
+import { AuthFlow } from './AuthFlow';
 
 const steps = ['이름', '생년월일', '성별', '프로필 사진'];
 
 export function ProfileSetup({ user, onComplete }: { user: User; onComplete: (profile: UserProfile) => void }) {
+  const hasPassword = user.providerData.some((provider) => provider.providerId === 'password');
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
   const [birthDate, setBirthDate] = useState('');
@@ -14,6 +16,8 @@ export function ProfileSetup({ user, onComplete }: { user: User; onComplete: (pr
   const [error, setError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const age = useMemo(() => birthDate ? calculateAge(birthDate) : 0, [birthDate]);
+
+  if (user.phoneNumber && !hasPassword) return <AuthFlow />;
 
   const canContinue = step === 0 ? name.trim().length >= 2
     : step === 1 ? Boolean(birthDate) && age > 0
