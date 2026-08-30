@@ -1,5 +1,5 @@
 import { ArrowLeft, LockKeyhole, Mail, Phone } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   RecaptchaVerifier,
   sendPasswordResetEmail,
@@ -12,15 +12,32 @@ import { auth } from '../../lib/firebase';
 
 type Mode = 'phone' | 'code' | 'email' | 'reset';
 
+type FirebaseLikeError = {
+  code?: string;
+  message?: string;
+};
+
+const getErrorDetails = (error: unknown) => {
+  if (typeof error !== 'object' || !error) return { code: '', message: String(error ?? '') };
+  const firebaseError = error as FirebaseLikeError;
+  return {
+    code: firebaseError.code ? String(firebaseError.code) : '',
+    message: firebaseError.message ? String(firebaseError.message) : '',
+  };
+};
+
 const errorMessage = (error: unknown) => {
-  const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
+  const { code, message } = getErrorDetails(error);
+  const host = typeof window !== 'undefined' ? window.location.hostname : '';
   const messages: Record<string, string> = {
     'auth/invalid-phone-number': '휴대전화 번호를 다시 확인해 주세요.',
     'auth/operation-not-allowed': '현재 국가에서는 SMS 인증이 허용되지 않았어요. Firebase의 SMS 리전 설정을 확인해 주세요.',
-    'auth/unauthorized-domain': '현재 실행 중인 주소가 Firebase에 승인되지 않았어요. 승인된 앱 주소에서 다시 시도해 주세요.',
-    'auth/captcha-check-failed': '보안 확인에 실패했어요. 페이지를 새로고침한 뒤 다시 시도해 주세요.',
-    'auth/invalid-app-credential': 'SMS 보안 확인이 만료됐어요. 페이지를 새로고침한 뒤 다시 시도해 주세요.',
-    'auth/missing-recaptcha-token': 'SMS 보안 확인을 시작하지 못했어요. 페이지를 새로고침한 뒤 다시 시도해 주세요.',
+    'auth/unauthorized-domain': `현재 주소(${host})가 Firebase 승인 도메인에 등록되지 않았어요. Firebase Authentication > Settings > Authorized domains에 이 주소를 추가해 주세요.`,
+    'auth/captcha-check-failed': '보안 확인에 실패했어요. 보안 확인을 새로 준비했으니 다시 눌러 주세요.',
+    'auth/invalid-app-credential': 'SMS 보안 확인 정보가 만료됐어요. 보안 확인을 새로 준비했으니 다시 눌러 주세요.',
+    'auth/missing-recaptcha-token': 'SMS 보안 확인을 시작하지 못했어요. 보안 확인을 새로 준비했으니 다시 눌러 주세요.',
+    'auth/network-request-failed': '네트워크 연결이 불안정해요. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.',
+    'auth/internal-error': 'Firebase 인증 서버에서 일시적인 오류가 발생했어요. 잠시 뒤 다시 시도해 주세요.',
     'auth/billing-not-enabled': '실제 SMS를 보내려면 Firebase 결제 설정이 필요해요.',
     'auth/too-many-requests': '요청이 너무 많아요. 잠시 후 다시 시도해 주세요.',
     'auth/quota-exceeded': '오늘 사용할 수 있는 SMS 인증 횟수를 초과했어요.',
@@ -30,12 +47,24 @@ const errorMessage = (error: unknown) => {
     'auth/invalid-credential': '이메일 또는 비밀번호가 올바르지 않아요.',
     'auth/user-disabled': '사용이 중지된 계정이에요.',
   };
+
+  const known = code ? messages[code] : undefined;
+  if (known) return known;
+
+  // Firebase SDK가 code 없이 reCAPTCHA DOM 오류를 던지는 경우도 있다.
+  if (/recaptcha/i.test(message)) {
+    return '보안 확인을 다시 초기화했어요. 한 번 더 SMS 인증번호 받기를 눌러 주세요.';
+  }
+
   const fallback = '처리 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
-  return messages[code] ?? (import.meta.env.DEV && code ? `${fallback} (${code})` : fallback);
+  return import.meta.env.DEV && (code || message)
+    ? `${fallback} (${code || message})`
+    : fallback;
 };
 
 const normalizeKoreanPhone = (value: string) => {
-  const digits = value.replace(/[^\d+]/g, '');
+  const trimmed = value.trim();
+  const digits = trimmed.replace(/[^\d+]/g, '');
   if (digits.startsWith('+')) return digits;
   if (digits.startsWith('0')) return `+82${digits.slice(1)}`;
   return `+82${digits}`;
@@ -61,18 +90,47 @@ export function AuthFlow() {
   const resetMessages = () => { setError(''); setNotice(''); };
   const changeMode = (next: Mode) => { resetMessages(); setMode(next); };
 
+  const destroyVerifier = () => {
+    try {
+      verifier.current?.clear();
+    } catch {
+      // 이미 정리된 verifier는 무시한다.
+    }
+    verifier.current = undefined;
+
+    // Codespaces/Vite HMR 및 재시도 시 남아 있는 reCAPTCHA DOM을 완전히 제거한다.
+    const container = document.getElementById('recaptcha-container');
+    if (container) container.replaceChildren();
+  };
+
+  const createVerifier = async () => {
+    destroyVerifier();
+    const nextVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+      size: 'invisible',
+      callback: () => resetMessages(),
+      'expired-callback': () => {
+        destroyVerifier();
+        setError('보안 확인 시간이 만료됐어요. SMS 인증번호 받기를 다시 눌러 주세요.');
+      },
+    });
+    verifier.current = nextVerifier;
+    await nextVerifier.render();
+    return nextVerifier;
+  };
+
+  useEffect(() => () => destroyVerifier(), []);
+
   const sendCode = async () => {
     resetMessages();
     setBusy(true);
     try {
-      verifier.current?.clear();
-      verifier.current = new RecaptchaVerifier(auth, 'recaptcha-container', { size: 'invisible' });
-      confirmation.current = await signInWithPhoneNumber(auth, normalizeKoreanPhone(phone), verifier.current);
+      const nextVerifier = await createVerifier();
+      confirmation.current = await signInWithPhoneNumber(auth, normalizeKoreanPhone(phone), nextVerifier);
       setMode('code');
       setNotice('인증번호 6자리를 문자로 보냈어요.');
     } catch (cause) {
-      verifier.current?.clear();
-      verifier.current = undefined;
+      console.error('[MELUNI phone auth]', cause);
+      destroyVerifier();
       setError(errorMessage(cause));
     } finally {
       setBusy(false);
@@ -86,6 +144,7 @@ export function AuthFlow() {
     try {
       await confirmation.current.confirm(code);
     } catch (cause) {
+      console.error('[MELUNI phone verification]', cause);
       setError(errorMessage(cause));
     } finally {
       setBusy(false);
