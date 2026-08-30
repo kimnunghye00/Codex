@@ -6,6 +6,7 @@ import './auth-onboarding.css';
 import './nickname.css';
 import './ai-test.css';
 import './chat-typing.css';
+import './chat-tools.css';
 import './notifications.css';
 import './location.css';
 import './home-simple.css';
