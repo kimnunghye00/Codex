@@ -1,0 +1,44 @@
+.auth-v2 .auth-card { margin-top: 2px; }
+.auth-v2 .auth-card h2 { margin-bottom: 20px; }
+.signup-button { width: 100%; min-height: 48px; display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid #d9d8e8; border-radius: 14px; color: var(--primary); background: #fff; font-size: 13px; font-weight: 700; }
+.signup-button:hover { border-color: #bdbceb; background: #fafaff; }
+
+.onboarding-shell { min-height: 100vh; padding: 0 24px 34px; background: linear-gradient(160deg, #f8f8fc, #fff 58%, #f1f1fd); }
+.onboarding-header { height: 88px; display: flex; align-items: center; justify-content: space-between; }
+.onboarding-header > span { padding: 6px 10px; border-radius: 999px; color: var(--primary); background: var(--primary-soft); font-size: 11px; font-weight: 700; }
+.onboarding-progress { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 2px 0 24px; }
+.onboarding-progress div { min-width: 0; color: #aaa9b5; text-align: center; font-size: 9px; }
+.onboarding-progress i { display: block; height: 4px; margin-bottom: 7px; border-radius: 999px; background: #e7e6ef; }
+.onboarding-progress .active { color: var(--primary); font-weight: 700; }
+.onboarding-progress .active i { background: var(--primary); }
+.onboarding-card { min-height: 540px; display: flex; flex-direction: column; padding: 28px 24px 22px; border: 1px solid var(--border); border-radius: 26px; background: #fff; box-shadow: 0 16px 40px #33335a0b; }
+.onboarding-card section { flex: 1; }
+.onboarding-card h1 { margin: 7px 0 8px; font-size: 26px; letter-spacing: -1.1px; }
+.onboarding-copy { margin: 0 0 28px; color: var(--text-secondary); font-size: 12px; line-height: 1.6; }
+.onboarding-card label { display: flex; flex-direction: column; gap: 8px; color: #656472; font-size: 11px; font-weight: 600; }
+.onboarding-card label input { width: 100%; min-height: 52px; padding: 0 14px; border: 1px solid var(--border); border-radius: 14px; color: var(--text-primary); background: #fafafd; outline: none; }
+.onboarding-card label input:focus { border-color: #bdbceb; background: #fff; }
+.age-preview { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding: 14px 16px; border-radius: 14px; background: var(--primary-soft); }
+.age-preview span { color: #74738a; font-size: 11px; }
+.age-preview strong { color: var(--primary); font-size: 15px; }
+.gender-options { display: grid; gap: 10px; }
+.gender-options button { min-height: 58px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; border: 1px solid var(--border); border-radius: 16px; color: var(--text-primary); background: #fff; font-weight: 600; }
+.gender-options button.selected { border-color: #bdbceb; color: var(--primary); background: var(--primary-soft); }
+.photo-picker { width: 132px; height: 132px; display: grid; place-items: center; margin: 10px auto 14px; overflow: hidden; padding: 0; border: 1px dashed #c8c7df; border-radius: 50%; color: var(--primary); background: var(--primary-soft); }
+.photo-picker > span { position: relative; display: grid; place-items: center; }
+.photo-picker > span svg:last-child { position: absolute; right: -15px; bottom: -9px; padding: 4px; box-sizing: content-box; border-radius: 50%; color: white; background: var(--primary); }
+.photo-picker img { width: 100%; height: 100%; object-fit: cover; }
+.photo-action { display: block; min-height: 42px; margin: 0 auto; padding: 0 18px; border: 0; border-radius: 12px; color: var(--primary); background: transparent; font-size: 12px; font-weight: 700; }
+.skip-note { display: block; margin-top: 2px; color: var(--text-secondary); text-align: center; font-size: 10px; }
+.onboarding-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 24px; }
+.onboarding-actions > span { flex: 1; }
+.onboarding-actions .primary, .onboarding-actions .secondary { min-height: 48px; display: flex; align-items: center; justify-content: center; gap: 5px; border-radius: 14px; }
+.onboarding-actions .primary { flex: 1.35; }
+.onboarding-actions .secondary { flex: 1; border: 1px solid var(--border); color: #747381; background: #fff; }
+.onboarding-actions button:disabled { opacity: .45; }
+
+@media (max-width: 380px) {
+  .onboarding-shell { padding-left: 16px; padding-right: 16px; }
+  .onboarding-card { padding: 24px 18px 20px; }
+  .onboarding-card h1 { font-size: 23px; }
+}
