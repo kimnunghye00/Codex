@@ -8,7 +8,6 @@ body.home-map-overlay-open { overflow: hidden; }
   justify-content: center;
   padding: 14px;
   background: #0f172a70;
-  backdrop-filter: blur(4px);
 }
 .home-map-overlay-panel {
   position: relative;
@@ -41,8 +40,24 @@ body.home-map-overlay-open { overflow: hidden; }
   font-size: 28px;
   line-height: 1;
 }
-.home-map-overlay-map-wrap { position: relative; height: min(68vh, 600px); min-height: 430px; background: #eef1f4; }
-.home-map-overlay-map { position: absolute; inset: 0; }
+.home-map-overlay-map-wrap {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: min(68vh, 600px);
+  min-height: 430px;
+  overflow: hidden;
+  background: #eef1f4;
+}
+.home-map-overlay-map {
+  position: relative !important;
+  inset: auto !important;
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 430px;
+  z-index: 1;
+}
 .home-map-overlay-status {
   position: absolute;
   z-index: 500;
@@ -55,6 +70,7 @@ body.home-map-overlay-open { overflow: hidden; }
   background: #fffffff0;
   box-shadow: 0 8px 24px #17203318;
   font-size: 10px;
+  pointer-events: none;
 }
 .home-map-overlay-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 16px 15px; }
 .home-map-overlay-footer strong { color: var(--primary); font-size: 11px; }
@@ -63,5 +79,6 @@ body.home-map-overlay-open { overflow: hidden; }
 @media (max-width: 380px) {
   .home-map-overlay { padding: 8px; }
   .home-map-overlay-panel { border-radius: 22px; }
-  .home-map-overlay-map-wrap { min-height: 390px; }
+  .home-map-overlay-map-wrap,
+  .home-map-overlay-map { min-height: 390px; }
 }
