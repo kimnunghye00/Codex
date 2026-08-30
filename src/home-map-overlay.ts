@@ -17,7 +17,7 @@ function markerHtml(current: boolean) {
   return `<div style="width:${size}px;height:${size}px;border:3px solid #fff;border-radius:50%;background:${color};box-shadow:0 3px 10px #0003"></div>`;
 }
 
-function openHomeMap() {
+export function openHomeMap() {
   if (document.querySelector('.home-map-overlay')) return;
 
   const overlay = document.createElement('div');
@@ -152,33 +152,29 @@ function openHomeMap() {
   close.focus();
 }
 
-function wireHomeMapCard() {
-  const card = document.querySelector<HTMLButtonElement>('.home-map-card');
-  if (!card || card.dataset.routeHomeMapOverlay === 'true') return;
-  card.dataset.routeHomeMapOverlay = 'true';
-  card.setAttribute('aria-label', '우리의 네이버 지도 바로 열기');
-  card.addEventListener('click', (event) => {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    openHomeMap();
-  }, true);
+function handleHomeMapClick(event: Event) {
+  const target = event.target instanceof Element ? event.target : null;
+  const card = target?.closest('.home-map-card');
+  if (!card) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  if ('stopImmediatePropagation' in event) event.stopImmediatePropagation();
+  openHomeMap();
 }
 
-let queued = false;
-const refresh = () => {
-  if (queued) return;
-  queued = true;
-  requestAnimationFrame(() => {
-    queued = false;
-    wireHomeMapCard();
-  });
-};
+function handleHomeMapKeyboard(event: KeyboardEvent) {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  const target = event.target instanceof Element ? event.target : null;
+  const card = target?.closest('.home-map-card');
+  if (!card) return;
 
-const observer = new MutationObserver(refresh);
-function start() {
-  wireHomeMapCard();
-  observer.observe(document.body, { childList: true, subtree: true });
+  event.preventDefault();
+  event.stopPropagation();
+  openHomeMap();
 }
 
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
-else start();
+// React가 홈 화면을 다시 렌더링해도 이벤트가 끊기지 않도록
+// 개별 카드가 아니라 document 캡처 단계에서 홈 지도 클릭을 직접 처리한다.
+document.addEventListener('click', handleHomeMapClick, true);
+document.addEventListener('keydown', handleHomeMapKeyboard, true);
