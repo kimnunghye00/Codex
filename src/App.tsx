@@ -3,11 +3,13 @@ import { ChatPage } from './components/chat/ChatPage';
 import { MemoriesPage } from './components/memories/MemoriesPage';
 import { AccountSettings } from './components/auth/AccountSettings';
 import { AuthFlow, Wordmark } from './components/auth/AuthFlow';
+import { ProfileSetup } from './components/auth/ProfileSetup';
 import { auth } from './lib/firebase';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import type { Memory, Message } from './types';
 import { isSameMonthDay } from './utils/dates';
 import { loadMemories, loadMessages, saveMemories, saveMessages } from './utils/storage';
+import { loadProfile, type UserProfile } from './utils/profile';
 import {
   Bell, CalendarDays, ChevronRight, Heart, Home,
   Image, LockKeyhole, MessageCircle, Plus, Settings,
@@ -61,6 +63,7 @@ function formatDate(date: Date) {
 function App() {
   const [user, setUser] = useState<User | null>(auth.currentUser);
   const [authReady, setAuthReady] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(() => auth.currentUser ? loadProfile(auth.currentUser.uid) : null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('home');
   const [messages, setMessages] = useState<Message[]>(() => loadMessages(initialMessages));
@@ -68,12 +71,19 @@ function App() {
   const [memoryToOpen, setMemoryToOpen] = useState<number>();
   const coupleDay = useMemo(() => Math.floor((atMidnight().getTime() - startDate.getTime()) / DAY) + 1, []);
   const anniversaries = useMemo(() => upcomingAnniversaries(), []);
-  useEffect(() => onAuthStateChanged(auth, (nextUser) => { setUser(nextUser); setAuthReady(true); }), []);
+
+  useEffect(() => onAuthStateChanged(auth, (nextUser) => {
+    setUser(nextUser);
+    setProfile(nextUser ? loadProfile(nextUser.uid) : null);
+    setAuthReady(true);
+  }), []);
   useEffect(() => saveMessages(messages), [messages]);
   useEffect(() => saveMemories(memories), [memories]);
 
   if (!authReady) return <div className="app-shell auth-loading"><Wordmark /><div className="loading-mark" /><p>MELUNI를 준비하고 있어요</p></div>;
   if (!user) return <AuthFlow />;
+  if (!profile) return <ProfileSetup user={user} onComplete={setProfile} />;
+
   const AppHeader = ({ title }: { title?: string }) => <Header title={title} onSettings={() => setSettingsOpen(true)} />;
   return (
     <>
