@@ -1,0 +1,37 @@
+.couple-connect-shell { min-height: 100dvh; padding: 26px 18px 30px; background: var(--background); }
+.couple-connect-brand { display: flex; align-items: baseline; justify-content: space-between; padding: 6px 2px 22px; }
+.couple-connect-brand strong { color: var(--primary); font-size: 25px; letter-spacing: -1px; }
+.couple-connect-brand small { color: var(--route-accent); font-size: 8px; font-weight: 900; letter-spacing: 1.4px; }
+.couple-connect-card { max-width: 430px; margin: 0 auto; padding: 26px 20px 20px; border: 1px solid var(--border); border-radius: 26px; background: var(--surface); box-shadow: 0 18px 60px #14203310; }
+.couple-connect-symbol { width: 58px; height: 58px; display: grid; place-items: center; margin-bottom: 18px; border-radius: 18px; color: #fff; background: var(--primary); box-shadow: 0 10px 28px color-mix(in srgb, var(--primary) 24%, transparent); }
+.couple-connect-card .overline { margin: 0; color: var(--route-accent); font-size: 8px; font-weight: 900; letter-spacing: 1.4px; }
+.couple-connect-card h1 { margin: 6px 0 8px; color: var(--text-primary); font-size: 24px; letter-spacing: -.8px; }
+.couple-connect-copy { margin: 0 0 22px; color: var(--text-secondary); font-size: 11px; line-height: 1.6; word-break: keep-all; }
+.couple-connect-options { display: grid; gap: 10px; }
+.couple-connect-option { width: 100%; min-height: 74px; display: flex; align-items: center; gap: 12px; padding: 13px; border: 1px solid var(--border); border-radius: 18px; color: var(--text-primary); background: #fff; text-align: left; }
+.couple-connect-option > span { width: 42px; height: 42px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 13px; color: var(--primary); background: var(--primary-soft); }
+.couple-connect-option > div { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.couple-connect-option strong { font-size: 13px; }
+.couple-connect-option small { color: var(--text-secondary); font-size: 9px; }
+.couple-connect-option.primary-option { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 5%, white); }
+.couple-invite-code { display: grid; place-items: center; padding: 22px 16px; border: 1px dashed var(--primary); border-radius: 20px; background: color-mix(in srgb, var(--primary) 5%, white); }
+.couple-invite-code small { color: var(--text-secondary); font-size: 9px; }
+.couple-invite-code strong { margin: 8px 0 5px; color: var(--primary); font-size: 27px; letter-spacing: 1.5px; }
+.couple-invite-code em { color: var(--text-secondary); font-size: 8px; font-style: normal; }
+.couple-code-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 11px; }
+.couple-code-actions button, .couple-connect-submit { min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 13px; font-size: 10px; font-weight: 800; }
+.couple-code-actions button { color: var(--primary); background: var(--primary-soft); }
+.couple-code-actions button:last-child, .couple-connect-submit { color: #fff; background: var(--primary); }
+.couple-waiting { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 13px 0 0; color: var(--text-secondary); font-size: 9px; }
+.couple-code-input { display: flex; flex-direction: column; gap: 7px; color: var(--text-primary); font-size: 10px; font-weight: 800; }
+.couple-code-input input { width: 100%; height: 52px; padding: 0 15px; border: 1px solid var(--border); border-radius: 14px; outline: none; color: var(--text-primary); background: #fff; font-size: 17px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
+.couple-code-input input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent); }
+.couple-connect-submit { width: 100%; margin-top: 11px; }
+.couple-connect-submit:disabled { opacity: .45; }
+.couple-connect-error { margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; color: #a53f4a; background: #fff0f1; font-size: 9px; line-height: 1.4; }
+.couple-connect-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border); }
+.couple-connect-footer button { border: 0; color: var(--text-secondary); background: transparent; font-size: 9px; }
+.couple-connect-footer .couple-skip { margin-left: auto; }
+.couple-gate-loading { min-height: 100dvh; display: grid; place-content: center; gap: 10px; text-align: center; background: var(--background); }
+.couple-gate-loading strong { color: var(--primary); font-size: 26px; }
+.couple-gate-loading span { color: var(--text-secondary); font-size: 10px; }
