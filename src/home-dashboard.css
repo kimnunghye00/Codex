@@ -1,0 +1,68 @@
+.home-dashboard { padding-bottom: 98px; }
+.home-dashboard .topbar { margin-bottom: 8px; }
+.home-dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.18fr) minmax(0, .82fr); gap: 12px; align-items: stretch; }
+.home-map-card,
+.home-time-card,
+.home-photo-card,
+.home-chat-card { border: 1px solid var(--border); color: var(--text-primary); background: var(--surface); box-shadow: 0 10px 28px #30305a0c; }
+.home-map-card { position: relative; min-height: 610px; overflow: hidden; border-radius: 26px; padding: 0; text-align: left; background: linear-gradient(145deg, #fbfaf6 0%, #f7f7f2 45%, #f1f6ee 100%); }
+.home-map-grid-lines { position: absolute; inset: 0; opacity: .7; background-image: linear-gradient(32deg, transparent 47%, #e9e5dc 48%, #e9e5dc 51%, transparent 52%), linear-gradient(118deg, transparent 46%, #ebe8e0 47%, #ebe8e0 50%, transparent 51%); background-size: 138px 110px, 160px 128px; }
+.home-map-road { position: absolute; display: block; height: 14px; border-radius: 99px; background: #fff; box-shadow: 0 0 0 1px #ece9e3; transform-origin: left center; }
+.home-map-road::after { content: ''; position: absolute; inset: 5px 0; border-top: 1px dashed #d8d3cb; }
+.road-a { width: 125%; left: -16%; top: 38%; transform: rotate(19deg); }
+.road-b { width: 118%; left: -9%; bottom: 24%; transform: rotate(-29deg); }
+.home-map-river { position: absolute; width: 70px; height: 115%; left: 62%; top: -7%; border-radius: 46%; background: linear-gradient(90deg, #e9f3f7, #dceef5, #edf6f8); transform: rotate(9deg); opacity: .92; }
+.home-map-place { position: absolute; z-index: 2; padding: 5px 8px; border-radius: 10px; color: #858391; background: #ffffffb8; backdrop-filter: blur(8px); font-size: 9px; }
+.place-office { top: 23%; left: 10%; }
+.place-cafe { top: 56%; left: 9%; }
+.place-park { top: 35%; right: 7%; color: #71906f; background: #eef6eebd; }
+.home-location-status { position: absolute; z-index: 5; top: 18px; left: 16px; right: 16px; min-height: 58px; display: flex; align-items: center; gap: 9px; padding: 10px 12px; border: 1px solid #ffffffcc; border-radius: 18px; background: #ffffffde; box-shadow: 0 8px 22px #35355f12; backdrop-filter: blur(12px); }
+.home-location-status > svg { color: var(--primary); flex: 0 0 auto; }
+.home-location-status span { min-width: 0; display: flex; flex-direction: column; }
+.home-location-status b { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; }
+.home-location-status small { margin-top: 2px; color: var(--text-secondary); font-size: 8px; }
+.home-map-person { position: absolute; z-index: 4; top: 48%; left: 50%; width: 74px; height: 90px; display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -50%); color: var(--primary); }
+.home-map-halo { position: absolute; width: 132px; height: 132px; top: 7px; border-radius: 50%; background: #8d78e827; }
+.home-map-avatar { z-index: 2; width: 56px; height: 56px; display: grid; place-items: center; border: 5px solid white; border-radius: 50%; color: white; background: linear-gradient(145deg, var(--primary-light), var(--primary)); box-shadow: 0 6px 18px #4e4eb42a; font-size: 17px; font-weight: 700; }
+.home-map-person > svg { z-index: 2; margin-top: -4px; filter: drop-shadow(0 3px 4px #5b5bd633); }
+.home-map-locate { position: absolute; z-index: 4; right: 16px; bottom: 16px; width: 48px; height: 48px; display: grid; place-items: center; border-radius: 50%; color: var(--primary); background: #fff; box-shadow: 0 6px 20px #35355f15; }
+.home-dashboard-side { min-width: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 12px; }
+.home-time-card { padding: 15px; text-align: left; border-radius: 22px; background: linear-gradient(145deg, #f8f3ff, #fff 60%); }
+.home-card-title { display: flex; align-items: center; justify-content: space-between; color: var(--primary); }
+.home-card-title span { font-size: 13px; font-weight: 800; }
+.home-time-block { display: flex; flex-direction: column; margin-top: 12px; }
+.home-time-block small { color: var(--primary-light); font-size: 9px; font-weight: 700; }
+.home-time-block strong { margin-top: 1px; color: var(--primary); font-size: 24px; line-height: 1.1; }
+.home-time-block em { margin-top: 3px; overflow: hidden; color: #666572; font-size: 9px; font-style: normal; white-space: nowrap; text-overflow: ellipsis; }
+.home-time-divider { height: 1px; margin: 12px 0 0; background: var(--border); }
+.upcoming-time strong { font-size: 20px; }
+.home-photo-card { position: relative; min-height: 260px; overflow: hidden; padding: 0; border-radius: 22px; text-align: left; background: #e8e8ee; }
+.home-photo-card img { width: 100%; height: 100%; position: absolute; inset: 0; object-fit: cover; }
+.home-photo-shade { position: absolute; inset: 0; background: linear-gradient(180deg, #1918241c 0%, #19182400 45%, #191824bf 100%); }
+.home-photo-copy { position: absolute; left: 14px; right: 12px; bottom: 15px; z-index: 2; display: flex; flex-direction: column; color: #fff; }
+.home-photo-copy small { width: max-content; margin-bottom: 7px; padding: 4px 8px; border-radius: 99px; color: var(--primary); background: #ffffffde; font-size: 8px; font-weight: 700; }
+.home-photo-copy strong { font-size: 15px; line-height: 1.25; }
+.home-photo-copy em { margin-top: 3px; font-size: 9px; font-style: normal; opacity: .8; }
+.home-photo-heart { position: absolute; z-index: 3; right: 12px; bottom: 12px; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; color: var(--primary); background: #ffffffdb; }
+.home-photo-card.empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--text-secondary); font-size: 10px; }
+.home-chat-card { min-height: 124px; display: flex; flex-direction: column; padding: 14px; text-align: left; border-radius: 22px; }
+.home-chat-head { display: flex; align-items: center; justify-content: space-between; color: var(--primary); }
+.home-chat-head b { font-size: 12px; }
+.home-chat-preview { min-width: 0; display: flex; align-items: center; gap: 9px; margin-top: 16px; }
+.home-chat-avatar { width: 36px; height: 36px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 50%; color: #fff; background: linear-gradient(145deg, var(--primary-light), var(--primary)); font-size: 11px; font-weight: 700; }
+.home-chat-copy { min-width: 0; display: flex; flex-direction: column; }
+.home-chat-copy b { font-size: 11px; }
+.home-chat-copy small { max-width: 100%; margin-top: 3px; overflow: hidden; color: var(--text-secondary); font-size: 9px; white-space: nowrap; text-overflow: ellipsis; }
+@media (max-width: 390px) {
+  .home-dashboard-grid { grid-template-columns: minmax(0, 1.12fr) minmax(0, .88fr); gap: 9px; }
+  .home-map-card { min-height: 565px; border-radius: 22px; }
+  .home-dashboard-side { gap: 9px; }
+  .home-time-card, .home-chat-card { padding: 12px; border-radius: 19px; }
+  .home-card-title span { font-size: 11px; }
+  .home-time-block strong { font-size: 21px; }
+  .upcoming-time strong { font-size: 18px; }
+  .home-photo-card { min-height: 228px; border-radius: 19px; }
+  .home-chat-card { min-height: 116px; }
+  .home-location-status { left: 11px; right: 11px; padding: 9px 10px; }
+  .home-location-status b { font-size: 10px; }
+}
