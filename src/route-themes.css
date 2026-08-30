@@ -1,0 +1,126 @@
+/* ROUTE official color themes
+   1 Navy + Coral      #1F2A44 / #FF6F61 (default)
+   2 Deep Green + Sand #355C4B / #D9C7A3
+   3 Blue Gray + Lav.  #5E718D / #B7A7D9
+   4 Charcoal + Mint   #2B2E34 / #8ED1C6
+   5 Burgundy + Ivory  #7A3E48 / #F7EFEA
+*/
+
+:root,
+:root[data-route-theme='navy-coral'] {
+  --primary: #1F2A44;
+  --primary-light: #FF6F61;
+  --primary-soft: #FFF0ED;
+  --background: #FBFAF8;
+  --surface: #FFFFFF;
+  --text-primary: #1F2A44;
+  --text-secondary: #777681;
+  --border: #E9E3DF;
+  --emotion: #FF6F61;
+  --route-accent: #FF6F61;
+  --route-accent-soft: #FFF0ED;
+}
+
+:root[data-route-theme='deep-green-sand'] {
+  --primary: #355C4B;
+  --primary-light: #D9C7A3;
+  --primary-soft: #F3EFE5;
+  --background: #FAF8F2;
+  --surface: #FFFFFF;
+  --text-primary: #29483B;
+  --text-secondary: #78766F;
+  --border: #E8E0CF;
+  --emotion: #D9C7A3;
+  --route-accent: #D9C7A3;
+  --route-accent-soft: #F3EFE5;
+}
+
+:root[data-route-theme='blue-gray-lavender'] {
+  --primary: #5E718D;
+  --primary-light: #B7A7D9;
+  --primary-soft: #F1EDF8;
+  --background: #F8F9FB;
+  --surface: #FFFFFF;
+  --text-primary: #43536C;
+  --text-secondary: #7D8290;
+  --border: #E2E4EB;
+  --emotion: #B7A7D9;
+  --route-accent: #B7A7D9;
+  --route-accent-soft: #F1EDF8;
+}
+
+:root[data-route-theme='charcoal-mint'] {
+  --primary: #2B2E34;
+  --primary-light: #8ED1C6;
+  --primary-soft: #EAF7F5;
+  --background: #F7F8F8;
+  --surface: #FFFFFF;
+  --text-primary: #2B2E34;
+  --text-secondary: #777C80;
+  --border: #DEE5E3;
+  --emotion: #8ED1C6;
+  --route-accent: #8ED1C6;
+  --route-accent-soft: #EAF7F5;
+}
+
+:root[data-route-theme='burgundy-ivory'] {
+  --primary: #7A3E48;
+  --primary-light: #F7EFEA;
+  --primary-soft: #F7EFEA;
+  --background: #FCF9F7;
+  --surface: #FFFFFF;
+  --text-primary: #65343C;
+  --text-secondary: #81777A;
+  --border: #EADFD9;
+  --emotion: #7A3E48;
+  --route-accent: #F7EFEA;
+  --route-accent-soft: #F7EFEA;
+}
+
+/* Existing old theme attributes must not override ROUTE themes. */
+:root[data-route-theme] body { background: var(--background); }
+:root[data-route-theme] .app-shell,
+:root[data-route-theme] .more-grid-button,
+:root[data-route-theme] .theme-card,
+:root[data-route-theme] .theme-option,
+:root[data-route-theme] .more-list,
+:root[data-route-theme] .more-list-button { color: var(--text-primary); }
+:root[data-route-theme] .bottom-nav { background: color-mix(in srgb, var(--surface) 94%, transparent); }
+
+/* ROUTE five-theme picker */
+.theme-options.route-theme-options {
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+.route-theme-option {
+  width: 100%;
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: 46px 46px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: var(--text-primary);
+  background: var(--surface);
+  text-align: left;
+}
+.route-theme-option.active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 14%, transparent);
+}
+.route-theme-color {
+  height: 34px;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px #0000000b;
+}
+.route-theme-copy { min-width: 0; display: flex; flex-direction: column; }
+.route-theme-copy b { font-size: 10px; }
+.route-theme-copy small { margin-top: 2px; color: var(--text-secondary); font-size: 7px; }
+.route-theme-check { color: var(--primary); font-size: 13px; font-weight: 800; }
+
+@media (min-width: 400px) {
+  .theme-options.route-theme-options { grid-template-columns: 1fr 1fr; }
+  .route-theme-option { grid-template-columns: 34px 34px minmax(0, 1fr) auto; }
+}
