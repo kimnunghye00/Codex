@@ -7,6 +7,7 @@ import { AuthFlow, Wordmark } from './components/auth/AuthFlow';
 import { ProfileSetup } from './components/auth/ProfileSetup';
 import { NotificationPanel } from './components/notifications/NotificationPanel';
 import { auth } from './lib/firebase';
+import { loadLocalAiPartner } from './lib/coupleData';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import type { Memory, Message } from './types';
 import { loadMemories, loadMessages, saveMemories, saveMessages } from './utils/storage';
@@ -19,8 +20,8 @@ import {
   type AppNotification,
 } from './utils/notifications';
 import {
-  Bell, CalendarDays, ChevronRight, Ellipsis, Heart, Home,
-  Image, MapPinned, MessageCircle, Plus, Settings,
+  Bell, ChevronRight, Ellipsis, Heart, Home,
+  Image, MapPin, MapPinned, MessageCircle, Plus, Settings,
 } from 'lucide-react';
 
 type Tab = 'home' | 'chat' | 'memories' | 'location' | 'anniversary';
@@ -185,7 +186,7 @@ function App() {
     <>
       <div className="app-shell">
         <main>
-          {tab === 'home' && <HomePage profile={profile} coupleDay={coupleDay} anniversaries={anniversaries} memories={memories} onNavigate={setTab} onOpenMemory={(id) => { setMemoryToOpen(id); setTab('memories'); }} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
+          {tab === 'home' && <HomePage profile={profile} coupleDay={coupleDay} anniversaries={anniversaries} memories={memories} messages={messages} onNavigate={setTab} onOpenMemory={(id) => { setMemoryToOpen(id); setTab('memories'); }} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
           {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} />}
           {tab === 'memories' && <MemoriesPage Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} onClearInitial={() => setMemoryToOpen(undefined)} />}
           {tab === 'location' && <LocationPage Header={AppHeader} onActivity={(title, detail) => addActivity({ actor: 'me', kind: 'location', title, detail })} />}
@@ -207,38 +208,54 @@ function Header({ title, onSettings, onNotifications, unreadCount }: { title?: s
   return <header className="topbar"><div className="brand"><Wordmark />{title && <span className="page-title">{title}</span>}</div><div className="header-actions"><button className="notification-button" aria-label={`알림 ${unreadCount ? `${unreadCount}개` : ''}`} onClick={onNotifications}><Bell size={20} />{unreadCount > 0 && <em className="notification-count">{unreadCount > 99 ? '99+' : unreadCount}</em>}</button><button aria-label="설정" onClick={onSettings}><Settings size={20} /></button></div></header>;
 }
 
-function HomePage({ profile, coupleDay, anniversaries, memories, onNavigate, onOpenMemory, onSettings, onNotifications, unreadCount }: { profile: UserProfile; coupleDay: number; anniversaries: Anniversary[]; memories: Memory[]; onNavigate: (tab: Tab) => void; onOpenMemory: (id: number) => void; onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
+function HomePage({ profile, coupleDay, anniversaries, memories, messages, onNavigate, onOpenMemory, onSettings, onNotifications, unreadCount }: { profile: UserProfile; coupleDay: number; anniversaries: Anniversary[]; memories: Memory[]; messages: Message[]; onNavigate: (tab: Tab) => void; onOpenMemory: (id: number) => void; onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
   const nearest = anniversaries[0];
   const latestMemory = memories[0];
+  const latestPartnerMessage = [...messages].reverse().find((message) => message.sender === 'partner');
+  const aiPartner = auth.currentUser ? loadLocalAiPartner(auth.currentUser.uid) : null;
+  const partnerName = aiPartner?.connected ? aiPartner.displayName : '서연';
+  const partnerInitial = partnerName.slice(0, 1);
 
   return (
-    <div className="page home-page home-simple">
+    <div className="page home-page home-dashboard">
       <Header onSettings={onSettings} onNotifications={onNotifications} unreadCount={unreadCount} />
 
-      <section className="home-couple-card">
-        <p>2024. 06. 01부터</p>
-        <h1>{displayName(profile)} <span>×</span> 서연</h1>
-        <strong>D+{coupleDay}</strong>
-      </section>
+      <div className="home-dashboard-grid">
+        <button className="home-map-card" type="button" onClick={() => onNavigate('location')} aria-label="위치 화면 열기">
+          <div className="home-map-grid-lines" />
+          <span className="home-map-road road-a" />
+          <span className="home-map-road road-b" />
+          <span className="home-map-river" />
+          <span className="home-map-place place-office">MELUNI 오피스</span>
+          <span className="home-map-place place-cafe">카페</span>
+          <span className="home-map-place place-park">공원</span>
 
-      <section className="home-simple-section">
-        <div className="home-simple-heading"><h2>우리의 오늘</h2></div>
-        <div className="home-simple-list">
-          {nearest && <button className="home-simple-row" onClick={() => onNavigate('anniversary')}>
-            <span className="home-simple-icon">{nearest.icon}</span>
-            <span className="home-simple-copy"><small>다가오는 날 · {formatDate(nearest.date)}</small><b>{nearest.title}</b><em>{daysUntil(nearest.date)}일 남았어요</em></span>
-            <ChevronRight size={18} />
-          </button>}
+          <div className="home-location-status"><MapPin size={16} /><span><b>{partnerName} · 위치 공유</b><small>최근 위치를 확인해보세요</small></span></div>
+          <div className="home-map-person"><span className="home-map-halo" /><span className="home-map-avatar">{partnerInitial}</span><MapPin size={25} fill="currentColor" /></div>
+          <div className="home-map-locate"><MapPinned size={20} /></div>
+        </button>
 
-          {latestMemory && <button className="home-simple-row home-memory-row" onClick={() => onOpenMemory(latestMemory.id)}>
-            <span className="home-memory-thumb"><img src={latestMemory.images[0]} alt="" /></span>
-            <span className="home-simple-copy"><small>최근 추억 · {latestMemory.date.replaceAll('-', '. ')}</small><b>{latestMemory.title}</b><em>추억 열어보기</em></span>
-            <ChevronRight size={18} />
-          </button>}
+        <div className="home-dashboard-side">
+          <button className="home-time-card" type="button" onClick={() => onNavigate('anniversary')}>
+            <div className="home-card-title"><span>우리의 시간</span><Heart size={16} fill="currentColor" /></div>
+            <div className="home-time-block"><small>사귄 지</small><strong>D+{coupleDay}</strong><em>2024.06.01부터</em></div>
+            <div className="home-time-divider" />
+            {nearest && <div className="home-time-block upcoming-time"><small>다가오는 날</small><strong>D-{daysUntil(nearest.date)}</strong><em>{nearest.title}</em></div>}
+          </button>
+
+          {latestMemory ? <button className="home-photo-card" type="button" onClick={() => onOpenMemory(latestMemory.id)}>
+            <img src={latestMemory.images[0]} alt={latestMemory.title} />
+            <span className="home-photo-shade" />
+            <span className="home-photo-copy"><small>최근 추억</small><strong>{latestMemory.title}</strong><em>{latestMemory.date.replaceAll('-', '.')}</em></span>
+            <span className="home-photo-heart"><Heart size={16} /></span>
+          </button> : <button className="home-photo-card empty" type="button" onClick={() => onNavigate('memories')}><Image size={24} /><span>첫 추억을 남겨보세요</span></button>}
+
+          <button className="home-chat-card" type="button" onClick={() => onNavigate('chat')}>
+            <span className="home-chat-head"><b>최근 대화</b><ChevronRight size={17} /></span>
+            <span className="home-chat-preview"><span className="home-chat-avatar">{partnerInitial}</span><span className="home-chat-copy"><b>{partnerName}</b><small>{latestPartnerMessage?.text ?? '아직 대화가 없어요.'}</small></span></span>
+          </button>
         </div>
-      </section>
-
-      <p className="home-simple-note">나머지 기능은 아래 메뉴에서 바로 열 수 있어요.</p>
+      </div>
     </div>
   );
 }
