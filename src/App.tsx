@@ -20,7 +20,7 @@ import {
   type AppNotification,
 } from './utils/notifications';
 import {
-  Bell, CalendarDays, ChevronRight, Heart, Home,
+  Bell, CalendarDays, ChevronRight, Ellipsis, Heart, Home,
   Image, LockKeyhole, MapPinned, MessageCircle, Plus, Settings,
 } from 'lucide-react';
 
@@ -238,7 +238,7 @@ function AnniversaryPage({ coupleDay, anniversaries, onSettings, onNotifications
 }
 
 function BottomNav({ tab, setTab }: { tab: Tab; setTab: (tab: Tab) => void }) {
-  const items: [Tab, string, typeof Home][] = [['home', '홈', Home], ['chat', '채팅', MessageCircle], ['memories', '추억', Image], ['location', '위치', MapPinned], ['anniversary', '기념일', CalendarDays]];
+  const items: [Tab, string, typeof Home][] = [['home', '홈', Home], ['memories', '추억', Image], ['chat', '채팅', MessageCircle], ['location', '위치', MapPinned], ['anniversary', '더보기', Ellipsis]];
   return <nav className="bottom-nav" aria-label="주요 메뉴">{items.map(([id, label, Icon]) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}><span className="nav-icon"><Icon size={21} strokeWidth={tab === id ? 2.4 : 1.8} /></span><span>{label}</span></button>)}</nav>;
 }
 
