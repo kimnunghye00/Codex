@@ -22,6 +22,17 @@ function aiReplyFor(text: string) {
   return `응, 확인했어. “${value.slice(0, 28)}${value.length > 28 ? '…' : ''}”라고 보냈네. 지금 메시지 왕복은 정상적으로 동작하고 있어.`;
 }
 
+function TypingIndicator({ ai }: { ai: boolean }) {
+  return <div className="typing-row" aria-label="상대방이 입력 중입니다">
+    <div className="avatar tiny">{ai ? <Bot size={14} /> : '상'}</div>
+    <div className="typing-bubble" aria-hidden="true">
+      <span />
+      <span />
+      <span />
+    </div>
+  </div>;
+}
+
 export function ChatPage({ Header, messages, setMessages }: { Header: ({ title }: { title?: string }) => React.ReactNode; messages: Message[]; setMessages: React.Dispatch<React.SetStateAction<Message[]>> }) {
   const [draft, setDraft] = useState('');
   const [replyTo, setReplyTo] = useState<number>();
@@ -44,6 +55,9 @@ export function ChatPage({ Header, messages, setMessages }: { Header: ({ title }
     if (!aiPartner?.connected) return;
     setAiTyping(true);
     if (aiTimerRef.current) window.clearTimeout(aiTimerRef.current);
+
+    // 실제 사람이 짧게 생각하고 타이핑하는 느낌이 나도록 메시지 길이에 따라 조금 다르게 기다린다.
+    const typingMs = Math.min(2400, Math.max(900, 700 + text.length * 35));
     aiTimerRef.current = window.setTimeout(() => {
       setMessages((items) => [...items, {
         id: Date.now() + 1,
@@ -55,7 +69,7 @@ export function ChatPage({ Header, messages, setMessages }: { Header: ({ title }
         replyTo: replyTarget,
       }]);
       setAiTyping(false);
-    }, 850);
+    }, typingMs);
   };
 
   const send = () => {
@@ -87,7 +101,10 @@ export function ChatPage({ Header, messages, setMessages }: { Header: ({ title }
     <Header title="대화" />
     <div className="chat-profile">
       <div className="avatar large">{aiPartner?.connected ? <Bot size={22} /> : partnerInitial}</div>
-      <div><b>{partnerName}</b><span><i /> {aiPartner?.connected ? 'AI 테스트 파트너 · 연결됨' : '지금 함께 있어요'}</span></div>
+      <div>
+        <b>{partnerName}</b>
+        <span className={aiTyping ? 'chat-status typing' : 'chat-status'}><i /> {aiTyping ? '입력 중...' : aiPartner?.connected ? 'AI 테스트 파트너 · 연결됨' : '지금 함께 있어요'}</span>
+      </div>
       <button aria-label="대화 메뉴"><MoreHorizontal /></button>
     </div>
     <div className="messages" onClick={() => active && setActive(undefined)}>
@@ -97,7 +114,7 @@ export function ChatPage({ Header, messages, setMessages }: { Header: ({ title }
         const divider = date !== previousDate;
         return <div key={message.id}>{divider && <div className="date-chip">{messageDateLabel(message.timestamp)}</div>}<ChatBubble message={message} reply={message.replyTo ? byId.get(message.replyTo) : undefined} active={active === message.id} highlighted={highlighted === message.id} onAction={() => setActive(active === message.id ? undefined : message.id)} onReact={(emoji) => react(message.id, emoji)} onReply={() => { setReplyTo(message.id); setActive(undefined); }} onSave={() => { setMessages((items) => items.map((item) => item.id === message.id ? { ...item, saved: !item.saved } : item)); setActive(undefined); }} onImage={setLightbox} onJump={jump} /></div>;
       })}
-      {aiTyping && <div className="bubble-row"><div className="avatar tiny"><Bot size={14} /></div><div className="bubble">멜루니가 답장을 쓰고 있어요…</div></div>}
+      {aiTyping && <TypingIndicator ai={Boolean(aiPartner?.connected)} />}
       <div ref={bottomRef} />
     </div>
     <ChatComposer draft={draft} reply={replyTo ? byId.get(replyTo) : undefined} onDraft={setDraft} onSend={send} onImage={sendImage} onCancelReply={() => setReplyTo(undefined)} />
