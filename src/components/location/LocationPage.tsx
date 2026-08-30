@@ -65,16 +65,18 @@ export function LocationPage({ Header, onActivity }: {
       mapRef.current = new naver.maps.Map(mapElement.current, {
         center: new naver.maps.LatLng(37.5666103, 126.9783882),
         zoom: 15,
-        gl: true,
         zoomControl: true,
         zoomControlOptions: { position: naver.maps.Position.TOP_RIGHT },
       });
+      window.setTimeout(() => {
+        if (mapRef.current) naver.maps.Event.trigger(mapRef.current, 'resize');
+      }, 120);
       setMapStatus(visits.length ? '' : '위치 기록이 생기면 방문한 장소가 지도에 표시돼요.');
     }).catch((error) => {
       console.error('[ROUTE NAVER location map]', error);
       if (!cancelled) {
         setMapStatus(String(import.meta.env.VITE_NAVER_MAP_CLIENT_ID ?? '').trim()
-          ? '네이버 지도를 불러오지 못했어요. Web 서비스 URL을 확인해 주세요.'
+          ? '네이버 지도를 불러오지 못했어요. 현재 Codespaces Web 서비스 URL을 확인해 주세요.'
           : '네이버 지도 Client ID가 아직 설정되지 않았어요.');
       }
     });
@@ -92,6 +94,7 @@ export function LocationPage({ Header, onActivity }: {
     const naver = naverApi();
     const map = mapRef.current;
     if (!naver?.maps || !map) return;
+    naver.maps.Event.trigger(map, 'resize');
 
     overlaysRef.current.forEach((overlay) => overlay.setMap(null));
     overlaysRef.current = [];
@@ -104,23 +107,11 @@ export function LocationPage({ Header, onActivity }: {
     }
 
     const points = visits.map((visit) => new naver.maps.LatLng(visit.latitude, visit.longitude));
-    if (points.length > 1) {
-      overlaysRef.current.push(new naver.maps.Polyline({
-        map,
-        path: points,
-        strokeColor: '#FF6F61',
-        strokeWeight: 5,
-        strokeOpacity: 0.76,
-      }));
-    }
+    if (points.length > 1) overlaysRef.current.push(new naver.maps.Polyline({ map, path: points, strokeColor: '#FF6F61', strokeWeight: 5, strokeOpacity: 0.76 }));
 
     visits.forEach((visit, index) => {
       const current = index === 0 && !visit.leftAt;
-      const marker = new naver.maps.Marker({
-        map,
-        position: points[index],
-        icon: { content: markerHtml(current) },
-      });
+      const marker = new naver.maps.Marker({ map, position: points[index], icon: { content: markerHtml(current) } });
       const popup = new naver.maps.InfoWindow({
         content: `<div style="padding:10px 12px;font-size:12px;line-height:1.45"><strong>${escapeHtml(visit.placeName || '위치 기록')}</strong><br>${escapeHtml(dayText(visit.arrivedAt))} · ${escapeHtml(timeText(visit.arrivedAt))}</div>`,
         borderWidth: 0,
@@ -147,28 +138,17 @@ export function LocationPage({ Header, onActivity }: {
   };
 
   const recordPosition = async (position: GeolocationPosition) => {
-    const point = {
-      latitude: position.coords.latitude,
-      longitude: position.coords.longitude,
-      accuracy: position.coords.accuracy,
-    };
+    const point = { latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy };
     const now = new Date().toISOString();
     const current = visits[0];
-
     if (current && !current.leftAt && distanceMeters(current, point) < MIN_MOVE_METERS) {
       setStatus(`현재 위치 확인됨 · 오차 약 ${Math.round(position.coords.accuracy)}m`);
       return;
     }
-
     const placeName = await reverseGeocode(point.latitude, point.longitude);
     const closed = current && !current.leftAt ? { ...current, leftAt: now } : current;
     const rest = current ? visits.slice(1) : visits;
-    const nextVisit: LocationVisit = {
-      id: `${Date.now()}`,
-      ...point,
-      placeName,
-      arrivedAt: now,
-    };
+    const nextVisit: LocationVisit = { id: `${Date.now()}`, ...point, placeName, arrivedAt: now };
     persistVisits([nextVisit, ...(closed ? [closed] : []), ...rest].slice(0, 300));
     setStatus(placeName ? `${placeName}에서 위치가 확인됐어요.` : '새 위치가 기록됐어요.');
     onActivity?.('새 위치가 기록됐어요', placeName || `${point.latitude.toFixed(5)}, ${point.longitude.toFixed(5)}`);
@@ -186,12 +166,9 @@ export function LocationPage({ Header, onActivity }: {
       (error) => {
         stopWatching(false);
         if (error.code === error.PERMISSION_DENIED) {
-          saveLocationSharing(uid, false);
-          setSharing(false);
+          saveLocationSharing(uid, false); setSharing(false);
           setStatus('위치 권한이 거부됐어요. 브라우저의 사이트 권한에서 위치를 허용해 주세요.');
-        } else {
-          setStatus('현재 위치를 가져오지 못했어요. 잠시 뒤 다시 시도해 주세요.');
-        }
+        } else setStatus('현재 위치를 가져오지 못했어요. 잠시 뒤 다시 시도해 주세요.');
       },
       { enableHighAccuracy: true, maximumAge: 45_000, timeout: 20_000 },
     );
@@ -215,30 +192,19 @@ export function LocationPage({ Header, onActivity }: {
 
   return <div className="page location-page">
     <Header title="위치" />
-
     <section className="location-map-card" aria-label="네이버 이동 지도">
       <div ref={mapElement} className="location-real-map" />
       {mapStatus && <div className="location-map-status"><MapPin size={18} /><span>{mapStatus}</span></div>}
       <div className="location-map-caption"><strong>우리의 이동 지도</strong><span>{visits.length ? `${visits.length}개의 위치 기록` : '아직 기록 없음'}</span></div>
     </section>
-
     <section className={`location-share-card ${sharing ? 'active' : ''}`}>
       <div className="location-share-head"><span><LocateFixed size={21} /></span><div><strong>{sharing ? '내 위치 공유 중' : '내 위치 공유 꺼짐'}</strong><small>{tracking ? '현재 ROUTE가 위치 변화를 확인하고 있어요.' : status}</small></div></div>
-      <div className="location-actions">
-        {!sharing ? <button className="primary" type="button" onClick={startWatching}><Navigation size={16} />위치 공유 시작</button> : <>
-          {!tracking && <button className="primary" type="button" onClick={startWatching}><LocateFixed size={16} />다시 추적</button>}
-          <button className="location-stop" type="button" onClick={disableSharing}><PauseCircle size={16} />공유 끄기</button>
-        </>}
-      </div>
+      <div className="location-actions">{!sharing ? <button className="primary" type="button" onClick={startWatching}><Navigation size={16} />위치 공유 시작</button> : <>{!tracking && <button className="primary" type="button" onClick={startWatching}><LocateFixed size={16} />다시 추적</button>}<button className="location-stop" type="button" onClick={disableSharing}><PauseCircle size={16} />공유 끄기</button></>}</div>
       <p className="location-privacy"><ShieldCheck size={14} /> 위치 공유는 직접 켠 경우에만 동작하고, 기존 방문 기록은 기기에 저장돼요.</p>
     </section>
-
     <section className="location-history">
       <div className="location-section-head"><div><small>TIMELINE</small><h2>최근 다녀온 곳</h2></div><span>{visits.length}곳</span></div>
-      {!visits.length ? <div className="location-empty"><MapPin size={24} /><strong>아직 위치 기록이 없어요</strong><p>위치 공유를 시작하고 이동하면 네이버 지도 위에 방문 장소가 자동으로 쌓여요.</p></div> : <div className="location-list">{visits.map((visit, index) => <button type="button" key={visit.id} className="location-visit" onClick={() => focusVisit(visit)}>
-        <div className="location-rail"><i className={index === 0 && !visit.leftAt ? 'live' : ''} />{index < visits.length - 1 && <span />}</div>
-        <div className="location-visit-copy"><small>{dayText(visit.arrivedAt)}</small><strong>{visit.placeName || '위치 기록'}</strong><p><Clock3 size={13} /> {timeText(visit.arrivedAt)} 도착 · {visit.leftAt ? `${timeText(visit.leftAt)} 이동` : '현재 머무는 중'}</p><em>정확도 약 {Math.round(visit.accuracy)}m · 눌러서 지도에서 보기</em></div>
-      </button>)}</div>}
+      {!visits.length ? <div className="location-empty"><MapPin size={24} /><strong>아직 위치 기록이 없어요</strong><p>위치 공유를 시작하고 이동하면 네이버 지도 위에 방문 장소가 자동으로 쌓여요.</p></div> : <div className="location-list">{visits.map((visit, index) => <button type="button" key={visit.id} className="location-visit" onClick={() => focusVisit(visit)}><div className="location-rail"><i className={index === 0 && !visit.leftAt ? 'live' : ''} />{index < visits.length - 1 && <span />}</div><div className="location-visit-copy"><small>{dayText(visit.arrivedAt)}</small><strong>{visit.placeName || '위치 기록'}</strong><p><Clock3 size={13} /> {timeText(visit.arrivedAt)} 도착 · {visit.leftAt ? `${timeText(visit.leftAt)} 이동` : '현재 머무는 중'}</p><em>정확도 약 {Math.round(visit.accuracy)}m · 눌러서 지도에서 보기</em></div></button>)}</div>}
     </section>
   </div>;
 }
