@@ -8,5 +8,6 @@ import './ai-test.css';
 import './chat-typing.css';
 import './notifications.css';
 import './location.css';
+import './home-simple.css';
 
 createRoot(document.getElementById('root')!).render(<StrictMode><Root /></StrictMode>);
