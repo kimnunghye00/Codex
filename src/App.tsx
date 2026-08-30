@@ -9,7 +9,6 @@ import { NotificationPanel } from './components/notifications/NotificationPanel'
 import { auth } from './lib/firebase';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import type { Memory, Message } from './types';
-import { isSameMonthDay } from './utils/dates';
 import { loadMemories, loadMessages, saveMemories, saveMessages } from './utils/storage';
 import { displayName, loadProfile, type UserProfile } from './utils/profile';
 import {
@@ -21,7 +20,7 @@ import {
 } from './utils/notifications';
 import {
   Bell, CalendarDays, ChevronRight, Ellipsis, Heart, Home,
-  Image, LockKeyhole, MapPinned, MessageCircle, Plus, Settings,
+  Image, MapPinned, MessageCircle, Plus, Settings,
 } from 'lucide-react';
 
 type Tab = 'home' | 'chat' | 'memories' | 'location' | 'anniversary';
@@ -211,20 +210,35 @@ function Header({ title, onSettings, onNotifications, unreadCount }: { title?: s
 function HomePage({ profile, coupleDay, anniversaries, memories, onNavigate, onOpenMemory, onSettings, onNotifications, unreadCount }: { profile: UserProfile; coupleDay: number; anniversaries: Anniversary[]; memories: Memory[]; onNavigate: (tab: Tab) => void; onOpenMemory: (id: number) => void; onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
   const nearest = anniversaries[0];
   const latestMemory = memories[0];
-  const onThisDay = memories.find((memory) => isSameMonthDay(memory.date));
+
   return (
-    <div className="page home-page">
+    <div className="page home-page home-simple">
       <Header onSettings={onSettings} onNotifications={onNotifications} unreadCount={unreadCount} />
-      <section className="hero"><p className="hero-kicker">2024. 06. 01부터</p><h1>{displayName(profile)} <span>×</span> 서연</h1><p className="hero-day">우리의 <strong>{coupleDay}번째 날</strong></p><span className="d-day">D+{coupleDay}</span></section>
-      <section className="section anniversary-preview">
-        <SectionHead eyebrow="NEXT MOMENT" title="다가오는 우리 날" action="모두 보기" onClick={() => onNavigate('anniversary')} />
-        {nearest ? <button className="next-card" onClick={() => onNavigate('anniversary')}><div className="event-icon">{nearest.icon}</div><div><span>{formatDate(nearest.date)}</span><h3>{nearest.title}</h3><strong>{daysUntil(nearest.date)}일 남았어요</strong></div><ChevronRight size={20} /></button> : <button className="empty-card" onClick={() => onNavigate('anniversary')}><Plus size={18} />우리만의 특별한 날을 등록해보세요</button>}
-        <div className="mini-events">{anniversaries.slice(1, 3).map((event) => <button key={event.id} onClick={() => onNavigate('anniversary')}><span>{event.icon} {event.title}</span><b>D-{daysUntil(event.date)}</b></button>)}</div>
+
+      <section className="home-couple-card">
+        <p>2024. 06. 01부터</p>
+        <h1>{displayName(profile)} <span>×</span> 서연</h1>
+        <strong>D+{coupleDay}</strong>
       </section>
-      {onThisDay && <section className="section on-this-day"><SectionHead eyebrow="ON THIS DAY" title="1년 전 오늘" action="열어보기" onClick={() => onOpenMemory(onThisDay.id)} /><button onClick={() => onOpenMemory(onThisDay.id)}><img src={onThisDay.images[0]} alt="" /><div><h3>{onThisDay.title}</h3><p>{onThisDay.description}</p></div><ChevronRight size={18} /></button></section>}
-      {latestMemory && <section className="section"><SectionHead eyebrow="OUR MOMENTS" title="최근 추억" action="전체 보기" onClick={() => onNavigate('memories')} /><button className="memory-feature" onClick={() => onOpenMemory(latestMemory.id)}><img src={latestMemory.images[0]} alt={latestMemory.title} /><div className="image-shade" /><div className="memory-copy"><span>{latestMemory.date.replaceAll('-', '. ')}</span><h3>{latestMemory.title}</h3><p>{latestMemory.description}</p></div><span className="round-button"><Image size={18} /></span></button></section>}
-      <section className="section"><SectionHead eyebrow="JUST NOW" title="최근 메시지" action="채팅 열기" onClick={() => onNavigate('chat')} /><button className="recent-message" onClick={() => onNavigate('chat')}><div className="avatar">서</div><div><div><b>서연</b><span>오후 8:46</span></div><p>그럼 조금 있다가 전화하자!</p></div><ChevronRight size={19} /></button></section>
-      <div className="privacy"><LockKeyhole size={14} /> 이 공간은 오직 두 사람에게만 보여요</div>
+
+      <section className="home-simple-section">
+        <div className="home-simple-heading"><h2>우리의 오늘</h2></div>
+        <div className="home-simple-list">
+          {nearest && <button className="home-simple-row" onClick={() => onNavigate('anniversary')}>
+            <span className="home-simple-icon">{nearest.icon}</span>
+            <span className="home-simple-copy"><small>다가오는 날 · {formatDate(nearest.date)}</small><b>{nearest.title}</b><em>{daysUntil(nearest.date)}일 남았어요</em></span>
+            <ChevronRight size={18} />
+          </button>}
+
+          {latestMemory && <button className="home-simple-row home-memory-row" onClick={() => onOpenMemory(latestMemory.id)}>
+            <span className="home-memory-thumb"><img src={latestMemory.images[0]} alt="" /></span>
+            <span className="home-simple-copy"><small>최근 추억 · {latestMemory.date.replaceAll('-', '. ')}</small><b>{latestMemory.title}</b><em>추억 열어보기</em></span>
+            <ChevronRight size={18} />
+          </button>}
+        </div>
+      </section>
+
+      <p className="home-simple-note">나머지 기능은 아래 메뉴에서 바로 열 수 있어요.</p>
     </div>
   );
 }
