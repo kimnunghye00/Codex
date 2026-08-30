@@ -1,4 +1,4 @@
-import { Bot, Camera, CheckCircle2, Heart, LogOut, Mail, UserRound, X } from 'lucide-react';
+import { Bot, Camera, CheckCircle2, Heart, LogOut, Mail, Sparkles, UserRound, X } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import {
   EmailAuthProvider,
@@ -9,12 +9,13 @@ import {
   type User,
 } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
-import { connectAiTestPartner, syncUserProfile } from '../../lib/coupleData';
+import { connectAiTestPartner, loadLocalAiPartner, syncUserProfile } from '../../lib/coupleData';
 import {
   calculateAge,
   displayName,
   nicknameChangeState,
   saveProfile,
+  setPartnerNickname,
   setSelfNickname,
   type Gender,
   type UserProfile,
@@ -28,6 +29,14 @@ const messageFor = (error: unknown) => {
   if (code === 'auth/invalid-email') return '이메일 주소를 확인해 주세요.';
   return '처리 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
 };
+
+function aiNicknameFor(name: string) {
+  const clean = name.trim();
+  if (!clean) return '내사람';
+  const last = clean.length >= 2 ? clean.slice(-2) : clean;
+  const candidates = [`${last}야`, `${last}콩`, `${last}링`, '내사람'];
+  return candidates[new Date().getDate() % candidates.length].slice(0, 12);
+}
 
 export function AccountSettings({ user, profile, onProfileChange, onClose }: {
   user: User;
@@ -51,6 +60,7 @@ export function AccountSettings({ user, profile, onProfileChange, onClose }: {
   const [profileFeedback, setProfileFeedback] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
   const [aiFeedback, setAiFeedback] = useState('');
+  const [aiPartner, setAiPartner] = useState(() => loadLocalAiPartner(user.uid));
   const fileRef = useRef<HTMLInputElement>(null);
   const age = useMemo(() => birthDate ? calculateAge(birthDate) : 0, [birthDate]);
   const nicknameState = nicknameChangeState(profile);
@@ -119,18 +129,30 @@ export function AccountSettings({ user, profile, onProfileChange, onClose }: {
   };
 
   const connectAi = async () => {
+    if (aiBusy) return;
     setAiBusy(true);
-    setAiFeedback('');
+    setAiFeedback('AI 테스트 파트너를 연결하고 있어요.');
     try {
-      await syncUserProfile(user.uid, profile);
-      await connectAiTestPartner(user.uid, displayName(profile));
-      setAiFeedback('AI 테스트 파트너를 연결했어요. 이제 커플 데이터를 Firestore에서 함께 테스트할 준비가 됐어요.');
+      const result = await connectAiTestPartner(user.uid, displayName(profile));
+      setAiPartner(result.localPartner);
+      setAiFeedback(result.cloudSynced
+        ? 'AI 테스트 파트너가 연결됐어요. Firestore 동기화도 완료됐어요.'
+        : 'AI 테스트 파트너는 연결됐어요. Firestore는 아직 연결되지 않아 현재 기기에서 먼저 테스트할 수 있어요.');
     } catch (cause) {
       console.error('[MELUNI AI partner connect]', cause);
-      setAiFeedback('Firestore 연결을 완료하지 못했어요. Firebase에서 Firestore Database를 먼저 생성해 주세요.');
+      setAiFeedback('AI 테스트 파트너 연결 중 문제가 생겼어요.');
     } finally {
       setAiBusy(false);
     }
+  };
+
+  const letAiChooseNickname = () => {
+    if (!aiPartner?.connected) return setAiFeedback('먼저 AI 테스트 파트너를 연결해 주세요.');
+    const chosen = aiNicknameFor(profile.name);
+    const next = setPartnerNickname(profile, chosen);
+    syncProfile(next);
+    setNickname(chosen);
+    setAiFeedback(`멜루니가 "${chosen}"라고 별명을 지어줬어요. 이 변경은 내 월 1회 변경 횟수를 사용하지 않아요.`);
   };
 
   const nicknameSource = profile.nicknameSetBy === 'partner' ? '상대방이 지어준 별명' : profile.nicknameSetBy === 'self' ? '내가 바꾼 별명' : '아직 상대방이 지어준 별명이 없어요';
@@ -183,7 +205,8 @@ export function AccountSettings({ user, profile, onProfileChange, onClose }: {
 
       <section className="ai-test-card">
         <div><Bot size={20} /><span><strong>AI 테스트 파트너</strong><small>실제 상대방 기능을 만들기 전에 MELUNI의 커플 동작을 함께 테스트해요.</small></span></div>
-        <button type="button" className="nickname-edit-button" disabled={aiBusy} onClick={() => void connectAi()}>{aiBusy ? '연결 중...' : 'AI 테스트 파트너 연결'}</button>
+        <button type="button" className="nickname-edit-button" disabled={aiBusy || Boolean(aiPartner?.connected)} onClick={() => void connectAi()}>{aiBusy ? '연결 중...' : aiPartner?.connected ? '멜루니 연결됨' : 'AI 테스트 파트너 연결'}</button>
+        {aiPartner?.connected && <button type="button" className="nickname-edit-button ai-nickname-button" onClick={letAiChooseNickname}><Sparkles size={15} />멜루니가 내 별명 지어주기</button>}
         {aiFeedback && <p className="account-feedback">{aiFeedback}</p>}
       </section>
 
