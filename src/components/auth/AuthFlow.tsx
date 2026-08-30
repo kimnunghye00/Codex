@@ -37,9 +37,9 @@ const messageFor = (error: unknown) => {
     'auth/invalid-phone-number': '휴대폰 번호를 다시 확인해 주세요.',
     'auth/operation-not-allowed': 'Firebase에서 전화번호 로그인이 활성화되어 있는지 확인해 주세요.',
     'auth/unauthorized-domain': `현재 주소(${host})가 Firebase 승인 도메인에 등록되지 않았어요.`,
-    'auth/captcha-check-failed': '보안 확인에 실패했어요. 다시 시도해 주세요.',
-    'auth/invalid-app-credential': '보안 확인 정보가 만료됐어요. 다시 시도해 주세요.',
-    'auth/missing-recaptcha-token': '보안 확인을 시작하지 못했어요. 다시 시도해 주세요.',
+    'auth/captcha-check-failed': '보안 확인에 실패했어요. 화면의 reCAPTCHA를 다시 완료해 주세요.',
+    'auth/invalid-app-credential': '보안 확인 정보가 만료됐어요. reCAPTCHA를 다시 완료해 주세요.',
+    'auth/missing-recaptcha-token': '보안 확인을 시작하지 못했어요. reCAPTCHA를 완료한 뒤 다시 시도해 주세요.',
     'auth/network-request-failed': '네트워크 연결을 확인한 뒤 다시 시도해 주세요.',
     'auth/too-many-requests': '인증 요청이 너무 많아요. 잠시 후 다시 시도해 주세요.',
     'auth/quota-exceeded': 'SMS 인증 한도를 초과했어요.',
@@ -53,7 +53,10 @@ const messageFor = (error: unknown) => {
     'auth/wrong-password': '비밀번호가 올바르지 않아요.',
     'auth/invalid-email': '이메일 주소를 확인해 주세요.',
   };
-  return messages[code] ?? (import.meta.env.DEV && code ? `처리 중 문제가 생겼어요. (${code})` : '처리 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.');
+  if (messages[code]) return `${messages[code]}${import.meta.env.DEV && code ? ` (${code})` : ''}`;
+  if (code) return `처리 중 문제가 생겼어요. (${code})`;
+  const rawMessage = String(firebaseError.message ?? '').trim();
+  return rawMessage ? `처리 중 문제가 생겼어요. (${rawMessage})` : '처리 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
 };
 
 export function Wordmark() {
@@ -93,7 +96,10 @@ export function AuthFlow() {
 
   const createVerifier = async () => {
     destroyVerifier();
-    const next = new RecaptchaVerifier(auth, 'recaptcha-container', { size: 'invisible' });
+    const next = new RecaptchaVerifier(auth, 'recaptcha-container', {
+      size: 'normal',
+      theme: 'light',
+    });
     verifier.current = next;
     await next.render();
     return next;
@@ -120,6 +126,7 @@ export function AuthFlow() {
     setBusy(true);
     try {
       const nextVerifier = await createVerifier();
+      setNotice('아래 보안 확인을 완료하면 인증번호가 전송돼요.');
       confirmation.current = await signInWithPhoneNumber(auth, normalizeKoreanPhone(phone), nextVerifier);
       changeMode('signup-code');
       setNotice('인증번호 6자리를 문자로 보냈어요.');
@@ -137,8 +144,6 @@ export function AuthFlow() {
     clearMessages();
     setBusy(true);
     try {
-      // Firebase의 전화번호 인증 완료 순간 로그인 상태가 되므로,
-      // 먼저 이 플래그를 저장해 Root가 회원가입 화면을 유지하게 한다.
       localStorage.setItem(SIGNUP_PENDING_KEY, '1');
       const result = await confirmation.current.confirm(code);
       verifiedPhoneUser.current = result.user;
@@ -162,16 +167,12 @@ export function AuthFlow() {
     try {
       const hasPasswordLogin = user.providerData.some((provider) => provider.providerId === 'password');
       if (hasPasswordLogin) {
-        // 개발 중 이미 만들어 둔 동일 전화번호 계정도 회원가입 흐름을 끝까지 테스트할 수 있게
-        // 최근 SMS 인증을 근거로 기존 비밀번호를 새 값으로 갱신한다.
         await updatePassword(user, password);
       } else {
         const credential = EmailAuthProvider.credential(phoneLoginEmail(phone), password);
         await linkWithCredential(user, credential);
       }
 
-      // 과거 개발 버전에서 같은 Firebase uid로 저장된 로컬 프로필이 있으면
-      // 새 회원가입에서 프로필 설정이 건너뛰어지므로 제거한다.
       localStorage.removeItem(`meluni-profile:${user.uid}`);
       localStorage.removeItem(SIGNUP_PENDING_KEY);
       window.location.reload();
@@ -220,7 +221,7 @@ export function AuthFlow() {
         <p className="auth-guide">가입할 휴대폰 번호로 인증 문자를 보내드려요.</p>
         <label>휴대폰 번호<input required type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="01012345678" /></label>
         <label className="auth-consent"><input type="checkbox" checked={consented} onChange={(e) => setConsented(e.target.checked)} /><span>본인 확인을 위해 전화번호가 Google Firebase로 전송·저장되는 것에 동의해요.</span></label>
-        <button className="primary" type="submit" disabled={!signupPhoneReady || busy}><Phone size={17} />{busy ? '전송 중...' : '인증번호 받기'}</button>
+        <button className="primary" type="submit" disabled={!signupPhoneReady || busy}><Phone size={17} />{busy ? '보안 확인 준비 중...' : '인증번호 받기'}</button>
       </>}
 
       {mode === 'signup-code' && <>
@@ -240,7 +241,7 @@ export function AuthFlow() {
         <button className="primary" type="submit" disabled={password.length < 6 || passwordConfirm.length < 6 || busy}>{busy ? '계정 만드는 중...' : '가입 완료하고 프로필 설정'}</button>
       </>}
 
-      <div id="recaptcha-container" />
+      <div id="recaptcha-container" className="route-recaptcha" />
       {error && <p className="auth-feedback error" role="alert">{error}</p>}
       {notice && <p className="auth-feedback notice">{notice}</p>}
     </form>
