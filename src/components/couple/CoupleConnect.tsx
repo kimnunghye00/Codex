@@ -15,8 +15,11 @@ type CoupleConnectProps = {
   onConnected: (connection: RealCoupleConnection) => void;
 };
 
+type FirebaseLikeError = { code?: string; message?: string };
+
 function messageFor(error: unknown) {
-  const code = error instanceof Error ? error.message : '';
+  const raw = (typeof error === 'object' && error ? error : {}) as FirebaseLikeError;
+  const code = raw.code || (error instanceof Error ? error.message : '');
   const messages: Record<string, string> = {
     'already-connected': '이미 다른 계정과 연결되어 있어요.',
     'owner-already-connected': '초대 코드를 만든 계정이 이미 다른 계정과 연결되어 있어요.',
@@ -25,8 +28,12 @@ function messageFor(error: unknown) {
     'invite-used': '이미 사용된 초대 코드예요.',
     'invite-expired': '초대 코드가 만료됐어요. 새 코드를 만들어 주세요.',
     'self-invite': '내가 만든 초대 코드는 내 계정에서 사용할 수 없어요.',
+    'permission-denied': 'Firebase 권한 설정 때문에 초대 코드를 만들 수 없어요. Firestore 규칙을 먼저 배포해 주세요.',
+    'firestore/permission-denied': 'Firebase 권한 설정 때문에 초대 코드를 만들 수 없어요. Firestore 규칙을 먼저 배포해 주세요.',
+    'unavailable': 'Firebase에 연결할 수 없어요. 네트워크 연결을 확인해 주세요.',
+    'firestore/unavailable': 'Firebase에 연결할 수 없어요. 네트워크 연결을 확인해 주세요.',
   };
-  return messages[code] ?? '연결 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
+  return messages[code] ?? `연결 중 문제가 생겼어요.${code ? ` (${code})` : ''}`;
 }
 
 export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps) {
@@ -54,6 +61,7 @@ export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps
       setInviteCode(invite.code);
       setMode('invite');
     } catch (cause) {
+      console.error('[ROUTE couple invite]', cause);
       setError(messageFor(cause));
     } finally {
       setBusy(false);
@@ -87,6 +95,7 @@ export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps
       if (!connection) throw new Error('connection-refresh-failed');
       onConnected(connection);
     } catch (cause) {
+      console.error('[ROUTE couple join]', cause);
       setError(messageFor(cause));
     } finally {
       setBusy(false);
@@ -108,9 +117,9 @@ export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps
 
       {mode === 'choose' && <div className="couple-connect-options">
         <button type="button" className="couple-connect-option primary-option" onClick={makeInvite} disabled={busy}>
-          <span><Share2 size={20} /></span><div><strong>상대방 초대하기</strong><small>내 초대 코드를 만들어 공유해요</small></div>
+          <span><Share2 size={20} /></span><div><strong>{busy ? '초대 코드 만드는 중...' : '상대방 초대하기'}</strong><small>내 초대 코드를 만들어 공유해요</small></div>
         </button>
-        <button type="button" className="couple-connect-option" onClick={() => { setError(''); setMode('join'); }}>
+        <button type="button" className="couple-connect-option" onClick={() => { setError(''); setMode('join'); }} disabled={busy}>
           <span><Link2 size={20} /></span><div><strong>초대 코드 입력</strong><small>상대방이 만든 코드로 연결해요</small></div>
         </button>
       </div>}
