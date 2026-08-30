@@ -1,0 +1,144 @@
+import { collection, doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { db } from './firebase';
+import type { UserProfile } from '../utils/profile';
+
+export type RealCoupleConnection = {
+  coupleId: string;
+  partnerUid: string;
+  partnerProfile: UserProfile | null;
+};
+
+export type CoupleInvite = {
+  code: string;
+  ownerUid: string;
+  ownerName: string;
+  expiresAt: number;
+};
+
+const INVITE_TTL = 7 * 24 * 60 * 60 * 1000;
+const isTestCouple = (coupleId?: string) => Boolean(coupleId?.startsWith('test-'));
+
+function normalizeCode(code: string) {
+  return code.trim().toUpperCase().replace(/\s+/g, '');
+}
+
+function makeCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let value = 'ROUTE-';
+  for (let i = 0; i < 6; i += 1) value += chars[Math.floor(Math.random() * chars.length)];
+  return value;
+}
+
+export async function getRealCoupleConnection(uid: string): Promise<RealCoupleConnection | null> {
+  const userSnap = await getDoc(doc(db, 'users', uid));
+  if (!userSnap.exists()) return null;
+  const coupleId = String(userSnap.data()?.coupleId ?? '');
+  if (!coupleId || isTestCouple(coupleId)) return null;
+
+  const coupleSnap = await getDoc(doc(db, 'couples', coupleId));
+  if (!coupleSnap.exists() || coupleSnap.data()?.testMode) return null;
+  const memberUids = (coupleSnap.data()?.memberUids ?? []) as string[];
+  const partnerUid = memberUids.find((memberUid) => memberUid !== uid);
+  if (!partnerUid) return null;
+
+  const partnerSnap = await getDoc(doc(db, 'users', partnerUid));
+  const partnerProfile = partnerSnap.exists() ? (partnerSnap.data()?.profile as UserProfile | undefined) ?? null : null;
+  return { coupleId, partnerUid, partnerProfile };
+}
+
+export async function createCoupleInvite(uid: string, ownerName: string): Promise<CoupleInvite> {
+  const existing = await getRealCoupleConnection(uid);
+  if (existing) throw new Error('already-connected');
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const code = makeCode();
+    const inviteRef = doc(db, 'coupleInvites', code);
+    const expiresAt = Date.now() + INVITE_TTL;
+    try {
+      await runTransaction(db, async (transaction) => {
+        const snapshot = await transaction.get(inviteRef);
+        if (snapshot.exists()) throw new Error('code-collision');
+        transaction.set(inviteRef, {
+          code,
+          ownerUid: uid,
+          ownerName,
+          status: 'open',
+          expiresAt,
+          createdAt: serverTimestamp(),
+        });
+      });
+      return { code, ownerUid: uid, ownerName, expiresAt };
+    } catch (error) {
+      if (error instanceof Error && error.message === 'code-collision') continue;
+      throw error;
+    }
+  }
+  throw new Error('invite-create-failed');
+}
+
+export async function connectWithInviteCode(uid: string, displayName: string, rawCode: string) {
+  const code = normalizeCode(rawCode);
+  if (!/^ROUTE-[A-Z2-9]{6}$/.test(code)) throw new Error('invalid-code');
+
+  const inviteRef = doc(db, 'coupleInvites', code);
+  const currentUserRef = doc(db, 'users', uid);
+
+  return runTransaction(db, async (transaction) => {
+    const inviteSnap = await transaction.get(inviteRef);
+    if (!inviteSnap.exists()) throw new Error('invite-not-found');
+    const invite = inviteSnap.data();
+    if (invite.status !== 'open') throw new Error('invite-used');
+    if (Number(invite.expiresAt ?? 0) < Date.now()) throw new Error('invite-expired');
+
+    const ownerUid = String(invite.ownerUid ?? '');
+    if (!ownerUid || ownerUid === uid) throw new Error('self-invite');
+
+    const ownerUserRef = doc(db, 'users', ownerUid);
+    const [ownerSnap, currentSnap] = await Promise.all([
+      transaction.get(ownerUserRef),
+      transaction.get(currentUserRef),
+    ]);
+
+    const ownerCoupleId = String(ownerSnap.data()?.coupleId ?? '');
+    const currentCoupleId = String(currentSnap.data()?.coupleId ?? '');
+    if (ownerCoupleId && !isTestCouple(ownerCoupleId)) throw new Error('owner-already-connected');
+    if (currentCoupleId && !isTestCouple(currentCoupleId)) throw new Error('already-connected');
+
+    const coupleRef = doc(collection(db, 'couples'));
+    const coupleId = coupleRef.id;
+    const ownerName = String(invite.ownerName ?? ownerSnap.data()?.profile?.name ?? '상대방');
+
+    transaction.set(coupleRef, {
+      id: coupleId,
+      memberUids: [ownerUid, uid],
+      members: {
+        [ownerUid]: { uid: ownerUid, role: 'user', displayName: ownerName },
+        [uid]: { uid, role: 'user', displayName },
+      },
+      createdBy: ownerUid,
+      testMode: false,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    transaction.set(ownerUserRef, { coupleId, partnerUid: uid, updatedAt: serverTimestamp() }, { merge: true });
+    transaction.set(currentUserRef, { coupleId, partnerUid: ownerUid, updatedAt: serverTimestamp() }, { merge: true });
+    transaction.set(inviteRef, { status: 'used', usedBy: uid, coupleId, usedAt: serverTimestamp() }, { merge: true });
+
+    return { coupleId, partnerUid: ownerUid, partnerName: ownerName };
+  });
+}
+
+export async function refreshInvite(code: string): Promise<CoupleInvite | null> {
+  const normalized = normalizeCode(code);
+  const snap = await getDoc(doc(db, 'coupleInvites', normalized));
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  if (data.status !== 'open' || Number(data.expiresAt ?? 0) < Date.now()) return null;
+  return {
+    code: normalized,
+    ownerUid: String(data.ownerUid ?? ''),
+    ownerName: String(data.ownerName ?? ''),
+    expiresAt: Number(data.expiresAt ?? 0),
+  };
+}
