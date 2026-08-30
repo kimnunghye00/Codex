@@ -1,0 +1,46 @@
+/* ROUTE close-button standard
+   Any modal/sheet close X lives at the top-right corner.
+   Keep this file imported last so future component styles cannot move it. */
+
+.account-settings,
+.memory-form,
+.notification-panel,
+.route-theme-sheet {
+  position: relative;
+}
+
+.account-settings > header,
+.memory-form > header,
+.notification-panel > header,
+.route-theme-sheet-header {
+  position: relative;
+  padding-right: 66px !important;
+}
+
+.account-settings > header > button[aria-label='닫기'],
+.memory-form > header > button[aria-label='닫기'],
+.notification-panel .notification-close,
+.route-theme-sheet .route-theme-sheet-close {
+  position: absolute !important;
+  top: 12px !important;
+  right: 12px !important;
+  left: auto !important;
+  bottom: auto !important;
+  margin: 0 !important;
+  z-index: 20;
+}
+
+/* Theme sheet has a compact inner header, so keep its X aligned to the sheet edge. */
+.route-theme-sheet .route-theme-sheet-close {
+  top: 8px !important;
+  right: 8px !important;
+}
+
+@media (max-width: 380px) {
+  .account-settings > header,
+  .memory-form > header,
+  .notification-panel > header,
+  .route-theme-sheet-header {
+    padding-right: 58px !important;
+  }
+}
