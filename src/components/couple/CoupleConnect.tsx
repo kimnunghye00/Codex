@@ -3,9 +3,10 @@ import { useEffect, useState } from 'react';
 import type { User } from 'firebase/auth';
 import type { UserProfile } from '../../utils/profile';
 import {
-  completeInviteOwnerConnection,
+  completeJoinerConnection,
   connectWithInviteCode,
   createCoupleInvite,
+  finalizeInviteAsOwner,
   getRealCoupleConnection,
   type RealCoupleConnection,
 } from '../../lib/coupleConnection';
@@ -17,6 +18,7 @@ type CoupleConnectProps = {
 };
 
 type FirebaseLikeError = { code?: string; message?: string };
+type Mode = 'choose' | 'invite' | 'join' | 'waiting';
 
 function messageFor(error: unknown) {
   const raw = (typeof error === 'object' && error ? error : {}) as FirebaseLikeError;
@@ -27,10 +29,11 @@ function messageFor(error: unknown) {
     'invalid-code': '초대 코드 형식을 다시 확인해 주세요.',
     'invite-not-found': '존재하지 않는 초대 코드예요.',
     'invite-used': '이미 사용된 초대 코드예요.',
+    'invite-pending': '이미 연결 요청이 진행 중인 초대 코드예요.',
     'invite-expired': '초대 코드가 만료됐어요. 새 코드를 만들어 주세요.',
     'self-invite': '내가 만든 초대 코드는 내 계정에서 사용할 수 없어요.',
-    'permission-denied': 'Firebase 권한 설정 때문에 연결할 수 없어요. Firestore 규칙을 다시 배포해 주세요.',
-    'firestore/permission-denied': 'Firebase 권한 설정 때문에 연결할 수 없어요. Firestore 규칙을 다시 배포해 주세요.',
+    'permission-denied': 'Firebase 권한 설정 때문에 연결할 수 없어요. Firestore 규칙 배포 상태를 확인해 주세요.',
+    'firestore/permission-denied': 'Firebase 권한 설정 때문에 연결할 수 없어요. Firestore 규칙 배포 상태를 확인해 주세요.',
     'unavailable': 'Firebase에 연결할 수 없어요. 네트워크 연결을 확인해 주세요.',
     'firestore/unavailable': 'Firebase에 연결할 수 없어요. 네트워크 연결을 확인해 주세요.',
   };
@@ -38,26 +41,54 @@ function messageFor(error: unknown) {
 }
 
 export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps) {
-  const [mode, setMode] = useState<'choose' | 'invite' | 'join'>('choose');
+  const [mode, setMode] = useState<Mode>('choose');
   const [inviteCode, setInviteCode] = useState('');
   const [joinCode, setJoinCode] = useState('');
+  const [pendingJoinCode, setPendingJoinCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      const check = inviteCode
-        ? completeInviteOwnerConnection(user.uid, inviteCode)
-        : getRealCoupleConnection(user.uid);
-      void check.then((connection) => {
+      void getRealCoupleConnection(user.uid).then((connection) => {
         if (connection) onConnected(connection);
-      }).catch((cause) => {
-        console.warn('[ROUTE couple poll]', cause);
-      });
-    }, 2500);
+      }).catch(() => undefined);
+    }, 4000);
     return () => window.clearInterval(timer);
-  }, [inviteCode, onConnected, user.uid]);
+  }, [onConnected, user.uid]);
+
+  useEffect(() => {
+    if (mode !== 'invite' || !inviteCode) return;
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const connection = await finalizeInviteAsOwner(user.uid, profile.name, inviteCode);
+        if (!cancelled && connection) onConnected(connection);
+      } catch (cause) {
+        if (!cancelled) setError(messageFor(cause));
+      }
+    };
+    void check();
+    const timer = window.setInterval(() => void check(), 2500);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [inviteCode, mode, onConnected, profile.name, user.uid]);
+
+  useEffect(() => {
+    if (mode !== 'waiting' || !pendingJoinCode) return;
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const connection = await completeJoinerConnection(user.uid, pendingJoinCode);
+        if (!cancelled && connection) onConnected(connection);
+      } catch (cause) {
+        if (!cancelled) setError(messageFor(cause));
+      }
+    };
+    void check();
+    const timer = window.setInterval(() => void check(), 2000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [mode, onConnected, pendingJoinCode, user.uid]);
 
   const makeInvite = async () => {
     setBusy(true);
@@ -96,10 +127,9 @@ export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps
     setBusy(true);
     setError('');
     try {
-      await connectWithInviteCode(user.uid, profile.name, joinCode);
-      const connection = await getRealCoupleConnection(user.uid);
-      if (!connection) throw new Error('connection-refresh-failed');
-      onConnected(connection);
+      const result = await connectWithInviteCode(user.uid, profile.name, joinCode);
+      setPendingJoinCode(result.code);
+      setMode('waiting');
     } catch (cause) {
       console.error('[ROUTE couple join]', cause);
       setError(messageFor(cause));
@@ -114,11 +144,12 @@ export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps
     <main className="couple-connect-card">
       <div className="couple-connect-symbol"><HeartHandshake size={30} /></div>
       <p className="overline">TOGETHER ON ROUTE</p>
-      <h1>{mode === 'choose' ? '상대방과 연결할까요?' : mode === 'invite' ? '상대방을 초대해요' : '초대 코드를 입력해요'}</h1>
+      <h1>{mode === 'choose' ? '상대방과 연결할까요?' : mode === 'invite' ? '상대방을 초대해요' : mode === 'join' ? '초대 코드를 입력해요' : '연결을 마무리하고 있어요'}</h1>
       <p className="couple-connect-copy">
         {mode === 'choose' && '두 계정을 연결하면 채팅, 추억, 기념일과 위치 기록을 둘만의 공간에서 함께 사용할 수 있어요.'}
         {mode === 'invite' && '상대방이 ROUTE에 가입한 뒤 아래 코드를 입력하면 두 계정이 연결돼요.'}
         {mode === 'join' && '상대방에게 받은 ROUTE 초대 코드를 입력해 주세요.'}
+        {mode === 'waiting' && '상대방의 ROUTE 화면에서 연결 요청을 확인하고 있어요. 잠시만 기다려 주세요.'}
       </p>
 
       {mode === 'choose' && <div className="couple-connect-options">
@@ -136,19 +167,21 @@ export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps
           <button type="button" onClick={copyCode}>{copied ? <Check size={17} /> : <Copy size={17} />}{copied ? '복사됨' : '코드 복사'}</button>
           <button type="button" onClick={shareCode}><Share2 size={17} />공유하기</button>
         </div>
-        <p className="couple-waiting"><RefreshCw size={14} /> 상대방이 연결하면 이 화면이 자동으로 넘어가요.</p>
+        <p className="couple-waiting"><RefreshCw size={14} /> 상대방이 연결 요청을 보내면 자동으로 연결돼요.</p>
       </>}
 
       {mode === 'join' && <>
         <label className="couple-code-input">초대 코드
           <input autoFocus value={joinCode} onChange={(event) => setJoinCode(event.target.value.toUpperCase())} placeholder="ROUTE-XXXXXX" maxLength={12} autoCapitalize="characters" />
         </label>
-        <button className="couple-connect-submit" type="button" disabled={busy || joinCode.trim().length < 10} onClick={join}>{busy ? '연결 중...' : '상대방과 연결하기'}</button>
+        <button className="couple-connect-submit" type="button" disabled={busy || joinCode.trim().length < 10} onClick={join}>{busy ? '요청 보내는 중...' : '상대방과 연결하기'}</button>
       </>}
+
+      {mode === 'waiting' && <div className="couple-waiting"><RefreshCw size={18} /> 연결 요청을 확인하는 중이에요…</div>}
 
       {error && <p className="couple-connect-error" role="alert">{error}</p>}
 
-      {mode !== 'choose' && <div className="couple-connect-footer">
+      {(mode === 'invite' || mode === 'join') && <div className="couple-connect-footer">
         <button type="button" onClick={() => { setError(''); setMode('choose'); }}>이전</button>
       </div>}
     </main>
