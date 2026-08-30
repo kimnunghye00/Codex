@@ -14,6 +14,7 @@ import './more.css';
 import './route-brand.css';
 import './route-themes.css';
 import './route-themes';
+import './couple-connect.css';
 import './home-map-overlay.css';
 import './home-map-overlay';
 import './close-standard.css';
