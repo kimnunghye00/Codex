@@ -10,5 +10,6 @@ import './notifications.css';
 import './location.css';
 import './home-simple.css';
 import './home-dashboard.css';
+import './more.css';
 
 createRoot(document.getElementById('root')!).render(<StrictMode><Root /></StrictMode>);
