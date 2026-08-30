@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { auth } from '../../lib/firebase';
 import { AI_TEST_PARTNER_NAME, loadLocalAiPartner } from '../../lib/coupleData';
+import { getRealCoupleConnection } from '../../lib/coupleConnection';
 import type { Message } from '../../types';
 import { messageDateLabel } from '../../utils/dates';
 import { ChatBubble } from './ChatBubble';
@@ -13,7 +14,7 @@ function aiReplyFor(text: string) {
   const lower = value.toLowerCase();
 
   if (!value) return '응, 듣고 있어.';
-  if (/안녕|하이|hello|hi/.test(lower)) return '안녕! 이제 MELUNI 안에서도 대화 테스트를 할 수 있어 😊';
+  if (/안녕|하이|hello|hi/.test(lower)) return '안녕! 이제 ROUTE 안에서도 대화 테스트를 할 수 있어 😊';
   if (/별명/.test(value)) return '별명 기능도 같이 확인해보자. 내가 지어준 별명이 홈 화면과 설정에 같은 이름으로 보이는지 확인해줘.';
   if (/오류|에러|버그|안돼|안 돼|문제/.test(value)) return '어디에서 문제가 생겼는지 알려줘. 어떤 버튼을 눌렀는지와 화면에 보이는 문구를 같이 확인해보자.';
   if (/테스트/.test(value)) return '좋아. 메시지 전송, 답장, 반응, 이미지 같은 기능을 하나씩 테스트해보자.';
@@ -25,11 +26,7 @@ function aiReplyFor(text: string) {
 function TypingIndicator({ ai }: { ai: boolean }) {
   return <div className="typing-row" aria-label="상대방이 입력 중입니다">
     <div className="avatar tiny">{ai ? <Bot size={14} /> : '상'}</div>
-    <div className="typing-bubble" aria-hidden="true">
-      <span />
-      <span />
-      <span />
-    </div>
+    <div className="typing-bubble" aria-hidden="true"><span /><span /><span /></div>
   </div>;
 }
 
@@ -40,13 +37,24 @@ export function ChatPage({ Header, messages, setMessages }: { Header: ({ title }
   const [lightbox, setLightbox] = useState<string>();
   const [highlighted, setHighlighted] = useState<number>();
   const [aiTyping, setAiTyping] = useState(false);
+  const [realPartnerName, setRealPartnerName] = useState('상대방');
   const bottomRef = useRef<HTMLDivElement>(null);
   const aiTimerRef = useRef<number>();
   const byId = useMemo(() => new Map(messages.map((message) => [message.id, message])), [messages]);
   const currentUid = auth.currentUser?.uid;
   const aiPartner = currentUid ? loadLocalAiPartner(currentUid) : null;
-  const partnerName = aiPartner?.connected ? aiPartner.displayName || AI_TEST_PARTNER_NAME : '서연';
-  const partnerInitial = aiPartner?.connected ? 'M' : '서';
+  const partnerName = aiPartner?.connected ? aiPartner.displayName || AI_TEST_PARTNER_NAME : realPartnerName;
+  const partnerInitial = partnerName.trim().charAt(0) || '상';
+
+  useEffect(() => {
+    if (!currentUid || aiPartner?.connected) return;
+    let cancelled = false;
+    void getRealCoupleConnection(currentUid).then((connection) => {
+      if (cancelled || !connection) return;
+      setRealPartnerName(connection.partnerProfile?.nickname?.trim() || connection.partnerProfile?.name?.trim() || '상대방');
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [currentUid, aiPartner?.connected]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages.length, aiTyping]);
   useEffect(() => () => { if (aiTimerRef.current) window.clearTimeout(aiTimerRef.current); }, []);
@@ -55,8 +63,6 @@ export function ChatPage({ Header, messages, setMessages }: { Header: ({ title }
     if (!aiPartner?.connected) return;
     setAiTyping(true);
     if (aiTimerRef.current) window.clearTimeout(aiTimerRef.current);
-
-    // 실제 사람이 짧게 생각하고 타이핑하는 느낌이 나도록 메시지 길이에 따라 조금 다르게 기다린다.
     const typingMs = Math.min(2400, Math.max(900, 700 + text.length * 35));
     aiTimerRef.current = window.setTimeout(() => {
       setMessages((items) => [...items, {
@@ -103,7 +109,7 @@ export function ChatPage({ Header, messages, setMessages }: { Header: ({ title }
       <div className="avatar large">{aiPartner?.connected ? <Bot size={22} /> : partnerInitial}</div>
       <div>
         <b>{partnerName}</b>
-        <span className={aiTyping ? 'chat-status typing' : 'chat-status'}><i /> {aiTyping ? '입력 중...' : aiPartner?.connected ? 'AI 테스트 파트너 · 연결됨' : '지금 함께 있어요'}</span>
+        <span className={aiTyping ? 'chat-status typing' : 'chat-status'}><i /> {aiTyping ? '입력 중...' : aiPartner?.connected ? 'AI 테스트 파트너 · 연결됨' : '연결된 상대방'}</span>
       </div>
       <button aria-label="대화 메뉴"><MoreHorizontal /></button>
     </div>
