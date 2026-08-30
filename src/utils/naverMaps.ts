@@ -85,7 +85,6 @@ export function loadNaverMaps() {
     script.id = NAVER_MAP_SCRIPT_ID;
     script.async = true;
     script.defer = true;
-    script.crossOrigin = 'anonymous';
     script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(key)}`;
     script.onload = () => {
       if (settled) return;
