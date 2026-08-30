@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import App from './App';
 import { AuthFlow, SIGNUP_PENDING_KEY } from './components/auth/AuthFlow';
+import { CoupleGate } from './components/couple/CoupleGate';
 import { auth } from './lib/firebase';
 
 export default function Root() {
@@ -17,5 +18,6 @@ export default function Root() {
 
   if (!ready) return null;
   if (user && signupPending) return <AuthFlow />;
+  if (user) return <CoupleGate user={user}><App /></CoupleGate>;
   return <App />;
 }
