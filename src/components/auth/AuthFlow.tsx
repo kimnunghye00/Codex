@@ -57,7 +57,7 @@ const messageFor = (error: unknown) => {
 };
 
 export function Wordmark() {
-  return <div className="wordmark"><strong>MELUNI.</strong><span>ME + U</span></div>;
+  return <div className="wordmark"><strong>ROUTE.</strong></div>;
 }
 
 export function AuthFlow() {
@@ -124,7 +124,7 @@ export function AuthFlow() {
       changeMode('signup-code');
       setNotice('인증번호 6자리를 문자로 보냈어요.');
     } catch (cause) {
-      console.error('[MELUNI signup SMS]', cause);
+      console.error('[ROUTE signup SMS]', cause);
       destroyVerifier();
       setError(messageFor(cause));
     } finally {
