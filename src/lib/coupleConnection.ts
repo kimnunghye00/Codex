@@ -76,6 +76,8 @@ export async function createCoupleInvite(uid: string, ownerName: string): Promis
   throw new Error('invite-create-failed');
 }
 
+// 초대받은 사람은 커플을 직접 만들지 않고, 초대 문서에 연결 요청만 남깁니다.
+// 따라서 다른 사용자의 users 문서를 건드리지 않습니다.
 export async function connectWithInviteCode(uid: string, displayName: string, rawCode: string) {
   const code = normalizeCode(rawCode);
   if (!/^ROUTE-[A-Z2-9]{6}$/.test(code)) throw new Error('invalid-code');
@@ -87,7 +89,7 @@ export async function connectWithInviteCode(uid: string, displayName: string, ra
     const inviteSnap = await transaction.get(inviteRef);
     if (!inviteSnap.exists()) throw new Error('invite-not-found');
     const invite = inviteSnap.data();
-    if (invite.status !== 'open') throw new Error('invite-used');
+    if (invite.status !== 'open') throw new Error(invite.status === 'requested' ? 'invite-pending' : 'invite-used');
     if (Number(invite.expiresAt ?? 0) < Date.now()) throw new Error('invite-expired');
 
     const ownerUid = String(invite.ownerUid ?? '');
@@ -97,43 +99,94 @@ export async function connectWithInviteCode(uid: string, displayName: string, ra
     const currentCoupleId = String(currentSnap.data()?.coupleId ?? '');
     if (currentCoupleId && !isTestCouple(currentCoupleId)) throw new Error('already-connected');
 
+    transaction.update(inviteRef, {
+      status: 'requested',
+      joinerUid: uid,
+      joinerName: displayName,
+      requestedAt: serverTimestamp(),
+    });
+
+    return { code, ownerUid, ownerName: String(invite.ownerName ?? '상대방') };
+  });
+}
+
+// 초대한 사람만 자기 권한으로 커플 문서를 만들고 자기 users 문서를 갱신합니다.
+export async function finalizeInviteAsOwner(uid: string, ownerName: string, rawCode: string): Promise<RealCoupleConnection | null> {
+  const code = normalizeCode(rawCode);
+  if (!/^ROUTE-[A-Z2-9]{6}$/.test(code)) return null;
+
+  const inviteRef = doc(db, 'coupleInvites', code);
+  const ownerUserRef = doc(db, 'users', uid);
+
+  const result = await runTransaction(db, async (transaction) => {
+    const inviteSnap = await transaction.get(inviteRef);
+    if (!inviteSnap.exists()) return null;
+    const invite = inviteSnap.data();
+    if (String(invite.ownerUid ?? '') !== uid) return null;
+
+    if (invite.status === 'accepted') {
+      return {
+        coupleId: String(invite.coupleId ?? ''),
+        partnerUid: String(invite.joinerUid ?? ''),
+      };
+    }
+    if (invite.status !== 'requested') return null;
+
+    const joinerUid = String(invite.joinerUid ?? '');
+    const joinerName = String(invite.joinerName ?? '상대방');
+    if (!joinerUid || joinerUid === uid) return null;
+
+    const ownerSnap = await transaction.get(ownerUserRef);
+    const ownerCoupleId = String(ownerSnap.data()?.coupleId ?? '');
+    if (ownerCoupleId && !isTestCouple(ownerCoupleId)) throw new Error('already-connected');
+
     const coupleRef = doc(collection(db, 'couples'));
     const coupleId = coupleRef.id;
-    const ownerName = String(invite.ownerName ?? '상대방');
 
     transaction.set(coupleRef, {
       id: coupleId,
-      memberUids: [ownerUid, uid],
+      memberUids: [uid, joinerUid],
       members: {
-        [ownerUid]: { uid: ownerUid, role: 'user', displayName: ownerName },
-        [uid]: { uid, role: 'user', displayName },
+        [uid]: { uid, role: 'user', displayName: ownerName },
+        [joinerUid]: { uid: joinerUid, role: 'user', displayName: joinerName },
       },
-      createdBy: ownerUid,
+      createdBy: uid,
       testMode: false,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
 
-    // 연결을 요청한 사람은 자기 문서만 수정합니다.
-    transaction.set(currentUserRef, { coupleId, partnerUid: ownerUid, updatedAt: serverTimestamp() }, { merge: true });
-    // 초대한 사람은 자신의 화면에서 이 초대가 사용된 것을 감지한 뒤 자기 문서를 직접 갱신합니다.
-    transaction.set(inviteRef, { status: 'used', usedBy: uid, coupleId, usedAt: serverTimestamp() }, { merge: true });
+    transaction.set(ownerUserRef, {
+      coupleId,
+      partnerUid: joinerUid,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
 
-    return { coupleId, partnerUid: ownerUid, partnerName: ownerName };
+    transaction.update(inviteRef, {
+      status: 'accepted',
+      coupleId,
+      acceptedAt: serverTimestamp(),
+    });
+
+    return { coupleId, partnerUid: joinerUid };
   });
+
+  if (!result?.coupleId || !result.partnerUid) return null;
+  return getRealCoupleConnection(uid);
 }
 
-export async function completeInviteOwnerConnection(uid: string, rawCode: string): Promise<RealCoupleConnection | null> {
+// 초대받은 사람은 초대가 승인된 뒤 자기 users 문서만 갱신합니다.
+export async function completeJoinerConnection(uid: string, rawCode: string): Promise<RealCoupleConnection | null> {
   const code = normalizeCode(rawCode);
   if (!/^ROUTE-[A-Z2-9]{6}$/.test(code)) return null;
 
   const inviteSnap = await getDoc(doc(db, 'coupleInvites', code));
   if (!inviteSnap.exists()) return null;
   const invite = inviteSnap.data();
-  if (String(invite.ownerUid ?? '') !== uid || invite.status !== 'used') return null;
+  if (invite.status !== 'accepted' || String(invite.joinerUid ?? '') !== uid) return null;
 
   const coupleId = String(invite.coupleId ?? '');
-  const partnerUid = String(invite.usedBy ?? '');
+  const partnerUid = String(invite.ownerUid ?? '');
   if (!coupleId || !partnerUid) return null;
 
   await setDoc(doc(db, 'users', uid), {
