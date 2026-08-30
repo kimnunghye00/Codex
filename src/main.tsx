@@ -6,5 +6,6 @@ import './auth-onboarding.css';
 import './nickname.css';
 import './ai-test.css';
 import './chat-typing.css';
+import './notifications.css';
 
 createRoot(document.getElementById('root')!).render(<StrictMode><Root /></StrictMode>);
