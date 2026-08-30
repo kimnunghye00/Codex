@@ -74,9 +74,10 @@ function renderThemePicker() {
       container.querySelectorAll<HTMLElement>('[data-route-theme-option]').forEach((button) => {
         const active = button.dataset.routeThemeOption === activeId;
         button.classList.toggle('active', active);
-        button.setAttribute('aria-pressed', String(active));
+        if (button.getAttribute('aria-pressed') !== String(active)) button.setAttribute('aria-pressed', String(active));
         const check = button.querySelector<HTMLElement>('.route-theme-check');
-        if (check) check.textContent = active ? '✓' : '';
+        const nextCheck = active ? '✓' : '';
+        if (check && check.textContent !== nextCheck) check.textContent = nextCheck;
       });
       return;
     }
