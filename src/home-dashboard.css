@@ -53,8 +53,35 @@
 .home-chat-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .home-chat-copy b { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; }
 .home-chat-copy small { width: 100%; max-width: 100%; margin-top: 3px; overflow: hidden; color: var(--text-secondary); font-size: 9px; white-space: nowrap; text-overflow: ellipsis; }
+
+/* Keep the complete two-column dashboard inside the actual mobile viewport. */
+@media (max-width: 480px) {
+  .home-dashboard.page {
+    width: 100%;
+    max-width: 100%;
+    padding-left: 11px;
+    padding-right: 11px;
+  }
+
+  .home-dashboard-grid {
+    width: calc(100vw - 22px);
+    max-width: calc(100vw - 22px);
+    grid-template-columns: minmax(0, calc(58% - 5px)) minmax(0, calc(42% - 5px));
+    gap: 10px;
+  }
+
+  .home-map-card,
+  .home-dashboard-side,
+  .home-time-card,
+  .home-photo-card,
+  .home-chat-card {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
 @media (max-width: 390px) {
-  .home-dashboard-grid { grid-template-columns: minmax(0, 1.12fr) minmax(0, .88fr); gap: 9px; }
+  .home-dashboard-grid { grid-template-columns: minmax(0, calc(56% - 4.5px)) minmax(0, calc(44% - 4.5px)); gap: 9px; }
   .home-map-card { min-height: 565px; border-radius: 22px; }
   .home-dashboard-side { gap: 9px; }
   .home-time-card, .home-chat-card { padding: 12px; border-radius: 19px; }
