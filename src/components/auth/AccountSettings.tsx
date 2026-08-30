@@ -1,4 +1,4 @@
-import { Camera, CheckCircle2, LogOut, Mail, UserRound, X } from 'lucide-react';
+import { Camera, CheckCircle2, Heart, LogOut, Mail, UserRound, X } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import {
   EmailAuthProvider,
@@ -9,7 +9,15 @@ import {
   type User,
 } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
-import { calculateAge, saveProfile, type Gender, type UserProfile } from '../../utils/profile';
+import {
+  calculateAge,
+  displayName,
+  nicknameChangeState,
+  saveProfile,
+  setSelfNickname,
+  type Gender,
+  type UserProfile,
+} from '../../utils/profile';
 
 const messageFor = (error: unknown) => {
   const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
@@ -20,12 +28,7 @@ const messageFor = (error: unknown) => {
   return '처리 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
 };
 
-export function AccountSettings({
-  user,
-  profile,
-  onProfileChange,
-  onClose,
-}: {
+export function AccountSettings({ user, profile, onProfileChange, onClose }: {
   user: User;
   profile: UserProfile;
   onProfileChange: (profile: UserProfile) => void;
@@ -37,6 +40,9 @@ export function AccountSettings({
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [profileOpen, setProfileOpen] = useState(false);
+  const [nicknameOpen, setNicknameOpen] = useState(false);
+  const [nickname, setNickname] = useState(profile.nickname ?? profile.name);
+  const [nicknameFeedback, setNicknameFeedback] = useState('');
   const [name, setName] = useState(profile.name);
   const [birthDate, setBirthDate] = useState(profile.birthDate);
   const [gender, setGender] = useState<Gender>(profile.gender);
@@ -44,6 +50,7 @@ export function AccountSettings({
   const [profileFeedback, setProfileFeedback] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const age = useMemo(() => birthDate ? calculateAge(birthDate) : 0, [birthDate]);
+  const nicknameState = nicknameChangeState(profile);
   const hasEmail = user.providerData.some((provider) => provider.providerId === 'password');
   const loginEmail = user.email?.endsWith('@login.meluni.app') ? null : user.email;
 
@@ -56,11 +63,8 @@ export function AccountSettings({
       const result = await linkWithCredential(user, credential);
       await sendEmailVerification(result.user);
       setFeedback('인증 메일을 보냈어요. 메일의 링크를 누르면 이메일 로그인이 활성화돼요.');
-    } catch (cause) {
-      setFeedback(messageFor(cause));
-    } finally {
-      setBusy(false);
-    }
+    } catch (cause) { setFeedback(messageFor(cause)); }
+    finally { setBusy(false); }
   };
 
   const refreshVerification = async () => {
@@ -68,9 +72,7 @@ export function AccountSettings({
     try {
       await reload(user);
       setFeedback(user.emailVerified ? '이메일 인증이 완료됐어요.' : '아직 이메일 인증이 확인되지 않았어요.');
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   };
 
   const readPhoto = (file?: File) => {
@@ -78,10 +80,7 @@ export function AccountSettings({
     if (!file.type.startsWith('image/')) return setProfileFeedback('이미지 파일을 선택해 주세요.');
     if (file.size > 3 * 1024 * 1024) return setProfileFeedback('프로필 사진은 3MB 이하로 선택해 주세요.');
     const reader = new FileReader();
-    reader.onload = () => {
-      setPhotoDataUrl(String(reader.result ?? ''));
-      setProfileFeedback('');
-    };
+    reader.onload = () => { setPhotoDataUrl(String(reader.result ?? '')); setProfileFeedback(''); };
     reader.readAsDataURL(file);
   };
 
@@ -89,40 +88,59 @@ export function AccountSettings({
     setProfileFeedback('');
     if (name.trim().length < 2) return setProfileFeedback('이름을 2자 이상 입력해 주세요.');
     if (!birthDate || age <= 0) return setProfileFeedback('생년월일을 확인해 주세요.');
-    const next: UserProfile = {
-      ...profile,
-      name: name.trim(),
-      birthDate,
-      gender,
-      photoDataUrl: photoDataUrl || undefined,
-    };
+    const next: UserProfile = { ...profile, name: name.trim(), birthDate, gender, photoDataUrl: photoDataUrl || undefined };
     saveProfile(user.uid, next);
     onProfileChange(next);
     setProfileFeedback('프로필을 저장했어요.');
     setProfileOpen(false);
   };
 
+  const saveNickname = () => {
+    setNicknameFeedback('');
+    const trimmed = nickname.trim();
+    if (trimmed.length < 1 || trimmed.length > 12) return setNicknameFeedback('별명은 1~12자로 입력해 주세요.');
+    if (!nicknameState.canChange) return setNicknameFeedback(`내가 직접 바꾸는 별명은 ${nicknameState.daysLeft}일 뒤에 다시 변경할 수 있어요.`);
+    try {
+      const next = setSelfNickname(profile, trimmed);
+      saveProfile(user.uid, next);
+      onProfileChange(next);
+      setNicknameFeedback('별명을 바꿨어요. 다음 직접 변경은 30일 뒤에 가능해요.');
+      setNicknameOpen(false);
+    } catch {
+      setNicknameFeedback('아직 별명을 직접 바꿀 수 있는 기간이 아니에요.');
+    }
+  };
+
+  const nicknameSource = profile.nicknameSetBy === 'partner' ? '상대방이 지어준 별명' : profile.nicknameSetBy === 'self' ? '내가 바꾼 별명' : '아직 상대방이 지어준 별명이 없어요';
+
   return <div className="sheet-backdrop account-backdrop" role="dialog" aria-modal="true" aria-label="계정 설정">
     <div className="account-settings profile-enabled-settings">
       <header><div><small>MY ACCOUNT</small><h2>계정 설정</h2></div><button onClick={onClose} aria-label="닫기"><X /></button></header>
 
+      <section className="nickname-card">
+        <div className="nickname-heading"><span><Heart size={17} /></span><div><small>우리끼리 부르는 이름</small><strong>{displayName(profile)}</strong><em>{nicknameSource}</em></div></div>
+        <p>기본적으로 상대방이 내 별명을 지어줘요. 마음에 들지 않으면 내가 30일에 한 번 직접 바꿀 수 있어요.</p>
+        {!nicknameOpen ? <button type="button" className="nickname-edit-button" disabled={!nicknameState.canChange} onClick={() => { setNickname(profile.nickname ?? profile.name); setNicknameFeedback(''); setNicknameOpen(true); }}>
+          {nicknameState.canChange ? '내가 별명 바꾸기' : `${nicknameState.daysLeft}일 뒤 변경 가능`}
+        </button> : <div className="nickname-editor">
+          <label>새 별명<input autoFocus type="text" maxLength={12} value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="1~12자" /></label>
+          {nicknameFeedback && <p className="account-feedback">{nicknameFeedback}</p>}
+          <div><button type="button" onClick={() => setNicknameOpen(false)}>취소</button><button type="button" className="primary" onClick={saveNickname}>별명 저장</button></div>
+        </div>}
+      </section>
+
       <section className="settings-profile-card">
         <button className="settings-profile-summary" type="button" onClick={() => setProfileOpen((open) => !open)}>
           <span className="settings-profile-avatar">{photoDataUrl ? <img src={photoDataUrl} alt="프로필" /> : <UserRound size={24} />}</span>
-          <span className="settings-profile-copy"><small>내 프로필</small><strong>{profile.name}</strong><em>{profile.birthDate} · 만 {calculateAge(profile.birthDate)}세</em></span>
+          <span className="settings-profile-copy"><small>내 기본 프로필</small><strong>{profile.name}</strong><em>{profile.birthDate} · 만 {calculateAge(profile.birthDate)}세</em></span>
           <span className="settings-edit-label">{profileOpen ? '닫기' : '수정'}</span>
         </button>
-
         {profileOpen && <div className="settings-profile-editor">
           <div className="settings-photo-row">
-            <button type="button" className="settings-photo-picker" onClick={() => fileRef.current?.click()}>
-              {photoDataUrl ? <img src={photoDataUrl} alt="선택한 프로필" /> : <UserRound size={28} />}
-              <span><Camera size={13} /></span>
-            </button>
+            <button type="button" className="settings-photo-picker" onClick={() => fileRef.current?.click()}>{photoDataUrl ? <img src={photoDataUrl} alt="선택한 프로필" /> : <UserRound size={28} />}<span><Camera size={13} /></span></button>
             <div><strong>프로필 사진</strong><button type="button" onClick={() => fileRef.current?.click()}>사진 변경</button>{photoDataUrl && <button type="button" onClick={() => setPhotoDataUrl('')}>사진 삭제</button>}</div>
             <input ref={fileRef} hidden type="file" accept="image/*" onChange={(event) => readPhoto(event.target.files?.[0])} />
           </div>
-
           <label>이름<input type="text" maxLength={20} value={name} onChange={(event) => setName(event.target.value)} /></label>
           <label>생년월일<input type="date" max={new Date().toISOString().slice(0, 10)} value={birthDate} onChange={(event) => setBirthDate(event.target.value)} /></label>
           {birthDate && <div className="settings-age"><span>현재 나이</span><strong>만 {age}세</strong></div>}
