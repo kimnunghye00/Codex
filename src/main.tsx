@@ -23,5 +23,6 @@ import './couple-connect.css';
 import './home-map-overlay.css';
 import './home-map-overlay';
 import './close-standard.css';
+import './more-enhance';
 
 createRoot(document.getElementById('root')!).render(<StrictMode><Root /></StrictMode>);
