@@ -122,14 +122,30 @@
   font-size: 8px;
 }
 
+/* Symmetric couple profile: photo + my real name | heart | partner real name + photo */
 .home-dashboard .home-couple-profile-card {
   grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr);
-  column-gap: 2px;
+  column-gap: 4px;
 }
 
 .home-dashboard .home-person {
   min-width: 0;
   gap: 4px;
+}
+
+.home-dashboard .home-person-me {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.home-dashboard .home-couple-profile-card > .home-person:last-child {
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+  text-align: right;
+}
+
+.home-dashboard .home-couple-profile-card > .home-person:last-child .home-profile-copy {
+  align-items: flex-end;
 }
 
 .home-dashboard .home-profile-avatar {
@@ -154,14 +170,11 @@
 }
 
 .home-dashboard .home-profile-copy b {
-  display: -webkit-box;
+  display: block;
+  width: 100%;
   overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  white-space: normal;
-  word-break: keep-all;
-  overflow-wrap: anywhere;
-  text-overflow: clip;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font-size: 9px;
   line-height: 1.16;
 }
