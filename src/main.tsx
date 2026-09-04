@@ -11,6 +11,7 @@ import './notifications.css';
 import './location.css';
 import './home-simple.css';
 import './home-dashboard.css';
+import './home-couple-tools.css';
 import './more.css';
 import './route-brand.css';
 import './route-themes.css';
