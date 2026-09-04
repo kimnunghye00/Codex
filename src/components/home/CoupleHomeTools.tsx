@@ -42,7 +42,7 @@ function loadLocal(uid: string): Schedule[] {
 
 function avatar(profile: UserProfile | null, fallback: string) {
   if (profile?.photoDataUrl) return <img src={profile.photoDataUrl} alt="프로필" />;
-  return <span>{profile ? displayName(profile).slice(0, 1) : fallback}</span>;
+  return <span>{profile?.name?.trim()?.slice(0, 1) || fallback}</span>;
 }
 
 function prettyDate(value: string) {
@@ -88,6 +88,8 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
   const upcoming = schedules.filter((item) => item.date >= todayKey()).slice(0, 3);
   const partner = connection?.partnerProfile ?? null;
   const partnerName = partner ? displayName(partner) : '상대방';
+  const partnerRealName = partner?.name?.trim() || '상대방';
+  const myRealName = profile.name?.trim() || '나';
 
   const filtered = schedules.filter((item) => {
     if (filter === 'all') return true;
@@ -135,12 +137,12 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
       <div className="home-couple-profile-card">
         <button type="button" className="home-person home-person-me" onClick={onOpenMyProfile}>
           <span className="home-profile-avatar">{avatar(profile, '나')}</span>
-          <span className="home-profile-copy"><b>{displayName(profile)}</b><small>내 프로필 편집</small></span>
+          <span className="home-profile-copy"><b>{myRealName}</b><small>내 프로필 편집</small></span>
         </button>
         <span className="home-profile-heart" aria-hidden="true"><Heart size={18} fill="currentColor" /></span>
         <button type="button" className="home-person" onClick={() => connection ? setPartnerOpen(true) : onOpenConnect()}>
           <span className="home-profile-avatar partner">{avatar(partner, '상')}</span>
-          <span className="home-profile-copy"><b>{partnerName}</b><small>{connection ? '프로필 보기' : '상대 연결하기'}</small></span>
+          <span className="home-profile-copy"><b>{partnerRealName}</b><small>{connection ? '프로필 보기' : '상대 연결하기'}</small></span>
         </button>
       </div>
 
@@ -160,7 +162,7 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
     {partnerOpen && <div className="route-modal-backdrop" onMouseDown={() => setPartnerOpen(false)}><section className="route-modal partner-profile-modal" onMouseDown={(e) => e.stopPropagation()}>
       <button className="route-modal-close" type="button" onClick={() => setPartnerOpen(false)} aria-label="닫기"><X size={19} /></button>
       <span className="partner-profile-avatar">{avatar(partner, '상')}</span>
-      <h2>{partnerName}</h2>
+      <h2>{partnerRealName}</h2>
       <p className="partner-status">{(partner as UserProfile & { statusMessage?: string } | null)?.statusMessage || '함께하는 하루를 기록하고 있어요 ❤️'}</p>
       <div className="partner-profile-info"><span><small>생일</small><b>{partner?.birthDate ? partner.birthDate.replaceAll('-', '.') : '등록되지 않음'}</b></span><span><small>우리의 시작</small><b>{relationshipStartDate?.replaceAll('-', '.') || '등록되지 않음'}</b></span></div>
     </section></div>}
