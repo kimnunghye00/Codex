@@ -232,32 +232,41 @@ function HomePage({ uid, profile, connection, relationshipStartDate, coupleDay, 
 }
 
 function AnniversaryPage({ connected, relationshipStartDate, coupleDay, anniversaries, onSaveStartDate, onSettings, onNotifications, unreadCount }: { connected: boolean; relationshipStartDate?: string; coupleDay: number; anniversaries: Anniversary[]; onSaveStartDate: (value: string) => Promise<void>; onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(relationshipStartDate ?? '');
+  const [date, setDate] = useState(relationshipStartDate ?? '');
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  useEffect(() => setDraft(relationshipStartDate ?? ''), [relationshipStartDate]);
+  const [feedback, setFeedback] = useState('');
+  useEffect(() => setDate(relationshipStartDate ?? ''), [relationshipStartDate]);
   const save = async () => {
-    if (!draft || !connected) return;
-    setSaving(true); setError('');
-    try { await onSaveStartDate(draft); setEditing(false); } catch { setError('기념일을 저장하지 못했어요.'); } finally { setSaving(false); }
+    if (!date) return setFeedback('서로 만나기 시작한 날짜를 입력해 주세요.');
+    setSaving(true); setFeedback('');
+    try { await onSaveStartDate(date); setFeedback('우리의 기념일을 저장했어요. 상대방 화면에도 함께 반영돼요.'); }
+    catch { setFeedback('기념일 저장 중 문제가 생겼어요.'); }
+    finally { setSaving(false); }
   };
-  return <div className="page anniversary-page"><Header title="기념일" onSettings={onSettings} onNotifications={onNotifications} unreadCount={unreadCount} /><div className="anniversary-hero"><small>OUR TIME</small><h1>{relationshipStartDate ? `D+${coupleDay}` : '우리의 시작을 기록해요'}</h1><p>{relationshipStartDate ? formatShortDate(relationshipStartDate) : '사귄 날을 등록하면 기념일을 자동으로 계산해요.'}</p>{connected ? <button type="button" onClick={() => setEditing(true)}>{relationshipStartDate ? '시작일 수정' : '시작일 등록'}</button> : <button type="button" onClick={onSettings}>상대방 연결하기</button>}</div><div className="anniversary-list">{anniversaries.map((item) => <article key={item.id}><span>{item.icon}</span><div><b>{item.title}</b><small>{formatDate(item.date)}</small></div><strong>{daysUntil(item.date) === 0 ? 'D-DAY' : `D-${daysUntil(item.date)}`}</strong></article>)}</div>{editing && <div className="sheet-backdrop"><div className="anniversary-sheet"><div><small>RELATIONSHIP</small><h2>우리의 시작일</h2></div><input type="date" value={draft} onChange={(event) => setDraft(event.target.value)} />{error && <p>{error}</p>}<div><button onClick={() => setEditing(false)}>취소</button><button className="primary" disabled={!draft || saving} onClick={() => void save()}>{saving ? '저장 중...' : '저장'}</button></div></div></div>}</div>;
+  return <div className="page"><Header title="기념일" onSettings={onSettings} onNotifications={onNotifications} unreadCount={unreadCount} />
+    <div className="title-block"><small>OUR DAYS</small><h1>함께 기다리는 날</h1><p>우리 둘의 생일과 소중한 기념일을 한곳에서 확인해요.</p></div>
+    {connected && !relationshipStartDate && <div className="anniversary-card"><div className="rings"><Heart fill="currentColor" /></div><span>처음 한 번만 설정해 주세요</span><strong>우리의 시작일</strong><p>한 사람이 저장하면 두 사람에게 동일하게 적용돼요.</p><label style={{display:'grid',gap:8,marginTop:14}}>서로 만나기 시작한 날짜<input type="date" value={date} max={new Date().toISOString().slice(0,10)} onChange={(e) => setDate(e.target.value)} /></label><button className="primary" type="button" disabled={saving || !date} onClick={() => void save()}>{saving ? '저장 중...' : '기념일 저장'}</button>{feedback && <p>{feedback}</p>}</div>}
+    {!connected && <div className="anniversary-card"><div className="rings"><Heart fill="currentColor" /></div><span>상대방 연결 필요</span><strong>둘만의 기념일</strong><p>설정에서 상대방 계정을 먼저 연결하면 생일과 기념일을 함께 볼 수 있어요.</p></div>}
+    {relationshipStartDate && <div className="anniversary-card"><div className="rings"><Heart fill="currentColor" /></div><span>우리의 시간</span><strong>{coupleDay}번째 날</strong><p>{relationshipStartDate.replaceAll('-', '.')}부터 · D+{coupleDay}</p></div>}
+    <div className="section-head upcoming"><h2>다가오는 기념일</h2><button onClick={() => connected && !relationshipStartDate && void save()}><Plus size={16} />기념일</button></div>
+    <div className="event-list">{anniversaries.map((event) => <button className="event" key={event.id}><div className="event-icon">{event.icon}</div><div><b>{event.title}</b><span>{formatDate(event.date)}</span></div><em>D-{daysUntil(event.date)}</em><ChevronRight size={17} /></button>)}</div>
+  </div>;
 }
 
 function MorePage({ onSettings, onNotifications, unreadCount }: { onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
-  return <div className="page more-page"><Header title="더보기" onSettings={onSettings} onNotifications={onNotifications} unreadCount={unreadCount} /><div className="more-menu"><button onClick={onSettings}><Settings size={19} /><span><b>앱 설정 및 테마</b><small>프로필, 테마, 알림 설정</small></span><ChevronRight size={17} /></button><button onClick={onNotifications}><Bell size={19} /><span><b>알림</b><small>최근 활동과 알림 확인</small></span><ChevronRight size={17} /></button></div></div>;
+  const [theme, setTheme] = useState<MeluniTheme>(() => { const saved = localStorage.getItem('meluni-theme'); return saved === 'lavender' || saved === 'dark' ? saved : 'default'; });
+  useEffect(() => { document.documentElement.dataset.meluniTheme = theme; localStorage.setItem('meluni-theme', theme); }, [theme]);
+  return <div className="page more-page"><Header title="더보기" onSettings={onSettings} onNotifications={onNotifications} unreadCount={unreadCount} /><div className="more-scroll">
+    <section className="more-hero"><div className="more-hero-copy"><small>ROUTE SETTINGS</small><h1>우리에게 맞게 꾸며요</h1><p>프로필부터 테마, 알림과 앱 설정까지 한곳에서 관리할 수 있어요.</p></div><div className="more-hero-icon"><Settings size={25} /></div></section>
+    <section className="more-section"><div className="more-section-head"><h2>빠른 메뉴</h2><span>자주 쓰는 설정</span></div><div className="more-grid"><button className="more-grid-button" type="button" onClick={onSettings}><span className="more-icon"><Settings size={18} /></span><b>프로필</b></button><button className="more-grid-button" type="button" onClick={onNotifications}><span className="more-icon"><Bell size={18} />{unreadCount > 0 && <em className="more-badge">{unreadCount > 9 ? '9+' : unreadCount}</em>}</span><b>알림</b></button><button className="more-grid-button" type="button" onClick={() => document.getElementById('theme-settings')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}><span className="more-icon"><Heart size={18} /></span><b>테마</b></button><button className="more-grid-button" type="button"><span className="more-icon"><MapPinned size={18} /></span><b>앱 설정</b></button></div></section>
+    <section className="more-section" id="theme-settings"><div className="more-section-head"><h2>테마</h2><span>즉시 적용돼요</span></div><div className="theme-card"><div className="theme-options"><button className={`theme-option ${theme === 'default' ? 'active' : ''}`} type="button" onClick={() => setTheme('default')}><i className="theme-swatch default" /><span><b>기본</b><small>네이비 + 코랄</small></span></button><button className={`theme-option ${theme === 'lavender' ? 'active' : ''}`} type="button" onClick={() => setTheme('lavender')}><i className="theme-swatch lavender" /><span><b>라벤더</b><small>부드러운 보라</small></span></button><button className={`theme-option ${theme === 'dark' ? 'active' : ''}`} type="button" onClick={() => setTheme('dark')}><i className="theme-swatch dark" /><span><b>다크</b><small>어두운 화면</small></span></button></div></div></section>
+    <section className="more-section"><div className="more-section-head"><h2>앱 및 계정</h2><span>ROUTE 관리</span></div><div className="more-list"><button className="more-list-button" type="button" onClick={onSettings}><span className="more-list-icon"><Settings size={17} /></span><span className="more-list-copy"><b>계정 및 프로필 설정</b><small>이름, 생년월일, 이메일과 프로필 사진</small></span><ChevronRight size={17} /></button><button className="more-list-button" type="button" onClick={onNotifications}><span className="more-list-icon"><Bell size={17} /></span><span className="more-list-copy"><b>알림 설정</b><small>최근 알림 확인 및 알림 관리</small></span><ChevronRight size={17} /></button><button className="more-list-button" type="button"><span className="more-list-icon"><MessageCircle size={17} /></span><span className="more-list-copy"><b>채팅 및 데이터</b><small>채팅 저장, 사진과 데이터 관리</small></span><ChevronRight size={17} /></button><button className="more-list-button" type="button"><span className="more-list-icon"><Home size={17} /></span><span className="more-list-copy"><b>앱 정보 및 도움말</b><small>ROUTE 버전, 이용 안내와 문의</small></span><ChevronRight size={17} /></button></div></section>
+  </div></div>;
 }
 
 function BottomNav({ tab, setTab }: { tab: Tab; setTab: (tab: Tab) => void }) {
-  const items: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: 'home', label: '홈', icon: <Home size={21} /> },
-    { key: 'memories', label: '앨범', icon: <Image size={21} /> },
-    { key: 'chat', label: '대화', icon: <MessageCircle size={21} /> },
-    { key: 'location', label: '지도', icon: <MapPin size={21} /> },
-    { key: 'more', label: '더보기', icon: <Ellipsis size={21} /> },
-  ];
-  return <nav className="bottom-nav">{items.map((item) => <button key={item.key} className={tab === item.key ? 'active' : ''} onClick={() => setTab(item.key)}>{item.icon}<span>{item.label}</span></button>)}</nav>;
+  const items: [Tab, string, typeof Home][] = [['home', '홈', Home], ['memories', '추억', Image], ['chat', '채팅', MessageCircle], ['location', '위치', MapPinned], ['more', '더보기', Ellipsis]];
+  return <nav className="bottom-nav" aria-label="주요 메뉴">{items.map(([id, label, Icon]) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}><span className="nav-icon"><Icon size={21} strokeWidth={tab === id ? 2.4 : 1.8} /></span><span>{label}</span></button>)}</nav>;
 }
 
 export default App;
