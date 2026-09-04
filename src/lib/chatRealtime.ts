@@ -7,15 +7,17 @@ type CloudReaction = { emoji: string; uid: string };
 type CloudMessage = {
   id: number;
   authorUid: string;
-  type: 'text' | 'image';
+  type: 'text' | 'image' | 'gallery' | 'gif';
   text?: string;
   imageUrl?: string;
+  imageUrls?: string[];
   timestamp: string;
   createdAt?: unknown;
   read?: boolean;
   replyTo?: number;
   reactions?: CloudReaction[];
   savedBy?: string[];
+  scheduledFor?: string;
 };
 
 function messageRef(coupleId: string, id: number) {
@@ -43,11 +45,13 @@ export function subscribeCoupleMessages(
         type: data.type || 'text',
         text: data.text,
         imageUrl: data.imageUrl,
+        imageUrls: data.imageUrls,
         timestamp: data.timestamp || new Date().toISOString(),
         read: Boolean(data.read),
         replyTo: data.replyTo,
         reactions,
         saved: Boolean(data.savedBy?.includes(currentUid)),
+        scheduledFor: data.scheduledFor,
       } satisfies Message;
     });
     onMessages(messages);
@@ -65,7 +69,9 @@ export async function sendCoupleMessage(coupleId: string, currentUid: string, me
   };
   if (message.text) payload.text = message.text;
   if (message.imageUrl) payload.imageUrl = message.imageUrl;
+  if (message.imageUrls?.length) payload.imageUrls = message.imageUrls;
   if (message.replyTo) payload.replyTo = message.replyTo;
+  if (message.scheduledFor) payload.scheduledFor = message.scheduledFor;
   await setDoc(messageRef(coupleId, message.id), payload);
 }
 
@@ -84,8 +90,6 @@ export async function setCoupleMessageReactions(
 
 export async function setCoupleMessageSaved(coupleId: string, messageId: number, currentUid: string, saved: boolean) {
   const ref = messageRef(coupleId, messageId);
-  // Saved state is intentionally per-device/user for now; the UI is updated locally.
-  // A dedicated per-user saved-message collection can replace this in a later data-migration step.
   if (!saved) return;
   await updateDoc(ref, { lastSavedBy: currentUid });
 }
