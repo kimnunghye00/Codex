@@ -6,6 +6,7 @@ import { AccountSettings } from './components/auth/AccountSettings';
 import { AuthFlow, Wordmark } from './components/auth/AuthFlow';
 import { ProfileSetup } from './components/auth/ProfileSetup';
 import { NotificationPanel } from './components/notifications/NotificationPanel';
+import { CoupleHomeTools } from './components/home/CoupleHomeTools';
 import { auth } from './lib/firebase';
 import { getRealCoupleConnection, type RealCoupleConnection } from './lib/coupleConnection';
 import { saveRelationshipStartDate, subscribeCoupleShared } from './lib/coupleShared';
@@ -182,7 +183,7 @@ function App() {
   const AppHeader = ({ title }: { title?: string }) => <Header title={title} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />;
   return <>
     <div className="app-shell"><main>
-      {tab === 'home' && <HomePage profile={profile} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} memories={memories} messages={messages} onNavigate={setTab} onOpenMemory={(id) => { setMemoryToOpen(id); setTab('memories'); }} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
+      {tab === 'home' && <HomePage uid={user.uid} profile={profile} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} memories={memories} messages={messages} onNavigate={setTab} onOpenMemory={(id) => { setMemoryToOpen(id); setTab('memories'); }} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} connection={connection} />}
       {tab === 'memories' && <MemoriesPage Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} onClearInitial={() => setMemoryToOpen(undefined)} />}
       {tab === 'location' && <LocationPage Header={AppHeader} onActivity={(title, detail) => addActivity({ actor: 'me', kind: 'location', title, detail })} />}
@@ -198,7 +199,7 @@ function Header({ title, onSettings, onNotifications, unreadCount }: { title?: s
   return <header className="topbar"><div className="brand"><Wordmark />{title && <span className="page-title">{title}</span>}</div><div className="header-actions"><button className="notification-button" aria-label={`알림 ${unreadCount ? `${unreadCount}개` : ''}`} onClick={onNotifications}><Bell size={20} />{unreadCount > 0 && <em className="notification-count">{unreadCount > 99 ? '99+' : unreadCount}</em>}</button><button aria-label="설정" onClick={onSettings}><Settings size={20} /></button></div></header>;
 }
 
-function HomePage({ connection, relationshipStartDate, coupleDay, anniversaries, memories, messages, onNavigate, onOpenMemory, onSettings, onNotifications, unreadCount }: { profile: UserProfile; connection: RealCoupleConnection | null; relationshipStartDate?: string; coupleDay: number; anniversaries: Anniversary[]; memories: Memory[]; messages: Message[]; onNavigate: (tab: Tab) => void; onOpenMemory: (id: number) => void; onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
+function HomePage({ uid, profile, connection, relationshipStartDate, coupleDay, anniversaries, memories, messages, onNavigate, onOpenMemory, onSettings, onNotifications, unreadCount }: { uid: string; profile: UserProfile; connection: RealCoupleConnection | null; relationshipStartDate?: string; coupleDay: number; anniversaries: Anniversary[]; memories: Memory[]; messages: Message[]; onNavigate: (tab: Tab) => void; onOpenMemory: (id: number) => void; onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
   const nearest = anniversaries[0];
   const latestMemory = memories[0];
   const latestPartnerMessage = [...messages].reverse().find((message) => message.sender === 'partner');
@@ -208,6 +209,7 @@ function HomePage({ connection, relationshipStartDate, coupleDay, anniversaries,
 
   return <div className="page home-page home-dashboard">
     <Header onSettings={onSettings} onNotifications={onNotifications} unreadCount={unreadCount} />
+    <CoupleHomeTools uid={uid} profile={profile} connection={connection} relationshipStartDate={relationshipStartDate} onOpenMyProfile={onSettings} onOpenConnect={onSettings} />
     <div className="home-dashboard-grid">
       <button className="home-map-card" type="button" aria-label="우리의 지도 열기" onClick={() => onNavigate('location')}>
         <div className="home-map-grid-lines" /><span className="home-map-road road-a" /><span className="home-map-road road-b" /><span className="home-map-river" />
