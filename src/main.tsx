@@ -25,6 +25,9 @@ import './couple-connect.css';
 import './home-map-overlay.css';
 import './home-map-overlay';
 import './close-standard.css';
+import './mobile-apk-fixes.css';
+import './native-back-ui';
+import './app-icon-native';
 import './more-enhance';
 
 void initializeNativeApp();
