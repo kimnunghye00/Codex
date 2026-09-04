@@ -1,0 +1,44 @@
+/* APK/mobile-specific layout corrections. Kept separate so the desktop layout stays easy to tune. */
+@supports (padding: max(0px)) {
+  .topbar {
+    height: auto;
+    min-height: 84px;
+    padding-top: max(10px, env(safe-area-inset-top));
+  }
+}
+
+/* A single photo should be the bubble itself, without a colored/white letterbox. */
+.media-bubble {
+  width: min(250px, 72vw);
+  max-width: 75vw;
+  padding: 0 !important;
+  overflow: hidden;
+  border: 0 !important;
+  border-radius: 16px !important;
+  background: transparent !important;
+  line-height: 0;
+}
+.media-bubble .chat-image {
+  display: block;
+  width: 100%;
+  max-width: none;
+  height: auto;
+  max-height: none;
+  margin: 0;
+  border-radius: 16px;
+  object-fit: contain;
+}
+.media-bubble .chat-gif {
+  max-height: 420px;
+  object-fit: contain;
+}
+
+/* Keep the composer above gesture/navigation safe areas on phones. */
+.composer-area {
+  padding-bottom: max(0px, env(safe-area-inset-bottom));
+}
+
+@media (max-width: 480px) {
+  .page { padding-left: 18px; padding-right: 18px; }
+  .topbar { min-height: 82px; }
+}
