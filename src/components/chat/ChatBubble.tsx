@@ -16,11 +16,12 @@ export function ChatBubble({ message, reply, partnerName, partnerInitial, active
   onSave: () => void; onImage: (url: string) => void; onJump: (id: number) => void;
 }) {
   const mine = message.sender === 'me';
+  const mediaBubble = message.type === 'image' || message.type === 'gif';
   return <div id={`message-${message.id}`} className={`bubble-row ${mine ? 'mine' : ''} ${highlighted ? 'highlighted' : ''}`}>
     {!mine && <div className="avatar tiny">{partnerInitial}</div>}
     <div className="message-wrap">
       {active && <><ReactionPicker onSelect={onReact} /><div className="message-actions"><button onClick={onReply}><CornerUpLeft size={14} />답장</button><button onClick={onSave}>{message.saved ? <Bookmark size={14} fill="currentColor" /> : <Bookmark size={14} />} {message.saved ? '저장 취소' : '추억으로 저장'}</button></div></>}
-      <button type="button" className={`bubble ${message.type === 'gallery' ? 'gallery-bubble' : ''}`} onClick={(event) => { event.stopPropagation(); onAction(); }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); onAction(); }}>
+      <button type="button" className={`bubble ${message.type === 'gallery' ? 'gallery-bubble' : ''} ${mediaBubble ? 'media-bubble' : ''}`} onClick={(event) => { event.stopPropagation(); onAction(); }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); onAction(); }}>
         {reply && <span className="reply-preview" onClick={(event) => { event.stopPropagation(); onJump(reply.id); }}><b>{reply.sender === 'me' ? '나' : partnerName}</b>{reply.type !== 'text' ? <><ImageIcon size={12} /> {replyLabel(reply)}</> : replyLabel(reply)}</span>}
         {message.type === 'image' && message.imageUrl && <img className="chat-image" src={message.imageUrl} alt="채팅으로 보낸 사진" onClick={(event) => { event.stopPropagation(); onImage(message.imageUrl!); }} />}
         {message.type === 'gif' && message.imageUrl && <img className="chat-image chat-gif" src={message.imageUrl} alt="채팅으로 보낸 움짤" onClick={(event) => { event.stopPropagation(); onImage(message.imageUrl!); }} />}
