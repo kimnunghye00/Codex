@@ -75,6 +75,11 @@ service cloud.firestore {
         allow read, create, update, delete: if memberOf(coupleId);
       }
 
+      match /typing/{uid} {
+        allow read: if memberOf(coupleId);
+        allow create, update, delete: if memberOf(coupleId) && request.auth.uid == uid;
+      }
+
       match /memories/{memoryId} {
         allow read, create, update, delete: if memberOf(coupleId);
       }
