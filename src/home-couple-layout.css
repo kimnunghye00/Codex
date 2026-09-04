@@ -1,1 +1,239 @@
-.home-dashboard{display:flex;flex-direction:column}.home-dashboard>.topbar{flex:0 0 auto}.home-dashboard>.home-couple-tools{flex:0 0 auto}.home-dashboard>.home-dashboard-grid{flex:1 1 auto;min-height:0}.home-dashboard .home-map-card{height:100%;min-height:0}.home-dashboard .home-dashboard-side{height:100%;min-height:0}.home-dashboard .home-photo-card{min-height:0}.home-dashboard .home-time-card{padding:12px}.home-dashboard .home-time-block{margin-top:8px}.home-dashboard .home-time-divider{margin-top:8px}.home-dashboard .home-chat-card{min-height:94px;padding:11px}.home-dashboard .home-chat-preview{margin-top:10px}@media(max-width:480px){.home-dashboard .home-couple-tools{grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr);gap:7px}.home-dashboard .home-couple-profile-card{padding:6px 7px}.home-dashboard .home-profile-avatar{width:32px;height:32px}.home-dashboard .home-profile-copy small{display:none}.home-dashboard .home-profile-heart{width:20px}.home-dashboard .home-schedule-card{padding:6px 7px}.home-dashboard .home-schedule-list{display:grid;grid-template-columns:1fr;gap:2px}.home-dashboard .home-schedule-row:nth-child(n+2){display:none}.home-dashboard .home-schedule-add{margin-top:3px;padding:3px}.home-dashboard .home-map-card{min-height:0}.home-dashboard .home-time-card{padding:9px}.home-dashboard .home-time-block{margin-top:5px}.home-dashboard .home-time-divider{margin-top:5px}.home-dashboard .home-photo-card{min-height:0}.home-dashboard .home-chat-card{min-height:76px;padding:9px}.home-dashboard .home-chat-preview{margin-top:6px}.home-dashboard .home-chat-avatar{width:30px;height:30px}}
+.home-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.home-dashboard > .topbar {
+  flex: 0 0 auto;
+  order: 0;
+  margin-bottom: 0;
+}
+
+/* Flatten the old two-column dashboard so the home cards can follow the
+   exact couple-first order without changing any of their existing actions. */
+.home-dashboard > .home-couple-tools,
+.home-dashboard > .home-dashboard-grid,
+.home-dashboard .home-dashboard-side {
+  display: contents;
+}
+
+/* The location map is still available from the bottom Location tab.  The home
+   screen now focuses on the five sections requested by the user. */
+.home-dashboard .home-map-card {
+  display: none;
+}
+
+.home-dashboard .home-couple-profile-card {
+  order: 1;
+  width: 100%;
+  min-height: 76px;
+  flex: 0 0 auto;
+  padding: 10px 12px;
+}
+
+.home-dashboard .home-time-card {
+  order: 2;
+  width: 100%;
+  min-height: 116px;
+  flex: 0 0 auto;
+  padding: 12px 14px;
+}
+
+.home-dashboard .home-schedule-card {
+  order: 3;
+  width: 100%;
+  min-height: 132px;
+  flex: 0 0 auto;
+  padding: 10px 12px;
+}
+
+.home-dashboard .home-photo-card {
+  order: 4;
+  width: 100%;
+  height: 92px;
+  min-height: 92px;
+  max-height: 92px;
+  flex: 0 0 92px;
+  border-radius: 20px;
+}
+
+.home-dashboard .home-chat-card {
+  order: 5;
+  width: 100%;
+  min-height: 80px;
+  flex: 0 0 auto;
+  padding: 10px 12px;
+  border-radius: 20px;
+}
+
+.home-dashboard .home-time-block {
+  margin-top: 6px;
+}
+
+.home-dashboard .home-time-divider {
+  margin-top: 7px;
+}
+
+.home-dashboard .home-photo-copy {
+  left: 13px;
+  right: 48px;
+  bottom: 11px;
+}
+
+.home-dashboard .home-photo-copy small {
+  margin-bottom: 4px;
+}
+
+.home-dashboard .home-photo-copy strong {
+  font-size: 13px;
+}
+
+.home-dashboard .home-photo-heart {
+  right: 10px;
+  bottom: 10px;
+  width: 30px;
+  height: 30px;
+}
+
+.home-dashboard .home-chat-preview {
+  margin-top: 7px;
+}
+
+.home-dashboard .home-schedule-list {
+  display: grid;
+  gap: 3px;
+}
+
+.home-dashboard .home-schedule-row:nth-child(n+3) {
+  display: none;
+}
+
+.home-dashboard .home-schedule-add {
+  margin-top: 5px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+@media (max-width: 480px) {
+  .home-dashboard.page {
+    padding-left: 11px;
+    padding-right: 11px;
+  }
+
+  .home-dashboard {
+    gap: 7px;
+  }
+
+  .home-dashboard .home-couple-profile-card {
+    min-height: 68px;
+    padding: 7px 9px;
+  }
+
+  .home-dashboard .home-profile-avatar {
+    width: 36px;
+    height: 36px;
+  }
+
+  .home-dashboard .home-profile-copy small {
+    display: block;
+    font-size: 8px;
+  }
+
+  .home-dashboard .home-profile-heart {
+    width: 24px;
+  }
+
+  .home-dashboard .home-time-card {
+    min-height: 108px;
+    padding: 9px 11px;
+  }
+
+  .home-dashboard .home-time-block {
+    margin-top: 4px;
+  }
+
+  .home-dashboard .home-time-divider {
+    margin-top: 4px;
+  }
+
+  .home-dashboard .home-time-block strong {
+    font-size: 21px;
+  }
+
+  .home-dashboard .upcoming-time strong {
+    font-size: 17px;
+  }
+
+  .home-dashboard .home-schedule-card {
+    min-height: 118px;
+    padding: 7px 9px;
+  }
+
+  .home-dashboard .home-schedule-row:nth-child(n+2) {
+    display: none;
+  }
+
+  .home-dashboard .home-schedule-add {
+    margin-top: 3px;
+    padding: 4px;
+  }
+
+  .home-dashboard .home-photo-card {
+    height: 78px;
+    min-height: 78px;
+    max-height: 78px;
+    flex-basis: 78px;
+  }
+
+  .home-dashboard .home-photo-copy {
+    bottom: 9px;
+  }
+
+  .home-dashboard .home-photo-copy small {
+    display: none;
+  }
+
+  .home-dashboard .home-chat-card {
+    min-height: 72px;
+    padding: 8px 10px;
+  }
+
+  .home-dashboard .home-chat-preview {
+    margin-top: 5px;
+  }
+
+  .home-dashboard .home-chat-avatar {
+    width: 30px;
+    height: 30px;
+  }
+}
+
+@media (max-width: 390px) {
+  .home-dashboard {
+    gap: 6px;
+  }
+
+  .home-dashboard .home-couple-profile-card {
+    min-height: 62px;
+  }
+
+  .home-dashboard .home-time-card {
+    min-height: 100px;
+  }
+
+  .home-dashboard .home-schedule-card {
+    min-height: 108px;
+  }
+
+  .home-dashboard .home-photo-card {
+    height: 70px;
+    min-height: 70px;
+    max-height: 70px;
+    flex-basis: 70px;
+  }
+
+  .home-dashboard .home-chat-card {
+    min-height: 66px;
+  }
+}
