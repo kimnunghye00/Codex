@@ -29,6 +29,11 @@ export async function initializeNativeApp() {
   } catch {}
 
   App.addListener('backButton', ({ canGoBack }) => {
+    // Give ROUTE overlays/details/tabs the first chance to consume Android back.
+    const routeBack = new Event('route-native-back', { cancelable: true });
+    window.dispatchEvent(routeBack);
+    if (routeBack.defaultPrevented) return;
+
     if (canGoBack) window.history.back();
     else App.minimizeApp();
   }).catch(() => undefined);
