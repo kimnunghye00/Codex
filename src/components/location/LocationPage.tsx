@@ -59,9 +59,9 @@ export function LocationPage({ Header, onActivity }: {
   const [mapStatus, setMapStatus] = useState('네이버 지도를 불러오는 중이에요…');
   const [mapFailed, setMapFailed] = useState(false);
   const [mapAttempt, setMapAttempt] = useState(0);
-  const watchId = useRef<number>();
+  const watchId = useRef<number | undefined>(undefined);
   const mapElement = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<NaverMap>();
+  const mapRef = useRef<NaverMap | undefined>(undefined);
   const overlaysRef = useRef<NaverOverlay[]>([]);
 
   const stopWatching = (announce = true) => {
