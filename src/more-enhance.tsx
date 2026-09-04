@@ -3,12 +3,9 @@ import { MoreServices, applySavedRouteAppIcon } from './components/more/MoreServ
 
 applySavedRouteAppIcon();
 
-const mounted = new WeakSet<Element>();
-
 function enhanceMorePage() {
   const scroll = document.querySelector('.more-page .more-scroll');
-  if (!scroll || mounted.has(scroll)) return;
-  mounted.add(scroll);
+  if (!scroll || scroll.querySelector(':scope > .route-more-root')) return;
   scroll.replaceChildren();
   const root = document.createElement('div');
   root.className = 'route-more-root';
