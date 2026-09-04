@@ -7,7 +7,8 @@ const config: CapacitorConfig = {
   backgroundColor: '#fffaf8',
   android: {
     allowMixedContent: false,
-    captureInput: true,
+    // Android WebView의 기본 InputConnection을 사용해야 한글 조합 입력이 안정적입니다.
+    captureInput: false,
   },
   ios: {
     contentInset: 'automatic',
