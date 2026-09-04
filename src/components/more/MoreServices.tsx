@@ -1,4 +1,4 @@
-import { AppWindow, Bell, CalendarDays, Clock3, Heart, Image, MapPinned, MessageCircle, Palette, Settings, Smile, Sparkles, Trophy, UserRound, X } from 'lucide-react';
+import { Bell, CalendarDays, Clock3, Heart, Image, MapPinned, MessageCircle, Palette, Settings, Smartphone, Smile, Sparkles, Trophy, UserRound, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 type MoreServiceId = 'profile' | 'notifications' | 'theme' | 'app-icon' | 'emoticon' | 'album' | 'anniversary' | 'record' | 'tier' | 'schedule' | 'date' | 'chat' | 'map' | 'footprint';
@@ -15,7 +15,7 @@ const SERVICES: Service[] = [
   { id: 'profile', label: '프로필', icon: UserRound },
   { id: 'notifications', label: '알림', icon: Bell },
   { id: 'theme', label: '테마', icon: Palette },
-  { id: 'app-icon', label: '앱 아이콘', icon: AppWindow },
+  { id: 'app-icon', label: '앱 아이콘', icon: Smartphone },
   { id: 'emoticon', label: '이모티콘', icon: Smile },
   { id: 'album', label: '앨범', icon: Image },
   { id: 'anniversary', label: '기념일', icon: Heart },
