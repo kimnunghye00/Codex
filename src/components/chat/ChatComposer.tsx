@@ -11,6 +11,7 @@ export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onIma
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const gifRef = useRef<HTMLInputElement>(null);
+  const composingRef = useRef(false);
   const [extras, setExtras] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   return <div className="composer-area">
@@ -27,7 +28,24 @@ export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onIma
       <input ref={fileRef} className="file-input" type="file" accept="image/*" multiple onChange={(event) => { const files = Array.from(event.target.files ?? []).slice(0, 10); if (files.length) onImages(files); event.target.value = ''; }} />
       <input ref={gifRef} className="file-input" type="file" accept="image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (file) onGif(file); event.target.value = ''; }} />
       <button type="button" onClick={() => setExtras((value) => !value)} aria-label="추가 기능"><Plus size={21} /></button>
-      <textarea rows={1} value={draft} onChange={(event) => onDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); onSend(); } }} placeholder="메시지를 입력하세요..." />
+      <textarea
+        rows={1}
+        value={draft}
+        onChange={(event) => onDraft(event.target.value)}
+        onCompositionStart={() => { composingRef.current = true; }}
+        onCompositionEnd={(event) => { composingRef.current = false; onDraft(event.currentTarget.value); }}
+        onKeyDown={(event) => {
+          const nativeEvent = event.nativeEvent as KeyboardEvent;
+          if (event.key === 'Enter' && !event.shiftKey && !composingRef.current && !nativeEvent.isComposing) {
+            event.preventDefault();
+            onSend();
+          }
+        }}
+        enterKeyHint="send"
+        autoCorrect="on"
+        spellCheck
+        placeholder="메시지를 입력하세요..."
+      />
       <button type="button" className={`send ${draft.trim() ? 'ready' : ''}`} disabled={!draft.trim()} onClick={onSend} aria-label="전송"><Send size={18} /></button>
     </div>
   </div>;
