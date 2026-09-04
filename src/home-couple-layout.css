@@ -32,8 +32,8 @@
   grid-row: 2;
   width: 100%;
   min-width: 0;
-  min-height: 78px;
-  padding: 8px 9px;
+  min-height: 62px;
+  padding: 6px 8px;
 }
 
 .home-dashboard .home-time-card {
@@ -123,29 +123,29 @@
 }
 
 .home-dashboard .home-couple-profile-card {
-  grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr);
-  column-gap: 3px;
+  grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr);
+  column-gap: 2px;
 }
 
 .home-dashboard .home-person {
   min-width: 0;
-  gap: 5px;
+  gap: 4px;
 }
 
 .home-dashboard .home-profile-avatar {
-  width: 34px;
-  height: 34px;
-  font-size: 11px;
+  width: 30px;
+  height: 30px;
+  font-size: 10px;
 }
 
 .home-dashboard .home-profile-heart {
-  width: 18px;
-  height: 24px;
+  width: 16px;
+  height: 20px;
 }
 
 .home-dashboard .home-profile-heart svg {
-  width: 15px;
-  height: 15px;
+  width: 13px;
+  height: 13px;
 }
 
 .home-dashboard .home-profile-copy {
@@ -163,13 +163,11 @@
   overflow-wrap: anywhere;
   text-overflow: clip;
   font-size: 9px;
-  line-height: 1.18;
+  line-height: 1.16;
 }
 
 .home-dashboard .home-profile-copy small {
-  margin-top: 2px;
-  font-size: 7px;
-  line-height: 1.15;
+  display: none;
 }
 
 .home-dashboard .home-photo-copy {
@@ -229,21 +227,17 @@
   }
 
   .home-dashboard .home-couple-profile-card {
-    min-height: 78px;
-    padding: 7px 8px;
+    min-height: 60px;
+    padding: 5px 7px;
   }
 
   .home-dashboard .home-profile-avatar {
-    width: 32px;
-    height: 32px;
+    width: 29px;
+    height: 29px;
   }
 
   .home-dashboard .home-profile-copy b {
     font-size: 9px;
-  }
-
-  .home-dashboard .home-profile-copy small {
-    display: none;
   }
 
   .home-dashboard .home-time-card {
@@ -284,12 +278,13 @@
   }
 
   .home-dashboard .home-couple-profile-card {
-    min-height: 74px;
+    min-height: 56px;
+    padding: 5px 6px;
   }
 
   .home-dashboard .home-profile-avatar {
-    width: 30px;
-    height: 30px;
+    width: 27px;
+    height: 27px;
   }
 
   .home-dashboard .home-profile-copy b {
