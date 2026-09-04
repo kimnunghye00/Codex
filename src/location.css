@@ -1,5 +1,14 @@
 .location-page { height: calc(100dvh - 88px); min-height: 0; display: flex; flex-direction: column; gap: 9px; padding-bottom: 10px; overflow: hidden; }
 .location-page .topbar { flex: 0 0 auto; }
+.location-tabs { flex: 0 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+.location-tabs button { min-height: 34px; border: 0; border-radius: 10px; color: var(--text-secondary); background: transparent; font-size: 10px; font-weight: 800; }
+.location-tabs button.active { color: #fff; background: var(--primary); box-shadow: 0 4px 12px #30305a18; }
+.footprint-daybar { flex: 0 0 auto; display: grid; grid-template-columns: 36px 1fr 36px; gap: 6px; align-items: center; }
+.footprint-daybar > button { height: 34px; border: 1px solid var(--border); border-radius: 10px; color: var(--text-primary); background: var(--surface); font-size: 20px; }
+.footprint-daybar > button:disabled { opacity: .35; }
+.footprint-daybar label { min-width: 0; height: 34px; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 0 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.footprint-daybar label svg { flex: 0 0 auto; color: var(--primary); }
+.footprint-daybar input { min-width: 0; width: 100%; border: 0; outline: 0; color: var(--text-primary); background: transparent; font: inherit; font-size: 9px; font-weight: 700; text-align: center; }
 .location-map-card { position: relative; flex: 0 0 248px; min-height: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 22px; background: #eef0f5; box-shadow: 0 8px 24px #30305a0a; }
 .location-real-map { position: absolute; inset: 0; width: 100%; height: 100%; min-width: 100%; min-height: 100%; z-index: 1; }
 .location-real-map .leaflet-control-attribution { font-size: 7px; }
@@ -42,6 +51,10 @@
 .location-rail i { z-index: 1; width: 8px; height: 8px; margin-top: 18px; border: 2px solid #c8c7da; border-radius: 50%; background: #fff; }
 .location-rail i.live { border-color: var(--primary); background: var(--primary); box-shadow: 0 0 0 4px var(--primary-soft); }
 .location-rail span { position: absolute; top: 25px; bottom: -17px; width: 1px; background: #e4e3ec; }
+.footprint-rail { width: 24px; }
+.footprint-rail i { width: 20px; height: 20px; display: grid; place-items: center; margin-top: 14px; border: 2px solid #fff; color: #fff; background: #4d5570; box-shadow: 0 0 0 1px #dcdde7; font-size: 8px; font-style: normal; font-weight: 800; }
+.footprint-rail i.live { color: #fff; background: var(--primary); box-shadow: 0 0 0 4px var(--primary-soft); }
+.footprint-rail span { top: 32px; bottom: -14px; width: 2px; background: linear-gradient(var(--primary-light), #e4e3ec); }
 .location-visit-copy { min-width: 0; flex: 1; padding: 11px 0 10px; border-bottom: 1px solid #efeff4; }
 .location-visit:last-child .location-visit-copy { border-bottom: 0; }
 .location-visit-copy > small { display: block; color: #a09fab; font-size: 7px; }
@@ -68,6 +81,9 @@
   .location-map-caption { top: 8px; left: 8px; }
 }
 
+:root[data-meluni-theme='dark'] .location-tabs,
+:root[data-meluni-theme='dark'] .footprint-daybar label,
+:root[data-meluni-theme='dark'] .footprint-daybar > button,
 :root[data-meluni-theme='dark'] .location-share-card,
 :root[data-meluni-theme='dark'] .location-list,
 :root[data-meluni-theme='dark'] .location-empty { background: var(--surface); }
