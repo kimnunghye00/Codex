@@ -1,4 +1,4 @@
-import { CalendarDays, Cake, ChevronDown, ChevronRight, Crown, GripVertical, Heart, MapPin, Phone, Plus, Settings2, Sparkles, Trophy, Video, X } from 'lucide-react';
+import { CalendarDays, ChevronRight, Crown, GripVertical, Heart, MapPin, Phone, Plus, Settings2, Sparkles, Trophy, Video, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type React from 'react';
 import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
@@ -6,7 +6,7 @@ import type { Memory } from '../../types';
 import { auth, db } from '../../lib/firebase';
 import { getRealCoupleConnection, type RealCoupleConnection } from '../../lib/coupleConnection';
 import { subscribeCoupleShared } from '../../lib/coupleShared';
-import { displayName, loadProfile, type UserProfile } from '../../utils/profile';
+import { loadProfile, type UserProfile } from '../../utils/profile';
 import { loadLocationVisits } from '../../utils/location';
 import { MemoryCard } from './MemoryCard';
 import { MemoryDetail } from './MemoryDetail';
@@ -60,8 +60,8 @@ export function MemoriesPage({ Header, memories, setMemories, initialMemoryId, o
   const [dateForm, setDateForm] = useState({ title: '', date: todayKey(), time: '18:00', location: '', memo: '' });
 
   useEffect(() => { if (!uid) return; void getRealCoupleConnection(uid).then(setConnection).catch(() => setConnection(null)); }, [uid]);
-  useEffect(() => { if (!connection?.coupleId) return setRelationshipStartDate(undefined); return subscribeCoupleShared(connection.coupleId, (shared) => setRelationshipStartDate(shared.relationshipStartDate)); }, [connection?.coupleId]);
-  useEffect(() => { if (!connection?.coupleId) return setSchedules([]); const q = query(collection(db, 'couples', connection.coupleId, 'schedules'), orderBy('date', 'asc')); return onSnapshot(q, (snap) => setSchedules(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Schedule, 'id'>) })))); }, [connection?.coupleId]);
+  useEffect(() => { if (!connection?.coupleId) { setRelationshipStartDate(undefined); return; } return subscribeCoupleShared(connection.coupleId, (shared) => setRelationshipStartDate(shared.relationshipStartDate)); }, [connection?.coupleId]);
+  useEffect(() => { if (!connection?.coupleId) { setSchedules([]); return; } const q = query(collection(db, 'couples', connection.coupleId, 'schedules'), orderBy('date', 'asc')); return onSnapshot(q, (snap) => setSchedules(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Schedule, 'id'>) })))); }, [connection?.coupleId]);
   useEffect(() => { localStorage.setItem(`route-hub-tabs:${uid}`, JSON.stringify(tabOrder)); }, [tabOrder, uid]);
   useEffect(() => { localStorage.setItem(`route-date-plans:${uid}`, JSON.stringify(datePlans)); }, [datePlans, uid]);
 
@@ -103,7 +103,6 @@ export function MemoriesPage({ Header, memories, setMemories, initialMemoryId, o
   const topPlace = Object.entries(placeCounts).sort((a, b) => b[1] - a[1])[0];
 
   const moveTab = (tab: HubTab, direction: -1 | 1) => setTabOrder((items) => { const index = items.indexOf(tab); const nextIndex = index + direction; if (nextIndex < 0 || nextIndex >= items.length) return items; const next = [...items]; [next[index], next[nextIndex]] = [next[nextIndex], next[index]]; return next; });
-
   const saveSchedule = async () => {
     if (!connection?.coupleId || !scheduleForm.title.trim()) return;
     await addDoc(collection(db, 'couples', connection.coupleId, 'schedules'), { ...scheduleForm, title: scheduleForm.title.trim(), ownerId: uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
@@ -132,7 +131,7 @@ export function MemoriesPage({ Header, memories, setMemories, initialMemoryId, o
 
     {activeTab === 'schedule' && <div className="hub-stack"><div className="hub-section-head"><div><small>CALENDAR</small><h2>서로의 일정</h2></div><button onClick={() => setScheduleOpen(true)} disabled={!connection}><Plus size={15} />추가</button></div>{!connection && <div className="hub-empty">상대방을 연결하면 서로의 일정을 함께 볼 수 있어요.</div>}{schedules.map((item) => <article className="schedule-hub-row" key={item.id}><CalendarDays size={17} /><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')} · {item.startTime}{item.location ? ` · ${item.location}` : ''}</small></div><span>{item.type === 'couple' ? '우리' : item.ownerId === uid ? '내 일정' : '상대 일정'}</span></article>)}</div>}
 
-    {activeTab === 'date' && <div className="hub-stack"><div className="hub-section-head"><div><small>DATE PLAN</small><h2>우리 데이트</h2></div><button onClick={() => setDateOpen(true)}><Plus size={15} />추가</button></div>{datePlans.length ? datePlans.sort((a,b) => a.date.localeCompare(b.date)).map((plan) => <article className="date-plan-card" key={plan.id}><span><Heart size={17} fill="currentColor" /></span><div><small>{plan.date.replaceAll('-', '.')} · {plan.time}</small><b>{plan.title}</b><p>{plan.location}{plan.memo ? ` · ${plan.memo}` : ''}</p></div><button onClick={() => setDatePlans((items) => items.filter((item) => item.id !== plan.id))}>삭제</button></article>) : <div className="hub-empty">다음 데이트를 계획해보세요 ❤️</div>}</div>}
+    {activeTab === 'date' && <div className="hub-stack"><div className="hub-section-head"><div><small>DATE PLAN</small><h2>우리 데이트</h2></div><button onClick={() => setDateOpen(true)}><Plus size={15} />추가</button></div>{datePlans.length ? [...datePlans].sort((a,b) => a.date.localeCompare(b.date)).map((plan) => <article className="date-plan-card" key={plan.id}><span><Heart size={17} fill="currentColor" /></span><div><small>{plan.date.replaceAll('-', '.')} · {plan.time}</small><b>{plan.title}</b><p>{plan.location}{plan.memo ? ` · ${plan.memo}` : ''}</p></div><button onClick={() => setDatePlans((items) => items.filter((item) => item.id !== plan.id))}>삭제</button></article>) : <div className="hub-empty">다음 데이트를 계획해보세요 ❤️</div>}</div>}
 
     {orderOpen && <div className="hub-modal-backdrop"><section className="hub-modal"><div className="hub-modal-head"><div><small>EDIT ORDER</small><h2>탭 순서 편집</h2></div><button onClick={() => setOrderOpen(false)}><X /></button></div>{tabOrder.map((tab, index) => <div className="tab-order-row" key={tab}><GripVertical size={18} /><b>{TAB_LABEL[tab]}</b><span><button disabled={index === 0} onClick={() => moveTab(tab,-1)}>↑</button><button disabled={index === tabOrder.length - 1} onClick={() => moveTab(tab,1)}>↓</button></span></div>)}</section></div>}
 
