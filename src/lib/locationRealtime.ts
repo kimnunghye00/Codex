@@ -1,4 +1,4 @@
-import { collection, doc, onSnapshot, orderBy, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import { db } from './firebase';
 import type { LocationVisit } from '../utils/location';
 
@@ -38,20 +38,25 @@ export function subscribePartnerLocationVisits(
   onError?: (error: unknown) => void,
 ) {
   const locations = collection(db, 'couples', coupleId, 'locations');
-  const q = query(locations, where('ownerUid', '==', partnerUid), where('dayKey', '==', dayKey), orderBy('arrivedAt', 'asc'));
+  const q = query(locations, where('ownerUid', '==', partnerUid));
   return onSnapshot(q, (snapshot) => {
     const visits = snapshot.docs.map((snapshotDoc) => {
       const data = snapshotDoc.data() as CloudLocationVisit;
       return {
-        id: data.id || snapshotDoc.id,
-        latitude: Number(data.latitude),
-        longitude: Number(data.longitude),
-        accuracy: Number(data.accuracy || 0),
-        placeName: data.placeName,
-        arrivedAt: data.arrivedAt,
-        leftAt: data.leftAt,
-      } satisfies LocationVisit;
-    }).filter((visit) => Number.isFinite(visit.latitude) && Number.isFinite(visit.longitude));
+        dayKey: data.dayKey,
+        visit: {
+          id: data.id || snapshotDoc.id,
+          latitude: Number(data.latitude),
+          longitude: Number(data.longitude),
+          accuracy: Number(data.accuracy || 0),
+          placeName: data.placeName,
+          arrivedAt: data.arrivedAt,
+          leftAt: data.leftAt,
+        } satisfies LocationVisit,
+      };
+    }).filter((item) => item.dayKey === dayKey && Number.isFinite(item.visit.latitude) && Number.isFinite(item.visit.longitude))
+      .map((item) => item.visit)
+      .sort((a, b) => a.arrivedAt.localeCompare(b.arrivedAt));
     onVisits(visits);
   }, onError);
 }
