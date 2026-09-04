@@ -57,7 +57,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   const [toolsOpen, setToolsOpen] = useState(false);
   const [preferences, setPreferences] = useState(() => loadChatPreferences(currentUid || 'guest'));
   const bottomRef = useRef<HTMLDivElement>(null);
-  const aiTimerRef = useRef<number>();
+  const aiTimerRef = useRef<number | undefined>(undefined);
   const byId = useMemo(() => new Map(messages.map((message) => [message.id, message])), [messages]);
   const aiPartner = currentUid ? loadLocalAiPartner(currentUid) : null;
   const usingAiPartner = Boolean(aiPartner?.connected && !connection);
