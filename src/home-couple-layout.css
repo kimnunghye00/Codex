@@ -1,79 +1,83 @@
 .home-dashboard {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.18fr) minmax(0, .82fr);
+  grid-template-rows: auto repeat(5, auto);
+  gap: 9px 12px;
+  align-content: start;
 }
 
 .home-dashboard > .topbar {
-  flex: 0 0 auto;
-  order: 0;
+  grid-column: 1 / -1;
+  grid-row: 1;
   margin-bottom: 0;
 }
 
-/* Flatten the old two-column dashboard so the home cards can follow the
-   exact couple-first order without changing any of their existing actions. */
+/* Flatten the existing wrappers so every home card can be positioned on the
+   same two-column grid without changing any actions or modal behavior. */
 .home-dashboard > .home-couple-tools,
 .home-dashboard > .home-dashboard-grid,
 .home-dashboard .home-dashboard-side {
   display: contents;
 }
 
-/* The location map is still available from the bottom Location tab.  The home
-   screen now focuses on the five sections requested by the user. */
+/* Left column: the map always stays fixed and spans the full card stack. */
 .home-dashboard .home-map-card {
-  display: none;
+  display: block;
+  grid-column: 1;
+  grid-row: 2 / 7;
+  width: 100%;
+  height: 100%;
+  min-height: 610px;
+  align-self: stretch;
 }
 
+/* Right column, exact requested order. */
 .home-dashboard .home-couple-profile-card {
-  order: 1;
+  grid-column: 2;
+  grid-row: 2;
   width: 100%;
   min-height: 76px;
-  flex: 0 0 auto;
   padding: 10px 12px;
 }
 
 .home-dashboard .home-time-card {
-  order: 2;
+  grid-column: 2;
+  grid-row: 3;
   width: 100%;
-  min-height: 116px;
-  flex: 0 0 auto;
+  min-height: 132px;
   padding: 12px 14px;
 }
 
 .home-dashboard .home-schedule-card {
-  order: 3;
+  grid-column: 2;
+  grid-row: 4;
   width: 100%;
-  min-height: 132px;
-  flex: 0 0 auto;
+  min-height: 128px;
   padding: 10px 12px;
 }
 
 .home-dashboard .home-photo-card {
-  order: 4;
+  grid-column: 2;
+  grid-row: 5;
   width: 100%;
-  height: 92px;
-  min-height: 92px;
-  max-height: 92px;
-  flex: 0 0 92px;
+  height: 96px;
+  min-height: 96px;
+  max-height: 96px;
   border-radius: 20px;
 }
 
 .home-dashboard .home-chat-card {
-  order: 5;
+  grid-column: 2;
+  grid-row: 6;
   width: 100%;
-  min-height: 80px;
-  flex: 0 0 auto;
+  min-height: 86px;
   padding: 10px 12px;
   border-radius: 20px;
 }
 
-.home-dashboard .home-time-block {
-  margin-top: 6px;
-}
-
-.home-dashboard .home-time-divider {
-  margin-top: 7px;
-}
+.home-dashboard .home-time-block { margin-top: 6px; }
+.home-dashboard .home-time-divider { margin-top: 7px; }
+.home-dashboard .home-chat-preview { margin-top: 7px; }
 
 .home-dashboard .home-photo-copy {
   left: 13px;
@@ -81,14 +85,8 @@
   bottom: 11px;
 }
 
-.home-dashboard .home-photo-copy small {
-  margin-bottom: 4px;
-}
-
-.home-dashboard .home-photo-copy strong {
-  font-size: 13px;
-}
-
+.home-dashboard .home-photo-copy small { margin-bottom: 4px; }
+.home-dashboard .home-photo-copy strong { font-size: 13px; }
 .home-dashboard .home-photo-heart {
   right: 10px;
   bottom: 10px;
@@ -96,19 +94,11 @@
   height: 30px;
 }
 
-.home-dashboard .home-chat-preview {
-  margin-top: 7px;
-}
-
 .home-dashboard .home-schedule-list {
   display: grid;
   gap: 3px;
 }
-
-.home-dashboard .home-schedule-row:nth-child(n+3) {
-  display: none;
-}
-
+.home-dashboard .home-schedule-row:nth-child(n+3) { display: none; }
 .home-dashboard .home-schedule-add {
   margin-top: 5px;
   padding-top: 5px;
@@ -122,118 +112,65 @@
   }
 
   .home-dashboard {
-    gap: 7px;
+    width: 100%;
+    grid-template-columns: minmax(0, calc(58% - 5px)) minmax(0, calc(42% - 5px));
+    gap: 7px 10px;
+  }
+
+  .home-dashboard .home-map-card {
+    min-height: 610px;
+    border-radius: 24px;
   }
 
   .home-dashboard .home-couple-profile-card {
     min-height: 68px;
-    padding: 7px 9px;
+    padding: 7px 8px;
   }
-
-  .home-dashboard .home-profile-avatar {
-    width: 36px;
-    height: 36px;
-  }
-
-  .home-dashboard .home-profile-copy small {
-    display: block;
-    font-size: 8px;
-  }
-
-  .home-dashboard .home-profile-heart {
-    width: 24px;
-  }
+  .home-dashboard .home-profile-avatar { width: 32px; height: 32px; }
+  .home-dashboard .home-profile-copy small { display: none; }
+  .home-dashboard .home-profile-heart { width: 20px; }
 
   .home-dashboard .home-time-card {
-    min-height: 108px;
-    padding: 9px 11px;
+    min-height: 126px;
+    padding: 9px;
   }
-
-  .home-dashboard .home-time-block {
-    margin-top: 4px;
-  }
-
-  .home-dashboard .home-time-divider {
-    margin-top: 4px;
-  }
-
-  .home-dashboard .home-time-block strong {
-    font-size: 21px;
-  }
-
-  .home-dashboard .upcoming-time strong {
-    font-size: 17px;
-  }
+  .home-dashboard .home-time-block { margin-top: 4px; }
+  .home-dashboard .home-time-divider { margin-top: 4px; }
+  .home-dashboard .home-time-block strong { font-size: 21px; }
+  .home-dashboard .upcoming-time strong { font-size: 17px; }
 
   .home-dashboard .home-schedule-card {
-    min-height: 118px;
-    padding: 7px 9px;
+    min-height: 116px;
+    padding: 7px 8px;
   }
-
-  .home-dashboard .home-schedule-row:nth-child(n+2) {
-    display: none;
-  }
-
-  .home-dashboard .home-schedule-add {
-    margin-top: 3px;
-    padding: 4px;
-  }
+  .home-dashboard .home-schedule-row:nth-child(n+2) { display: none; }
+  .home-dashboard .home-schedule-add { margin-top: 3px; padding: 4px; }
 
   .home-dashboard .home-photo-card {
-    height: 78px;
-    min-height: 78px;
-    max-height: 78px;
-    flex-basis: 78px;
+    height: 82px;
+    min-height: 82px;
+    max-height: 82px;
   }
-
-  .home-dashboard .home-photo-copy {
-    bottom: 9px;
-  }
-
-  .home-dashboard .home-photo-copy small {
-    display: none;
-  }
+  .home-dashboard .home-photo-copy { bottom: 9px; }
+  .home-dashboard .home-photo-copy small { display: none; }
 
   .home-dashboard .home-chat-card {
-    min-height: 72px;
-    padding: 8px 10px;
+    min-height: 74px;
+    padding: 8px 9px;
   }
-
-  .home-dashboard .home-chat-preview {
-    margin-top: 5px;
-  }
-
-  .home-dashboard .home-chat-avatar {
-    width: 30px;
-    height: 30px;
-  }
+  .home-dashboard .home-chat-preview { margin-top: 5px; }
+  .home-dashboard .home-chat-avatar { width: 30px; height: 30px; }
 }
 
 @media (max-width: 390px) {
   .home-dashboard {
-    gap: 6px;
+    grid-template-columns: minmax(0, calc(56% - 4.5px)) minmax(0, calc(44% - 4.5px));
+    gap: 6px 9px;
   }
-
-  .home-dashboard .home-couple-profile-card {
-    min-height: 62px;
-  }
-
-  .home-dashboard .home-time-card {
-    min-height: 100px;
-  }
-
-  .home-dashboard .home-schedule-card {
-    min-height: 108px;
-  }
-
-  .home-dashboard .home-photo-card {
-    height: 70px;
-    min-height: 70px;
-    max-height: 70px;
-    flex-basis: 70px;
-  }
-
-  .home-dashboard .home-chat-card {
-    min-height: 66px;
-  }
+  .home-dashboard .home-map-card { min-height: 565px; }
+  .home-dashboard .home-couple-profile-card { min-height: 62px; }
+  .home-dashboard .home-time-card { min-height: 116px; }
+  .home-dashboard .home-schedule-card { min-height: 106px; }
+  .home-dashboard .home-photo-card { height: 72px; min-height: 72px; max-height: 72px; }
+  .home-dashboard .home-chat-card { min-height: 66px; }
 }
