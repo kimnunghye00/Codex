@@ -85,7 +85,14 @@ service cloud.firestore {
       }
 
       match /locations/{locationId} {
-        allow read, create, update, delete: if memberOf(coupleId);
+        allow read: if memberOf(coupleId);
+        allow create: if memberOf(coupleId)
+          && request.resource.data.ownerUid == request.auth.uid;
+        allow update: if memberOf(coupleId)
+          && resource.data.ownerUid == request.auth.uid
+          && request.resource.data.ownerUid == resource.data.ownerUid;
+        allow delete: if memberOf(coupleId)
+          && resource.data.ownerUid == request.auth.uid;
       }
 
       match /schedules/{scheduleId} {
