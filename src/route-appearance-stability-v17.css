@@ -54,6 +54,10 @@
   color: var(--emotion) !important;
 }
 
+:root[data-route-theme] .schedule-dot.couple { background: var(--emotion) !important; }
+:root[data-route-theme] .schedule-dot.mine { background: var(--primary) !important; }
+:root[data-route-theme] .schedule-dot.partner { background: var(--primary-light) !important; }
+
 :root[data-route-theme] .more-service-icon,
 :root[data-route-theme] .location-share-head > span,
 :root[data-route-theme] .home-map-locate {
@@ -61,6 +65,7 @@
   background: color-mix(in srgb, var(--primary-soft) 88%, var(--surface));
 }
 
+.app-icon-picker[aria-busy='true'] button,
 .app-icon-picker button[aria-busy='true'] {
   opacity: .62;
   pointer-events: none;
