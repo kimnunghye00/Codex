@@ -1,0 +1,50 @@
+name: Deploy ROUTE Web
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.ts'
+      - 'firebase.json'
+      - '.github/workflows/web-deploy.yml'
+
+concurrency:
+  group: route-web-deploy-main
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      FIREBASE_TOKEN: ${{ secrets.ROUTE_FIREBASE_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Deploy to Firebase Hosting
+        if: ${{ env.FIREBASE_TOKEN != '' }}
+        run: npx --yes firebase-tools deploy --only hosting --project meluni-f4e00 --token "$FIREBASE_TOKEN" --non-interactive
+
+      - name: Firebase credentials not configured yet
+        if: ${{ env.FIREBASE_TOKEN == '' }}
+        run: |
+          echo 'ROUTE web build succeeded.'
+          echo 'Add GitHub Actions secret ROUTE_FIREBASE_TOKEN once to enable automatic Firebase Hosting deployment.'
