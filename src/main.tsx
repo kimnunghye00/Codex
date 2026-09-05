@@ -34,6 +34,7 @@ import './crash-recovery.css';
 // Contrast safety first, then runtime appearance/layout overrides.
 import './route-theme-accessibility.css';
 import './system-dark.css';
+import './home-brand-polish-v5.css';
 import './layout-polish-v4.css';
 
 import './route-themes';
