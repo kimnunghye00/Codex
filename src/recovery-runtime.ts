@@ -4,6 +4,7 @@ import { signalPersistentStateChange } from './utils/persistenceSignal';
 
 const NETWORK_BANNER_ID = 'route-network-status';
 const RECOVERY_RELOAD_PREFIX = 'route.backup.reloadApplied:';
+const ALBUM_PENDING_KEY = 'route.albumSync.pending';
 let onlineHideTimer: number | undefined;
 
 function banner() {
@@ -49,7 +50,13 @@ function setNetworkState(online: boolean, announceReconnect = false) {
 
 function flushPendingState() {
   if (!navigator.onLine) return;
-  try { requestAlbumSyncNow(); } catch (error) { console.warn('[ROUTE reconnect album]', error); }
+
+  // Album sync can upload media, so only retry it when the album layer itself
+  // recorded a pending local change. Backup signaling is cheap: its own snapshot
+  // guard prevents network writes when nothing changed.
+  if (localStorage.getItem(ALBUM_PENDING_KEY) === '1') {
+    try { requestAlbumSyncNow(); } catch (error) { console.warn('[ROUTE reconnect album]', error); }
+  }
   try { signalPersistentStateChange(); } catch (error) { console.warn('[ROUTE reconnect backup]', error); }
   window.dispatchEvent(new Event('route-network-restored'));
 }
