@@ -11,10 +11,9 @@ type WriteOutcome = { kind: 'confirmed' } | { kind: 'queued' } | { kind: 'failed
 
 async function waitForWriteWithoutBlockingOffline(write: Promise<void>) {
   let timeout: number | undefined;
-  const tracked = write.then<WriteOutcome>(
-    () => ({ kind: 'confirmed' }),
-    (cause) => ({ kind: 'failed', cause }),
-  );
+  const tracked: Promise<WriteOutcome> = write
+    .then(() => ({ kind: 'confirmed' } as WriteOutcome))
+    .catch((cause) => ({ kind: 'failed', cause } as WriteOutcome));
   const delayed = new Promise<WriteOutcome>((resolve) => {
     timeout = window.setTimeout(() => resolve({ kind: 'queued' }), CLOUD_ACK_WAIT_MS);
   });
@@ -41,17 +40,19 @@ export function subscribeCoupleShared(coupleId: string, onChange: (data: CoupleS
 
 export async function saveRelationshipStartDate(coupleId: string, date: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('invalid-relationship-date');
-  await waitForWriteWithoutBlockingOffline(setDoc(doc(db, 'couples', coupleId), {
+  const write = setDoc(doc(db, 'couples', coupleId), {
     relationshipStartDate: date,
     updatedAt: serverTimestamp(),
-  }, { merge: true }));
+  }, { merge: true });
+  await waitForWriteWithoutBlockingOffline(write);
 }
 
 export async function savePartnerNickname(coupleId: string, targetUid: string, nickname: string) {
   const value = nickname.trim();
   if (!targetUid || value.length < 1 || value.length > 12) throw new Error('invalid-partner-nickname');
-  await waitForWriteWithoutBlockingOffline(setDoc(doc(db, 'couples', coupleId), {
+  const write = setDoc(doc(db, 'couples', coupleId), {
     nicknames: { [targetUid]: value },
     updatedAt: serverTimestamp(),
-  }, { merge: true }));
+  }, { merge: true });
+  await waitForWriteWithoutBlockingOffline(write);
 }
