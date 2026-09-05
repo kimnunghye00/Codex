@@ -2,6 +2,12 @@ import { onAuthStateChanged, type User } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadString } from 'firebase/storage';
 import type { Memory, Message } from '../types';
+import {
+  loadDeletedMemories,
+  MEMORY_DELETED_KEY,
+  saveDeletedMemories,
+  type MemoryDeletionMap,
+} from '../utils/storage';
 import { auth, db, storage } from './firebase';
 
 const MAX_BACKUP_MESSAGES = 500;
@@ -13,8 +19,10 @@ const BACKUP_INTERVAL_MS = 8_000;
 
 type BackupEnvelope<T> = {
   value?: T;
+  deleted?: MemoryDeletionMap;
   updatedAt?: unknown;
   retentionPolicy?: string;
+  sourceDeviceId?: string;
 };
 
 type LocalStateBackup = Record<string, string>;
@@ -54,6 +62,14 @@ function mergeById<T extends { id: string | number }>(cloud: T[], local: T[]) {
   return [...merged.values()];
 }
 
+function mergeDeleted(a: MemoryDeletionMap, b: MemoryDeletionMap) {
+  const merged: MemoryDeletionMap = { ...a };
+  Object.entries(b).forEach(([id, timestamp]) => {
+    if (!merged[id] || timestamp > merged[id]) merged[id] = timestamp;
+  });
+  return merged;
+}
+
 function localStateKeys(uid: string) {
   return [
     `route-scheduled-chat:${uid}`,
@@ -61,6 +77,7 @@ function localStateKeys(uid: string) {
     `route-local-schedules:${uid}`,
     `meluni-location-visits:${uid}`,
     `meluni-location-sharing:${uid}`,
+    MEMORY_DELETED_KEY,
   ];
 }
 
@@ -116,6 +133,13 @@ export async function loadBackupValue<T>(uid: string, key: string): Promise<T | 
   return (snapshot.data() as BackupEnvelope<T>).value;
 }
 
+async function loadBackupEnvelope<T>(uid: string, key: string): Promise<BackupEnvelope<T> | undefined> {
+  if (!uid) return undefined;
+  const snapshot = await getDoc(backupRef(uid, key));
+  if (!snapshot.exists()) return undefined;
+  return snapshot.data() as BackupEnvelope<T>;
+}
+
 export async function saveMessagesBackup(uid: string, messages: Message[]) {
   const recent = messages.slice(-MAX_BACKUP_MESSAGES);
   const prepared: Message[] = [];
@@ -124,17 +148,32 @@ export async function saveMessagesBackup(uid: string, messages: Message[]) {
 }
 
 export async function saveMemoriesBackup(uid: string, memories: Memory[]) {
+  const deleted = loadDeletedMemories();
   const prepared: Memory[] = [];
-  for (const memory of memories) prepared.push(await persistMemoryMedia(uid, memory));
-  await saveBackupValue(uid, 'memories-latest', prepared);
+  for (const memory of memories) {
+    if (!deleted[String(memory.id)]) prepared.push(await persistMemoryMedia(uid, memory));
+  }
+  await setDoc(backupRef(uid, 'memories-latest'), {
+    value: prepared,
+    deleted,
+    updatedAt: serverTimestamp(),
+    retentionPolicy: KEEP_POLICY,
+  } satisfies BackupEnvelope<Memory[]>, { merge: true });
 }
 
 export async function restoreCoreBackup(uid: string) {
-  const [messages, memories] = await Promise.all([
+  const [messages, latestMemories, liveMemories] = await Promise.all([
     loadBackupValue<Message[]>(uid, 'messages-latest'),
-    loadBackupValue<Memory[]>(uid, 'memories-latest'),
+    loadBackupEnvelope<Memory[]>(uid, 'memories-latest'),
+    loadBackupEnvelope<Memory[]>(uid, 'memories-live'),
   ]);
-  return { messages: messages ?? [], memories: memories ?? [] };
+
+  // memories-live is the album's authoritative cross-device record. Fall back to
+  // memories-latest only for accounts created before live album sync existed.
+  const chosen = liveMemories?.value ? liveMemories : latestMemories;
+  const deleted = mergeDeleted(latestMemories?.deleted ?? {}, liveMemories?.deleted ?? {});
+  const memories = (chosen?.value ?? []).filter((memory) => !deleted[String(memory.id)]);
+  return { messages: messages ?? [], memories, deleted };
 }
 
 async function waitForInitialAuth(): Promise<User | null> {
@@ -160,17 +199,28 @@ async function restoreIntoLocalStorage(uid: string) {
   ]);
 
   const localMessages = readJson<Message[]>(MESSAGE_KEY, []);
-  const localMemories = readJson<Memory[]>(MEMORY_KEY, []);
+  const rawLocalMemories = readJson<Memory[]>(MEMORY_KEY, []);
+  const localDeleted = loadDeletedMemories();
+  const deleted = mergeDeleted(core.deleted, localDeleted);
+  const cloudMemories = core.memories.filter((memory) => !deleted[String(memory.id)]);
+  const localMemories = rawLocalMemories.filter((memory) => !deleted[String(memory.id)]);
+
   const mergedMessages = mergeById(core.messages, localMessages).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-  const mergedMemories = mergeById(core.memories, localMemories).sort((a, b) => b.date.localeCompare(a.date));
+  const mergedMemories = mergeById(cloudMemories, localMemories)
+    .filter((memory) => !deleted[String(memory.id)])
+    .sort((a, b) => b.date.localeCompare(a.date));
 
   let changed = false;
-  if (mergedMessages.length && JSON.stringify(localMessages) !== JSON.stringify(mergedMessages)) {
+  if (JSON.stringify(localMessages) !== JSON.stringify(mergedMessages)) {
     localStorage.setItem(MESSAGE_KEY, JSON.stringify(mergedMessages));
     changed = true;
   }
-  if (mergedMemories.length && JSON.stringify(localMemories) !== JSON.stringify(mergedMemories)) {
+  if (JSON.stringify(rawLocalMemories) !== JSON.stringify(mergedMemories)) {
     localStorage.setItem(MEMORY_KEY, JSON.stringify(mergedMemories));
+    changed = true;
+  }
+  if (JSON.stringify(localDeleted) !== JSON.stringify(deleted)) {
+    saveDeletedMemories(deleted);
     changed = true;
   }
 
@@ -207,7 +257,7 @@ async function backupCurrentLocalState(uid: string) {
       await saveMessagesBackup(uid, readJson<Message[]>(MESSAGE_KEY, []));
       lastMessageSnapshot = messageSnapshot;
     }
-    if (memoriesChanged) {
+    if (memoriesChanged || localStateChanged) {
       await saveMemoriesBackup(uid, readJson<Memory[]>(MEMORY_KEY, []));
       lastMemorySnapshot = memorySnapshot;
     }
