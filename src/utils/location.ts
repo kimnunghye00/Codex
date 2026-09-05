@@ -1,3 +1,5 @@
+import { signalPersistentStateChange } from './persistenceSignal';
+
 export type LocationVisit = {
   id: string;
   latitude: number;
@@ -30,6 +32,7 @@ export function loadLocationVisits(uid: string): LocationVisit[] {
 
 export function saveLocationVisits(uid: string, visits: LocationVisit[]) {
   localStorage.setItem(visitsKey(uid), JSON.stringify(visits.slice(0, MAX_VISITS)));
+  signalPersistentStateChange();
 }
 
 export function loadLocationSharing(uid: string): LocationSharingState {
@@ -46,6 +49,7 @@ export function loadLocationSharing(uid: string): LocationSharingState {
 export function saveLocationSharing(uid: string, enabled: boolean) {
   const next = { enabled, updatedAt: new Date().toISOString() };
   localStorage.setItem(sharingKey(uid), JSON.stringify(next));
+  signalPersistentStateChange();
   return next;
 }
 
