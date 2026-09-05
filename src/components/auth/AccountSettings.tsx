@@ -13,6 +13,7 @@ import { connectAiTestPartner, loadLocalAiPartner, syncUserProfile } from '../..
 import { getRealCoupleConnection, type RealCoupleConnection } from '../../lib/coupleConnection';
 import { savePartnerNickname } from '../../lib/coupleShared';
 import { CoupleConnect } from '../couple/CoupleConnect';
+import { CoupleDisconnectControl } from './CoupleDisconnectControl';
 import {
   calculateAge,
   displayName,
@@ -205,8 +206,14 @@ export function AccountSettings({ user, profile, onProfileChange, onClose }: {
         <div className="account-summary"><span>전화번호</span><strong>{user.phoneNumber ?? '등록되지 않음'}</strong><CheckCircle2 size={18} /></div>
 
         <section className="ai-test-card real-couple-connect-card">
-          <div><Link2 size={20} /><span><strong>{realConnection ? '상대방 연결됨' : '상대방과 연결하기'}</strong><small>{realConnection ? `${realConnection.partnerProfile?.name || '상대방'}님과 실제 계정이 연결되어 있어요.` : '초대 코드를 만들거나 상대방에게 받은 코드를 입력해 실제 계정을 연결해요.'}</small></span></div>
+          <div><Link2 size={20} /><span><strong>{realConnection ? '상대방 프로필 및 연결' : '상대방과 연결하기'}</strong><small>{realConnection ? `${realConnection.partnerProfile?.name || '상대방'}님과 실제 계정이 연결되어 있어요.` : '초대 코드를 만들거나 상대방에게 받은 코드를 입력해 실제 계정을 연결해요.'}</small></span></div>
           {!realConnection && <button type="button" className="nickname-edit-button" onClick={() => setCoupleConnectOpen(true)}>상대방 연결 설정 열기</button>}
+          {realConnection && <CoupleDisconnectControl uid={user.uid} connection={realConnection} onDisconnected={() => {
+            setRealConnection(null);
+            setPartnerNicknameValue('');
+            setPartnerNicknameFeedback('');
+            setFeedback('상대방과의 연결을 끊었어요. 공유 기록은 더 이상 접근하지 못할 수 있어요.');
+          }} />}
         </section>
 
         {realConnection && <section className="nickname-card partner-nickname-card">
