@@ -30,8 +30,27 @@ export async function installRouteWebApp(): Promise<'installed' | 'accepted' | '
   return choice.outcome;
 }
 
+async function clearDevelopmentServiceWorkers() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(registrations.map((registration) => registration.unregister()));
+  } catch (error) {
+    console.warn('[ROUTE PWA] development service worker cleanup failed', error);
+  }
+}
+
 export function initializeRoutePwa() {
   if (Capacitor.isNativePlatform()) return;
+
+  // Vite/Codespaces development already has its own live-reload pipeline.
+  // A previously registered PWA service worker can keep serving stale app shells
+  // or interfere with HMR, which may look like the page is endlessly refreshing.
+  // Never keep a ROUTE service worker active while running `npm run dev`.
+  if (import.meta.env.DEV) {
+    void clearDevelopmentServiceWorkers();
+    return;
+  }
 
   window.addEventListener('beforeinstallprompt', (event) => {
     event.preventDefault();
