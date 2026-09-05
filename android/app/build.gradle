@@ -3,6 +3,19 @@ apply plugin: 'com.android.application'
 android {
     namespace = "com.route.couple"
     compileSdk = rootProject.ext.compileSdkVersion
+
+    signingConfigs {
+        debug {
+            // Test-only key reconstructed by GitHub Actions from the repository's
+            // base64 fixture. Keeping this exact key stable makes every ROUTE
+            // debug APK update-compatible with the previous fixed-key build.
+            storeFile file('../signing/route-test-debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
+
     defaultConfig {
         applicationId "com.route.couple"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -22,6 +35,9 @@ android {
         }
     }
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
