@@ -10,6 +10,10 @@ files:
 extraResources:
   - from: build/icons/route.ico
     to: build/icons/route.ico
+  - from: dist
+    to: dist
+    filter:
+      - '**/*'
 
 extraMetadata:
   main: electron/main.cjs
