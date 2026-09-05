@@ -43,10 +43,12 @@ jobs:
       - name: Create and sync iOS project
         shell: bash
         run: |
+          set -euo pipefail
           rm -rf ios
           npx cap add ios
           npx cap sync ios
           npm run native:configure
+          test -d ios/App/App.xcodeproj
 
       - name: Apply latest ROUTE iOS icon
         shell: bash
@@ -79,7 +81,7 @@ jobs:
         run: |
           set -euo pipefail
           xcodebuild \
-            -workspace ios/App/App.xcworkspace \
+            -project ios/App/App.xcodeproj \
             -scheme App \
             -configuration Release \
             -sdk iphoneos \
@@ -94,20 +96,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          VERSION="$(node -p "require('./package.json').version")"
           APP_PATH='release/ios-device/Build/Products/Release-iphoneos/App.app'
           test -d "$APP_PATH"
           rm -rf release/ios-package
           mkdir -p release/ios-package/Payload
           cp -R "$APP_PATH" release/ios-package/Payload/App.app
           cd release/ios-package
-          /usr/bin/zip -qry ROUTE-iOS-0.2.2-unsigned.ipa Payload
+          /usr/bin/zip -qry "ROUTE-iOS-${VERSION}-unsigned.ipa" Payload
 
       - name: Build iOS Simulator app
         shell: bash
         run: |
           set -euo pipefail
+          VERSION="$(node -p "require('./package.json').version")"
           xcodebuild \
-            -workspace ios/App/App.xcworkspace \
+            -project ios/App/App.xcodeproj \
             -scheme App \
             -configuration Debug \
             -sdk iphonesimulator \
@@ -117,14 +121,14 @@ jobs:
             build
           APP_PATH='release/ios-simulator/Build/Products/Debug-iphonesimulator/App.app'
           test -d "$APP_PATH"
-          /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" release/ROUTE-iOS-0.2.2-Simulator.zip
+          /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "release/ROUTE-iOS-${VERSION}-Simulator.zip"
 
       - name: Upload ROUTE iOS builds
         uses: actions/upload-artifact@v4
         with:
           name: ROUTE-iOS-Build
           path: |
-            release/ios-package/ROUTE-iOS-0.2.2-unsigned.ipa
-            release/ROUTE-iOS-0.2.2-Simulator.zip
+            release/ios-package/ROUTE-iOS-*-unsigned.ipa
+            release/ROUTE-iOS-*-Simulator.zip
           if-no-files-found: error
           retention-days: 30
