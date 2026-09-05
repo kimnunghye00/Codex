@@ -7,6 +7,42 @@ const ROUTE_URL = 'https://meluni-f4e00.web.app';
 const ROUTE_ORIGIN = new URL(ROUTE_URL).origin;
 const DIST_DIR = path.join(process.resourcesPath, 'dist');
 
+const WINDOWS_APP_CHROME_CSS = `
+  .topbar,
+  .page > .topbar,
+  .home-dashboard > .topbar,
+  .home-page > .topbar {
+    -webkit-app-region: drag;
+    padding-right: max(
+      126px,
+      calc(100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px) - 8px)
+    ) !important;
+  }
+
+  .topbar .header-actions,
+  .topbar button,
+  .topbar a,
+  .topbar input,
+  .topbar textarea,
+  .topbar select,
+  .topbar [role='button'] {
+    -webkit-app-region: no-drag;
+  }
+
+  @media (max-width: 560px) {
+    .topbar .header-actions {
+      gap: 0 !important;
+    }
+
+    .topbar .header-actions button {
+      min-width: 40px !important;
+      width: 40px !important;
+      min-height: 40px !important;
+      height: 40px !important;
+    }
+  }
+`;
+
 app.setAppUserModelId('com.route.couple');
 
 function isTrustedUrl(rawUrl) {
@@ -109,6 +145,14 @@ function createWindow() {
     autoHideMenuBar: true,
     backgroundColor: '#fffaf8',
     icon: path.join(process.resourcesPath, 'build', 'icons', 'route.ico'),
+    ...(process.platform === 'win32' ? {
+      titleBarStyle: 'hidden',
+      titleBarOverlay: {
+        color: '#00000000',
+        symbolColor: '#5f554f',
+        height: 64,
+      },
+    } : {}),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -116,6 +160,14 @@ function createWindow() {
       spellcheck: true,
     },
   });
+
+  if (process.platform === 'win32') {
+    win.webContents.on('dom-ready', () => {
+      void win.webContents.insertCSS(WINDOWS_APP_CHROME_CSS).catch(() => {
+        // Cosmetic only: keep the app usable even if title-bar CSS injection fails.
+      });
+    });
+  }
 
   win.once('ready-to-show', () => win.show());
 
