@@ -1,6 +1,7 @@
-import { CalendarDays, Clock3, LocateFixed, MapPin, Navigation, PauseCircle, RefreshCw, ShieldCheck } from 'lucide-react';
+import { CalendarDays, Clock3, ImagePlus, LocateFixed, MapPin, Navigation, PauseCircle, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
+import type { MemoryDraft } from '../../types';
 import { auth } from '../../lib/firebase';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
 import { saveCoupleLocationVisit, subscribePartnerLocationVisits } from '../../lib/locationRealtime';
@@ -11,6 +12,7 @@ import {
   reverseGeocode,
   saveLocationSharing,
   saveLocationVisits,
+  searchLocation,
   type LocationVisit,
 } from '../../utils/location';
 
@@ -20,6 +22,7 @@ const ROUTE_MAP_HOST = `${ROUTE_MAP_ORIGIN}/naver-map-host.html`;
 
 type LocationTab = 'map' | 'footprints';
 type MapHostMessage = { source?: string; type?: string };
+type FocusState = 'idle' | 'searching' | 'found' | 'failed';
 
 function todayKey() {
   const now = new Date();
@@ -27,6 +30,19 @@ function todayKey() {
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function dateKey(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return todayKey();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function normalizePlace(value: string) {
+  return value.trim().toLocaleLowerCase('ko-KR').replace(/\s+/g, '');
 }
 
 function timeText(value?: string) {
@@ -38,9 +54,12 @@ function dayText(value: string) {
   return new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }).format(new Date(value));
 }
 
-export function LocationPage({ Header, connection, onActivity }: {
+export function LocationPage({ Header, connection, focusPlace, onClearFocus, onCreateMemory, onActivity }: {
   Header: ({ title }: { title?: string }) => React.ReactNode;
   connection: RealCoupleConnection | null;
+  focusPlace?: string;
+  onClearFocus?: () => void;
+  onCreateMemory?: (draft: MemoryDraft) => void;
   onActivity?: (title: string, detail?: string) => void;
 }) {
   const uid = auth.currentUser?.uid ?? '';
@@ -56,6 +75,9 @@ export function LocationPage({ Header, connection, onActivity }: {
   const [mapFailed, setMapFailed] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [mapAttempt, setMapAttempt] = useState(0);
+  const [focusState, setFocusState] = useState<FocusState>('idle');
+  const [focusStatus, setFocusStatus] = useState('');
+  const [focusedVisit, setFocusedVisit] = useState<LocationVisit>();
   const watchId = useRef<number | undefined>(undefined);
   const mapFrame = useRef<HTMLIFrameElement>(null);
   const partnerName = connection?.partnerProfile?.name?.trim() || connection?.partnerProfile?.nickname?.trim() || '상대방';
@@ -86,6 +108,56 @@ export function LocationPage({ Header, connection, onActivity }: {
       setPartnerStatus(items.length ? '' : selectedDay === todayKey() ? '아직 오늘 공유된 발자취가 없어요.' : '이 날짜에는 공유된 발자취가 없어요.');
     }, () => setPartnerStatus('발자취를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.'));
   }, [connection?.coupleId, connection?.partnerUid, partnerName, selectedDay]);
+
+  useEffect(() => {
+    if (!focusPlace?.trim()) return;
+    let cancelled = false;
+    const query = focusPlace.trim();
+    const normalized = normalizePlace(query);
+    setActiveTab('map');
+    setFocusState('searching');
+    setFocusStatus(`‘${query}’ 위치를 찾는 중이에요…`);
+
+    const resolvePlace = async () => {
+      const localMatch = visits.find((visit) => {
+        const place = normalizePlace(visit.placeName ?? '');
+        return place && (place.includes(normalized) || normalized.includes(place));
+      });
+      if (localMatch) {
+        if (cancelled) return;
+        setFocusedVisit(localMatch);
+        setFocusState('found');
+        setFocusStatus(`일정 장소 ‘${query}’를 최근 방문 기록에서 찾았어요.`);
+        onClearFocus?.();
+        return;
+      }
+
+      const result = await searchLocation(query);
+      if (cancelled) return;
+      if (!result) {
+        setFocusedVisit(undefined);
+        setFocusState('failed');
+        setFocusStatus(`‘${query}’ 위치를 찾지 못했어요. 장소명이나 주소를 조금 더 자세히 입력해 주세요.`);
+        onClearFocus?.();
+        return;
+      }
+
+      setFocusedVisit({
+        id: `schedule-place-${Date.now()}`,
+        latitude: result.latitude,
+        longitude: result.longitude,
+        accuracy: 0,
+        placeName: result.placeName || query,
+        arrivedAt: new Date().toISOString(),
+      });
+      setFocusState('found');
+      setFocusStatus(`일정 장소 ‘${query}’를 지도에서 열었어요.`);
+      onClearFocus?.();
+    };
+
+    void resolvePlace();
+    return () => { cancelled = true; };
+  }, [focusPlace]);
 
   useEffect(() => {
     const receiveMapMessage = (event: MessageEvent<MapHostMessage>) => {
@@ -130,6 +202,12 @@ export function LocationPage({ Header, connection, onActivity }: {
     if (!mapReady) return;
     postMapMessage({ type: 'render', visits: mapVisits, mode: activeTab });
   }, [activeTab, mapReady, mapVisits]);
+
+  useEffect(() => {
+    if (!mapReady || !focusedVisit) return;
+    const timer = window.setTimeout(() => postMapMessage({ type: 'focus', visit: focusedVisit, showPopup: true }), 80);
+    return () => window.clearTimeout(timer);
+  }, [focusedVisit, mapReady]);
 
   useEffect(() => {
     const resize = () => mapReady && postMapMessage({ type: 'resize' });
@@ -208,7 +286,26 @@ export function LocationPage({ Header, connection, onActivity }: {
 
   const focusVisit = (visit: LocationVisit) => {
     if (!mapReady) return;
-    postMapMessage({ type: 'focus', visit });
+    postMapMessage({ type: 'focus', visit, showPopup: true });
+  };
+
+  const clearFocusedPlace = () => {
+    setFocusState('idle');
+    setFocusStatus('');
+    setFocusedVisit(undefined);
+    if (mapReady) postMapMessage({ type: 'clear-focus' });
+  };
+
+  const createMemoryFromVisit = (visit: LocationVisit) => {
+    if (!onCreateMemory) return;
+    const place = visit.placeName?.trim() || '다녀온 곳';
+    onCreateMemory({
+      title: `${place}에서의 추억`,
+      date: dateKey(visit.arrivedAt),
+      description: `${dayText(visit.arrivedAt)} ${timeText(visit.arrivedAt)}에 다녀온 곳이에요. 사진이나 영상을 더해 이 순간을 남겨보세요.`,
+      location: visit.placeName?.trim() || undefined,
+      tags: ['위치', '방문'],
+    });
   };
 
   const moveDay = (amount: number) => {
@@ -222,7 +319,7 @@ export function LocationPage({ Header, connection, onActivity }: {
     <Header title="지도" />
     <div className="location-tabs" role="tablist" aria-label="지도 보기 방식">
       <button type="button" role="tab" aria-selected={activeTab === 'map'} className={activeTab === 'map' ? 'active' : ''} onClick={() => setActiveTab('map')}>지도</button>
-      <button type="button" role="tab" aria-selected={activeTab === 'footprints'} className={activeTab === 'footprints' ? 'active' : ''} onClick={() => setActiveTab('footprints')}>발자취</button>
+      <button type="button" role="tab" aria-selected={activeTab === 'footprints'} className={activeTab === 'footprints' ? 'active' : ''} onClick={() => { clearFocusedPlace(); setActiveTab('footprints'); }}>발자취</button>
     </div>
 
     {activeTab === 'footprints' && <div className="footprint-daybar"><button type="button" onClick={() => moveDay(-1)}>‹</button><label><CalendarDays size={14} /><input type="date" value={selectedDay} max={todayKey()} onChange={(event) => setSelectedDay(event.target.value)} /></label><button type="button" disabled={selectedDay >= todayKey()} onClick={() => moveDay(1)}>›</button></div>}
@@ -233,13 +330,14 @@ export function LocationPage({ Header, connection, onActivity }: {
         ref={mapFrame}
         className="location-real-map route-map-frame"
         title="ROUTE 네이버 지도"
-        src={`${ROUTE_MAP_HOST}?v=2&attempt=${mapAttempt}`}
+        src={`${ROUTE_MAP_HOST}?v=3&attempt=${mapAttempt}`}
         onLoad={() => {
           setMapStatus('네이버 지도를 준비하는 중이에요…');
           setMapFailed(false);
         }}
       />
       {mapStatus && <div className={`location-map-status ${mapFailed ? 'failed' : ''}`}><MapPin size={18} /><span>{mapStatus}</span>{mapFailed && <button type="button" onClick={retryMap}><RefreshCw size={14} />다시 불러오기</button>}</div>}
+      {focusState !== 'idle' && <div className={`location-focus-banner ${focusState}`}><MapPin size={16} /><span><b>{focusState === 'searching' ? '일정 장소 찾는 중' : focusState === 'found' ? '일정 장소' : '장소를 찾지 못했어요'}</b><small>{focusStatus}</small></span><button type="button" aria-label="장소 안내 닫기" onClick={clearFocusedPlace}><X size={14} /></button></div>}
       <div className="location-map-caption"><strong>{activeTab === 'footprints' ? `${partnerName}의 발자취` : '우리의 이동 지도'}</strong><span>{mapVisits.length ? `${mapVisits.length}개의 위치 기록` : '아직 기록 없음'}</span></div>
     </section>
 
@@ -251,7 +349,7 @@ export function LocationPage({ Header, connection, onActivity }: {
       </section>
       <section className="location-history">
         <div className="location-section-head"><div><small>TIMELINE</small><h2>최근 다녀온 곳</h2></div><span>{visits.length}곳</span></div>
-        {!visits.length ? <div className="location-empty"><MapPin size={24} /><strong>아직 위치 기록이 없어요</strong><p>위치 공유를 시작하고 이동하면 네이버 지도 위에 방문 장소가 자동으로 쌓여요.</p></div> : <div className="location-list">{visits.map((visit, index) => <button type="button" key={visit.id} className="location-visit" onClick={() => focusVisit(visit)}><div className="location-rail"><i className={index === 0 && !visit.leftAt ? 'live' : ''} />{index < visits.length - 1 && <span />}</div><div className="location-visit-copy"><small>{dayText(visit.arrivedAt)}</small><strong>{visit.placeName || '위치 기록'}</strong><p><Clock3 size={13} /> {timeText(visit.arrivedAt)} 도착 · {visit.leftAt ? `${timeText(visit.leftAt)} 이동` : '현재 머무는 중'}</p><em>정확도 약 {Math.round(visit.accuracy)}m · 눌러서 지도에서 보기</em></div></button>)}</div>}
+        {!visits.length ? <div className="location-empty"><MapPin size={24} /><strong>아직 위치 기록이 없어요</strong><p>위치 공유를 시작하고 이동하면 네이버 지도 위에 방문 장소가 자동으로 쌓여요.</p></div> : <div className="location-list">{visits.map((visit, index) => <div className="location-visit-row" key={visit.id}><button type="button" className="location-visit" onClick={() => focusVisit(visit)}><div className="location-rail"><i className={index === 0 && !visit.leftAt ? 'live' : ''} />{index < visits.length - 1 && <span />}</div><div className="location-visit-copy"><small>{dayText(visit.arrivedAt)}</small><strong>{visit.placeName || '위치 기록'}</strong><p><Clock3 size={13} /> {timeText(visit.arrivedAt)} 도착 · {visit.leftAt ? `${timeText(visit.leftAt)} 이동` : '현재 머무는 중'}</p><em>정확도 약 {Math.round(visit.accuracy)}m · 눌러서 지도에서 보기</em></div></button>{onCreateMemory && <button type="button" className="location-memory-button" onClick={() => createMemoryFromVisit(visit)}><ImagePlus size={14} /><span>추억</span></button>}</div>)}</div>}
       </section>
     </> : <section className="location-history footprints-history">
       <div className="location-section-head"><div><small>FOOTPRINTS</small><h2>{selectedDay === todayKey() ? `오늘 ${partnerName}의 발자취` : `${partnerName}의 발자취`}</h2></div><span>{partnerVisits.length}곳</span></div>
