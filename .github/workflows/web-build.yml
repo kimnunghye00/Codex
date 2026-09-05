@@ -1,0 +1,52 @@
+name: Build ROUTE Web
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.ts'
+      - 'firebase.json'
+      - '.github/workflows/web-build.yml'
+
+concurrency:
+  group: route-web-main
+  cancel-in-progress: true
+
+jobs:
+  build-web:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Verify PWA files
+        run: |
+          test -f dist/manifest.webmanifest
+          test -f dist/sw.js
+          test -f dist/route-icon.svg
+          grep -q 'manifest.webmanifest' dist/index.html
+
+      - name: Upload web bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ROUTE-web
+          path: dist
+          if-no-files-found: error
