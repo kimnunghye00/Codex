@@ -1,8 +1,11 @@
-const { app, BrowserWindow, shell, session } = require('electron');
+const { app, BrowserWindow, net, shell, session } = require('electron');
+const fs = require('fs');
 const path = require('path');
+const { pathToFileURL } = require('url');
 
 const ROUTE_URL = 'https://meluni-f4e00.web.app';
 const ROUTE_ORIGIN = new URL(ROUTE_URL).origin;
+const DIST_DIR = path.join(process.resourcesPath, 'dist');
 
 app.setAppUserModelId('com.route.couple');
 
@@ -14,13 +17,65 @@ function isTrustedUrl(rawUrl) {
   }
 }
 
+function forwardNetworkRequest(request) {
+  return net.fetch(request, { bypassCustomProtocolHandlers: true });
+}
+
+function resolveBundledFile(pathname) {
+  let decodedPath = pathname;
+  try {
+    decodedPath = decodeURIComponent(pathname);
+  } catch {
+    return null;
+  }
+
+  const relativePath = decodedPath === '/' ? 'index.html' : decodedPath.replace(/^\/+/, '');
+  const candidate = path.resolve(DIST_DIR, relativePath);
+  const relative = path.relative(DIST_DIR, candidate);
+  const safe = relative && !relative.startsWith('..') && !path.isAbsolute(relative);
+  if (!safe) return null;
+
+  try {
+    if (fs.statSync(candidate).isFile()) return candidate;
+  } catch {
+    // Missing packaged resource: handled by SPA or network fallback below.
+  }
+  return null;
+}
+
+function configureBundledAppProtocol(ses) {
+  ses.protocol.handle('https', (request) => {
+    const requestUrl = new URL(request.url);
+    if (requestUrl.origin !== ROUTE_ORIGIN) return forwardNetworkRequest(request);
+
+    // Firebase's reserved auth/hosting endpoints must stay on the real network.
+    if (requestUrl.pathname.startsWith('/__/') || !['GET', 'HEAD'].includes(request.method)) {
+      return forwardNetworkRequest(request);
+    }
+
+    const bundledFile = resolveBundledFile(requestUrl.pathname);
+    if (bundledFile) return net.fetch(pathToFileURL(bundledFile).toString());
+
+    // Client-side ROUTE pages have no extension, so serve the packaged app shell.
+    if (!path.extname(requestUrl.pathname)) {
+      const appShell = path.join(DIST_DIR, 'index.html');
+      if (fs.existsSync(appShell)) return net.fetch(pathToFileURL(appShell).toString());
+    }
+
+    // Keep a network fallback for reserved/unknown static resources.
+    return forwardNetworkRequest(request);
+  });
+}
+
 function configureSession() {
   const ses = session.defaultSession;
 
   // Keep the browser identity Chrome-like so Firebase/reCAPTCHA web flows
-  // behave the same way as they do in the installed PWA.
+  // behave the same way as they do on the authorized ROUTE web origin.
   const currentUserAgent = ses.getUserAgent();
   ses.setUserAgent(currentUserAgent.replace(/\sElectron\/\S+/g, ''));
+
+  configureBundledAppProtocol(ses);
 
   const allowedPermissions = new Set([
     'geolocation',
@@ -53,7 +108,7 @@ function createWindow() {
     show: false,
     autoHideMenuBar: true,
     backgroundColor: '#fffaf8',
-    icon: path.join(__dirname, '..', 'build', 'icons', 'route.ico'),
+    icon: path.join(process.resourcesPath, 'build', 'icons', 'route.ico'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -65,9 +120,7 @@ function createWindow() {
   win.once('ready-to-show', () => win.show());
 
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (isTrustedUrl(url)) {
-      return { action: 'allow' };
-    }
+    if (isTrustedUrl(url)) return { action: 'allow' };
     void shell.openExternal(url);
     return { action: 'deny' };
   });
