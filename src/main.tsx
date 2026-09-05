@@ -28,6 +28,8 @@ import './close-standard.css';
 import './mobile-apk-fixes.css';
 import './native-back-ui';
 import './app-icon-native';
+import './profile-enhance';
+import './couple-date-enhance';
 import './more-enhance';
 
 void initializeNativeApp();
