@@ -30,7 +30,6 @@ import './home-map-overlay.css';
 import './close-standard.css';
 import './mobile-apk-fixes.css';
 import './mobile-polish-v3.css';
-import './web-desktop.css';
 import './crash-recovery.css';
 // Contrast safety first, then runtime appearance/layout overrides.
 import './route-theme-accessibility.css';
@@ -45,8 +44,11 @@ import './route-product-polish-v7.css';
 import './route-final-qa-v8.css';
 // Cross-feature interaction feedback must remain visible above all legacy layers.
 import './route-feature-flow-v9.css';
-// Place-centered story view connects visits, memories, dates and schedules. Retry after Actions budget update.
+// Place-centered story view connects visits, memories, dates and schedules.
 import './route-place-timeline-v10.css';
+// Desktop web layout is intentionally last so legacy/mobile rules cannot override
+// the 60/40 home composition or compact desktop navigation dock.
+import './web-desktop.css';
 
 import './route-themes';
 import './home-map-overlay';
