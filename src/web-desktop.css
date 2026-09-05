@@ -2,8 +2,10 @@
 html, body, #root { min-height: 100%; }
 
 /*
- * Desktop is a dedicated layout. Do not inherit the 480px mobile canvas or a
- * narrow centered phone-style column when ROUTE runs in a browser/Windows PWA.
+ * Desktop keeps the proven home dashboard structure used by mobile, but gives
+ * it a wider canvas.  The home page intentionally flattens home-couple-tools
+ * and home-dashboard-grid into ONE parent grid; rebuilding a nested grid here
+ * makes the cards and map jump into different rows.
  */
 @media (min-width: 900px) {
   html, body, #root {
@@ -42,86 +44,124 @@ html, body, #root { min-height: 100%; }
     padding-bottom: 92px !important;
   }
 
-  /* Main desktop canvas: almost the full browser width. */
   .home-dashboard.page,
   .home-page.home-dashboard {
-    width: calc(100vw - 64px) !important;
-    max-width: none !important;
+    width: min(1440px, calc(100vw - 64px)) !important;
+    max-width: 1440px !important;
     min-width: 0 !important;
     height: auto !important;
     min-height: calc(100dvh - 92px) !important;
     margin: 0 auto !important;
     padding: 0 0 22px !important;
     overflow: visible !important;
+
+    /* One stable desktop grid: map on the left, all cards on the right. */
+    display: grid !important;
+    grid-template-columns: minmax(0, 1.85fr) minmax(340px, .72fr) !important;
+    grid-template-rows: 78px auto auto auto minmax(220px, 1fr) auto !important;
+    column-gap: clamp(18px, 1.7vw, 28px) !important;
+    row-gap: 14px !important;
+    align-items: stretch !important;
   }
 
   .home-dashboard > .topbar,
   .home-page > .topbar {
+    grid-column: 1 / -1 !important;
+    grid-row: 1 !important;
     width: 100% !important;
     max-width: none !important;
     min-height: 78px !important;
     height: 78px !important;
     padding: 0 10px !important;
-    margin: 0 0 18px !important;
+    margin: 0 !important;
+  }
+
+  /* These wrappers are layout-only. Their children are the actual grid items. */
+  .home-dashboard > .home-couple-tools,
+  .home-dashboard > .home-dashboard-grid,
+  .home-dashboard .home-dashboard-side {
+    display: contents !important;
+  }
+
+  .home-dashboard .home-map-card {
+    grid-column: 1 !important;
+    grid-row: 2 / 7 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 100% !important;
+    min-height: clamp(620px, calc(100dvh - 180px), 840px) !important;
+    max-height: none !important;
+    border-radius: 28px !important;
+  }
+
+  .home-dashboard .home-couple-profile-card {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 78px !important;
+    padding: 10px 12px !important;
+  }
+
+  .home-dashboard .home-time-card {
+    grid-column: 2 !important;
+    grid-row: 3 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 156px !important;
+    padding: 16px !important;
+  }
+
+  .home-dashboard .home-schedule-card {
+    grid-column: 2 !important;
+    grid-row: 4 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 156px !important;
+    padding: 13px 14px !important;
+  }
+
+  .home-dashboard .home-photo-card {
+    grid-column: 2 !important;
+    grid-row: 5 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 100% !important;
+    min-height: 220px !important;
+    max-height: none !important;
+    border-radius: 22px !important;
+  }
+
+  .home-dashboard .home-chat-card {
+    grid-column: 2 !important;
+    grid-row: 6 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 110px !important;
+    padding: 14px !important;
+    border-radius: 22px !important;
   }
 
   .wordmark strong { font-size: 28px; }
   .page-title { font-size: 19px; }
   .header-actions button { min-width: 46px; min-height: 46px; }
 
-  .home-dashboard-grid {
-    width: 100% !important;
-    max-width: none !important;
-    min-width: 0 !important;
-    display: grid !important;
-    grid-template-columns: minmax(0, 1.75fr) minmax(360px, .75fr) !important;
-    gap: clamp(18px, 1.6vw, 28px) !important;
-    align-items: stretch !important;
-    overflow: visible !important;
-  }
-
-  .home-map-card {
-    width: 100% !important;
-    min-width: 0 !important;
-    min-height: clamp(650px, calc(100dvh - 190px), 860px) !important;
-    border-radius: 30px !important;
-  }
-
-  .home-dashboard-side {
-    width: 100% !important;
-    min-width: 0 !important;
-    max-width: none !important;
-    display: grid !important;
-    grid-template-rows: auto auto minmax(260px, 1fr) auto !important;
-    gap: 18px !important;
-    overflow: visible !important;
-  }
-
-  .home-time-card,
-  .home-photo-card,
-  .home-chat-card {
-    width: 100% !important;
-    max-width: none !important;
-    border-radius: 24px !important;
-  }
-
-  .home-time-card { padding: 22px !important; }
-  .home-card-title span { font-size: 16px; }
-  .home-time-block small { font-size: 12px; }
-  .home-time-block strong { font-size: 32px; }
-  .upcoming-time strong { font-size: 27px; }
-  .home-time-block em { font-size: 12px; }
-
-  .home-photo-card { min-height: 280px !important; }
-  .home-photo-copy small { font-size: 10px; }
-  .home-photo-copy strong { font-size: 19px; }
-  .home-photo-copy em { font-size: 11px; }
-
-  .home-chat-card { min-height: 132px !important; padding: 19px !important; }
-  .home-chat-head b { font-size: 15px; }
-  .home-chat-copy b { font-size: 13px; }
-  .home-chat-copy small { font-size: 11px; }
-  .home-chat-avatar { width: 44px; height: 44px; font-size: 13px; }
+  .home-dashboard .home-profile-avatar { width: 38px !important; height: 38px !important; font-size: 12px !important; }
+  .home-dashboard .home-profile-copy b { font-size: 11px !important; }
+  .home-dashboard .home-card-title span,
+  .home-dashboard .home-schedule-head b,
+  .home-dashboard .home-chat-head b { font-size: 13px !important; }
+  .home-dashboard .home-time-block small,
+  .home-dashboard .home-time-block em { font-size: 10px !important; }
+  .home-dashboard .home-time-block strong { font-size: 25px !important; }
+  .home-dashboard .upcoming-time strong { font-size: 21px !important; }
+  .home-dashboard .home-schedule-row:nth-child(n+2) { display: grid !important; }
+  .home-dashboard .home-schedule-row > strong,
+  .home-dashboard .schedule-when b,
+  .home-dashboard .schedule-when small { font-size: 9px !important; }
+  .home-dashboard .home-photo-copy strong { font-size: 14px !important; }
+  .home-dashboard .home-chat-copy b { font-size: 11px !important; }
+  .home-dashboard .home-chat-copy small { font-size: 9px !important; }
 
   .home-location-status {
     top: 22px !important;
@@ -137,7 +177,7 @@ html, body, #root { min-height: 100%; }
 
   /* Other tabs: wide desktop surfaces, with chat kept readable. */
   .page:not(.home-dashboard) {
-    width: calc(100vw - 64px) !important;
+    width: min(1480px, calc(100vw - 64px)) !important;
     max-width: 1480px !important;
     margin-left: auto !important;
     margin-right: auto !important;
@@ -178,20 +218,16 @@ html, body, #root { min-height: 100%; }
 
   .auth-loading,
   .auth-shell,
-  .profile-setup-shell {
-    max-width: 620px;
-  }
+  .profile-setup-shell { max-width: 620px; }
 }
 
 @media (min-width: 1400px) {
   .home-dashboard.page,
   .home-page.home-dashboard {
-    width: calc(100vw - 96px) !important;
-  }
-
-  .home-dashboard-grid {
-    grid-template-columns: minmax(0, 2fr) minmax(410px, .72fr) !important;
-    gap: 28px !important;
+    width: min(1540px, calc(100vw - 96px)) !important;
+    max-width: 1540px !important;
+    grid-template-columns: minmax(0, 2fr) minmax(400px, .7fr) !important;
+    column-gap: 28px !important;
   }
 
   .bottom-nav {
