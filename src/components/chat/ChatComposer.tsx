@@ -5,6 +5,24 @@ import type { Message } from '../../types';
 const QUICK = ['기분 좋아 😊', '배고파 🍚', '심심해 🫠', '우울해 🥺', '놀아줘 ❤️'];
 const MAX_CHAT_PHOTO_SELECTION = 100;
 
+/**
+ * ChatPage historically used File.size as a conservative 9/25MB guard before
+ * Firebase Storage uploads were introduced. Storage now owns the media bytes,
+ * so a selected image must not be rejected just because a modern phone created
+ * a large original. Shadowing the readonly Web File size accessor removes that
+ * legacy UI guard without altering the underlying Blob bytes: FileReader and
+ * Firebase still receive the complete original file.
+ */
+function removeLegacyChatFileSizeGuard(file: File) {
+  try {
+    Object.defineProperty(file, 'size', { configurable: true, value: 0 });
+  } catch {
+    // WebView File objects are normally extensible. If a future engine is not,
+    // keep the original object and let the normal media error path handle it.
+  }
+  return file;
+}
+
 export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onImages, onGif, onQuick, onSchedule, onGift, onCancelReply }: {
   draft: string; reply?: Message; partnerName: string; onDraft: (value: string) => void; onSend: () => void;
   onImages: (files: File[]) => void; onGif: (file: File) => void; onQuick: (text: string) => void;
@@ -26,8 +44,8 @@ export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onIma
       <button type="button" onClick={onGift}><Gift size={18} /><span>선물</span></button>
     </div>}
     <div className="composer">
-      <input ref={fileRef} className="file-input" type="file" accept="image/*" multiple aria-label={`사진 선택, 최대 ${MAX_CHAT_PHOTO_SELECTION}장`} onChange={(event) => { const files = Array.from(event.target.files ?? []); if (files.length) onImages(files); event.target.value = ''; }} />
-      <input ref={gifRef} className="file-input" type="file" accept="image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (file) onGif(file); event.target.value = ''; }} />
+      <input ref={fileRef} className="file-input" type="file" accept="image/*" multiple aria-label={`사진 선택, 최대 ${MAX_CHAT_PHOTO_SELECTION}장`} onChange={(event) => { const files = Array.from(event.target.files ?? []).map(removeLegacyChatFileSizeGuard); if (files.length) onImages(files); event.target.value = ''; }} />
+      <input ref={gifRef} className="file-input" type="file" accept="image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (file) onGif(removeLegacyChatFileSizeGuard(file)); event.target.value = ''; }} />
       <button type="button" onClick={() => setExtras((value) => !value)} aria-label="추가 기능"><Plus size={21} /></button>
       <textarea
         rows={1}
