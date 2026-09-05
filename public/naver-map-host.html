@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>ROUTE Map Host</title>
+  <style>
+    html,body,#map{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#eef0f5}
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    (() => {
+      const CLIENT_ID = 'z3njcg8upv';
+      let map;
+      let overlays = [];
+      let lastRender = { visits: [], mode: 'map' };
+
+      const send = (type, detail = {}) => {
+        if (window.parent === window) return;
+        window.parent.postMessage({ source: 'route-map-host', type, ...detail }, '*');
+      };
+
+      const markerHtml = (current, index) => {
+        const color = current ? '#E07A5F' : '#3D405B';
+        const size = current ? 24 : 20;
+        const label = Number.isInteger(index) ? `<span style="font-size:9px;color:#fff;font-weight:800">${index + 1}</span>` : '';
+        return `<div style="width:${size}px;height:${size}px;border:3px solid #fff;border-radius:50%;background:${color};box-shadow:0 3px 10px #0003;display:grid;place-items:center">${label}</div>`;
+      };
+
+      const escapeHtml = (value) => String(value ?? '').replace(/[&<>'\"]/g, (character) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+      }[character] || character));
+
+      const timeText = (value) => {
+        if (!value) return '현재';
+        try { return new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit' }).format(new Date(value)); }
+        catch { return ''; }
+      };
+
+      const dayText = (value) => {
+        try { return new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }).format(new Date(value)); }
+        catch { return ''; }
+      };
+
+      const clearOverlays = () => {
+        overlays.forEach((overlay) => { try { overlay.setMap(null); } catch {} });
+        overlays = [];
+      };
+
+      const render = ({ visits = [], mode = 'map' } = {}) => {
+        lastRender = { visits: Array.isArray(visits) ? visits : [], mode };
+        if (!map || !window.naver?.maps) return;
+        const naver = window.naver;
+        naver.maps.Event.trigger(map, 'resize');
+        clearOverlays();
+
+        if (!lastRender.visits.length) {
+          map.setCenter(new naver.maps.LatLng(37.5666103, 126.9783882));
+          map.setZoom(15);
+          return;
+        }
+
+        const points = lastRender.visits.map((visit) => new naver.maps.LatLng(Number(visit.latitude), Number(visit.longitude)));
+        if (points.length > 1) overlays.push(new naver.maps.Polyline({ map, path: points, strokeColor: '#E07A5F', strokeWeight: 5, strokeOpacity: 0.76 }));
+
+        lastRender.visits.forEach((visit, index) => {
+          const current = !visit.leftAt && index === lastRender.visits.length - 1;
+          const marker = new naver.maps.Marker({
+            map,
+            position: points[index],
+            icon: { content: markerHtml(current, mode === 'footprints' ? index : undefined) },
+          });
+          const popup = new naver.maps.InfoWindow({
+            content: `<div style="padding:10px 12px;font-size:12px;line-height:1.45"><strong>${escapeHtml(visit.placeName || '위치 기록')}</strong><br>${escapeHtml(dayText(visit.arrivedAt))} · ${escapeHtml(timeText(visit.arrivedAt))}${visit.leftAt ? ` ~ ${escapeHtml(timeText(visit.leftAt))}` : ' · 현재'}</div>`,
+            borderWidth: 0,
+            backgroundColor: '#fff',
+          });
+          naver.maps.Event.addListener(marker, 'click', () => popup.open(map, marker));
+          overlays.push(marker);
+        });
+
+        if (points.length === 1) {
+          map.setCenter(points[0]);
+          map.setZoom(17);
+        } else {
+          const bounds = new naver.maps.LatLngBounds();
+          points.forEach((point) => bounds.extend(point));
+          map.fitBounds(bounds, { top: 34, right: 34, bottom: 34, left: 34 });
+        }
+      };
+
+      const focus = (visit) => {
+        if (!map || !window.naver?.maps || !visit) return;
+        map.setCenter(new window.naver.maps.LatLng(Number(visit.latitude), Number(visit.longitude)));
+        map.setZoom(17);
+      };
+
+      window.addEventListener('message', (event) => {
+        if (event.source !== window.parent) return;
+        const data = event.data || {};
+        if (data.source !== 'route-map-parent') return;
+        if (data.type === 'render') render(data);
+        if (data.type === 'focus') focus(data.visit);
+        if (data.type === 'resize' && map && window.naver?.maps) window.naver.maps.Event.trigger(map, 'resize');
+      });
+
+      window.navermap_authFailure = () => send('auth-error');
+
+      const script = document.createElement('script');
+      script.async = true;
+      script.defer = true;
+      script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(CLIENT_ID)}`;
+      script.onload = () => {
+        try {
+          if (!window.naver?.maps) throw new Error('NAVER_MAP_INIT_FAILED');
+          map = new window.naver.maps.Map(document.getElementById('map'), {
+            center: new window.naver.maps.LatLng(37.5666103, 126.9783882),
+            zoom: 15,
+            zoomControl: true,
+            zoomControlOptions: { position: window.naver.maps.Position.TOP_RIGHT },
+          });
+          requestAnimationFrame(() => requestAnimationFrame(() => window.naver.maps.Event.trigger(map, 'resize')));
+          send('ready');
+          render(lastRender);
+        } catch (error) {
+          console.error('[ROUTE map host init]', error);
+          send('init-error');
+        }
+      };
+      script.onerror = () => send('script-error');
+      document.head.appendChild(script);
+    })();
+  </script>
+</body>
+</html>
