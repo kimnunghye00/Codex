@@ -22,7 +22,7 @@ permissions:
 jobs:
   build-ios:
     runs-on: macos-latest
-    timeout-minutes: 45
+    timeout-minutes: 35
 
     steps:
       - name: Checkout
@@ -105,30 +105,10 @@ jobs:
           cd release/ios-package
           /usr/bin/zip -qry "ROUTE-iOS-${VERSION}-unsigned.ipa" Payload
 
-      - name: Build iOS Simulator app
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION="$(node -p "require('./package.json').version")"
-          xcodebuild \
-            -project ios/App/App.xcodeproj \
-            -scheme App \
-            -configuration Debug \
-            -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath release/ios-simulator \
-            CODE_SIGNING_ALLOWED=NO \
-            build
-          APP_PATH='release/ios-simulator/Build/Products/Debug-iphonesimulator/App.app'
-          test -d "$APP_PATH"
-          /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "release/ROUTE-iOS-${VERSION}-Simulator.zip"
-
-      - name: Upload ROUTE iOS builds
+      - name: Upload ROUTE iOS build
         uses: actions/upload-artifact@v4
         with:
           name: ROUTE-iOS-Build
-          path: |
-            release/ios-package/ROUTE-iOS-*-unsigned.ipa
-            release/ROUTE-iOS-*-Simulator.zip
+          path: release/ios-package/ROUTE-iOS-*-unsigned.ipa
           if-no-files-found: error
           retention-days: 30
