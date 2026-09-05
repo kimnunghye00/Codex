@@ -4,6 +4,7 @@ import Root from './Root';
 import { AppCrashBoundary, installGlobalCrashDiagnostics } from './AppCrashBoundary';
 import { initializeNativeApp } from './lib/native';
 import { preparePersistentBackup, startPersistentBackup } from './lib/persistentBackup';
+import { initializeCrossDeviceAlbumSync } from './lib/crossDeviceAlbumSync';
 import { initializeRoutePwa } from './pwa';
 import './styles.css';
 import './auth-onboarding.css';
@@ -52,6 +53,7 @@ async function bootstrap() {
   // This is what makes reinstalling the app recover recent ROUTE data.
   await preparePersistentBackup();
   startPersistentBackup();
+  initializeCrossDeviceAlbumSync();
 
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
