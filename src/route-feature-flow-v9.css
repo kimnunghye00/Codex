@@ -2,6 +2,8 @@
  * Cross-feature connections:
  * - chat media <-> memories
  * - anniversaries -> date plans -> shared schedules
+ * - schedule/date places -> map
+ * - location visits -> prefilled memories
  */
 
 .chat-flow-notice {
@@ -85,7 +87,8 @@
 }
 
 /* Date plan -> shared schedule ------------------------------------------- */
-.route-hub .date-flow-hint {
+.route-hub .date-flow-hint,
+.memory-form .memory-flow-hint {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -110,14 +113,16 @@
   background: color-mix(in srgb, var(--surface) 96%, var(--primary) 4%);
 }
 
-.route-hub .date-flow-actions {
+.route-hub .date-flow-actions,
+.route-hub .schedule-flow-actions {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.route-hub .date-flow-actions > span {
+.route-hub .date-flow-actions > span,
+.route-hub .schedule-flow-actions > span {
   min-height: 28px;
   display: inline-flex;
   align-items: center;
@@ -131,14 +136,138 @@
   white-space: nowrap;
 }
 
-.route-hub .date-flow-actions > button {
+.route-hub .date-flow-actions > button,
+.route-hub .schedule-flow-actions > button {
   min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   padding: 0 9px;
   border: 1px solid var(--border);
   border-radius: 10px;
   color: var(--text-secondary);
   background: var(--surface);
   font-size: 8px;
+  white-space: nowrap;
+}
+
+.route-hub .date-flow-actions > button.map-link,
+.route-hub .schedule-flow-actions > button {
+  border-color: color-mix(in srgb, var(--primary) 24%, var(--border));
+  color: var(--primary);
+  background: color-mix(in srgb, var(--surface) 95%, var(--primary) 5%);
+}
+
+/* Schedule / date -> map -------------------------------------------------- */
+.location-page .location-focus-banner {
+  position: absolute;
+  z-index: 520;
+  top: 58px;
+  left: 14px;
+  width: min(390px, calc(100% - 74px));
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 9px 9px 11px;
+  border: 1px solid rgba(255, 255, 255, .88);
+  border-radius: 14px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, .92);
+  box-shadow: 0 9px 26px rgba(31, 42, 68, .12);
+  backdrop-filter: blur(14px);
+}
+
+.location-page .location-focus-banner > svg {
+  flex: 0 0 auto;
+  color: var(--primary);
+}
+
+.location-page .location-focus-banner > span {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.location-page .location-focus-banner b {
+  font-size: 9px;
+}
+
+.location-page .location-focus-banner small {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 8px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.location-page .location-focus-banner > button {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--surface) 90%, var(--primary) 10%);
+}
+
+.location-page .location-focus-banner.searching {
+  border-color: color-mix(in srgb, var(--primary) 22%, white);
+}
+
+.location-page .location-focus-banner.failed {
+  border-color: color-mix(in srgb, var(--emotion) 35%, white);
+}
+
+.location-page .location-focus-banner.failed > svg {
+  color: var(--emotion);
+}
+
+/* Visit -> memory --------------------------------------------------------- */
+.location-page .location-visit-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 7px;
+}
+
+.location-page .location-visit-row .location-visit {
+  min-width: 0;
+}
+
+.location-page .location-memory-button {
+  width: 48px;
+  min-height: 48px;
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--border));
+  border-radius: 13px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--surface) 94%, var(--primary) 6%);
+  font-size: 7px;
+  font-weight: 800;
+}
+
+.location-page .location-memory-button:active {
+  transform: scale(.96);
+}
+
+.memory-form .memory-flow-hint {
+  margin-top: -2px;
+  margin-bottom: 10px;
 }
 
 @keyframes route-flow-notice-in {
@@ -160,6 +289,16 @@
     min-height: 36px;
     padding: 0 12px;
     font-size: 9px;
+  }
+
+  .location-page .location-focus-banner {
+    top: 64px;
+    left: 18px;
+    width: min(420px, calc(100% - 86px));
+  }
+
+  .location-page .location-memory-button {
+    width: 54px;
   }
 }
 
@@ -193,19 +332,35 @@
     font-size: 7px;
   }
 
-  .route-hub .date-flow-actions {
+  .route-hub .date-flow-actions,
+  .route-hub .schedule-flow-actions {
     flex-direction: column;
     align-items: flex-end;
     gap: 4px;
   }
 
-  .route-hub .date-flow-actions > span {
+  .route-hub .date-flow-actions > span,
+  .route-hub .schedule-flow-actions > span {
     min-height: 24px;
     padding: 0 6px;
   }
 
-  .route-hub .date-flow-actions > button {
+  .route-hub .date-flow-actions > button,
+  .route-hub .schedule-flow-actions > button {
     min-height: 29px;
+  }
+
+  .location-page .location-focus-banner {
+    top: 54px;
+    left: 10px;
+    width: calc(100% - 62px);
+    min-height: 44px;
+    padding: 7px 7px 7px 9px;
+  }
+
+  .location-page .location-memory-button {
+    width: 44px;
+    min-height: 44px;
   }
 }
 
