@@ -67,8 +67,45 @@
 .settings-gender button.selected { border-color: #c2c1ed; color: var(--primary); background: var(--primary-soft); font-weight: 700; }
 .settings-save-profile { width: 100%; min-height: 44px; margin-top: 14px; border-radius: 12px; }
 
+/* Login recovery */
+.auth-help-links { display: flex; align-items: center; justify-content: flex-end; gap: 9px; margin: -4px 0 16px; }
+.auth-help-links button { min-height: 38px; display: inline-flex; align-items: center; gap: 5px; padding: 0 4px; border: 0; color: #74738a; background: transparent; font-size: 11px; font-weight: 600; }
+.auth-help-links button:hover { color: var(--primary); }
+.auth-help-links > span { width: 1px; height: 12px; background: var(--border); }
+.auth-result-card { display: grid; gap: 6px; margin: 2px 0 20px; padding: 18px; border: 1px solid #dcdcf2; border-radius: 17px; background: linear-gradient(145deg, #fff, var(--primary-soft)); }
+.auth-result-card span { margin-top: 4px; color: var(--text-secondary); font-size: 10px; font-weight: 600; }
+.auth-result-card strong { color: var(--text-primary); font-size: 18px; letter-spacing: -.4px; word-break: break-all; }
+.auth-result-card strong + span { margin-top: 12px; padding-top: 12px; border-top: 1px solid #dcdcf2; }
+.auth-result-card small { margin-top: 10px; color: #77768a; font-size: 10px; line-height: 1.6; }
+
+/* Password change opened from Settings */
+.route-password-backdrop { position: fixed; z-index: 120; inset: 0; display: grid; place-items: center; padding: max(18px, env(safe-area-inset-top)) 18px max(18px, env(safe-area-inset-bottom)); background: #1d1d2a66; backdrop-filter: blur(8px); }
+.route-password-panel { width: min(100%, 440px); max-height: min(760px, 92vh); overflow: auto; border: 1px solid var(--border); border-radius: 25px; background: var(--surface); box-shadow: 0 24px 70px #23233a2e; }
+.route-password-panel > header { min-height: 64px; display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.route-password-panel > header strong { text-align: center; font-size: 15px; }
+.route-password-back { width: 44px; height: 44px; border: 0; border-radius: 50%; color: var(--text-primary); background: transparent; font-size: 30px; line-height: 1; }
+.route-password-form { display: flex; flex-direction: column; gap: 13px; padding: 20px; }
+.route-password-intro { display: flex; align-items: center; gap: 12px; margin-bottom: 3px; padding: 14px; border-radius: 16px; background: var(--primary-soft); }
+.route-password-intro > span { width: 40px; height: 40px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 13px; background: #fff; font-size: 18px; }
+.route-password-intro > div { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.route-password-intro b { font-size: 12px; }
+.route-password-intro small { color: var(--text-secondary); font-size: 10px; line-height: 1.5; }
+.route-password-form label { display: flex; flex-direction: column; gap: 7px; color: #666573; font-size: 10px; font-weight: 600; }
+.route-password-form input { width: 100%; min-height: 48px; padding: 0 13px; border: 1px solid var(--border); border-radius: 13px; color: var(--text-primary); background: #fafafd; outline: none; }
+.route-password-form input:focus { border-color: #bdbceb; background: #fff; }
+.route-password-feedback { min-height: 18px; margin: 0; font-size: 10px; line-height: 1.5; }
+.route-password-feedback.error { color: #c64e5a; }
+.route-password-feedback.success { color: #37865b; }
+.route-password-submit { min-height: 48px; border: 0; border-radius: 14px; color: #fff; background: var(--primary); font-size: 12px; font-weight: 700; }
+.route-password-submit:disabled { opacity: .55; }
+body.route-password-change-open { overflow: hidden; }
+
 @media (max-width: 380px) {
   .onboarding-shell { padding-left: 16px; padding-right: 16px; }
   .onboarding-card { padding: 24px 18px 20px; }
   .onboarding-card h1 { font-size: 23px; }
+  .auth-help-links { gap: 6px; }
+  .auth-help-links button { font-size: 10px; }
+  .route-password-backdrop { padding-left: 10px; padding-right: 10px; }
+  .route-password-form { padding: 17px; }
 }
