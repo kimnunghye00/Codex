@@ -1,0 +1,521 @@
+/* ROUTE place timeline v10
+ * Turns location, memory, date and schedule records into one place-centered story.
+ */
+
+.route-hub .place-timeline {
+  display: grid;
+  gap: 11px;
+  margin-top: 2px;
+  padding: 13px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, var(--primary) 18%);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 96% 0%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 33%),
+    var(--surface);
+  box-shadow: 0 10px 30px rgba(31, 42, 68, .045);
+}
+
+.route-hub .place-timeline-head,
+.route-hub .place-timeline-detail-head {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.route-hub .place-timeline-head > div,
+.route-hub .place-timeline-detail-head > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.route-hub .place-timeline-head small,
+.route-hub .place-timeline-detail-head small {
+  color: var(--primary);
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: .1em;
+}
+
+.route-hub .place-timeline-head h2,
+.route-hub .place-timeline-detail-head h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.route-hub .place-timeline-head p,
+.route-hub .place-timeline-detail-head p {
+  margin: 1px 0 0;
+  color: var(--text-secondary);
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.route-hub .place-timeline-head > span {
+  flex: 0 0 auto;
+  padding: 7px 9px;
+  border-radius: 999px;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--surface) 88%, var(--primary) 12%);
+  font-size: 8px;
+  white-space: nowrap;
+}
+
+.route-hub .place-timeline-head > span b {
+  color: var(--primary);
+  font-size: 11px;
+}
+
+.route-hub .place-timeline-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.route-hub .place-timeline-card {
+  min-width: 0;
+  min-height: 68px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--surface) 97%, var(--primary) 3%);
+  text-align: left;
+  transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+
+.route-hub .place-timeline-card:hover {
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
+  box-shadow: 0 8px 18px rgba(31, 42, 68, .05);
+}
+
+.route-hub .place-timeline-card:active {
+  transform: scale(.988);
+}
+
+.route-hub .place-timeline-card-icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--surface) 88%, var(--primary) 12%);
+}
+
+.route-hub .place-timeline-card-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.route-hub .place-timeline-card-copy b,
+.route-hub .place-timeline-card-copy small,
+.route-hub .place-timeline-card-copy em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.route-hub .place-timeline-card-copy b {
+  color: var(--text-primary);
+  font-size: 10px;
+}
+
+.route-hub .place-timeline-card-copy small {
+  color: var(--text-secondary);
+  font-size: 7px;
+}
+
+.route-hub .place-timeline-card-copy em {
+  color: var(--text-secondary);
+  font-size: 7px;
+  font-style: normal;
+}
+
+.route-hub .place-timeline-card > strong {
+  min-width: 29px;
+  height: 29px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--surface) 88%, var(--primary) 12%);
+  font-size: 9px;
+}
+
+.route-hub .place-timeline-empty {
+  min-height: 104px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 5px;
+  padding: 18px;
+  border: 1px dashed color-mix(in srgb, var(--primary) 24%, var(--border));
+  border-radius: 15px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.route-hub .place-timeline-empty svg {
+  color: var(--primary);
+}
+
+.route-hub .place-timeline-empty strong {
+  color: var(--text-primary);
+  font-size: 10px;
+}
+
+.route-hub .place-timeline-empty p {
+  max-width: 420px;
+  margin: 0;
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.route-hub .place-timeline-detail {
+  gap: 10px;
+}
+
+.route-hub .place-timeline-detail-head {
+  justify-content: flex-start;
+}
+
+.route-hub .place-timeline-detail-head > div {
+  flex: 1;
+}
+
+.route-hub .place-timeline-back,
+.route-hub .place-timeline-map {
+  flex: 0 0 auto;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--border));
+  border-radius: 11px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--surface) 94%, var(--primary) 6%);
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.route-hub .place-timeline-back {
+  width: 34px;
+  padding: 0;
+}
+
+.route-hub .place-timeline-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.route-hub .place-timeline-stats > div {
+  min-width: 0;
+  min-height: 48px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 1px;
+  padding: 6px;
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--background) 72%, var(--surface));
+}
+
+.route-hub .place-timeline-stats strong {
+  color: var(--primary);
+  font-size: 13px;
+}
+
+.route-hub .place-timeline-stats span {
+  color: var(--text-secondary);
+  font-size: 7px;
+}
+
+.route-hub .place-timeline-range {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--surface) 94%, var(--primary) 6%);
+}
+
+.route-hub .place-timeline-range > span {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.route-hub .place-timeline-range b {
+  color: var(--text-primary);
+  font-size: 8px;
+}
+
+.route-hub .place-timeline-range small {
+  color: var(--text-secondary);
+  font-size: 7px;
+}
+
+.route-hub .place-timeline-events {
+  display: grid;
+  gap: 0;
+  margin: 1px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.route-hub .place-timeline-event {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.route-hub .place-timeline-rail {
+  display: grid;
+  grid-template-rows: 32px minmax(12px, 1fr);
+  justify-items: center;
+}
+
+.route-hub .place-timeline-rail > span {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  z-index: 1;
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--border));
+  border-radius: 50%;
+  color: var(--primary);
+  background: var(--surface);
+}
+
+.route-hub .place-timeline-event.memory .place-timeline-rail > span {
+  color: var(--emotion);
+  border-color: color-mix(in srgb, var(--emotion) 26%, var(--border));
+}
+
+.route-hub .place-timeline-event.date .place-timeline-rail > span {
+  color: color-mix(in srgb, var(--emotion) 72%, var(--primary));
+}
+
+.route-hub .place-timeline-rail > i {
+  width: 1px;
+  height: 100%;
+  min-height: 20px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 28%, var(--border)), var(--border));
+}
+
+.route-hub .place-timeline-event-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 4px 0 13px;
+}
+
+.route-hub .place-timeline-event-copy > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.route-hub .place-timeline-event-copy em {
+  padding: 3px 6px;
+  border-radius: 999px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--surface) 90%, var(--primary) 10%);
+  font-size: 6px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.route-hub .place-timeline-event.memory .place-timeline-event-copy em {
+  color: var(--emotion);
+  background: color-mix(in srgb, var(--surface) 91%, var(--emotion) 9%);
+}
+
+.route-hub .place-timeline-event-copy time {
+  color: var(--text-secondary);
+  font-size: 7px;
+}
+
+.route-hub .place-timeline-event-copy > strong,
+.route-hub .place-timeline-event-copy > button {
+  width: max-content;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  color: var(--text-primary);
+  background: transparent;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.3;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.route-hub .place-timeline-event-copy > button {
+  color: var(--primary);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--primary) 28%, transparent);
+  text-underline-offset: 3px;
+}
+
+.route-hub .place-timeline-event-copy p {
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 8px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memory-detail .detail-place-related-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.memory-detail .detail-place-related-actions > strong {
+  color: var(--text-secondary);
+  font-size: 8px;
+  white-space: nowrap;
+}
+
+.memory-detail .detail-place-related-actions > button {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--border));
+  border-radius: 9px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--surface) 95%, var(--primary) 5%);
+  font-size: 7px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+@media (min-width: 900px) {
+  .route-hub .place-timeline {
+    padding: 16px;
+    border-radius: 22px;
+  }
+
+  .route-hub .place-timeline-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .route-hub .place-timeline-card {
+    min-height: 78px;
+    padding: 12px;
+  }
+
+  .route-hub .place-timeline-card-copy b {
+    font-size: 11px;
+  }
+
+  .route-hub .place-timeline-detail {
+    max-width: 920px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .route-hub .place-timeline-event-copy > strong,
+  .route-hub .place-timeline-event-copy > button {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 480px) {
+  .route-hub .place-timeline {
+    margin-left: 0;
+    margin-right: 0;
+    padding: 10px;
+    border-radius: 17px;
+  }
+
+  .route-hub .place-timeline-head {
+    align-items: flex-start;
+  }
+
+  .route-hub .place-timeline-head > span {
+    padding: 6px 7px;
+    font-size: 7px;
+  }
+
+  .route-hub .place-timeline-head p {
+    max-width: 235px;
+  }
+
+  .route-hub .place-timeline-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .route-hub .place-timeline-card {
+    min-height: 64px;
+  }
+
+  .route-hub .place-timeline-detail-head {
+    gap: 7px;
+  }
+
+  .route-hub .place-timeline-detail-head p {
+    max-width: 210px;
+  }
+
+  .route-hub .place-timeline-map {
+    padding: 0 8px;
+  }
+
+  .route-hub .place-timeline-stats {
+    gap: 4px;
+  }
+
+  .route-hub .place-timeline-stats > div {
+    min-height: 43px;
+  }
+
+  .route-hub .place-timeline-event {
+    grid-template-columns: 30px minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .route-hub .place-timeline-rail > span {
+    width: 27px;
+    height: 27px;
+  }
+
+  .memory-detail .detail-place-related > header {
+    align-items: flex-start;
+  }
+
+  .memory-detail .detail-place-related-actions {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-hub .place-timeline-card { transition: none; }
+}
