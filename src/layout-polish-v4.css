@@ -1,0 +1,52 @@
+/* ROUTE compact/mobile layout polish v4 */
+@media (max-width: 899px) {
+  :root { --route-mobile-gutter: 16px; }
+
+  .page {
+    padding-left: var(--route-mobile-gutter) !important;
+    padding-right: var(--route-mobile-gutter) !important;
+  }
+
+  .page > .topbar,
+  .chat-page > .topbar,
+  .location-page > .topbar,
+  .memories-page > .topbar,
+  .more-page > .topbar,
+  .home-page > .topbar {
+    width: calc(100% + (var(--route-mobile-gutter) * 2)) !important;
+    max-width: none !important;
+    margin-left: calc(var(--route-mobile-gutter) * -1) !important;
+    margin-right: calc(var(--route-mobile-gutter) * -1) !important;
+    padding-left: var(--route-mobile-gutter) !important;
+    padding-right: var(--route-mobile-gutter) !important;
+    border-bottom: 2px solid var(--route-accent, #e07a5f) !important;
+  }
+
+  .page > .topbar .brand,
+  .chat-page > .topbar .brand,
+  .location-page > .topbar .brand,
+  .memories-page > .topbar .brand,
+  .more-page > .topbar .brand,
+  .home-page > .topbar .brand,
+  .page > .topbar .header-actions,
+  .chat-page > .topbar .header-actions,
+  .location-page > .topbar .header-actions,
+  .memories-page > .topbar .header-actions,
+  .more-page > .topbar .header-actions,
+  .home-page > .topbar .header-actions {
+    min-height: 40px !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  .header-actions {
+    gap: 4px !important;
+  }
+
+  .header-actions button {
+    width: 42px !important;
+    min-width: 42px !important;
+    height: 42px !important;
+    min-height: 42px !important;
+  }
+}

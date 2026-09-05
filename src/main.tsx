@@ -31,8 +31,10 @@ import './mobile-apk-fixes.css';
 import './mobile-polish-v3.css';
 import './web-desktop.css';
 import './crash-recovery.css';
-// Must be the final stylesheet: it protects text/icon/input contrast from later feature CSS.
+// Contrast safety first, then runtime appearance/layout overrides.
 import './route-theme-accessibility.css';
+import './system-dark.css';
+import './layout-polish-v4.css';
 
 import './route-themes';
 import './home-map-overlay';

@@ -1,0 +1,130 @@
+name: Build iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'capacitor.config.ts'
+      - 'scripts/configure-native.mjs'
+      - 'branding/platform-icons/route-ios-1024.png'
+      - '.github/workflows/ios-unsigned.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: Build ROUTE web app
+        run: npm run build
+
+      - name: Create and sync iOS project
+        shell: bash
+        run: |
+          rm -rf ios
+          npx cap add ios
+          npx cap sync ios
+          npm run native:configure
+
+      - name: Apply latest ROUTE iOS icon
+        shell: bash
+        run: |
+          set -euo pipefail
+          ICON_DIR='ios/App/App/Assets.xcassets/AppIcon.appiconset'
+          test -f branding/platform-icons/route-ios-1024.png
+          mkdir -p "$ICON_DIR"
+          rm -f "$ICON_DIR"/*.png
+          cp branding/platform-icons/route-ios-1024.png "$ICON_DIR/AppIcon-512@2x.png"
+          cat > "$ICON_DIR/Contents.json" <<'JSON'
+          {
+            "images" : [
+              {
+                "filename" : "AppIcon-512@2x.png",
+                "idiom" : "universal",
+                "platform" : "ios",
+                "size" : "1024x1024"
+              }
+            ],
+            "info" : {
+              "author" : "xcode",
+              "version" : 1
+            }
+          }
+          JSON
+
+      - name: Build unsigned iPhone app
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath release/ios-device \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY='' \
+            build
+
+      - name: Package unsigned IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PATH='release/ios-device/Build/Products/Release-iphoneos/App.app'
+          test -d "$APP_PATH"
+          rm -rf release/ios-package
+          mkdir -p release/ios-package/Payload
+          cp -R "$APP_PATH" release/ios-package/Payload/App.app
+          cd release/ios-package
+          /usr/bin/zip -qry ROUTE-iOS-0.2.2-unsigned.ipa Payload
+
+      - name: Build iOS Simulator app
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath release/ios-simulator \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+          APP_PATH='release/ios-simulator/Build/Products/Debug-iphonesimulator/App.app'
+          test -d "$APP_PATH"
+          /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" release/ROUTE-iOS-0.2.2-Simulator.zip
+
+      - name: Upload ROUTE iOS builds
+        uses: actions/upload-artifact@v4
+        with:
+          name: ROUTE-iOS-Build
+          path: |
+            release/ios-package/ROUTE-iOS-0.2.2-unsigned.ipa
+            release/ROUTE-iOS-0.2.2-Simulator.zip
+          if-no-files-found: error
+          retention-days: 30

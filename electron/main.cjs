@@ -1,4 +1,5 @@
 const { app, BrowserWindow, shell, session } = require('electron');
+const path = require('path');
 
 const ROUTE_URL = 'https://meluni-f4e00.web.app';
 const ROUTE_ORIGIN = new URL(ROUTE_URL).origin;
@@ -42,14 +43,17 @@ function configureSession() {
 
 function createWindow() {
   const win = new BrowserWindow({
-    width: 1100,
-    height: 820,
-    minWidth: 420,
+    title: 'ROUTE',
+    width: 430,
+    height: 860,
+    minWidth: 360,
     minHeight: 640,
+    useContentSize: true,
+    center: true,
     show: false,
     autoHideMenuBar: true,
     backgroundColor: '#fffaf8',
-    icon: require('path').join(__dirname, '..', 'build', 'icons', 'route.ico'),
+    icon: path.join(__dirname, '..', 'build', 'icons', 'route.ico'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

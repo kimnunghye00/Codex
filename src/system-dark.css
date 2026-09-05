@@ -1,0 +1,80 @@
+/* System appearance bridge. Loaded after the normal ROUTE theme safety layer. */
+:root[data-route-system-dark='1'] {
+  --background:#0F151F !important;
+  --surface:#18212D !important;
+  --surface-elevated:#202B39 !important;
+  --text-primary:#F7F9FC !important;
+  --text-secondary:#C5CDD8 !important;
+  --border:#3C495B !important;
+  --control-bg:#243040 !important;
+  --placeholder:#9EABBA !important;
+  --primary-soft:color-mix(in srgb,var(--primary) 24%,#18212D) !important;
+  --route-accent-soft:color-mix(in srgb,var(--route-accent) 22%,#18212D) !important;
+  color-scheme:dark;
+}
+
+:root[data-route-system-dark='1'] body,
+:root[data-route-system-dark='1'] #root,
+:root[data-route-system-dark='1'] .app-shell,
+:root[data-route-system-dark='1'] .page {
+  background-color:var(--background) !important;
+  color:var(--text-primary) !important;
+}
+
+:root[data-route-system-dark='1'] .route-settings-hub,
+:root[data-route-system-dark='1'] .route-password-panel,
+:root[data-route-system-dark='1'] .hub-order-panel {
+  background:var(--background) !important;
+  color:var(--text-primary) !important;
+}
+
+:root[data-route-system-dark='1'] .route-settings-hub > header,
+:root[data-route-system-dark='1'] .route-settings-list,
+:root[data-route-system-dark='1'] .route-settings-row,
+:root[data-route-system-dark='1'] .route-password-panel > header,
+:root[data-route-system-dark='1'] .route-password-intro,
+:root[data-route-system-dark='1'] .hub-order-reset {
+  background:var(--surface) !important;
+  color:var(--text-primary) !important;
+  border-color:var(--border) !important;
+}
+
+:root[data-route-system-dark='1'] .route-settings-row-copy small,
+:root[data-route-system-dark='1'] .route-password-intro small,
+:root[data-route-system-dark='1'] .route-password-form label {
+  color:var(--text-secondary) !important;
+}
+
+:root[data-route-system-dark='1'] .route-settings-chevron {
+  color:var(--text-secondary) !important;
+}
+
+:root[data-route-system-dark='1'] .route-settings-row-icon {
+  background:color-mix(in srgb,var(--route-accent) 18%,var(--surface)) !important;
+}
+
+:root[data-route-system-dark='1'] .route-switch:not(.on) {
+  background:#465365 !important;
+}
+
+:root[data-route-system-dark='1'] .auth-shell,
+:root[data-route-system-dark='1'] .auth-card,
+:root[data-route-system-dark='1'] .profile-setup-shell,
+:root[data-route-system-dark='1'] .notification-panel,
+:root[data-route-system-dark='1'] .route-theme-sheet,
+:root[data-route-system-dark='1'] .more-sheet {
+  background-color:var(--surface) !important;
+  color:var(--text-primary) !important;
+  border-color:var(--border) !important;
+}
+
+:root[data-route-system-dark='1'] .topbar {
+  background-color:var(--background) !important;
+  color:var(--text-primary) !important;
+  border-bottom-color:var(--route-accent) !important;
+}
+
+:root[data-route-system-dark='1'] .bottom-nav {
+  background:color-mix(in srgb,var(--surface) 94%,transparent) !important;
+  border-top-color:var(--border) !important;
+}
