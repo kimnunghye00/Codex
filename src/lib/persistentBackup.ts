@@ -2,6 +2,7 @@ import { onAuthStateChanged, type User } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadString } from 'firebase/storage';
 import type { Memory, Message } from '../types';
+import { PERSISTENT_STATE_CHANGE_EVENT } from '../utils/persistenceSignal';
 import {
   loadDeletedMemories,
   MEMORY_DELETED_KEY,
@@ -16,6 +17,7 @@ const MESSAGE_KEY = 'route.messages.v2';
 const MEMORY_KEY = 'route.memories.v2';
 const RESTORED_SESSION_KEY = 'route.backup.restored.uid';
 const BACKUP_INTERVAL_MS = 8_000;
+const IMMEDIATE_BACKUP_DELAY_MS = 120;
 
 type BackupEnvelope<T> = {
   value?: T;
@@ -29,10 +31,12 @@ type LocalStateBackup = Record<string, string>;
 
 let activeUid = '';
 let backupTimer: number | undefined;
+let immediateBackupTimer: number | undefined;
 let lastMessageSnapshot = '';
 let lastMemorySnapshot = '';
 let lastLocalStateSnapshot = '';
 let backupRunning = false;
+let backupAgain = false;
 
 function backupRef(uid: string, key: string) {
   return doc(db, 'users', uid, 'backups', key);
@@ -72,6 +76,7 @@ function mergeDeleted(a: MemoryDeletionMap, b: MemoryDeletionMap) {
 
 function localStateKeys(uid: string) {
   return [
+    `meluni-profile:${uid}`,
     `route-scheduled-chat:${uid}`,
     `route-date-plans:${uid}`,
     `route-local-schedules:${uid}`,
@@ -193,9 +198,10 @@ async function waitForInitialAuth(): Promise<User | null> {
 }
 
 async function restoreIntoLocalStorage(uid: string) {
-  const [core, localState] = await Promise.all([
+  const [core, localState, userSnapshot] = await Promise.all([
     restoreCoreBackup(uid),
     loadBackupValue<LocalStateBackup>(uid, 'local-state-latest'),
+    getDoc(doc(db, 'users', uid)),
   ]);
 
   const localMessages = readJson<Message[]>(MESSAGE_KEY, []);
@@ -233,6 +239,18 @@ async function restoreIntoLocalStorage(uid: string) {
     });
   }
 
+  // Existing accounts may predate local-state profile backups. Restore the
+  // server-side profile only when this device has no profile at all, so a newer
+  // local edit is never overwritten by an older cloud copy.
+  const profileKey = `meluni-profile:${uid}`;
+  if (localStorage.getItem(profileKey) === null && userSnapshot.exists()) {
+    const cloudProfile = userSnapshot.data()?.profile;
+    if (cloudProfile && typeof cloudProfile === 'object') {
+      localStorage.setItem(profileKey, JSON.stringify(cloudProfile));
+      changed = true;
+    }
+  }
+
   lastMessageSnapshot = localStorage.getItem(MESSAGE_KEY) ?? '';
   lastMemorySnapshot = localStorage.getItem(MEMORY_KEY) ?? '';
   lastLocalStateSnapshot = JSON.stringify(readLocalState(uid));
@@ -240,7 +258,12 @@ async function restoreIntoLocalStorage(uid: string) {
 }
 
 async function backupCurrentLocalState(uid: string) {
-  if (!uid || backupRunning) return;
+  if (!uid) return;
+  if (backupRunning) {
+    backupAgain = true;
+    return;
+  }
+
   const messageSnapshot = localStorage.getItem(MESSAGE_KEY) ?? '[]';
   const memorySnapshot = localStorage.getItem(MEMORY_KEY) ?? '[]';
   const localState = readLocalState(uid);
@@ -272,7 +295,20 @@ async function backupCurrentLocalState(uid: string) {
     localStorage.setItem('route.backup.lastError', error instanceof Error ? error.message : String(error));
   } finally {
     backupRunning = false;
+    if (backupAgain) {
+      backupAgain = false;
+      window.setTimeout(() => void backupCurrentLocalState(activeUid), IMMEDIATE_BACKUP_DELAY_MS);
+    }
   }
+}
+
+function scheduleImmediateBackup() {
+  if (!activeUid) return;
+  if (immediateBackupTimer !== undefined) window.clearTimeout(immediateBackupTimer);
+  immediateBackupTimer = window.setTimeout(() => {
+    immediateBackupTimer = undefined;
+    void backupCurrentLocalState(activeUid);
+  }, IMMEDIATE_BACKUP_DELAY_MS);
 }
 
 export async function preparePersistentBackup() {
@@ -297,8 +333,11 @@ export function startPersistentBackup() {
   onAuthStateChanged(auth, (user) => {
     if (!user) {
       activeUid = '';
+      backupAgain = false;
       if (backupTimer !== undefined) window.clearInterval(backupTimer);
+      if (immediateBackupTimer !== undefined) window.clearTimeout(immediateBackupTimer);
       backupTimer = undefined;
+      immediateBackupTimer = undefined;
       return;
     }
 
@@ -322,6 +361,7 @@ export function startPersistentBackup() {
       });
   });
 
+  window.addEventListener(PERSISTENT_STATE_CHANGE_EVENT, scheduleImmediateBackup);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden' && activeUid) void backupCurrentLocalState(activeUid);
   });
