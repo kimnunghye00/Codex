@@ -37,6 +37,8 @@ import './route-theme-accessibility.css';
 import './system-dark.css';
 import './home-brand-polish-v5.css';
 import './layout-polish-v4.css';
+// Final product tokens and home composition must win over legacy feature CSS.
+import './route-design-system-v6.css';
 
 import './route-themes';
 import './home-map-overlay';
