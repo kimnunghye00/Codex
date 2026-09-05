@@ -1,4 +1,4 @@
-const CACHE_NAME = 'route-web-v3';
+const CACHE_NAME = 'route-web-v4';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.add('./')).catch(() => undefined));
