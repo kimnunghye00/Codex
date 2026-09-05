@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { browserLocalPersistence, getAuth, setPersistence } from 'firebase/auth';
 import { initializeFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
@@ -16,4 +16,7 @@ export const firebaseApp = initializeApp(firebaseConfig);
 export const auth = getAuth(firebaseApp);
 export const db = initializeFirestore(firebaseApp, { ignoreUndefinedProperties: true });
 export const storage = getStorage(firebaseApp);
+export const authPersistenceReady = setPersistence(auth, browserLocalPersistence).catch((cause) => {
+  console.warn('[ROUTE auth persistence]', cause);
+});
 auth.languageCode = 'ko';
