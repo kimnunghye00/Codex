@@ -15,6 +15,7 @@ const config: CapacitorConfig = {
     scrollEnabled: true,
   },
   server: {
+    hostname: 'localhost',
     androidScheme: 'https',
   },
   plugins: {
