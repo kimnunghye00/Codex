@@ -6,6 +6,13 @@ on:
     branches:
       - main
     paths:
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.ts'
+      - 'tsconfig*.json'
       - 'electron/**'
       - 'electron-builder.yml'
       - 'build/icons/route.ico'
@@ -31,6 +38,9 @@ jobs:
 
       - name: Install app dependencies
         run: npm ci
+
+      - name: Verify ROUTE web app build
+        run: npm run build
 
       - name: Install Electron packaging tools
         shell: pwsh
