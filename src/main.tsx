@@ -43,6 +43,8 @@ import './route-design-system-v6.css';
 import './route-product-polish-v7.css';
 // Last-mile responsive QA: clipping, Korean text, touch targets and safe areas.
 import './route-final-qa-v8.css';
+// Cross-feature interaction feedback must remain visible above all legacy layers.
+import './route-feature-flow-v9.css';
 
 import './route-themes';
 import './home-map-overlay';
