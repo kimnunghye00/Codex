@@ -1,3 +1,5 @@
+import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
+import { auth } from './lib/firebase';
 import { installRouteWebApp, isStandaloneWebApp } from './pwa';
 
 let bypassSettingsHub = false;
@@ -12,6 +14,116 @@ function clickByText(selector: string, text: string) {
 function closeHub() {
   document.querySelector('.route-settings-hub-backdrop')?.remove();
   document.body.classList.remove('route-settings-hub-open');
+}
+
+function closePasswordChange() {
+  document.querySelector('.route-password-backdrop')?.remove();
+  document.body.classList.remove('route-password-change-open');
+}
+
+function passwordChangeMessage(error: unknown) {
+  const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
+  if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') return '현재 비밀번호가 올바르지 않아요.';
+  if (code === 'auth/weak-password') return '새 비밀번호는 6자 이상으로 설정해 주세요.';
+  if (code === 'auth/requires-recent-login') return '보안을 위해 로그아웃 후 다시 로그인한 뒤 시도해 주세요.';
+  if (code === 'auth/too-many-requests') return '시도가 너무 많아요. 잠시 후 다시 시도해 주세요.';
+  if (code === 'auth/network-request-failed') return '네트워크 연결을 확인한 뒤 다시 시도해 주세요.';
+  return code ? `비밀번호를 변경하지 못했어요. (${code})` : '비밀번호를 변경하지 못했어요. 잠시 후 다시 시도해 주세요.';
+}
+
+function openPasswordChange() {
+  closeHub();
+  closePasswordChange();
+  const user = auth.currentUser;
+  if (!user) return alert('로그인 상태를 확인할 수 없어요. 다시 로그인한 뒤 시도해 주세요.');
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'route-password-backdrop';
+  backdrop.setAttribute('role', 'dialog');
+  backdrop.setAttribute('aria-modal', 'true');
+  backdrop.setAttribute('aria-label', '비밀번호 변경');
+
+  const panel = document.createElement('div');
+  panel.className = 'route-password-panel';
+  panel.innerHTML = `
+    <header>
+      <button type="button" class="route-password-back" aria-label="비밀번호 변경 닫기">‹</button>
+      <strong>비밀번호 변경</strong>
+      <span></span>
+    </header>
+    <form class="route-password-form">
+      <div class="route-password-intro">
+        <span>🔐</span>
+        <div><b>로그인 비밀번호를 바꿔요</b><small>현재 비밀번호를 확인한 뒤 새 비밀번호로 안전하게 변경해요.</small></div>
+      </div>
+      <label>현재 비밀번호<input name="currentPassword" required type="password" autocomplete="current-password" minlength="6" placeholder="현재 비밀번호" /></label>
+      <label>새 비밀번호<input name="newPassword" required type="password" autocomplete="new-password" minlength="6" placeholder="6자 이상 입력하세요" /></label>
+      <label>새 비밀번호 확인<input name="newPasswordConfirm" required type="password" autocomplete="new-password" minlength="6" placeholder="새 비밀번호를 한 번 더" /></label>
+      <p class="route-password-feedback" role="status"></p>
+      <button class="route-password-submit" type="submit">비밀번호 변경</button>
+    </form>`;
+
+  const form = panel.querySelector<HTMLFormElement>('.route-password-form')!;
+  const submit = panel.querySelector<HTMLButtonElement>('.route-password-submit')!;
+  const feedback = panel.querySelector<HTMLParagraphElement>('.route-password-feedback')!;
+  panel.querySelector<HTMLButtonElement>('.route-password-back')?.addEventListener('click', closePasswordChange);
+
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (submit.disabled) return;
+    const data = new FormData(form);
+    const currentPassword = String(data.get('currentPassword') ?? '');
+    const newPassword = String(data.get('newPassword') ?? '');
+    const newPasswordConfirm = String(data.get('newPasswordConfirm') ?? '');
+    feedback.className = 'route-password-feedback';
+    feedback.textContent = '';
+
+    if (newPassword.length < 6) {
+      feedback.textContent = '새 비밀번호는 6자 이상으로 설정해 주세요.';
+      feedback.classList.add('error');
+      return;
+    }
+    if (newPassword !== newPasswordConfirm) {
+      feedback.textContent = '새 비밀번호가 서로 달라요.';
+      feedback.classList.add('error');
+      return;
+    }
+    if (currentPassword === newPassword) {
+      feedback.textContent = '현재 비밀번호와 다른 새 비밀번호를 입력해 주세요.';
+      feedback.classList.add('error');
+      return;
+    }
+    if (!user.email) {
+      feedback.textContent = '비밀번호 로그인 정보를 찾을 수 없어요. 로그인 화면의 비밀번호 찾기를 이용해 주세요.';
+      feedback.classList.add('error');
+      return;
+    }
+
+    submit.disabled = true;
+    submit.textContent = '변경 중...';
+    void (async () => {
+      try {
+        const credential = EmailAuthProvider.credential(user.email!, currentPassword);
+        await reauthenticateWithCredential(user, credential);
+        await updatePassword(user, newPassword);
+        form.reset();
+        feedback.textContent = '비밀번호가 변경됐어요. 다음 로그인부터 새 비밀번호를 사용해 주세요.';
+        feedback.classList.add('success');
+      } catch (cause) {
+        feedback.textContent = passwordChangeMessage(cause);
+        feedback.classList.add('error');
+      } finally {
+        submit.disabled = false;
+        submit.textContent = '비밀번호 변경';
+      }
+    })();
+  });
+
+  backdrop.append(panel);
+  backdrop.addEventListener('pointerdown', (event) => { if (event.target === backdrop) closePasswordChange(); });
+  document.body.append(backdrop);
+  document.body.classList.add('route-password-change-open');
+  window.setTimeout(() => panel.querySelector<HTMLInputElement>('input[name="currentPassword"]')?.focus(), 0);
 }
 
 function openOriginalProfileSettings() {
@@ -103,6 +215,7 @@ function openSettingsHub() {
     section('계정', [
       settingRow('👤', '내 프로필', '이름, 생년월일, 사진, 별명 수정', openOriginalProfileSettings),
       settingRow('💞', '상대방 프로필 및 연결', '연결 상태, 상대방 프로필과 별명 관리', openOriginalProfileSettings),
+      settingRow('🔐', '비밀번호 변경', '현재 비밀번호 확인 후 새 비밀번호 설정', openPasswordChange),
     ]),
     section('알림', [
       settingRow('🔔', '알림 및 최근 활동', 'ROUTE 알림 확인과 읽음 관리', () => {
@@ -159,6 +272,11 @@ document.addEventListener('click', (event) => {
 }, true);
 
 window.addEventListener('route-native-back', (event) => {
+  if (document.querySelector('.route-password-backdrop')) {
+    event.preventDefault();
+    closePasswordChange();
+    return;
+  }
   if (!document.querySelector('.route-settings-hub-backdrop')) return;
   event.preventDefault();
   closeHub();
