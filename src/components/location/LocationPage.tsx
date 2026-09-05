@@ -5,6 +5,7 @@ import type { MemoryDraft } from '../../types';
 import { auth } from '../../lib/firebase';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
 import { saveCoupleLocationVisit, subscribePartnerLocationVisits } from '../../lib/locationRealtime';
+import { startRouteLocationWatch, type RouteLocationError, type RouteLocationPosition, type RouteLocationWatch } from '../../lib/native';
 import {
   distanceMeters,
   loadLocationSharing,
@@ -20,9 +21,10 @@ const MIN_MOVE_METERS = 120;
 const ROUTE_MAP_ORIGIN = 'https://meluni-f4e00.web.app';
 const ROUTE_MAP_HOST = `${ROUTE_MAP_ORIGIN}/naver-map-host.html`;
 const LOCATION_FOCUS_KEY = 'route-pending-location-focus';
+const MAP_READY_TIMEOUT_MS = 12_000;
 
 type LocationTab = 'map' | 'footprints';
-type MapHostMessage = { source?: string; type?: string };
+type MapHostMessage = { source?: string; type?: string; origin?: string; code?: string };
 type FocusState = 'idle' | 'searching' | 'found' | 'failed';
 
 function todayKey() {
@@ -55,6 +57,20 @@ function dayText(value: string) {
   return new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }).format(new Date(value));
 }
 
+function locationErrorMessage(error: RouteLocationError) {
+  const code = String(error.code ?? '');
+  if (code === '1' || code === 'OS-PLUG-GLOC-0003' || code.includes('PERMISSION')) {
+    return { permissionDenied: true, message: '위치 권한이 거부됐어요. 휴대폰의 ROUTE 앱 권한에서 위치를 허용해 주세요.' };
+  }
+  if (code === 'OS-PLUG-GLOC-0007' || code === 'OS-PLUG-GLOC-0017') {
+    return { permissionDenied: false, message: '휴대폰의 위치 서비스가 꺼져 있어요. GPS/위치를 켠 뒤 다시 추적해 주세요.' };
+  }
+  if (code === '3' || code === 'OS-PLUG-GLOC-0010') {
+    return { permissionDenied: false, message: '현재 위치 확인 시간이 초과됐어요. 실외나 창가에서 다시 시도해 주세요.' };
+  }
+  return { permissionDenied: false, message: '현재 위치를 가져오지 못했어요. 네트워크와 위치 서비스를 확인한 뒤 다시 시도해 주세요.' };
+}
+
 export function LocationPage({ Header, connection, focusPlace, onClearFocus, onCreateMemory, onActivity }: {
   Header: ({ title }: { title?: string }) => React.ReactNode;
   connection: RealCoupleConnection | null;
@@ -64,9 +80,10 @@ export function LocationPage({ Header, connection, focusPlace, onClearFocus, onC
   onActivity?: (title: string, detail?: string) => void;
 }) {
   const uid = auth.currentUser?.uid ?? '';
+  const initialVisits = uid ? loadLocationVisits(uid) : [];
   const [activeTab, setActiveTab] = useState<LocationTab>('map');
   const [sharing, setSharing] = useState(() => uid ? loadLocationSharing(uid).enabled : false);
-  const [visits, setVisits] = useState<LocationVisit[]>(() => uid ? loadLocationVisits(uid) : []);
+  const [visits, setVisits] = useState<LocationVisit[]>(initialVisits);
   const [partnerVisits, setPartnerVisits] = useState<LocationVisit[]>([]);
   const [selectedDay, setSelectedDay] = useState(todayKey());
   const [status, setStatus] = useState('위치 공유를 켜면 이동 기록을 만들어요.');
@@ -80,8 +97,13 @@ export function LocationPage({ Header, connection, focusPlace, onClearFocus, onC
   const [focusStatus, setFocusStatus] = useState('');
   const [focusedVisit, setFocusedVisit] = useState<LocationVisit>();
   const [queuedFocus] = useState(() => { try { return sessionStorage.getItem(LOCATION_FOCUS_KEY)?.trim() || ''; } catch { return ''; } });
-  const watchId = useRef<number | undefined>(undefined);
+
+  const watchRef = useRef<RouteLocationWatch | null>(null);
+  const watchStartingRef = useRef(false);
+  const recordingRef = useRef(false);
+  const visitsRef = useRef<LocationVisit[]>(initialVisits);
   const mapFrame = useRef<HTMLIFrameElement>(null);
+  const mapTimeoutRef = useRef<number | undefined>(undefined);
   const handledFocus = useRef('');
   const partnerName = connection?.partnerProfile?.name?.trim() || connection?.partnerProfile?.nickname?.trim() || '상대방';
   const mapVisits = useMemo(() => activeTab === 'footprints' ? partnerVisits : [...visits].reverse(), [activeTab, partnerVisits, visits]);
@@ -90,14 +112,40 @@ export function LocationPage({ Header, connection, focusPlace, onClearFocus, onC
     mapFrame.current?.contentWindow?.postMessage({ source: 'route-map-parent', ...payload }, ROUTE_MAP_ORIGIN);
   };
 
-  const stopWatching = (announce = true) => {
-    if (watchId.current !== undefined) navigator.geolocation.clearWatch(watchId.current);
-    watchId.current = undefined;
+  const clearMapTimeout = () => {
+    if (mapTimeoutRef.current) window.clearTimeout(mapTimeoutRef.current);
+    mapTimeoutRef.current = undefined;
+  };
+
+  const armMapTimeout = () => {
+    clearMapTimeout();
+    mapTimeoutRef.current = window.setTimeout(() => {
+      setMapReady(false);
+      setMapFailed(true);
+      setMapStatus('네이버 지도 응답이 늦어지고 있어요. 네트워크를 확인한 뒤 다시 불러와 주세요.');
+    }, MAP_READY_TIMEOUT_MS);
+  };
+
+  const stopWatching = async (announce = true) => {
+    const current = watchRef.current;
+    watchRef.current = null;
+    if (current) await current.stop();
     setTracking(false);
     if (announce) setStatus('위치 공유가 일시 정지됐어요.');
   };
 
-  useEffect(() => () => stopWatching(false), []);
+  useEffect(() => () => {
+    clearMapTimeout();
+    void stopWatching(false);
+  }, []);
+
+  useEffect(() => {
+    if (!uid) return;
+    const savedVisits = loadLocationVisits(uid);
+    visitsRef.current = savedVisits;
+    setVisits(savedVisits);
+    setSharing(loadLocationSharing(uid).enabled);
+  }, [uid]);
 
   useEffect(() => {
     if (!connection?.coupleId || !connection.partnerUid) {
@@ -129,7 +177,7 @@ export function LocationPage({ Header, connection, focusPlace, onClearFocus, onC
     };
 
     const resolvePlace = async () => {
-      const localMatch = visits.find((visit) => {
+      const localMatch = visitsRef.current.find((visit) => {
         const place = normalizePlace(visit.placeName ?? '');
         return place && (place.includes(normalized) || normalized.includes(place));
       });
@@ -175,7 +223,14 @@ export function LocationPage({ Header, connection, focusPlace, onClearFocus, onC
       if (event.source !== mapFrame.current?.contentWindow) return;
       if (event.data?.source !== 'route-map-host') return;
 
+      if (event.data.type === 'host-ready' || event.data.type === 'sdk-loading') {
+        setMapFailed(false);
+        setMapStatus('네이버 지도 인증을 확인하는 중이에요…');
+        return;
+      }
+
       if (event.data.type === 'ready') {
+        clearMapTimeout();
         setMapReady(true);
         setMapFailed(false);
         setMapStatus('');
@@ -183,17 +238,18 @@ export function LocationPage({ Header, connection, focusPlace, onClearFocus, onC
         return;
       }
 
+      clearMapTimeout();
       if (event.data.type === 'auth-error') {
         setMapReady(false);
         setMapFailed(true);
-        setMapStatus('네이버 지도 고정 호스트 인증이 거부됐어요. NAVER Cloud에는 meluni-f4e00.web.app 주소 하나만 유지하면 돼요.');
+        setMapStatus('네이버 지도 인증이 거부됐어요. NAVER Cloud Maps에서 Dynamic Map과 웹 서비스 URL meluni-f4e00.web.app 등록을 확인해 주세요.');
         return;
       }
 
       if (event.data.type === 'script-error') {
         setMapReady(false);
         setMapFailed(true);
-        setMapStatus('네이버 지도 서버에 연결하지 못했어요. 네트워크를 확인한 뒤 다시 시도해 주세요.');
+        setMapStatus('네이버 지도 SDK에 연결하지 못했어요. 네트워크를 확인한 뒤 다시 불러와 주세요.');
         return;
       }
 
@@ -226,6 +282,7 @@ export function LocationPage({ Header, connection, focusPlace, onClearFocus, onC
   }, [mapReady]);
 
   const retryMap = () => {
+    clearMapTimeout();
     setMapFailed(false);
     setMapReady(false);
     setMapStatus('네이버 지도를 다시 불러오는 중이에요…');
@@ -233,6 +290,7 @@ export function LocationPage({ Header, connection, focusPlace, onClearFocus, onC
   };
 
   const persistVisits = (next: LocationVisit[]) => {
+    visitsRef.current = next;
     setVisits(next);
     if (uid) saveLocationVisits(uid, next);
   };
@@ -242,52 +300,79 @@ export function LocationPage({ Header, connection, focusPlace, onClearFocus, onC
     void saveCoupleLocationVisit(connection.coupleId, uid, visit).catch(() => setStatus('기기에는 저장됐지만 상대방과 위치 기록을 동기화하지 못했어요.'));
   };
 
-  const recordPosition = async (position: GeolocationPosition) => {
-    const point = { latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy };
-    const now = new Date().toISOString();
-    const current = visits[0];
-    if (current && !current.leftAt && distanceMeters(current, point) < MIN_MOVE_METERS) {
-      setStatus(`현재 위치 확인됨 · 오차 약 ${Math.round(position.coords.accuracy)}m`);
-      return;
+  const recordPosition = async (position: RouteLocationPosition) => {
+    if (recordingRef.current) return;
+    recordingRef.current = true;
+    try {
+      const point = { latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy };
+      if (!Number.isFinite(point.latitude) || !Number.isFinite(point.longitude)) return;
+      const now = new Date().toISOString();
+      const currentVisits = visitsRef.current;
+      const current = currentVisits[0];
+
+      if (current && !current.leftAt && distanceMeters(current, point) < MIN_MOVE_METERS) {
+        setStatus(`현재 위치 확인됨 · 오차 약 ${Math.round(position.coords.accuracy)}m`);
+        return;
+      }
+
+      const placeName = await reverseGeocode(point.latitude, point.longitude);
+      const closed = current && !current.leftAt ? { ...current, leftAt: now } : current;
+      const rest = current ? currentVisits.slice(1) : currentVisits;
+      const nextVisit: LocationVisit = { id: `${Date.now()}`, ...point, placeName, arrivedAt: now };
+      const next = [nextVisit, ...(closed ? [closed] : []), ...rest].slice(0, 300);
+      persistVisits(next);
+      if (closed) syncVisit(closed);
+      syncVisit(nextVisit);
+      setStatus(placeName ? `${placeName}에서 위치가 확인됐어요.` : '새 위치가 기록됐어요.');
+      onActivity?.('새 위치가 기록됐어요', placeName || `${point.latitude.toFixed(5)}, ${point.longitude.toFixed(5)}`);
+    } finally {
+      recordingRef.current = false;
     }
-    const placeName = await reverseGeocode(point.latitude, point.longitude);
-    const closed = current && !current.leftAt ? { ...current, leftAt: now } : current;
-    const rest = current ? visits.slice(1) : visits;
-    const nextVisit: LocationVisit = { id: `${Date.now()}`, ...point, placeName, arrivedAt: now };
-    const next = [nextVisit, ...(closed ? [closed] : []), ...rest].slice(0, 300);
-    persistVisits(next);
-    if (closed) syncVisit(closed);
-    syncVisit(nextVisit);
-    setStatus(placeName ? `${placeName}에서 위치가 확인됐어요.` : '새 위치가 기록됐어요.');
-    onActivity?.('새 위치가 기록됐어요', placeName || `${point.latitude.toFixed(5)}, ${point.longitude.toFixed(5)}`);
   };
 
-  const startWatching = () => {
-    if (!uid) return;
-    if (!('geolocation' in navigator)) return setStatus('이 기기에서는 위치 기능을 사용할 수 없어요.');
-    setStatus('위치 권한을 확인하고 있어요…');
-    const nextSharing = saveLocationSharing(uid, true);
-    setSharing(nextSharing.enabled);
-    onActivity?.('위치 공유를 시작했어요');
-    watchId.current = navigator.geolocation.watchPosition(
-      (position) => { setTracking(true); void recordPosition(position); },
-      (error) => {
-        stopWatching(false);
-        if (error.code === error.PERMISSION_DENIED) {
-          saveLocationSharing(uid, false);
-          setSharing(false);
-          setStatus('위치 권한이 거부됐어요. 브라우저의 사이트 권한에서 위치를 허용해 주세요.');
-        } else {
-          setStatus('현재 위치를 가져오지 못했어요. 잠시 뒤 다시 시도해 주세요.');
-        }
-      },
-      { enableHighAccuracy: true, maximumAge: 45_000, timeout: 20_000 },
-    );
+  const handleLocationError = (error: RouteLocationError) => {
+    const detail = locationErrorMessage(error);
+    void stopWatching(false);
+    if (detail.permissionDenied && uid) {
+      saveLocationSharing(uid, false);
+      setSharing(false);
+    }
+    setStatus(detail.message);
+  };
+
+  const startWatching = async () => {
+    if (!uid || watchStartingRef.current) return;
+    watchStartingRef.current = true;
+    setStatus('위치 권한과 GPS 상태를 확인하고 있어요…');
+    try {
+      await stopWatching(false);
+      const watch = await startRouteLocationWatch(
+        (position) => { setTracking(true); void recordPosition(position); },
+        handleLocationError,
+      );
+      watchRef.current = watch;
+      const nextSharing = saveLocationSharing(uid, true);
+      setSharing(nextSharing.enabled);
+      setTracking(true);
+      setStatus('위치 공유가 시작됐어요. ROUTE를 사용하는 동안 이동 변화를 확인해요.');
+      onActivity?.('위치 공유를 시작했어요');
+    } catch (cause) {
+      const code = cause instanceof Error ? cause.message : '';
+      const permissionDenied = code === 'route-location-permission-denied';
+      saveLocationSharing(uid, false);
+      setSharing(false);
+      setTracking(false);
+      setStatus(permissionDenied
+        ? '위치 권한이 허용되지 않았어요. 휴대폰의 ROUTE 앱 권한에서 위치를 허용해 주세요.'
+        : '위치 추적을 시작하지 못했어요. 위치 서비스가 켜져 있는지 확인해 주세요.');
+    } finally {
+      watchStartingRef.current = false;
+    }
   };
 
   const disableSharing = () => {
     if (!uid) return;
-    stopWatching(false);
+    void stopWatching(false);
     saveLocationSharing(uid, false);
     setSharing(false);
     setStatus('위치 공유를 껐어요. 기존 이동 기록은 남아 있어요.');
@@ -340,10 +425,17 @@ export function LocationPage({ Header, connection, focusPlace, onClearFocus, onC
         ref={mapFrame}
         className="location-real-map route-map-frame"
         title="ROUTE 네이버 지도"
-        src={`${ROUTE_MAP_HOST}?v=3&attempt=${mapAttempt}`}
+        src={`${ROUTE_MAP_HOST}?v=4&attempt=${mapAttempt}`}
         onLoad={() => {
-          setMapStatus('네이버 지도를 준비하는 중이에요…');
+          setMapStatus('네이버 지도 인증을 확인하는 중이에요…');
           setMapFailed(false);
+          armMapTimeout();
+        }}
+        onError={() => {
+          clearMapTimeout();
+          setMapReady(false);
+          setMapFailed(true);
+          setMapStatus('지도 호스트에 연결하지 못했어요. 네트워크를 확인한 뒤 다시 불러와 주세요.');
         }}
       />
       {mapStatus && <div className={`location-map-status ${mapFailed ? 'failed' : ''}`}><MapPin size={18} /><span>{mapStatus}</span>{mapFailed && <button type="button" onClick={retryMap}><RefreshCw size={14} />다시 불러오기</button>}</div>}
@@ -353,9 +445,9 @@ export function LocationPage({ Header, connection, focusPlace, onClearFocus, onC
 
     {activeTab === 'map' ? <>
       <section className={`location-share-card ${sharing ? 'active' : ''}`}>
-        <div className="location-share-head"><span><LocateFixed size={21} /></span><div><strong>{sharing ? '내 위치 공유 중' : '내 위치 공유 꺼짐'}</strong><small>{tracking ? '현재 ROUTE가 위치 변화를 확인하고 있어요.' : status}</small></div></div>
-        <div className="location-actions">{!sharing ? <button className="primary" type="button" onClick={startWatching}><Navigation size={16} />위치 공유 시작</button> : <>{!tracking && <button className="primary" type="button" onClick={startWatching}><LocateFixed size={16} />다시 추적</button>}<button className="location-stop" type="button" onClick={disableSharing}><PauseCircle size={16} />공유 끄기</button></>}</div>
-        <p className="location-privacy"><ShieldCheck size={14} /> 위치 공유를 켠 동안의 방문 기록만 연결된 상대방과 공유돼요.</p>
+        <div className="location-share-head"><span><LocateFixed size={21} /></span><div><strong>{sharing ? '내 위치 공유 중' : '내 위치 공유 꺼짐'}</strong><small>{tracking ? status : status}</small></div></div>
+        <div className="location-actions">{!sharing ? <button className="primary" type="button" onClick={() => void startWatching()}><Navigation size={16} />위치 공유 시작</button> : <>{!tracking && <button className="primary" type="button" onClick={() => void startWatching()}><LocateFixed size={16} />다시 추적</button>}<button className="location-stop" type="button" onClick={disableSharing}><PauseCircle size={16} />공유 끄기</button></>}</div>
+        <p className="location-privacy"><ShieldCheck size={14} /> ROUTE를 사용하는 동안 기록된 방문 위치만 연결된 상대방과 공유돼요.</p>
       </section>
       <section className="location-history">
         <div className="location-section-head"><div><small>TIMELINE</small><h2>최근 다녀온 곳</h2></div><span>{visits.length}곳</span></div>
