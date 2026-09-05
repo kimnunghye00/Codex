@@ -47,6 +47,8 @@ import './route-feature-flow-v9.css';
 // Place-centered story view connects visits, memories, dates and schedules.
 import './route-place-timeline-v10.css';
 import './web-desktop.css';
+// Desktop browsers now present the app inside a real phone-sized viewport.
+import './route-web-phone-preview-v12.css';
 
 import './route-themes';
 import './home-map-overlay';
@@ -58,16 +60,51 @@ import './settings-hub';
 import './mobile-polish-v3';
 import './more-enhance';
 
+const DESKTOP_PREVIEW_PARAM = 'routeMobilePreview';
+
+function shouldUseDesktopPhonePreview() {
+  const params = new URLSearchParams(window.location.search);
+  return window.self === window.top
+    && /^https?:$/.test(window.location.protocol)
+    && window.matchMedia('(min-width: 900px)').matches
+    && !params.has(DESKTOP_PREVIEW_PARAM);
+}
+
+function mountDesktopPhonePreview() {
+  if (!shouldUseDesktopPhonePreview()) return false;
+
+  const root = document.getElementById('root');
+  if (!root) return false;
+
+  document.documentElement.classList.add('route-desktop-phone-mode');
+
+  const preview = document.createElement('div');
+  preview.className = 'route-desktop-phone-preview';
+
+  const frame = document.createElement('div');
+  frame.className = 'route-desktop-phone-frame';
+
+  const iframe = document.createElement('iframe');
+  const url = new URL(window.location.href);
+  url.searchParams.set(DESKTOP_PREVIEW_PARAM, '1');
+  iframe.src = url.toString();
+  iframe.title = 'ROUTE 모바일 화면';
+  iframe.setAttribute('allow', 'geolocation; camera; microphone; clipboard-read; clipboard-write');
+
+  frame.appendChild(iframe);
+  preview.appendChild(frame);
+  root.replaceChildren(preview);
+  return true;
+}
+
 async function bootstrap() {
   installGlobalCrashDiagnostics();
   installPersistentStorageObserver();
 
-  // Load the desktop web override as a separate CSS chunk before React renders.
-  // Dynamic loading makes this stylesheet authoritative regardless of static
-  // CSS bundling order and keeps the mobile layout untouched.
-  if (window.matchMedia('(min-width: 900px)').matches) {
-    await import('./route-web-home-v11.css');
-  }
+  // On desktop web, show the exact responsive mobile app instead of stretching
+  // the layout into a tablet/desktop dashboard. The iframe is same-origin, so
+  // auth and local app data remain shared with the normal web app.
+  if (mountDesktopPhonePreview()) return;
 
   void initializeNativeApp();
   initializeRoutePwa();
