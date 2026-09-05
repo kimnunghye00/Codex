@@ -60,6 +60,18 @@
   max-width: min(84vw, 350px);
 }
 
+.chat-page .chat-media-progress {
+  margin: 0 10px 8px;
+  padding: 9px 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--border));
+  border-radius: 13px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--surface) 94%, var(--primary) 6%);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
 @media (max-width: 380px) {
   .chat-page .bubble.media-bubble,
   .chat-page .bubble.gallery-bubble,
