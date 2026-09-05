@@ -6,13 +6,25 @@
   <title>ROUTE Map Host</title>
   <style>
     html,body,#map{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#eef0f5}
+    #diagnostic{position:absolute;left:10px;bottom:10px;z-index:9999;display:none;padding:7px 9px;border-radius:10px;background:#fffde;color:#6a4a3b;font:11px/1.35 system-ui,-apple-system,sans-serif;box-shadow:0 2px 10px #0002}
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <div id="diagnostic"></div>
   <script>
     (() => {
+      /*
+       * This project originally used NAVER Cloud's legacy Maps application.
+       * NAVER later changed JavaScript authentication from ncpClientId to
+       * ncpKeyId. ROUTE accepts either so the fixed host keeps working during
+       * the migration and across old/new NAVER Cloud applications.
+       */
       const CLIENT_ID = 'z3njcg8upv';
+      const AUTH_PARAMS = ['ncpKeyId', 'ncpClientId'];
+      let authIndex = 0;
+      let activeAttempt = 0;
+      let activeScript = null;
       let map;
       let overlays = [];
       let lastRender = { visits: [], mode: 'map' };
@@ -62,11 +74,13 @@
           return;
         }
 
-        const points = lastRender.visits.map((visit) => new naver.maps.LatLng(Number(visit.latitude), Number(visit.longitude)));
+        const validVisits = lastRender.visits.filter((visit) => Number.isFinite(Number(visit.latitude)) && Number.isFinite(Number(visit.longitude)));
+        const points = validVisits.map((visit) => new naver.maps.LatLng(Number(visit.latitude), Number(visit.longitude)));
+        if (!points.length) return;
         if (points.length > 1) overlays.push(new naver.maps.Polyline({ map, path: points, strokeColor: '#E07A5F', strokeWeight: 5, strokeOpacity: 0.76 }));
 
-        lastRender.visits.forEach((visit, index) => {
-          const current = !visit.leftAt && index === lastRender.visits.length - 1;
+        validVisits.forEach((visit, index) => {
+          const current = !visit.leftAt && index === validVisits.length - 1;
           const marker = new naver.maps.Marker({
             map,
             position: points[index],
@@ -106,13 +120,14 @@
         if (data.type === 'resize' && map && window.naver?.maps) window.naver.maps.Event.trigger(map, 'resize');
       });
 
-      window.navermap_authFailure = () => send('auth-error');
+      const cleanupSdk = () => {
+        try { activeScript?.remove(); } catch {}
+        activeScript = null;
+        try { delete window.naver; } catch { window.naver = undefined; }
+      };
 
-      const script = document.createElement('script');
-      script.async = true;
-      script.defer = true;
-      script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(CLIENT_ID)}`;
-      script.onload = () => {
+      const initializeMap = (attempt) => {
+        if (attempt !== activeAttempt) return;
         try {
           if (!window.naver?.maps) throw new Error('NAVER_MAP_INIT_FAILED');
           map = new window.naver.maps.Map(document.getElementById('map'), {
@@ -122,15 +137,63 @@
             zoomControlOptions: { position: window.naver.maps.Position.TOP_RIGHT },
           });
           requestAnimationFrame(() => requestAnimationFrame(() => window.naver.maps.Event.trigger(map, 'resize')));
-          send('ready');
+          send('ready', { authMode: AUTH_PARAMS[authIndex] });
           render(lastRender);
         } catch (error) {
           console.error('[ROUTE map host init]', error);
-          send('init-error');
+          send('init-error', { authMode: AUTH_PARAMS[authIndex] });
         }
       };
-      script.onerror = () => send('script-error');
-      document.head.appendChild(script);
+
+      const loadSdk = () => {
+        const attempt = ++activeAttempt;
+        const authParam = AUTH_PARAMS[authIndex];
+        let rejected = false;
+
+        cleanupSdk();
+
+        window.navermap_authFailure = () => {
+          if (attempt !== activeAttempt || rejected) return;
+          rejected = true;
+          console.warn('[ROUTE NAVER map auth failed]', { authParam, origin: location.origin });
+
+          if (authIndex + 1 < AUTH_PARAMS.length) {
+            authIndex += 1;
+            window.setTimeout(loadSdk, 80);
+            return;
+          }
+
+          send('auth-error', { tried: AUTH_PARAMS.slice(), origin: location.origin });
+        };
+
+        const script = document.createElement('script');
+        activeScript = script;
+        script.async = true;
+        script.defer = true;
+        script.dataset.routeNaverAuth = authParam;
+        script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?${authParam}=${encodeURIComponent(CLIENT_ID)}`;
+        script.onload = () => {
+          if (attempt !== activeAttempt || rejected) return;
+          /* Authentication callbacks can fire immediately after script load. */
+          window.setTimeout(() => {
+            if (attempt !== activeAttempt || rejected) return;
+            initializeMap(attempt);
+          }, 60);
+        };
+        script.onerror = () => {
+          if (attempt !== activeAttempt || rejected) return;
+          rejected = true;
+          if (authIndex + 1 < AUTH_PARAMS.length) {
+            authIndex += 1;
+            window.setTimeout(loadSdk, 80);
+            return;
+          }
+          send('script-error', { tried: AUTH_PARAMS.slice() });
+        };
+        document.head.appendChild(script);
+      };
+
+      loadSdk();
     })();
   </script>
 </body>
