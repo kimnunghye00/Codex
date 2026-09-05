@@ -11,8 +11,7 @@
 .footprint-daybar input { min-width: 0; width: 100%; border: 0; outline: 0; color: var(--text-primary); background: transparent; font: inherit; font-size: 9px; font-weight: 700; text-align: center; }
 .location-map-card { position: relative; flex: 0 0 248px; min-height: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 22px; background: #eef0f5; box-shadow: 0 8px 24px #30305a0a; }
 .location-real-map { position: absolute; inset: 0; width: 100%; height: 100%; min-width: 100%; min-height: 100%; z-index: 1; }
-.location-real-map .leaflet-control-attribution { font-size: 7px; }
-.location-real-map .leaflet-control-zoom a { color: #555465; }
+.route-map-frame { display: block; border: 0; background: #eef0f5; }
 .location-map-status { position: absolute; z-index: 500; inset: 50% auto auto 50%; min-width: 210px; max-width: calc(100% - 36px); display: flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 12px; transform: translate(-50%, -50%); border: 1px solid #ffffffcc; border-radius: 14px; color: #636271; background: #fffffff0; box-shadow: 0 7px 22px #25253618; backdrop-filter: blur(10px); font-size: 9px; text-align: center; }
 .location-map-status svg { flex: 0 0 auto; color: var(--primary); }
 .location-map-status.failed { width: min(330px, calc(100% - 28px)); min-width: 0; flex-wrap: wrap; padding: 12px 14px; }
