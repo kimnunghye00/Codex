@@ -20,7 +20,6 @@ service firebase.storage {
       allow read: if memberOf(coupleId);
       allow create, update: if memberOf(coupleId)
         && request.auth.uid == ownerUid
-        && request.resource.size < 10 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
       allow delete: if memberOf(coupleId) && request.auth.uid == ownerUid;
     }
