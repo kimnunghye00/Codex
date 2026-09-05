@@ -1,4 +1,5 @@
 import './route-appearance-stability-v17.css';
+import './route-theme-preview-stability-v18.css';
 
 type AppIconId = 'route' | 'heart' | 'night' | 'cream';
 
