@@ -2,7 +2,7 @@ import { CalendarDays, ChevronRight, Crown, GripVertical, Heart, MapPin, Phone, 
 import { useEffect, useMemo, useState } from 'react';
 import type React from 'react';
 import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
-import type { Memory } from '../../types';
+import type { Memory, MemoryDraft } from '../../types';
 import { auth, db } from '../../lib/firebase';
 import { getRealCoupleConnection, type RealCoupleConnection } from '../../lib/coupleConnection';
 import { subscribeCoupleShared } from '../../lib/coupleShared';
@@ -67,7 +67,16 @@ function anniversaryPlanKey(item: AnniversaryItem) {
   return `${item.title}:${item.date}`;
 }
 
-export function MemoriesPage({ Header, memories, setMemories, initialMemoryId, onClearInitial }: { Header: ({ title }: { title?: string }) => React.ReactNode; memories: Memory[]; setMemories: React.Dispatch<React.SetStateAction<Memory[]>>; initialMemoryId?: number; onClearInitial: () => void }) {
+export function MemoriesPage({ Header, memories, setMemories, initialMemoryId, initialDraft, onClearInitial, onClearInitialDraft, onOpenLocation }: {
+  Header: ({ title }: { title?: string }) => React.ReactNode;
+  memories: Memory[];
+  setMemories: React.Dispatch<React.SetStateAction<Memory[]>>;
+  initialMemoryId?: number;
+  initialDraft?: MemoryDraft;
+  onClearInitial: () => void;
+  onClearInitialDraft: () => void;
+  onOpenLocation?: (place: string) => void;
+}) {
   const uid = auth.currentUser?.uid ?? '';
   const profile = uid ? loadProfile(uid) : null;
   const [connection, setConnection] = useState<RealCoupleConnection | null>(null);
@@ -97,11 +106,17 @@ export function MemoriesPage({ Header, memories, setMemories, initialMemoryId, o
   useEffect(() => { try { localStorage.setItem(`route-hub-tabs:${uid}`, JSON.stringify(tabOrder)); } catch {} }, [tabOrder, uid]);
   useEffect(() => { try { localStorage.setItem(`route-date-plans:${uid}`, JSON.stringify(datePlans)); } catch { setDateFeedback('기기 저장 공간을 확인해 주세요.'); } }, [datePlans, uid]);
   useEffect(() => { try { localStorage.setItem(`route-local-schedules:${uid}`, JSON.stringify(localSchedules)); } catch { setScheduleFeedback('기기 저장 공간을 확인해 주세요.'); } }, [localSchedules, uid]);
+  useEffect(() => {
+    if (!initialDraft) return;
+    setSelected(undefined);
+    setActiveTab('album');
+    setEditing(null);
+  }, [initialDraft]);
 
   useEffect(() => {
     const handleBack = (event: Event) => {
       if (event.defaultPrevented) return;
-      if (editing !== undefined) { event.preventDefault(); setEditing(undefined); return; }
+      if (editing !== undefined) { event.preventDefault(); setEditing(undefined); if (initialDraft) onClearInitialDraft(); return; }
       if (scheduleOpen) { event.preventDefault(); setScheduleOpen(false); return; }
       if (dateOpen) { event.preventDefault(); setDateOpen(false); setDateSourceKey(undefined); return; }
       if (orderOpen) { event.preventDefault(); setOrderOpen(false); return; }
@@ -109,7 +124,7 @@ export function MemoriesPage({ Header, memories, setMemories, initialMemoryId, o
     };
     window.addEventListener('route-native-back', handleBack);
     return () => window.removeEventListener('route-native-back', handleBack);
-  }, [dateOpen, editing, onClearInitial, orderOpen, scheduleOpen, selected]);
+  }, [dateOpen, editing, initialDraft, onClearInitial, onClearInitialDraft, orderOpen, scheduleOpen, selected]);
 
   const years = useMemo(() => [...new Set(memories.map((memory) => memory.date.slice(0, 4)))].sort().reverse(), [memories]);
   const shown = memories.filter((memory) => filter === 'all' || filter === 'favorite' && memory.favorite || memory.date.startsWith(filter));
@@ -210,8 +225,6 @@ export function MemoriesPage({ Header, memories, setMemories, initialMemoryId, o
     const localSchedule: Schedule = { id: localScheduleId, ...schedulePayload, localOnly: true };
     const plan: DatePlan = { ...dateForm, id, title, location: dateForm.location.trim(), memo: dateForm.memo.trim(), scheduleId: localScheduleId, anniversaryKey: dateSourceKey };
 
-    // Save both pieces locally first. Even if the app closes while Firestore is
-    // syncing, the date and its linked calendar item survive together.
     setDatePlans((items) => [...items, plan]);
     setLocalSchedules((items) => [...items.filter((item) => item.id !== localScheduleId), localSchedule]);
     setDateOpen(false);
@@ -269,8 +282,8 @@ export function MemoriesPage({ Header, memories, setMemories, initialMemoryId, o
       {sameDayMemories.length > 0 && <section className="last-year-card"><div><Sparkles size={16} /><span><b>작년 우리</b><small>같은 날짜의 추억을 다시 만나보세요</small></span></div><button onClick={() => setSelected(sameDayMemories[0].id)}>바로 보기 <ChevronRight size={15} /></button></section>}
       <div className="memory-filters"><button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>전체</button><button className={filter === 'favorite' ? 'active' : ''} onClick={() => setFilter('favorite')}>즐겨찾기</button>{years.map((year) => <button key={year} className={filter === year ? 'active' : ''} onClick={() => setFilter(year)}>{year}</button>)}</div>
       <div className="memory-list">{shown.map((memory) => <MemoryCard key={memory.id} memory={memory} onOpen={() => setSelected(memory.id)} onFavorite={() => favorite(memory.id)} />)}{!shown.length && <div className="memory-empty">아직 남긴 추억이 없어요.</div>}</div>
-      <button className="fab" onClick={() => setEditing(null)}><Plus size={18} />추억 추가</button>
-      {editing !== undefined && <MemoryForm memory={editing ?? undefined} onClose={() => setEditing(undefined)} onSave={(memory) => { update(memory); setEditing(undefined); setSelected(memory.id); }} />}
+      <button className="fab" onClick={() => { onClearInitialDraft(); setEditing(null); }}><Plus size={18} />추억 추가</button>
+      {editing !== undefined && <MemoryForm memory={editing ?? undefined} draft={editing === null ? initialDraft : undefined} onClose={() => { setEditing(undefined); if (initialDraft) onClearInitialDraft(); }} onSave={(memory) => { update(memory); setEditing(undefined); onClearInitialDraft(); setSelected(memory.id); }} />}
     </>}
 
     {activeTab === 'anniversary' && <div className="hub-stack"><section className="hub-hero anniversary-hero"><Heart fill="currentColor" /><div><small>OUR DAYS</small><h2>함께 기다리는 날</h2><p>기념일에서 바로 데이트를 만들면 우리 일정에도 자동으로 이어져요.</p></div></section>{anniversaries.map((item) => { const left = dayDiff(item.date); const alert = [200,100,30,7,1].includes(left); const planned = datePlans.some((plan) => plan.anniversaryKey === anniversaryPlanKey(item)); return <article className="anniversary-row" key={`${item.title}-${item.date}`}><span>{item.icon}</span><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')}</small>{alert && !item.special && <em>D-{left} 알림 시점이에요</em>}</div><div className="anniversary-flow-actions"><strong>{dayBadge(item.date)}</strong><button type="button" className={planned ? 'planned' : ''} onClick={() => openDatePlan(item)}><Plus size={12} />{planned ? '계획 보기' : '데이트'}</button></div></article>; })}</div>}
@@ -279,9 +292,9 @@ export function MemoriesPage({ Header, memories, setMemories, initialMemoryId, o
 
     {activeTab === 'tier' && <div className="hub-stack"><section className="hub-hero tier-hero"><Trophy /><div><small>COUPLE TIER</small><h2>이번 달 커플 랭킹</h2><p>공개 참여를 선택한 커플끼리 재미로 경쟁해요.</p></div></section><div className="tier-card"><span>🥇</span><div><b>달달커플</b><small>이번 달 데이트 기록</small></div><strong>24회</strong></div><div className="tier-card"><span>🥈</span><div><b>콩떡커플</b><small>이번 달 데이트 기록</small></div><strong>21회</strong></div><div className="tier-card"><span>🥉</span><div><b>{realName(profile,'나')} ❤️ {realName(partner,'상대방')}</b><small>내 커플 · 샘플 순위</small></div><strong>{Math.max(0, Math.min(20, datePlans.length))}회</strong></div><p className="hub-note">실제 전체 사용자 순위는 서버 집계와 공개 동의 기능을 연결한 뒤 활성화돼요.</p></div>}
 
-    {activeTab === 'schedule' && <div className="hub-stack"><div className="hub-section-head"><div><small>SHARED CALENDAR</small><h2>우리 일정</h2></div><button type="button" onClick={() => { setScheduleFeedback(''); setScheduleOpen(true); }}><Plus size={15} />일정 추가</button></div>{scheduleFeedback && <p className="hub-note">{scheduleFeedback}</p>}{visibleSchedules.map((item) => <article key={item.id} className="hub-list-row"><CalendarDays size={17} /><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')} · {item.startTime}{item.location ? ` · ${item.location}` : ''}{item.localOnly ? ' · 기기 저장' : ''}</small></div><span>{item.source === 'date-plan' ? '데이트' : item.type === 'couple' ? '우리' : item.ownerId === uid ? '나' : realName(partner, '상대')}</span></article>)}{!visibleSchedules.length && <div className="memory-empty">등록된 일정이 없어요.</div>}</div>}
+    {activeTab === 'schedule' && <div className="hub-stack"><div className="hub-section-head"><div><small>SHARED CALENDAR</small><h2>우리 일정</h2></div><button type="button" onClick={() => { setScheduleFeedback(''); setScheduleOpen(true); }}><Plus size={15} />일정 추가</button></div>{scheduleFeedback && <p className="hub-note">{scheduleFeedback}</p>}{visibleSchedules.map((item) => <article key={item.id} className="hub-list-row"><CalendarDays size={17} /><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')} · {item.startTime}{item.location ? ` · ${item.location}` : ''}{item.localOnly ? ' · 기기 저장' : ''}</small></div><div className="schedule-flow-actions"><span>{item.source === 'date-plan' ? '데이트' : item.type === 'couple' ? '우리' : item.ownerId === uid ? '나' : realName(partner, '상대')}</span>{item.location && <button type="button" onClick={() => onOpenLocation?.(item.location!)}><MapPin size={12} />지도</button>}</div></article>)}{!visibleSchedules.length && <div className="memory-empty">등록된 일정이 없어요.</div>}</div>}
 
-    {activeTab === 'date' && <div className="hub-stack"><div className="hub-section-head"><div><small>DATE PLAN</small><h2>데이트</h2></div><button type="button" onClick={() => openDatePlan()}><Plus size={15} />데이트 추가</button></div>{dateFeedback && <p className="hub-note date-flow-feedback">{dateFeedback}</p>}{[...datePlans].sort((a,b) => a.date.localeCompare(b.date)).map((item) => <article key={item.id} className="hub-list-row date-row"><Heart size={17} /><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')} · {item.time}{item.location ? ` · ${item.location}` : ''}</small>{item.memo && <em>{item.memo}</em>}</div><div className="date-flow-actions">{item.scheduleId && <span><CalendarDays size={11} />일정 연결</span>}<button type="button" onClick={() => void deleteDatePlan(item)}>삭제</button></div></article>)}{!datePlans.length && <div className="memory-empty">다음 데이트를 계획해보세요 ❤️</div>}</div>}
+    {activeTab === 'date' && <div className="hub-stack"><div className="hub-section-head"><div><small>DATE PLAN</small><h2>데이트</h2></div><button type="button" onClick={() => openDatePlan()}><Plus size={15} />데이트 추가</button></div>{dateFeedback && <p className="hub-note date-flow-feedback">{dateFeedback}</p>}{[...datePlans].sort((a,b) => a.date.localeCompare(b.date)).map((item) => <article key={item.id} className="hub-list-row date-row"><Heart size={17} /><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')} · {item.time}{item.location ? ` · ${item.location}` : ''}</small>{item.memo && <em>{item.memo}</em>}</div><div className="date-flow-actions">{item.scheduleId && <span><CalendarDays size={11} />일정 연결</span>}{item.location && <button type="button" className="map-link" onClick={() => onOpenLocation?.(item.location)}><MapPin size={11} />지도</button>}<button type="button" onClick={() => void deleteDatePlan(item)}>삭제</button></div></article>)}{!datePlans.length && <div className="memory-empty">다음 데이트를 계획해보세요 ❤️</div>}</div>}
 
     {orderOpen && <div className="hub-order-backdrop"><section className="hub-order-panel"><header><div><small>앨범 구성</small><h2>탭 순서 편집</h2></div><button onClick={() => setOrderOpen(false)}><X size={18} /></button></header>{tabOrder.map((tab, index) => <div className="hub-order-row" key={tab}><GripVertical size={16} /><b>{TAB_LABEL[tab]}</b><span><button disabled={index === 0} onClick={() => moveTab(tab,-1)}>↑</button><button disabled={index === tabOrder.length-1} onClick={() => moveTab(tab,1)}>↓</button></span></div>)}</section></div>}
 
