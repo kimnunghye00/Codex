@@ -6,6 +6,11 @@ export type UploadedChatMedia = {
   paths: string[];
 };
 
+type UploadChatMediaOptions = {
+  startIndex?: number;
+  onUploaded?: (completedInBatch: number) => void;
+};
+
 function dataUrlMime(dataUrl: string) {
   return /^data:([^;,]+)[;,]/.exec(dataUrl)?.[1] || 'image/jpeg';
 }
@@ -27,8 +32,10 @@ export async function uploadChatMedia(
   ownerUid: string,
   messageId: number,
   dataUrls: string[],
+  options: UploadChatMediaOptions = {},
 ): Promise<UploadedChatMedia> {
   const uploaded: Array<{ path: string; url: string }> = [];
+  const startIndex = Math.max(0, options.startIndex ?? 0);
 
   try {
     for (let index = 0; index < dataUrls.length; index += 1) {
@@ -36,7 +43,8 @@ export async function uploadChatMedia(
       const mime = dataUrlMime(dataUrl);
       if (!mime.startsWith('image/')) throw new Error('unsupported-chat-media');
 
-      const fileName = `${String(index + 1).padStart(2, '0')}.${extensionForMime(mime)}`;
+      const absoluteIndex = startIndex + index;
+      const fileName = `${String(absoluteIndex + 1).padStart(3, '0')}.${extensionForMime(mime)}`;
       const path = `couples/${coupleId}/chatMedia/${ownerUid}/${messageId}/${fileName}`;
       const storageRef = ref(storage, path);
 
@@ -46,11 +54,13 @@ export async function uploadChatMedia(
           coupleId,
           ownerUid,
           messageId: String(messageId),
+          mediaIndex: String(absoluteIndex),
         },
       });
 
       const url = await getDownloadURL(storageRef);
       uploaded.push({ path, url });
+      options.onUploaded?.(index + 1);
     }
 
     return {
