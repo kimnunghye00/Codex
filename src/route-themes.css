@@ -20,6 +20,11 @@
 :root[data-route-theme] .home-time-card{background:linear-gradient(145deg,var(--route-accent-soft),var(--surface) 70%)}
 :root[data-route-theme='midnight-walk'] input,:root[data-route-theme='midnight-walk'] textarea,:root[data-route-theme='neon-night'] input,:root[data-route-theme='neon-night'] textarea{color:var(--text-primary);background:var(--surface);border-color:var(--border)}
 
+/* Keep both people and the relationship mark inside the active palette. */
+:root[data-route-theme] .home-profile-avatar.partner{background:linear-gradient(145deg,var(--primary-light),var(--route-accent));color:#fff}
+:root[data-route-theme] .home-profile-heart{color:var(--emotion)}
+:root[data-route-theme] .schedule-dot.partner{background:var(--primary-light)}
+
 .route-theme-legacy-hidden{display:none!important}body.route-theme-sheet-open{overflow:hidden}
 .route-theme-overlay{position:fixed;z-index:2300;inset:0;display:flex;align-items:flex-end;justify-content:center;padding:14px 12px max(14px,env(safe-area-inset-bottom));background:#11182778}
 .route-theme-sheet{width:min(456px,100%);max-height:88vh;overflow:auto;padding:10px 14px 18px;border:1px solid var(--border);border-radius:26px 26px 20px 20px;background:var(--surface);color:var(--text-primary)}
