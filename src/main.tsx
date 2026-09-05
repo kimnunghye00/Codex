@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import Root from './Root';
 import { AppCrashBoundary, installGlobalCrashDiagnostics } from './AppCrashBoundary';
 import { initializeNativeApp } from './lib/native';
+import { preparePersistentBackup, startPersistentBackup } from './lib/persistentBackup';
 import { initializeRoutePwa } from './pwa';
 import './styles.css';
 import './auth-onboarding.css';
@@ -39,14 +40,23 @@ import './settings-hub';
 import './mobile-polish-v3';
 import './more-enhance';
 
-installGlobalCrashDiagnostics();
-void initializeNativeApp();
-initializeRoutePwa();
+async function bootstrap() {
+  installGlobalCrashDiagnostics();
+  void initializeNativeApp();
+  initializeRoutePwa();
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <AppCrashBoundary>
-      <Root />
-    </AppCrashBoundary>
-  </StrictMode>,
-);
+  // Restore durable Firebase records before React reads local caches.
+  // This is what makes reinstalling the app recover recent ROUTE data.
+  await preparePersistentBackup();
+  startPersistentBackup();
+
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <AppCrashBoundary>
+        <Root />
+      </AppCrashBoundary>
+    </StrictMode>,
+  );
+}
+
+void bootstrap();
