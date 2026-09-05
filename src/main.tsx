@@ -23,15 +23,18 @@ import './more.css';
 import './more-services.css';
 import './route-brand.css';
 import './route-themes.css';
-import './route-themes';
 import './couple-connect.css';
 import './home-map-overlay.css';
-import './home-map-overlay';
 import './close-standard.css';
 import './mobile-apk-fixes.css';
 import './mobile-polish-v3.css';
 import './web-desktop.css';
 import './crash-recovery.css';
+// Must be the final stylesheet: it protects text/icon/input contrast from later feature CSS.
+import './route-theme-accessibility.css';
+
+import './route-themes';
+import './home-map-overlay';
 import './native-back-ui';
 import './app-icon-native';
 import './profile-enhance';
