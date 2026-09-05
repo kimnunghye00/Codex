@@ -46,8 +46,6 @@ import './route-final-qa-v8.css';
 import './route-feature-flow-v9.css';
 // Place-centered story view connects visits, memories, dates and schedules.
 import './route-place-timeline-v10.css';
-// Desktop web layout is intentionally last so legacy/mobile rules cannot override
-// the 60/40 home composition or compact desktop navigation dock.
 import './web-desktop.css';
 
 import './route-themes';
@@ -63,6 +61,14 @@ import './more-enhance';
 async function bootstrap() {
   installGlobalCrashDiagnostics();
   installPersistentStorageObserver();
+
+  // Load the desktop web override as a separate CSS chunk before React renders.
+  // Dynamic loading makes this stylesheet authoritative regardless of static
+  // CSS bundling order and keeps the mobile layout untouched.
+  if (window.matchMedia('(min-width: 900px)').matches) {
+    await import('./route-web-home-v11.css');
+  }
+
   void initializeNativeApp();
   initializeRoutePwa();
 
