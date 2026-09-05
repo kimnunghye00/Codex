@@ -21,6 +21,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       FIREBASE_TOKEN: ${{ secrets.ROUTE_FIREBASE_TOKEN }}
     steps:
@@ -38,6 +39,36 @@ jobs:
 
       - name: Build web app
         run: npm run build
+
+      - name: Verify PWA files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f dist/manifest.webmanifest
+          test -f dist/sw.js
+          test -f dist/route-icon.svg
+          grep -q 'manifest.webmanifest' dist/index.html
+
+      - name: Verify critical release guardrails
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ROUTE_RELEASE_GUARDRAILS.md
+          test -f src/AppCrashBoundary.tsx
+          test -f src/lib/persistentBackup.ts
+          test -f public/naver-map-host.html
+          test -f firestore.rules
+          test -f storage.rules
+          test -f firebase.json
+          test -f public/sw.js
+          grep -q "AppCrashBoundary" src/main.tsx
+          grep -q "preparePersistentBackup" src/main.tsx
+          grep -q "meluni-f4e00.web.app" src/components/location/LocationPage.tsx
+          grep -q "ncpKeyId" public/naver-map-host.html
+          grep -q '"storage"' firebase.json
+          grep -q "backups" firestore.rules
+          grep -q "backupMedia" storage.rules
+          echo "ROUTE web checks passed."
 
       - name: Deploy to Firebase Hosting
         if: ${{ env.FIREBASE_TOKEN != '' }}
