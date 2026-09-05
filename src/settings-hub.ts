@@ -1,3 +1,5 @@
+import { installRouteWebApp, isStandaloneWebApp } from './pwa';
+
 let bypassSettingsHub = false;
 
 function clickByText(selector: string, text: string) {
@@ -33,6 +35,15 @@ function openChatBackup() {
     menu?.click();
     window.setTimeout(() => clickByText('.chat-tools-menu button', '기능 / 옵션'), 80);
   }, 100);
+}
+
+async function installWindowsApp() {
+  const result = await installRouteWebApp();
+  if (result === 'accepted') return;
+  if (result === 'installed') return alert('ROUTE가 이미 Windows 앱으로 설치되어 있어요.');
+  if (result === 'dismissed') return;
+  if (result === 'native') return alert('Android/iOS 앱에서는 이 메뉴가 필요하지 않아요.');
+  alert('Chrome 또는 Edge 오른쪽 위의 앱 설치 아이콘을 누르거나, 메뉴에서 “ROUTE 설치”를 선택해 주세요.');
 }
 
 function settingRow(icon: string, title: string, description: string, action: () => void, badge?: string) {
@@ -113,6 +124,10 @@ function openSettingsHub() {
       settingRow('📱', '앱 아이콘', '홈 화면 ROUTE 아이콘 변경', () => navigateMoreAndOpen('앱 아이콘')),
       toggleRow('🌙', '시스템 다크 모드 연동', '기기 화면 모드를 참고해 표시', 'route-setting-system-dark', false),
     ]),
+    section('앱 및 설치', [
+      settingRow('🖥️', 'Windows 앱 설치', isStandaloneWebApp() ? '이 PC에 ROUTE가 설치되어 있어요' : '웹 버전을 Windows 앱처럼 설치', () => void installWindowsApp(), isStandaloneWebApp() ? '설치됨' : 'WEB'),
+      settingRow('🌐', '웹 버전', '브라우저에서도 같은 계정과 데이터를 사용', () => alert(`현재 ROUTE 웹 주소\n${window.location.origin}${window.location.pathname}`)),
+    ]),
     section('개인 / 보안', [
       toggleRow('🔒', '앱 잠금', 'ROUTE 실행 시 잠금 사용', 'route-setting-app-lock', false),
       settingRow('📍', '위치 및 발자취', '위치 공유와 발자취 설정 확인', () => {
@@ -121,7 +136,7 @@ function openSettingsHub() {
       }),
     ]),
     section('앱 정보', [
-      settingRow('ⓘ', 'ROUTE 정보', '버전, 이용 안내 및 업데이트', () => alert('ROUTE 테스트 버전\n업데이트 APK는 기존 앱 위에 설치할 수 있도록 동일 서명으로 빌드됩니다.')),
+      settingRow('ⓘ', 'ROUTE 정보', 'Android, iOS, Windows, Web에서 같은 ROUTE 사용', () => alert('ROUTE 멀티플랫폼 테스트 버전\nAndroid는 APK 업데이트, Windows는 웹 앱 설치, Web은 브라우저에서 바로 사용할 수 있어요.')),
       settingRow('❓', '도움말', '자주 묻는 질문과 문제 해결', () => alert('문제가 생기면 오류 화면과 함께 알려주세요. ROUTE 기능별로 확인할 수 있어요.')),
     ]),
   );
