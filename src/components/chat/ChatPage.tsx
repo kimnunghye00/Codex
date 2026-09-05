@@ -8,6 +8,7 @@ import type { RealCoupleConnection } from '../../lib/coupleConnection';
 import { sendCoupleMessage, subscribeCoupleMessages } from '../../lib/chatRealtime';
 import type { Message } from '../../types';
 import { messageDateLabel } from '../../utils/dates';
+import { isChatMediaMessage, loadChatMemoryMessageIds, toggleChatMessageMemory } from '../../utils/featureFlow';
 import { ChatBubble } from './ChatBubble';
 import { ChatComposer } from './ChatComposer';
 import { ChatToolsPanel, loadChatPreferences, saveChatPreferences, type ChatPreferences } from './ChatToolsPanel';
@@ -64,6 +65,8 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   const [aiTyping, setAiTyping] = useState(false);
   const [partnerTyping, setPartnerTyping] = useState(false);
   const [syncError, setSyncError] = useState('');
+  const [flowNotice, setFlowNotice] = useState('');
+  const [savedMediaIds, setSavedMediaIds] = useState<Set<number>>(() => loadChatMemoryMessageIds());
   const [toolsOpen, setToolsOpen] = useState(false);
   const [preferences, setPreferences] = useState(() => loadChatPreferences(currentUid || 'guest'));
   const [schedules, setSchedules] = useState<ChatSchedule[]>([]);
@@ -76,6 +79,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   const bottomRef = useRef<HTMLDivElement>(null);
   const aiTimerRef = useRef<number | undefined>(undefined);
   const typingTimerRef = useRef<number | undefined>(undefined);
+  const noticeTimerRef = useRef<number | undefined>(undefined);
   const videoRef = useRef<HTMLVideoElement>(null);
   const byId = useMemo(() => new Map(messages.map((message) => [message.id, message])), [messages]);
   const aiPartner = currentUid ? loadLocalAiPartner(currentUid) : null;
@@ -87,6 +91,15 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   useEffect(() => { if (currentUid) setPreferences(loadChatPreferences(currentUid)); }, [currentUid]);
   useEffect(() => { if (currentUid) saveChatPreferences(currentUid, preferences); }, [currentUid, preferences]);
   useEffect(() => { localStorage.setItem(`route-scheduled-chat:${currentUid}`, JSON.stringify(scheduledDrafts)); }, [scheduledDrafts, currentUid]);
+  useEffect(() => {
+    const refreshSavedMedia = () => setSavedMediaIds(loadChatMemoryMessageIds());
+    window.addEventListener('route-memories-local-change', refreshSavedMedia);
+    window.addEventListener('route-memories-remote-change', refreshSavedMedia);
+    return () => {
+      window.removeEventListener('route-memories-local-change', refreshSavedMedia);
+      window.removeEventListener('route-memories-remote-change', refreshSavedMedia);
+    };
+  }, []);
   useEffect(() => {
     if (!connection || !currentUid) return;
     setSyncError('');
@@ -112,8 +125,19 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     typingTimerRef.current = window.setTimeout(() => { void setDoc(ref, { typing: false, updatedAt: Date.now() }, { merge: true }).catch(() => undefined); }, 4500);
   }, [draft, connection?.coupleId, currentUid]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages.length, aiTyping, partnerTyping]);
-  useEffect(() => () => { if (aiTimerRef.current) window.clearTimeout(aiTimerRef.current); if (typingTimerRef.current) window.clearTimeout(typingTimerRef.current); mediaStream?.getTracks().forEach((track) => track.stop()); }, [mediaStream]);
+  useEffect(() => () => {
+    if (aiTimerRef.current) window.clearTimeout(aiTimerRef.current);
+    if (typingTimerRef.current) window.clearTimeout(typingTimerRef.current);
+    if (noticeTimerRef.current) window.clearTimeout(noticeTimerRef.current);
+    mediaStream?.getTracks().forEach((track) => track.stop());
+  }, [mediaStream]);
   useEffect(() => { if (videoRef.current && mediaStream) videoRef.current.srcObject = mediaStream; }, [mediaStream, callMode]);
+
+  const showFlowNotice = (text: string) => {
+    setFlowNotice(text);
+    if (noticeTimerRef.current) window.clearTimeout(noticeTimerRef.current);
+    noticeTimerRef.current = window.setTimeout(() => setFlowNotice(''), 2600);
+  };
 
   const queueAiReply = (text: string, replyTarget?: number) => {
     if (!usingAiPartner) return;
@@ -187,16 +211,30 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
 
   const react = (id: number, emoji: string) => setMessages((items) => items.map((message) => message.id !== id ? message : { ...message, reactions: message.reactions?.some((reaction) => reaction.by === 'me' && reaction.emoji === emoji) ? message.reactions.filter((reaction) => !(reaction.by === 'me' && reaction.emoji === emoji)) : [...(message.reactions ?? []).filter((reaction) => reaction.by !== 'me'), { emoji, by: 'me' }] }));
   const jump = (id: number) => { document.getElementById(`message-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); setHighlighted(id); window.setTimeout(() => setHighlighted(undefined), 1400); };
+  const saveMessage = (message: Message) => {
+    if (isChatMediaMessage(message)) {
+      const result = toggleChatMessageMemory(message, partnerName);
+      setSavedMediaIds(loadChatMemoryMessageIds());
+      setMessages((items) => items.map((item) => item.id === message.id ? { ...item, saved: result.saved } : item));
+      showFlowNotice(result.saved ? '사진을 추억 앨범에 저장했어요.' : '추억 앨범에서 사진을 제거했어요.');
+    } else {
+      setMessages((items) => items.map((item) => item.id === message.id ? { ...item, saved: !item.saved } : item));
+      showFlowNotice(message.saved ? '메시지 저장을 취소했어요.' : '메시지를 저장했어요.');
+    }
+    setActive(undefined);
+  };
 
   return <div className={`page full-page chat-page chat-bg-${preferences.background} chat-font-${preferences.fontSize}`}>
     <Header title="대화" />
     <div className="chat-profile"><div className="avatar large">{usingAiPartner ? <Bot size={22} /> : partnerInitial}</div><div><b>{partnerName}</b><span className={aiTyping || partnerTyping ? 'chat-status typing' : 'chat-status'}><i /> {aiTyping || partnerTyping ? '입력 중...' : connection ? '실시간 연결됨' : usingAiPartner ? 'AI 테스트 파트너 · 연결됨' : '상대방 연결 대기'}</span></div><div className="chat-call-actions"><button aria-label="음성 통화" onClick={() => void startMedia('voice')}><Phone size={17} /></button><button aria-label="영상 통화" onClick={() => void startMedia('video')}><Video size={17} /></button><button aria-label="화면 공유" onClick={() => void startMedia('screen')}><MonitorUp size={17} /></button><button aria-label="대화 메뉴" onClick={() => setToolsOpen(true)}><MoreHorizontal /></button></div></div>
     {nearestSchedule && <div className="chat-next-schedule"><CalendarClock size={16} /><div><small>가장 가까운 일정</small><b>{nearestSchedule.title}</b><span>{nearestSchedule.date.replaceAll('-', '.')} · {nearestSchedule.startTime}</span></div></div>}
     {syncError && <p className="chat-sync-error" role="alert">{syncError}</p>}
+    {flowNotice && <p className="chat-flow-notice" role="status">{flowNotice}</p>}
     <div className="messages" onClick={() => active && setActive(undefined)}>{messages.map((message, index) => {
       const date = new Date(message.timestamp).toDateString();
       const previousDate = index > 0 ? new Date(messages[index - 1].timestamp).toDateString() : '';
-      return <div key={message.id}>{date !== previousDate && <div className="date-chip">{messageDateLabel(message.timestamp)}</div>}<ChatBubble message={message} reply={message.replyTo ? byId.get(message.replyTo) : undefined} partnerName={partnerName} partnerInitial={partnerInitial} active={active === message.id} highlighted={highlighted === message.id} onAction={() => setActive(active === message.id ? undefined : message.id)} onReact={(emoji) => react(message.id, emoji)} onReply={() => { setReplyTo(message.id); setActive(undefined); }} onSave={() => { setMessages((items) => items.map((item) => item.id === message.id ? { ...item, saved: !item.saved } : item)); setActive(undefined); }} onImage={setLightbox} onJump={jump} /></div>;
+      const displayedMessage = isChatMediaMessage(message) ? { ...message, saved: savedMediaIds.has(message.id) } : message;
+      return <div key={message.id}>{date !== previousDate && <div className="date-chip">{messageDateLabel(message.timestamp)}</div>}<ChatBubble message={displayedMessage} reply={message.replyTo ? byId.get(message.replyTo) : undefined} partnerName={partnerName} partnerInitial={partnerInitial} active={active === message.id} highlighted={highlighted === message.id} onAction={() => setActive(active === message.id ? undefined : message.id)} onReact={(emoji) => react(message.id, emoji)} onReply={() => { setReplyTo(message.id); setActive(undefined); }} onSave={() => saveMessage(displayedMessage)} onImage={setLightbox} onJump={jump} /></div>;
     })}{aiTyping && <TypingIndicator ai initial={partnerInitial} />}{partnerTyping && !aiTyping && <TypingIndicator ai={false} initial={partnerInitial} heart />}<div ref={bottomRef} /></div>
     {scheduledDrafts.length > 0 && <div className="scheduled-strip"><CalendarClock size={14} /><span>예약 메시지 {scheduledDrafts.length}개</span><small>앱 실행 중 자동 전송</small></div>}
     <ChatComposer draft={draft} reply={replyTo ? byId.get(replyTo) : undefined} partnerName={partnerName} onDraft={setDraft} onSend={send} onImages={sendImages} onGif={sendGif} onQuick={sendText} onSchedule={() => setScheduleOpen(true)} onGift={() => setGiftOpen(true)} onCancelReply={() => setReplyTo(undefined)} />
