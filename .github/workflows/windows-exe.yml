@@ -42,6 +42,9 @@ jobs:
       - name: Verify ROUTE web app build
         run: npm run build
 
+      - name: Verify Electron main syntax
+        run: node --check electron/main.cjs
+
       - name: Install Electron packaging tools
         shell: pwsh
         run: npm install --no-save --package-lock=false electron@latest electron-builder@latest
@@ -51,6 +54,15 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npx electron-builder --win nsis --x64 --config electron-builder.yml --publish never
+
+      - name: Verify bundled ROUTE UI
+        shell: pwsh
+        run: |
+          $index = 'release/windows/win-unpacked/resources/dist/index.html'
+          if (-not (Test-Path $index)) { throw 'Bundled ROUTE UI was not included in the Windows app.' }
+          $assets = Get-ChildItem -Path 'release/windows/win-unpacked/resources/dist/assets' -File -ErrorAction SilentlyContinue
+          if (-not $assets -or $assets.Count -lt 1) { throw 'Bundled ROUTE UI assets were not included in the Windows app.' }
+          Write-Host "Bundled UI verified: $index / $($assets.Count) assets"
 
       - name: Verify installer
         shell: pwsh
