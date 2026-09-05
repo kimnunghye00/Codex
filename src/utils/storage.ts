@@ -1,4 +1,5 @@
 import type { Memory, Message } from '../types';
+import { signalPersistentStateChange } from './persistenceSignal';
 
 const MESSAGE_KEY = 'route.messages.v2';
 const MEMORY_KEY = 'route.memories.v2';
@@ -32,7 +33,7 @@ export function loadDeletedMemories(): MemoryDeletionMap {
 }
 
 export function saveDeletedMemories(value: MemoryDeletionMap) {
-  save(MEMORY_DELETED_KEY, value);
+  if (save(MEMORY_DELETED_KEY, value)) signalPersistentStateChange();
 }
 
 export function recordDeletedMemory(id: string | number) {
@@ -68,7 +69,9 @@ function reconcileDeletionMap(previous: Memory[], next: Memory[]) {
 
 // Real-couple testing starts with a clean slate. Old MELUNI/SAI demo keys are intentionally ignored.
 export const loadMessages = (_fallback: Message[]) => load<Message[]>(MESSAGE_KEY, []);
-export const saveMessages = (messages: Message[]) => { void save(MESSAGE_KEY, messages); };
+export const saveMessages = (messages: Message[]) => {
+  if (save(MESSAGE_KEY, messages)) signalPersistentStateChange();
+};
 export const loadMemories = (_fallback: Memory[]) => {
   const deleted = loadDeletedMemories();
   return load<Memory[]>(MEMORY_KEY, []).filter((memory) => !deleted[String(memory.id)]);
@@ -78,6 +81,7 @@ export const saveMemories = (memories: Memory[]) => {
   const deletionsChanged = reconcileDeletionMap(previous, memories);
   const memoriesChanged = save(MEMORY_KEY, memories);
   if (memoriesChanged || deletionsChanged) {
+    signalPersistentStateChange();
     window.dispatchEvent(new CustomEvent(MEMORY_CHANGE_EVENT, {
       detail: { deleted: deletionsChanged },
     }));
