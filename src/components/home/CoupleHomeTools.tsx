@@ -7,6 +7,7 @@ import { displayName, type UserProfile } from '../../utils/profile';
 
 type ScheduleType = 'personal' | 'couple';
 type ScheduleFilter = 'all' | 'couple' | 'mine' | 'partner';
+type CloudWriteState = 'confirmed' | 'queued' | 'failed';
 
 type Schedule = {
   id: string;
@@ -35,6 +36,7 @@ type Props = {
 const localKey = (uid: string) => `route-local-schedules:${uid}`;
 const appointmentKey = (uid: string) => `route-date-plans:${uid}`;
 const todayKey = () => new Date().toISOString().slice(0, 10);
+const CLOUD_ACK_WAIT_MS = 1200;
 
 function loadLocal(uid: string): Schedule[] {
   try { return JSON.parse(localStorage.getItem(localKey(uid)) || '[]') as Schedule[]; }
@@ -60,6 +62,22 @@ function saveAppointment(uid: string, schedule: Omit<Schedule, 'id'>) {
     };
     localStorage.setItem(appointmentKey(uid), JSON.stringify([...current, next]));
   } catch { /* local schedule remains the fallback */ }
+}
+
+async function observeCloudWrite<T>(write: Promise<T>): Promise<CloudWriteState> {
+  let timeout: number | undefined;
+  const tracked: Promise<CloudWriteState> = write
+    .then(() => 'confirmed' as CloudWriteState)
+    .catch((cause) => {
+      console.warn('[ROUTE schedule cloud save]', cause);
+      return 'failed' as CloudWriteState;
+    });
+  const delayed = new Promise<CloudWriteState>((resolve) => {
+    timeout = window.setTimeout(() => resolve('queued'), CLOUD_ACK_WAIT_MS);
+  });
+  const result = await Promise.race([tracked, delayed]);
+  if (timeout !== undefined) window.clearTimeout(timeout);
+  return result;
 }
 
 function avatar(profile: UserProfile | null, fallback: string) {
@@ -128,6 +146,7 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
       setError('제목, 날짜, 시작 시간을 입력해 주세요.');
       return;
     }
+    if (saving) return;
     setSaving(true);
     setError('');
     setNotice('');
@@ -146,23 +165,26 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
     persistLocal(payload);
     if (payload.type === 'couple') saveAppointment(uid, payload);
 
-    let cloudSaved = false;
+    let cloudState: CloudWriteState = connection?.coupleId ? 'queued' : 'failed';
     if (connection?.coupleId) {
-      try {
-        await addDoc(collection(db, 'couples', connection.coupleId, 'schedules'), {
-          ...payload,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-        cloudSaved = true;
-      } catch (cause) {
-        console.warn('[ROUTE schedule cloud save]', cause);
-      }
+      cloudState = await observeCloudWrite(addDoc(collection(db, 'couples', connection.coupleId, 'schedules'), {
+        ...payload,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }));
     }
 
     setNotice(payload.type === 'couple'
-      ? cloudSaved ? '약속을 저장했어요. 상대방과 약속 화면에 함께 반영돼요.' : '약속을 기기에 저장했어요. 연결이 정상화되면 다시 공유할 수 있어요.'
-      : cloudSaved ? '내 일정을 저장했어요.' : '내 일정을 기기에 저장했어요.');
+      ? cloudState === 'confirmed'
+        ? '약속을 저장했어요. 상대방과 약속 화면에 함께 반영돼요.'
+        : cloudState === 'queued'
+          ? '약속을 기기에 저장했어요. 연결이 돌아오면 상대방에게 자동으로 공유돼요.'
+          : '약속을 기기에 저장했어요. 공유에 문제가 있어 연결 상태를 확인해 주세요.'
+      : cloudState === 'confirmed'
+        ? '내 일정을 저장했어요.'
+        : cloudState === 'queued'
+          ? '내 일정을 기기에 저장했어요. 연결이 돌아오면 동기화돼요.'
+          : '내 일정을 기기에 저장했어요.');
     setForm({ title: '', date: todayKey(), startTime: '19:00', endTime: '', type: connection ? 'couple' : 'personal', memo: '', location: '' });
     setScheduleOpen(false);
     setSaving(false);

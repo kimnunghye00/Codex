@@ -9,17 +9,20 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
+    function memberOf(coupleId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/couples/$(coupleId))
+        && get(/databases/$(database)/documents/couples/$(coupleId)).data.memberUids.size() == 2
+        && request.auth.uid in get(/databases/$(database)/documents/couples/$(coupleId)).data.memberUids;
+    }
+
     function sharesCoupleWith(uid) {
       return signedIn()
         && exists(/databases/$(database)/documents/users/$(uid))
         && currentUser().data.coupleId != null
-        && get(/databases/$(database)/documents/users/$(uid)).data.coupleId == currentUser().data.coupleId;
-    }
-
-    function memberOf(coupleId) {
-      return signedIn()
-        && exists(/databases/$(database)/documents/couples/$(coupleId))
-        && request.auth.uid in get(/databases/$(database)/documents/couples/$(coupleId)).data.memberUids;
+        && get(/databases/$(database)/documents/users/$(uid)).data.coupleId == currentUser().data.coupleId
+        && memberOf(currentUser().data.coupleId)
+        && uid in get(/databases/$(database)/documents/couples/$(currentUser().data.coupleId)).data.memberUids;
     }
 
     match /users/{uid} {
@@ -72,7 +75,11 @@ service cloud.firestore {
         && request.resource.data.memberUids.size() == 2
         && request.auth.uid == request.resource.data.createdBy
         && request.auth.uid in request.resource.data.memberUids;
-      allow read, update: if memberOf(coupleId);
+      allow read: if memberOf(coupleId);
+      allow update: if memberOf(coupleId)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'id', 'memberUids', 'members', 'createdBy', 'testMode', 'createdAt'
+        ]);
       allow delete: if false;
 
       match /messages/{messageId} {

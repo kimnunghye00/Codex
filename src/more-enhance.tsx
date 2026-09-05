@@ -1,3 +1,4 @@
+import './appearance-stability';
 import { createRoot } from 'react-dom/client';
 import { MoreServices, applySavedRouteAppIcon } from './components/more/MoreServices';
 

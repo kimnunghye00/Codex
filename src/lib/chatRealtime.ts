@@ -1,4 +1,4 @@
-import { collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Message, Reaction } from '../types';
 
@@ -75,16 +75,34 @@ export async function sendCoupleMessage(coupleId: string, currentUid: string, me
   await setDoc(messageRef(coupleId, message.id), payload);
 }
 
+export async function toggleCoupleMessageReaction(
+  coupleId: string,
+  messageId: number,
+  currentUid: string,
+  emoji: string,
+) {
+  const ref = messageRef(coupleId, messageId);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) return;
+    const data = snapshot.data() as CloudMessage;
+    const reactions = data.reactions ?? [];
+    const alreadySelected = reactions.some((reaction) => reaction.uid === currentUid && reaction.emoji === emoji);
+    const next = reactions.filter((reaction) => reaction.uid !== currentUid);
+    if (!alreadySelected) next.push({ emoji, uid: currentUid });
+    transaction.update(ref, { reactions: next });
+  });
+}
+
 export async function setCoupleMessageReactions(
   coupleId: string,
   messageId: number,
   currentUid: string,
   reactions: Reaction[] | undefined,
 ) {
-  const cloudReactions: CloudReaction[] = (reactions ?? []).map((reaction) => ({
-    emoji: reaction.emoji,
-    uid: reaction.by === 'me' ? currentUid : `partner:${currentUid}`,
-  }));
+  const cloudReactions: CloudReaction[] = (reactions ?? [])
+    .filter((reaction) => reaction.by === 'me')
+    .map((reaction) => ({ emoji: reaction.emoji, uid: currentUid }));
   await updateDoc(messageRef(coupleId, messageId), { reactions: cloudReactions });
 }
 

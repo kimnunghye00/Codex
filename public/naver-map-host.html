@@ -6,29 +6,23 @@
   <title>ROUTE Map Host</title>
   <style>
     html,body,#map{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#eef0f5}
-    #diagnostic{position:absolute;left:10px;bottom:10px;z-index:9999;display:none;padding:7px 9px;border-radius:10px;background:#fffde;color:#6a4a3b;font:11px/1.35 system-ui,-apple-system,sans-serif;box-shadow:0 2px 10px #0002}
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div id="diagnostic"></div>
   <script>
     (() => {
-      /*
-       * This project originally used NAVER Cloud's legacy Maps application.
-       * NAVER later changed JavaScript authentication from ncpClientId to
-       * ncpKeyId. ROUTE accepts either so the fixed host keeps working during
-       * the migration and across old/new NAVER Cloud applications.
-       */
+      // NAVER's current Maps JavaScript API uses ncpKeyId for newly issued Maps applications.
+      // Keep the map on this fixed Firebase Hosting origin so Codespaces/APK origins never need
+      // to be added repeatedly to the NAVER Cloud Maps application.
       const CLIENT_ID = 'z3njcg8upv';
-      const AUTH_PARAMS = ['ncpKeyId', 'ncpClientId'];
-      let authIndex = 0;
-      let activeAttempt = 0;
-      let activeScript = null;
+      const SDK_URL = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(CLIENT_ID)}&callback=__routeNaverMapReady`;
       let map;
       let overlays = [];
       let focusOverlay = null;
       let focusPopup = null;
+      let initialized = false;
+      let authFailed = false;
       let lastRender = { visits: [], mode: 'map' };
 
       const send = (type, detail = {}) => {
@@ -77,7 +71,8 @@
         naver.maps.Event.trigger(map, 'resize');
         clearOverlays();
 
-        if (!lastRender.visits.length) {
+        const validVisits = lastRender.visits.filter((visit) => Number.isFinite(Number(visit.latitude)) && Number.isFinite(Number(visit.longitude)));
+        if (!validVisits.length) {
           if (!focusOverlay) {
             map.setCenter(new naver.maps.LatLng(37.5666103, 126.9783882));
             map.setZoom(15);
@@ -85,10 +80,10 @@
           return;
         }
 
-        const validVisits = lastRender.visits.filter((visit) => Number.isFinite(Number(visit.latitude)) && Number.isFinite(Number(visit.longitude)));
         const points = validVisits.map((visit) => new naver.maps.LatLng(Number(visit.latitude), Number(visit.longitude)));
-        if (!points.length) return;
-        if (points.length > 1) overlays.push(new naver.maps.Polyline({ map, path: points, strokeColor: '#E07A5F', strokeWeight: 5, strokeOpacity: 0.76 }));
+        if (points.length > 1) {
+          overlays.push(new naver.maps.Polyline({ map, path: points, strokeColor: '#E07A5F', strokeWeight: 5, strokeOpacity: 0.76 }));
+        }
 
         validVisits.forEach((visit, index) => {
           const current = !visit.leftAt && index === validVisits.length - 1;
@@ -152,15 +147,15 @@
         if (data.type === 'resize' && map && window.naver?.maps) window.naver.maps.Event.trigger(map, 'resize');
       });
 
-      const cleanupSdk = () => {
-        clearFocus();
-        try { activeScript?.remove(); } catch {}
-        activeScript = null;
-        try { delete window.naver; } catch { window.naver = undefined; }
+      window.navermap_authFailure = () => {
+        if (authFailed || initialized) return;
+        authFailed = true;
+        console.warn('[ROUTE NAVER map auth failed]', { origin: location.origin });
+        send('auth-error', { origin: location.origin, code: 'NAVER_AUTH_FAILED' });
       };
 
-      const initializeMap = (attempt) => {
-        if (attempt !== activeAttempt) return;
+      window.__routeNaverMapReady = () => {
+        if (authFailed || initialized) return;
         try {
           if (!window.naver?.maps) throw new Error('NAVER_MAP_INIT_FAILED');
           map = new window.naver.maps.Map(document.getElementById('map'), {
@@ -169,63 +164,28 @@
             zoomControl: true,
             zoomControlOptions: { position: window.naver.maps.Position.TOP_RIGHT },
           });
+          initialized = true;
           requestAnimationFrame(() => requestAnimationFrame(() => window.naver.maps.Event.trigger(map, 'resize')));
-          send('ready', { authMode: AUTH_PARAMS[authIndex] });
+          send('ready', { origin: location.origin, authMode: 'ncpKeyId' });
           render(lastRender);
         } catch (error) {
           console.error('[ROUTE map host init]', error);
-          send('init-error', { authMode: AUTH_PARAMS[authIndex] });
+          send('init-error', { origin: location.origin, code: 'NAVER_MAP_INIT_FAILED' });
         }
       };
 
-      const loadSdk = () => {
-        const attempt = ++activeAttempt;
-        const authParam = AUTH_PARAMS[authIndex];
-        let rejected = false;
+      send('host-ready', { origin: location.origin });
+      send('sdk-loading', { origin: location.origin, authMode: 'ncpKeyId' });
 
-        cleanupSdk();
-
-        window.navermap_authFailure = () => {
-          if (attempt !== activeAttempt || rejected) return;
-          rejected = true;
-          console.warn('[ROUTE NAVER map auth failed]', { authParam, origin: location.origin });
-
-          if (authIndex + 1 < AUTH_PARAMS.length) {
-            authIndex += 1;
-            window.setTimeout(loadSdk, 80);
-            return;
-          }
-
-          send('auth-error', { tried: AUTH_PARAMS.slice(), origin: location.origin });
-        };
-
-        const script = document.createElement('script');
-        activeScript = script;
-        script.async = true;
-        script.defer = true;
-        script.dataset.routeNaverAuth = authParam;
-        script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?${authParam}=${encodeURIComponent(CLIENT_ID)}`;
-        script.onload = () => {
-          if (attempt !== activeAttempt || rejected) return;
-          window.setTimeout(() => {
-            if (attempt !== activeAttempt || rejected) return;
-            initializeMap(attempt);
-          }, 60);
-        };
-        script.onerror = () => {
-          if (attempt !== activeAttempt || rejected) return;
-          rejected = true;
-          if (authIndex + 1 < AUTH_PARAMS.length) {
-            authIndex += 1;
-            window.setTimeout(loadSdk, 80);
-            return;
-          }
-          send('script-error', { tried: AUTH_PARAMS.slice() });
-        };
-        document.head.appendChild(script);
+      const script = document.createElement('script');
+      script.async = true;
+      script.defer = true;
+      script.src = SDK_URL;
+      script.onerror = () => {
+        if (authFailed || initialized) return;
+        send('script-error', { origin: location.origin, code: 'NAVER_SDK_LOAD_FAILED' });
       };
-
-      loadSdk();
+      document.head.appendChild(script);
     })();
   </script>
 </body>

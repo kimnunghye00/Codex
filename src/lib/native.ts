@@ -12,6 +12,24 @@ import { StatusBar, Style } from '@capacitor/status-bar';
 export const isNativePlatform = () => Capacitor.isNativePlatform();
 export const nativePlatform = () => Capacitor.getPlatform();
 
+export type RouteLocationPosition = {
+  coords: {
+    latitude: number;
+    longitude: number;
+    accuracy: number;
+  };
+  timestamp?: number;
+};
+
+export type RouteLocationError = {
+  code?: string | number;
+  message?: string;
+};
+
+export type RouteLocationWatch = {
+  stop: () => Promise<void>;
+};
+
 export async function initializeNativeApp() {
   if (!isNativePlatform()) return;
 
@@ -49,7 +67,16 @@ export async function initializeNativeApp() {
     await SplashScreen.hide();
   } catch {}
 
+  App.addListener('appStateChange', ({ isActive }) => {
+    window.dispatchEvent(new Event(isActive ? 'route-app-resume' : 'route-app-pause'));
+  }).catch(() => undefined);
+
+  let lastBackAt = 0;
   App.addListener('backButton', ({ canGoBack }) => {
+    const now = Date.now();
+    if (now - lastBackAt < 320) return;
+    lastBackAt = now;
+
     // Give ROUTE overlays/details/tabs the first chance to consume Android back.
     const routeBack = new Event('route-native-back', { cancelable: true });
     window.dispatchEvent(routeBack);
@@ -75,11 +102,67 @@ export async function ensureLocationPermission() {
   if (!isNativePlatform()) return true;
   try {
     let permissions = await Geolocation.checkPermissions();
-    if (permissions.location !== 'granted') permissions = await Geolocation.requestPermissions();
-    return permissions.location === 'granted';
+    if (permissions.location !== 'granted' && permissions.coarseLocation !== 'granted') {
+      permissions = await Geolocation.requestPermissions({ permissions: ['location', 'coarseLocation'] });
+    }
+    return permissions.location === 'granted' || permissions.coarseLocation === 'granted';
   } catch {
     return false;
   }
+}
+
+export async function startRouteLocationWatch(
+  onPosition: (position: RouteLocationPosition) => void,
+  onError: (error: RouteLocationError) => void,
+): Promise<RouteLocationWatch> {
+  if (isNativePlatform()) {
+    const allowed = await ensureLocationPermission();
+    if (!allowed) throw new Error('route-location-permission-denied');
+
+    const id = await Geolocation.watchPosition(
+      { enableHighAccuracy: true, maximumAge: 45_000, timeout: 20_000 },
+      (position, error) => {
+        if (error) {
+          onError({ code: error.code, message: error.message });
+          return;
+        }
+        if (!position) return;
+        onPosition({
+          coords: {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+          },
+          timestamp: position.timestamp,
+        });
+      },
+    );
+
+    return {
+      stop: async () => {
+        try { await Geolocation.clearWatch({ id }); } catch {}
+      },
+    };
+  }
+
+  if (!('geolocation' in navigator)) throw new Error('route-location-unavailable');
+
+  const id = navigator.geolocation.watchPosition(
+    (position) => onPosition({
+      coords: {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+      },
+      timestamp: position.timestamp,
+    }),
+    (error) => onError({ code: error.code, message: error.message }),
+    { enableHighAccuracy: true, maximumAge: 45_000, timeout: 20_000 },
+  );
+
+  return {
+    stop: async () => navigator.geolocation.clearWatch(id),
+  };
 }
 
 export async function ensureNotificationPermission() {

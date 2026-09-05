@@ -5,7 +5,8 @@ import { collection, doc, onSnapshot, orderBy, query, setDoc } from 'firebase/fi
 import { auth, db } from '../../lib/firebase';
 import { AI_TEST_PARTNER_NAME, loadLocalAiPartner } from '../../lib/coupleData';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
-import { sendCoupleMessage, subscribeCoupleMessages } from '../../lib/chatRealtime';
+import { sendCoupleMessage, subscribeCoupleMessages, toggleCoupleMessageReaction } from '../../lib/chatRealtime';
+import { deleteUploadedChatMedia, uploadChatMedia } from '../../lib/chatMedia';
 import type { Message } from '../../types';
 import { messageDateLabel } from '../../utils/dates';
 import { isChatMediaMessage, loadChatMemoryMessageIds, toggleChatMessageMemory } from '../../utils/featureFlow';
@@ -16,6 +17,19 @@ import { ChatToolsPanel, loadChatPreferences, saveChatPreferences, type ChatPref
 type ChatSchedule = { id: string; title: string; date: string; startTime: string; type: 'personal' | 'couple'; ownerId: string };
 type ScheduledDraft = { id: number; text: string; sendAt: string };
 type CallMode = 'voice' | 'video' | 'screen';
+type MediaProgress = { completed: number; total: number };
+
+const MAX_SOURCE_IMAGE_BYTES = 25 * 1024 * 1024;
+const MAX_ORIGINAL_IMAGE_BYTES = 9 * 1024 * 1024;
+const MAX_GIF_BYTES = 9 * 1024 * 1024;
+const MAX_CHAT_PHOTOS = 100;
+const CHAT_MEDIA_BATCH_SIZE = 4;
+let messageSequence = 0;
+
+function nextMessageId() {
+  messageSequence = (messageSequence + 1) % 1000;
+  return Date.now() * 1000 + messageSequence;
+}
 
 function aiReplyFor(text: string) {
   const value = text.trim();
@@ -37,7 +51,14 @@ async function readFile(file: File) {
 }
 
 async function prepareImage(file: File, quality: ChatPreferences['mediaQuality']) {
-  if (file.type === 'image/gif' || quality === 'original') return readFile(file);
+  if (!file.type.startsWith('image/')) throw new Error('unsupported-image');
+  if (file.size > MAX_SOURCE_IMAGE_BYTES) throw new Error('source-image-too-large');
+  if (file.type === 'image/gif') return readFile(file);
+  if (quality === 'original') {
+    if (file.size > MAX_ORIGINAL_IMAGE_BYTES) throw new Error('original-image-too-large');
+    return readFile(file);
+  }
+
   const max = quality === 'data' ? 1080 : 1800;
   const jpegQuality = quality === 'data' ? 0.68 : 0.86;
   const src = await readFile(file);
@@ -46,8 +67,19 @@ async function prepareImage(file: File, quality: ChatPreferences['mediaQuality']
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.round(image.width * scale));
   canvas.height = Math.max(1, Math.round(image.height * scale));
-  canvas.getContext('2d')?.drawImage(image, 0, 0, canvas.width, canvas.height);
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('image-canvas-unavailable');
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL('image/jpeg', jpegQuality);
+}
+
+function mediaErrorMessage(cause: unknown, kind: 'photo' | 'gif') {
+  const code = cause instanceof Error ? cause.message : '';
+  if (code === 'source-image-too-large') return '사진 한 장의 원본 크기는 25MB 이하만 선택할 수 있어요.';
+  if (code === 'original-image-too-large') return '원본 화질 전송은 사진 한 장당 9MB 이하만 지원해요. 고화질 또는 데이터 절약 화질을 선택해 주세요.';
+  if (code === 'gif-too-large') return '움짤은 9MB 이하만 전송할 수 있어요.';
+  if (code === 'unsupported-image') return '지원하지 않는 이미지 형식이에요.';
+  return kind === 'photo' ? '사진을 전송하지 못했어요. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.' : '움짤을 전송하지 못했어요. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.';
 }
 
 export function ChatPage({ Header, messages, setMessages, connection }: {
@@ -66,6 +98,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   const [partnerTyping, setPartnerTyping] = useState(false);
   const [syncError, setSyncError] = useState('');
   const [flowNotice, setFlowNotice] = useState('');
+  const [mediaProgress, setMediaProgress] = useState<MediaProgress | null>(null);
   const [savedMediaIds, setSavedMediaIds] = useState<Set<number>>(() => loadChatMemoryMessageIds());
   const [toolsOpen, setToolsOpen] = useState(false);
   const [preferences, setPreferences] = useState(() => loadChatPreferences(currentUid || 'guest'));
@@ -79,6 +112,9 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   const bottomRef = useRef<HTMLDivElement>(null);
   const aiTimerRef = useRef<number | undefined>(undefined);
   const typingTimerRef = useRef<number | undefined>(undefined);
+  const typingActiveRef = useRef(false);
+  const typingLastWriteRef = useRef(0);
+  const mediaSendingRef = useRef(false);
   const noticeTimerRef = useRef<number | undefined>(undefined);
   const videoRef = useRef<HTMLVideoElement>(null);
   const byId = useMemo(() => new Map(messages.map((message) => [message.id, message])), [messages]);
@@ -119,11 +155,29 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   }, [connection?.coupleId, connection?.partnerUid]);
   useEffect(() => {
     if (!connection?.coupleId || !currentUid) return;
-    const ref = doc(db, 'couples', connection.coupleId, 'typing', currentUid);
-    void setDoc(ref, { typing: Boolean(draft.trim()), updatedAt: Date.now() }, { merge: true }).catch(() => undefined);
+    const typingRef = doc(db, 'couples', connection.coupleId, 'typing', currentUid);
+    const hasText = Boolean(draft.trim());
+    const now = Date.now();
+    const publishTyping = (typing: boolean) => {
+      typingActiveRef.current = typing;
+      typingLastWriteRef.current = Date.now();
+      void setDoc(typingRef, { typing, updatedAt: Date.now() }, { merge: true }).catch(() => undefined);
+    };
+
     if (typingTimerRef.current) window.clearTimeout(typingTimerRef.current);
-    typingTimerRef.current = window.setTimeout(() => { void setDoc(ref, { typing: false, updatedAt: Date.now() }, { merge: true }).catch(() => undefined); }, 4500);
+    if (!hasText) {
+      if (typingActiveRef.current) publishTyping(false);
+      return;
+    }
+
+    if (!typingActiveRef.current || now - typingLastWriteRef.current >= 3500) publishTyping(true);
+    typingTimerRef.current = window.setTimeout(() => publishTyping(false), 4500);
   }, [draft, connection?.coupleId, currentUid]);
+  useEffect(() => () => {
+    if (!connection?.coupleId || !currentUid || !typingActiveRef.current) return;
+    void setDoc(doc(db, 'couples', connection.coupleId, 'typing', currentUid), { typing: false, updatedAt: Date.now() }, { merge: true }).catch(() => undefined);
+    typingActiveRef.current = false;
+  }, [connection?.coupleId, currentUid]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages.length, aiTyping, partnerTyping]);
   useEffect(() => () => {
     if (aiTimerRef.current) window.clearTimeout(aiTimerRef.current);
@@ -139,22 +193,31 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     noticeTimerRef.current = window.setTimeout(() => setFlowNotice(''), 2600);
   };
 
+  const appendIfMissing = (message: Message) => {
+    setMessages((items) => items.some((item) => item.id === message.id) ? items : [...items, message]);
+  };
+
   const queueAiReply = (text: string, replyTarget?: number) => {
     if (!usingAiPartner) return;
     setAiTyping(true);
     if (aiTimerRef.current) window.clearTimeout(aiTimerRef.current);
-    aiTimerRef.current = window.setTimeout(() => { setMessages((items) => [...items, { id: Date.now() + 1, sender: 'partner', type: 'text', text: aiReplyFor(text), timestamp: new Date().toISOString(), read: true, replyTo: replyTarget }]); setAiTyping(false); }, Math.min(2400, Math.max(900, 700 + text.length * 35)));
+    aiTimerRef.current = window.setTimeout(() => { setMessages((items) => [...items, { id: nextMessageId(), sender: 'partner', type: 'text', text: aiReplyFor(text), timestamp: new Date().toISOString(), read: true, replyTo: replyTarget }]); setAiTyping(false); }, Math.min(2400, Math.max(900, 700 + text.length * 35)));
   };
 
   const deliver = (message: Message) => {
-    setMessages((items) => [...items, message]);
-    if (connection && currentUid) void sendCoupleMessage(connection.coupleId, currentUid, message).catch(() => setSyncError('메시지를 상대방에게 전송하지 못했어요.'));
+    setSyncError('');
+    appendIfMissing(message);
+    if (connection && currentUid) void sendCoupleMessage(connection.coupleId, currentUid, message).catch(() => {
+      setMessages((items) => items.filter((item) => item.id !== message.id));
+      if (message.type === 'text') setDraft((current) => current || message.text || '');
+      setSyncError('메시지를 상대방에게 전송하지 못했어요. 다시 시도해 주세요.');
+    });
     else if (message.type === 'text') queueAiReply(message.text || '', message.id);
   };
 
   const sendText = (text: string, scheduledFor?: string) => {
     if (!text.trim() || !currentUid) return;
-    const message: Message = { id: Date.now(), sender: 'me', type: 'text', text: text.trim(), timestamp: new Date().toISOString(), read: usingAiPartner, replyTo, scheduledFor };
+    const message: Message = { id: nextMessageId(), sender: 'me', type: 'text', text: text.trim(), timestamp: new Date().toISOString(), read: usingAiPartner, replyTo, scheduledFor };
     deliver(message); setReplyTo(undefined);
   };
 
@@ -170,32 +233,89 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
 
   const send = () => { const text = draft; setDraft(''); sendText(text); };
   const sendImages = async (files: File[]) => {
+    if (!files.length || !currentUid) return;
+    if (mediaSendingRef.current) {
+      setSyncError('사진 전송이 끝난 뒤 다음 사진을 보내 주세요.');
+      return;
+    }
+
+    const selected = files.slice(0, MAX_CHAT_PHOTOS);
+    const messageId = nextMessageId();
+    const urls: string[] = [];
+    let uploadedPaths: string[] = [];
+    mediaSendingRef.current = true;
+    setMediaProgress({ completed: 0, total: selected.length });
+
     try {
-      const urls = await Promise.all(files.slice(0, 10).map((file) => prepareImage(file, preferences.mediaQuality)));
-      const message: Message = urls.length === 1
-        ? { id: Date.now(), sender: 'me', type: 'image', imageUrl: urls[0], timestamp: new Date().toISOString(), read: usingAiPartner, replyTo }
-        : { id: Date.now(), sender: 'me', type: 'gallery', imageUrls: urls, timestamp: new Date().toISOString(), read: usingAiPartner, replyTo };
-      const size = urls.reduce((sum, url) => sum + url.length, 0);
-      setMessages((items) => [...items, message]); setReplyTo(undefined);
-      if (connection && currentUid) {
-        if (size < 700_000) void sendCoupleMessage(connection.coupleId, currentUid, message).catch(() => setSyncError('사진 전송에 실패했어요.'));
-        else setSyncError('사진 묶음이 현재 Firestore 테스트 전송 한도를 넘었어요. Firebase Storage 연결 후 더 많은 원본 사진을 지원할 수 있어요.');
+      setSyncError('');
+      if (files.length > MAX_CHAT_PHOTOS) showFlowNotice(`한 번에 최대 ${MAX_CHAT_PHOTOS}장까지 전송할 수 있어요.`);
+
+      for (let offset = 0; offset < selected.length; offset += CHAT_MEDIA_BATCH_SIZE) {
+        const batch = selected.slice(offset, offset + CHAT_MEDIA_BATCH_SIZE);
+        const preparedUrls = await Promise.all(batch.map((file) => prepareImage(file, preferences.mediaQuality)));
+
+        if (connection) {
+          const uploaded = await uploadChatMedia(connection.coupleId, currentUid, messageId, preparedUrls, {
+            startIndex: offset,
+            onUploaded: (completedInBatch) => setMediaProgress({ completed: offset + completedInBatch, total: selected.length }),
+          });
+          urls.push(...uploaded.urls);
+          uploadedPaths = [...uploadedPaths, ...uploaded.paths];
+        } else {
+          urls.push(...preparedUrls);
+          setMediaProgress({ completed: Math.min(offset + batch.length, selected.length), total: selected.length });
+        }
       }
-    } catch { setSyncError('사진을 처리하지 못했어요.'); }
+
+      const message: Message = urls.length === 1
+        ? { id: messageId, sender: 'me', type: 'image', imageUrl: urls[0], timestamp: new Date().toISOString(), read: usingAiPartner, replyTo }
+        : { id: messageId, sender: 'me', type: 'gallery', imageUrls: urls, timestamp: new Date().toISOString(), read: usingAiPartner, replyTo };
+
+      if (connection) await sendCoupleMessage(connection.coupleId, currentUid, message);
+      appendIfMissing(message);
+      setReplyTo(undefined);
+      showFlowNotice(urls.length === 1 ? '사진을 전송했어요.' : `사진 ${urls.length}장을 전송했어요.`);
+    } catch (cause) {
+      if (uploadedPaths.length) await deleteUploadedChatMedia(uploadedPaths);
+      console.error('[ROUTE chat photo]', cause);
+      setSyncError(mediaErrorMessage(cause, 'photo'));
+    } finally {
+      mediaSendingRef.current = false;
+      setMediaProgress(null);
+    }
   };
   const sendGif = async (file: File) => {
+    if (!currentUid) return;
+    let uploadedPaths: string[] = [];
     try {
-      const imageUrl = await readFile(file);
-      const message: Message = { id: Date.now(), sender: 'me', type: 'gif', imageUrl, timestamp: new Date().toISOString(), read: usingAiPartner, replyTo };
-      setMessages((items) => [...items, message]); setReplyTo(undefined);
-      if (connection && currentUid && imageUrl.length < 700_000) void sendCoupleMessage(connection.coupleId, currentUid, message).catch(() => setSyncError('움짤 전송에 실패했어요.'));
-      else if (imageUrl.length >= 700_000) setSyncError('움짤 용량이 커서 전송하지 못했어요.');
-    } catch { setSyncError('움짤을 처리하지 못했어요.'); }
+      setSyncError('');
+      if (file.size > MAX_GIF_BYTES) throw new Error('gif-too-large');
+      showFlowNotice('움짤을 전송하고 있어요.');
+      const preparedUrl = await readFile(file);
+      const messageId = nextMessageId();
+      let imageUrl = preparedUrl;
+
+      if (connection) {
+        const uploaded = await uploadChatMedia(connection.coupleId, currentUid, messageId, [preparedUrl]);
+        imageUrl = uploaded.urls[0];
+        uploadedPaths = uploaded.paths;
+      }
+
+      const message: Message = { id: messageId, sender: 'me', type: 'gif', imageUrl, timestamp: new Date().toISOString(), read: usingAiPartner, replyTo };
+      if (connection) await sendCoupleMessage(connection.coupleId, currentUid, message);
+      appendIfMissing(message);
+      setReplyTo(undefined);
+      showFlowNotice('움짤을 전송했어요.');
+    } catch (cause) {
+      if (uploadedPaths.length) await deleteUploadedChatMedia(uploadedPaths);
+      console.error('[ROUTE chat gif]', cause);
+      setSyncError(mediaErrorMessage(cause, 'gif'));
+    }
   };
 
   const reserveMessage = () => {
     if (!scheduleForm.text.trim() || !scheduleForm.sendAt || new Date(scheduleForm.sendAt).getTime() <= Date.now()) return;
-    setScheduledDrafts((items) => [...items, { id: Date.now(), text: scheduleForm.text.trim(), sendAt: scheduleForm.sendAt }]);
+    setScheduledDrafts((items) => [...items, { id: nextMessageId(), text: scheduleForm.text.trim(), sendAt: scheduleForm.sendAt }]);
     setScheduleForm({ text: '', sendAt: '' }); setScheduleOpen(false);
   };
   const startMedia = async (mode: CallMode) => {
@@ -209,7 +329,13 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   };
   const stopMedia = () => { mediaStream?.getTracks().forEach((track) => track.stop()); setMediaStream(undefined); setCallMode(undefined); };
 
-  const react = (id: number, emoji: string) => setMessages((items) => items.map((message) => message.id !== id ? message : { ...message, reactions: message.reactions?.some((reaction) => reaction.by === 'me' && reaction.emoji === emoji) ? message.reactions.filter((reaction) => !(reaction.by === 'me' && reaction.emoji === emoji)) : [...(message.reactions ?? []).filter((reaction) => reaction.by !== 'me'), { emoji, by: 'me' }] }));
+  const react = (id: number, emoji: string) => {
+    setMessages((items) => items.map((message) => message.id !== id ? message : { ...message, reactions: message.reactions?.some((reaction) => reaction.by === 'me' && reaction.emoji === emoji) ? message.reactions.filter((reaction) => !(reaction.by === 'me' && reaction.emoji === emoji)) : [...(message.reactions ?? []).filter((reaction) => reaction.by !== 'me'), { emoji, by: 'me' }] }));
+    if (connection && currentUid) void toggleCoupleMessageReaction(connection.coupleId, id, currentUid, emoji).catch((cause) => {
+      console.error('[ROUTE chat reaction]', cause);
+      setSyncError('메시지 반응을 동기화하지 못했어요.');
+    });
+  };
   const jump = (id: number) => { document.getElementById(`message-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); setHighlighted(id); window.setTimeout(() => setHighlighted(undefined), 1400); };
   const saveMessage = (message: Message) => {
     if (isChatMediaMessage(message)) {
@@ -230,6 +356,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     {nearestSchedule && <div className="chat-next-schedule"><CalendarClock size={16} /><div><small>가장 가까운 일정</small><b>{nearestSchedule.title}</b><span>{nearestSchedule.date.replaceAll('-', '.')} · {nearestSchedule.startTime}</span></div></div>}
     {syncError && <p className="chat-sync-error" role="alert">{syncError}</p>}
     {flowNotice && <p className="chat-flow-notice" role="status">{flowNotice}</p>}
+    {mediaProgress && <p className="chat-media-progress" role="status" aria-live="polite">사진 {mediaProgress.completed} / {mediaProgress.total}장 전송 중...</p>}
     <div className="messages" onClick={() => active && setActive(undefined)}>{messages.map((message, index) => {
       const date = new Date(message.timestamp).toDateString();
       const previousDate = index > 0 ? new Date(messages[index - 1].timestamp).toDateString() : '';

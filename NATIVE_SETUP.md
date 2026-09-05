@@ -46,23 +46,47 @@ npm run native:configure
 
 The app initializes native status bar, keyboard, splash screen, Android back button handling, and exposes native permission helpers in `src/lib/native.ts`.
 
-## NAVER Maps authentication in the APK
+## NAVER Maps authentication in ROUTE
 
-ROUTE uses the NAVER Maps JavaScript Dynamic Map API inside the Capacitor WebView. The current SDK query parameter is `ncpKeyId`.
+ROUTE uses NAVER Maps JavaScript Dynamic Map through one fixed Firebase Hosting origin instead of authenticating every Codespaces URL or Capacitor WebView origin separately.
 
-For an installed Android APK, the Capacitor WebView origin is `https://localhost`. In NAVER Cloud Platform > Maps > Application, the application that owns ROUTE's Client ID must therefore have a matching **Web service URL** registered. NAVER Cloud treats HTTP and HTTPS as the same host, so register:
+The fixed map host is:
 
 ```text
-http://localhost
+https://meluni-f4e00.web.app/naver-map-host.html
 ```
 
-Also register the Android package name when using the mobile environment entry:
+The NAVER Maps JavaScript SDK now uses the current `ncpKeyId` query parameter. The map host is the only page that loads the NAVER SDK, while Android, iOS, Codespaces, and desktop web communicate with that page through `postMessage`.
+
+In NAVER Cloud Platform > Application Services > Maps > Application, the application that owns ROUTE's Client ID must have **Dynamic Map** enabled and its **Web service URL** must match the fixed host domain. Register the host only, without a port or path:
+
+```text
+http://meluni-f4e00.web.app
+```
+
+NAVER Cloud treats HTTP and HTTPS as the same host for this setting. Do not register `/naver-map-host.html`, a Codespaces URL, a port number, or a changing preview URL.
+
+Because ROUTE is using the Web Dynamic Map SDK through the fixed host, adding each new GitHub Codespaces domain is not required. The Android package name remains:
 
 ```text
 com.route.couple
 ```
 
-If the Web service URL does not match the WebView location, NAVER Maps rejects the JavaScript SDK request with an authentication failure even though the Client ID is correct.
+That package name is relevant if Mobile Dynamic Map/native NAVER SDK is added later, but the current ROUTE map renderer authenticates through the fixed web host above.
+
+If the map shows an authentication error, check these items in order:
+
+1. The application is the current **Application Services > Maps** application, not an obsolete Maps application.
+2. **Dynamic Map** is selected for that application.
+3. The Client ID in `public/naver-map-host.html` belongs to that same application.
+4. The Web service URL contains `meluni-f4e00.web.app` only, with no path or port.
+5. The fixed Firebase Hosting page has been deployed after any map-host code change.
+
+## Location tracking behavior
+
+ROUTE uses the Capacitor Geolocation plugin on installed Android/iOS apps and browser geolocation on the web. Fine location is preferred, but Android approximate-location permission is accepted instead of being treated as a denial.
+
+The current product records movement while ROUTE is actively running. A saved "location sharing on" preference does not turn the current JavaScript implementation into a production-grade background tracker by itself. Continuous background tracking should only be enabled after a dedicated native background-location service is implemented and store policies are reviewed.
 
 ## Android alternate launcher icons
 

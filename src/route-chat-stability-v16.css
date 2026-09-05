@@ -1,0 +1,85 @@
+/* ROUTE chat stability v16
+ * Media bubbles should follow the media itself instead of drawing an extra box.
+ */
+
+.chat-page .bubble.media-bubble,
+.chat-page .bubble.gallery-bubble {
+  width: auto !important;
+  max-width: min(78vw, 320px) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  border: 0 !important;
+  border-radius: 16px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.chat-page .bubble.media-bubble .reply-preview,
+.chat-page .bubble.gallery-bubble .reply-preview {
+  margin: 8px 10px 0;
+  border-radius: 10px;
+}
+
+.chat-page .chat-image {
+  width: auto !important;
+  max-width: min(78vw, 320px) !important;
+  height: auto !important;
+  max-height: 420px !important;
+  display: block !important;
+  margin: 0 !important;
+  object-fit: contain !important;
+  border-radius: 16px !important;
+  background: transparent !important;
+}
+
+.chat-page .chat-gif {
+  max-height: 320px !important;
+}
+
+.chat-page .chat-gallery {
+  width: min(72vw, 300px) !important;
+  max-width: 100% !important;
+  gap: 2px !important;
+  border-radius: 16px !important;
+  background: transparent !important;
+}
+
+.chat-page .chat-gallery-item {
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+.chat-page .chat-gallery-item img {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+
+.chat-page .message-wrap {
+  max-width: min(84vw, 350px);
+}
+
+.chat-page .chat-media-progress {
+  margin: 0 10px 8px;
+  padding: 9px 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--border));
+  border-radius: 13px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--surface) 94%, var(--primary) 6%);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+@media (max-width: 380px) {
+  .chat-page .bubble.media-bubble,
+  .chat-page .bubble.gallery-bubble,
+  .chat-page .chat-image {
+    max-width: 74vw !important;
+  }
+
+  .chat-page .chat-gallery {
+    width: 70vw !important;
+  }
+}
