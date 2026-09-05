@@ -47,14 +47,17 @@ document.addEventListener('click', (event) => {
   const button = target?.closest<HTMLButtonElement>('.app-icon-picker button');
   if (!button || !Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return;
 
-  // Let React's onClick continue so the picker immediately reflects the new choice.
-  // The native plugin handles only the launcher component switch.
   event.preventDefault();
-  if (changing) return;
+  if (changing) {
+    event.stopPropagation();
+    return;
+  }
 
   const icon = iconIdFromButton(button);
   if (!icon) return;
+  const picker = button.closest<HTMLElement>('.app-icon-picker');
   changing = true;
+  picker?.setAttribute('aria-busy', 'true');
   button.setAttribute('aria-busy', 'true');
   updateNotice('앱 아이콘을 변경하고 있어요…');
 
@@ -70,6 +73,7 @@ document.addEventListener('click', (event) => {
     })
     .finally(() => {
       changing = false;
+      picker?.removeAttribute('aria-busy');
       button.removeAttribute('aria-busy');
     });
 }, true);
