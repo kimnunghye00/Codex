@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import Root from './Root';
+import { AppCrashBoundary, installGlobalCrashDiagnostics } from './AppCrashBoundary';
 import { initializeNativeApp } from './lib/native';
 import { initializeRoutePwa } from './pwa';
 import './styles.css';
@@ -29,6 +30,7 @@ import './close-standard.css';
 import './mobile-apk-fixes.css';
 import './mobile-polish-v3.css';
 import './web-desktop.css';
+import './crash-recovery.css';
 import './native-back-ui';
 import './app-icon-native';
 import './profile-enhance';
@@ -37,7 +39,14 @@ import './settings-hub';
 import './mobile-polish-v3';
 import './more-enhance';
 
+installGlobalCrashDiagnostics();
 void initializeNativeApp();
 initializeRoutePwa();
 
-createRoot(document.getElementById('root')!).render(<StrictMode><Root /></StrictMode>);
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <AppCrashBoundary>
+      <Root />
+    </AppCrashBoundary>
+  </StrictMode>,
+);
