@@ -18,7 +18,10 @@ type Schedule = {
   ownerId: string;
   memo?: string;
   location?: string;
+  localOnly?: boolean;
 };
+
+type DatePlan = { id: number; title: string; date: string; time: string; location: string; memo: string };
 
 type Props = {
   uid: string;
@@ -30,14 +33,33 @@ type Props = {
 };
 
 const localKey = (uid: string) => `route-local-schedules:${uid}`;
+const appointmentKey = (uid: string) => `route-date-plans:${uid}`;
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
 function loadLocal(uid: string): Schedule[] {
+  try { return JSON.parse(localStorage.getItem(localKey(uid)) || '[]') as Schedule[]; }
+  catch { return []; }
+}
+
+function saveLocal(uid: string, items: Schedule[]) {
+  localStorage.setItem(localKey(uid), JSON.stringify(items));
+}
+
+function saveAppointment(uid: string, schedule: Omit<Schedule, 'id'>) {
   try {
-    return JSON.parse(localStorage.getItem(localKey(uid)) || '[]') as Schedule[];
-  } catch {
-    return [];
-  }
+    const current = JSON.parse(localStorage.getItem(appointmentKey(uid)) || '[]') as DatePlan[];
+    const duplicate = current.some((item) => item.title === schedule.title && item.date === schedule.date && item.time === schedule.startTime);
+    if (duplicate) return;
+    const next: DatePlan = {
+      id: Date.now(),
+      title: schedule.title,
+      date: schedule.date,
+      time: schedule.startTime,
+      location: schedule.location || '',
+      memo: schedule.memo || '',
+    };
+    localStorage.setItem(appointmentKey(uid), JSON.stringify([...current, next]));
+  } catch { /* local schedule remains the fallback */ }
 }
 
 function avatar(profile: UserProfile | null, fallback: string) {
@@ -48,8 +70,7 @@ function avatar(profile: UserProfile | null, fallback: string) {
 function prettyDate(value: string) {
   const date = new Date(`${value}T00:00:00`);
   if (Number.isNaN(date.getTime())) return value;
-  const today = todayKey();
-  if (value === today) return '오늘';
+  if (value === todayKey()) return '오늘';
   return `${date.getMonth() + 1}월 ${date.getDate()}일`;
 }
 
@@ -62,28 +83,25 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
   const [filter, setFilter] = useState<ScheduleFilter>('all');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [form, setForm] = useState({ title: '', date: todayKey(), startTime: '19:00', endTime: '', type: 'couple' as ScheduleType, memo: '', location: '' });
 
-  useEffect(() => {
-    setLocalSchedules(loadLocal(uid));
-  }, [uid]);
+  useEffect(() => setLocalSchedules(loadLocal(uid)), [uid]);
 
   useEffect(() => {
-    if (!connection?.coupleId) {
-      setRemoteSchedules([]);
-      return;
-    }
+    if (!connection?.coupleId) { setRemoteSchedules([]); return; }
     const schedulesRef = collection(db, 'couples', connection.coupleId, 'schedules');
     const q = query(schedulesRef, orderBy('date', 'asc'));
     return onSnapshot(q, (snapshot) => {
       setRemoteSchedules(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as Omit<Schedule, 'id'>) })));
-    }, () => setRemoteSchedules([]));
+    }, () => setNotice('공유 일정을 불러오지 못해 기기에 저장된 일정으로 표시하고 있어요.'));
   }, [connection?.coupleId]);
 
   const schedules = useMemo(() => {
-    const source = connection ? remoteSchedules : localSchedules;
-    return [...source].sort((a, b) => `${a.date} ${a.startTime}`.localeCompare(`${b.date} ${b.startTime}`));
-  }, [connection, localSchedules, remoteSchedules]);
+    const remoteKeys = new Set(remoteSchedules.map((item) => `${item.title}|${item.date}|${item.startTime}|${item.type}`));
+    const localOnly = localSchedules.filter((item) => !remoteKeys.has(`${item.title}|${item.date}|${item.startTime}|${item.type}`));
+    return [...remoteSchedules, ...localOnly].sort((a, b) => `${a.date} ${a.startTime}`.localeCompare(`${b.date} ${b.startTime}`));
+  }, [localSchedules, remoteSchedules]);
 
   const upcoming = schedules.filter((item) => item.date >= todayKey()).slice(0, 3);
   const partner = connection?.partnerProfile ?? null;
@@ -98,6 +116,13 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
     return item.type === 'personal' && item.ownerId !== uid;
   });
 
+  const persistLocal = (schedule: Omit<Schedule, 'id'>) => {
+    const local: Schedule = { ...schedule, id: `local-${Date.now()}`, localOnly: true };
+    const next = [...localSchedules, local];
+    setLocalSchedules(next);
+    saveLocal(uid, next);
+  };
+
   const submit = async () => {
     if (!form.title.trim() || !form.date || !form.startTime) {
       setError('제목, 날짜, 시작 시간을 입력해 주세요.');
@@ -105,6 +130,7 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
     }
     setSaving(true);
     setError('');
+    setNotice('');
     const payload: Omit<Schedule, 'id'> = {
       title: form.title.trim(),
       date: form.date,
@@ -115,21 +141,31 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
       memo: form.memo.trim() || undefined,
       location: form.location.trim() || undefined,
     };
-    try {
-      if (connection?.coupleId) {
-        await addDoc(collection(db, 'couples', connection.coupleId, 'schedules'), { ...payload, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-      } else {
-        const next = [...localSchedules, { ...payload, id: `local-${Date.now()}` }];
-        setLocalSchedules(next);
-        localStorage.setItem(localKey(uid), JSON.stringify(next));
+
+    // Always make a device copy first. A temporary Firestore/network failure must never lose the user's schedule.
+    persistLocal(payload);
+    if (payload.type === 'couple') saveAppointment(uid, payload);
+
+    let cloudSaved = false;
+    if (connection?.coupleId) {
+      try {
+        await addDoc(collection(db, 'couples', connection.coupleId, 'schedules'), {
+          ...payload,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        cloudSaved = true;
+      } catch (cause) {
+        console.warn('[ROUTE schedule cloud save]', cause);
       }
-      setForm({ title: '', date: todayKey(), startTime: '19:00', endTime: '', type: connection ? 'couple' : 'personal', memo: '', location: '' });
-      setScheduleOpen(false);
-    } catch {
-      setError('일정을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
-    } finally {
-      setSaving(false);
     }
+
+    setNotice(payload.type === 'couple'
+      ? cloudSaved ? '약속을 저장했어요. 상대방과 약속 화면에 함께 반영돼요.' : '약속을 기기에 저장했어요. 연결이 정상화되면 다시 공유할 수 있어요.'
+      : cloudSaved ? '내 일정을 저장했어요.' : '내 일정을 기기에 저장했어요.');
+    setForm({ title: '', date: todayKey(), startTime: '19:00', endTime: '', type: connection ? 'couple' : 'personal', memo: '', location: '' });
+    setScheduleOpen(false);
+    setSaving(false);
   };
 
   return <>
@@ -148,14 +184,15 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
 
       <div className="home-schedule-card">
         <div className="home-schedule-head"><span><CalendarDays size={16} /><b>우리 일정</b></span><button type="button" onClick={() => setAllOpen(true)}>전체보기 <ChevronRight size={14} /></button></div>
+        {notice && <p className="schedule-help route-home-save-notice">{notice}</p>}
         <div className="home-schedule-list">
           {upcoming.length ? upcoming.map((item) => {
             const mine = item.ownerId === uid;
-            const label = item.type === 'couple' ? '우리' : mine ? '나' : partnerName;
+            const label = item.type === 'couple' ? '약속' : mine ? '나' : partnerName;
             return <div className="home-schedule-row" key={item.id}><span className={`schedule-dot ${item.type === 'couple' ? 'couple' : mine ? 'mine' : 'partner'}`} /><span className="schedule-when"><b>{prettyDate(item.date)}</b><small>{item.startTime}</small></span><strong>{item.title}</strong><em>{label}</em></div>;
-          }) : <div className="home-schedule-empty"><span>아직 예정된 일정이 없어요</span><small>둘만의 새로운 일정을 만들어보세요 ❤️</small></div>}
+          }) : <div className="home-schedule-empty"><span>아직 예정된 일정이 없어요</span><small>새 일정이나 둘만의 약속을 만들어보세요 ❤️</small></div>}
         </div>
-        <button className="home-schedule-add" type="button" onClick={() => setScheduleOpen(true)}><Plus size={14} /> 일정 추가</button>
+        <button className="home-schedule-add" type="button" onClick={() => { setError(''); setNotice(''); setScheduleOpen(true); }}><Plus size={14} /> 일정 추가</button>
       </div>
     </section>
 
@@ -169,21 +206,21 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
 
     {scheduleOpen && <div className="route-modal-backdrop" onMouseDown={() => setScheduleOpen(false)}><section className="route-modal schedule-form-modal" onMouseDown={(e) => e.stopPropagation()}>
       <div className="route-modal-title"><div><small>NEW SCHEDULE</small><h2>일정 추가</h2></div><button type="button" onClick={() => setScheduleOpen(false)}><X size={19} /></button></div>
-      <label>일정 제목<input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="예: 저녁 데이트" autoFocus /></label>
+      <label>일정 제목<input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="예: 저녁 약속" autoFocus /></label>
       <div className="schedule-form-grid"><label>날짜<input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label><label>시작 시간<input type="time" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} /></label></div>
       <label>종료 시간 <small>(선택)</small><input type="time" value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} /></label>
-      <div className="schedule-type-picker"><button type="button" className={form.type === 'personal' ? 'active' : ''} onClick={() => setForm({ ...form, type: 'personal' })}><UserRound size={16} />내 일정</button><button type="button" disabled={!connection} className={form.type === 'couple' ? 'active' : ''} onClick={() => setForm({ ...form, type: 'couple' })}><Heart size={16} />우리 일정</button></div>
+      <div className="schedule-type-picker"><button type="button" className={form.type === 'personal' ? 'active' : ''} onClick={() => setForm({ ...form, type: 'personal' })}><UserRound size={16} />내 일정</button><button type="button" disabled={!connection} className={form.type === 'couple' ? 'active' : ''} onClick={() => setForm({ ...form, type: 'couple' })}><Heart size={16} />약속</button></div>
       <label>장소 <small>(선택)</small><div className="schedule-input-icon"><MapPin size={15} /><input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="장소를 입력해 주세요" /></div></label>
       <label>메모 <small>(선택)</small><textarea value={form.memo} onChange={(e) => setForm({ ...form, memo: e.target.value })} placeholder="메모를 남겨보세요" /></label>
       {error && <p className="schedule-error">{error}</p>}
       {!connection && <p className="schedule-help">상대방을 연결하기 전에는 내 일정으로 저장돼요.</p>}
-      <button className="primary schedule-save" type="button" disabled={saving} onClick={() => void submit()}>{saving ? '저장 중...' : '일정 저장'}</button>
+      <button className="primary schedule-save" type="button" disabled={saving} onClick={() => void submit()}>{saving ? '저장 중...' : '저장'}</button>
     </section></div>}
 
     {allOpen && <div className="route-modal-backdrop" onMouseDown={() => setAllOpen(false)}><section className="route-modal all-schedules-modal" onMouseDown={(e) => e.stopPropagation()}>
       <div className="route-modal-title"><div><small>OUR CALENDAR</small><h2>일정</h2></div><button type="button" onClick={() => setAllOpen(false)}><X size={19} /></button></div>
-      <div className="schedule-filters"><button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>전체</button><button className={filter === 'couple' ? 'active' : ''} onClick={() => setFilter('couple')}>우리</button><button className={filter === 'mine' ? 'active' : ''} onClick={() => setFilter('mine')}>내 일정</button><button className={filter === 'partner' ? 'active' : ''} onClick={() => setFilter('partner')} disabled={!connection}>상대 일정</button></div>
-      <div className="all-schedule-list">{filtered.length ? filtered.map((item) => <article key={item.id} className="all-schedule-item"><span className={`schedule-dot ${item.type === 'couple' ? 'couple' : item.ownerId === uid ? 'mine' : 'partner'}`} /><div><small>{prettyDate(item.date)} · {item.startTime}{item.endTime ? `–${item.endTime}` : ''}</small><b>{item.title}</b>{item.location && <em><MapPin size={13} />{item.location}</em>}</div><span className="schedule-owner">{item.type === 'couple' ? '우리' : item.ownerId === uid ? '나' : partnerName}</span></article>) : <div className="all-schedule-empty"><Clock3 size={24} /><b>표시할 일정이 없어요</b><span>새로운 일정을 추가해보세요.</span></div>}</div>
+      <div className="schedule-filters"><button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>전체</button><button className={filter === 'couple' ? 'active' : ''} onClick={() => setFilter('couple')}>약속</button><button className={filter === 'mine' ? 'active' : ''} onClick={() => setFilter('mine')}>내 일정</button><button className={filter === 'partner' ? 'active' : ''} onClick={() => setFilter('partner')} disabled={!connection}>상대 일정</button></div>
+      <div className="all-schedule-list">{filtered.length ? filtered.map((item) => <article key={item.id} className="all-schedule-item"><span className={`schedule-dot ${item.type === 'couple' ? 'couple' : item.ownerId === uid ? 'mine' : 'partner'}`} /><div><small>{prettyDate(item.date)} · {item.startTime}{item.endTime ? `–${item.endTime}` : ''}</small><b>{item.title}</b>{item.location && <em><MapPin size={13} />{item.location}</em>}</div><span className="schedule-owner">{item.type === 'couple' ? '약속' : item.ownerId === uid ? '나' : partnerName}</span></article>) : <div className="all-schedule-empty"><Clock3 size={24} /><b>표시할 일정이 없어요</b><span>새로운 일정을 추가해보세요.</span></div>}</div>
       <button className="primary schedule-save" type="button" onClick={() => { setAllOpen(false); setScheduleOpen(true); }}><Plus size={16} /> 일정 추가</button>
     </section></div>}
   </>;
