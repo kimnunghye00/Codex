@@ -1,0 +1,531 @@
+/* ROUTE design system v6
+ * Final visual rules for spacing, surfaces, controls and the home dashboard.
+ * Loaded last so feature-specific legacy CSS cannot silently override the product language.
+ */
+
+:root {
+  --route-space-1: 4px;
+  --route-space-2: 8px;
+  --route-space-3: 12px;
+  --route-space-4: 16px;
+  --route-space-5: 20px;
+  --route-space-6: 24px;
+  --route-space-7: 32px;
+  --route-radius-sm: 12px;
+  --route-radius-md: 16px;
+  --route-radius-lg: 20px;
+  --route-radius-xl: 24px;
+  --route-control-height: 44px;
+  --route-border-soft: color-mix(in srgb, var(--border) 84%, var(--primary) 16%);
+  --route-surface-soft: color-mix(in srgb, var(--surface) 96%, var(--primary) 4%);
+  --route-primary-soft: color-mix(in srgb, var(--primary) 8%, var(--surface));
+  --route-emotion-soft: color-mix(in srgb, var(--emotion) 9%, var(--surface));
+  --route-shadow-card: 0 12px 34px rgba(31, 42, 68, .065);
+  --route-shadow-float: 0 18px 46px rgba(31, 42, 68, .12);
+}
+
+/* Shared surface language -------------------------------------------------- */
+.topbar,
+.home-couple-profile-card,
+.home-time-card,
+.home-schedule-card,
+.home-photo-card,
+.home-chat-card,
+.next-card,
+.recent-message,
+.anniversary-card,
+.event,
+.more-section,
+.theme-card,
+.more-list-button,
+.route-modal,
+.chat-profile,
+.memory-card {
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+[role='button'] {
+  touch-action: manipulation;
+}
+
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+.header-actions button,
+.route-modal-close,
+.more-grid-button,
+.home-schedule-add,
+.schedule-filters button,
+.theme-option,
+.composer button {
+  min-height: var(--route-control-height);
+}
+
+/* Header: one consistent product bar, not a browser/web page header. */
+.topbar {
+  position: relative;
+  min-height: 72px;
+  border-bottom: 1px solid var(--route-border-soft);
+}
+
+.topbar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 52px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--emotion), var(--primary));
+}
+
+.wordmark strong {
+  letter-spacing: -1.15px;
+}
+
+.header-actions {
+  gap: 4px;
+}
+
+.header-actions button {
+  border-radius: 14px;
+  transition: background .16s ease, color .16s ease, transform .16s ease;
+}
+
+.header-actions button:hover {
+  background: var(--route-primary-soft);
+}
+
+/* Home: ROUTE's main product identity ------------------------------------ */
+.home-dashboard {
+  --home-card-radius: var(--route-radius-xl);
+  --home-card-border: var(--route-border-soft);
+  --home-card-shadow: var(--route-shadow-card);
+}
+
+.home-dashboard .home-couple-profile-card,
+.home-dashboard .home-time-card,
+.home-dashboard .home-schedule-card,
+.home-dashboard .home-photo-card,
+.home-dashboard .home-chat-card,
+.home-dashboard .home-map-card {
+  border: 1px solid var(--route-border-soft) !important;
+  border-radius: var(--route-radius-xl) !important;
+  box-shadow: var(--route-shadow-card) !important;
+}
+
+.home-dashboard .home-couple-profile-card,
+.home-dashboard .home-time-card,
+.home-dashboard .home-schedule-card,
+.home-dashboard .home-chat-card {
+  background-color: var(--surface);
+}
+
+/* Couple strip reads as a relationship connection rather than two unrelated profiles. */
+.home-dashboard .home-couple-profile-card {
+  min-height: 68px;
+  background:
+    linear-gradient(90deg, var(--route-primary-soft), var(--surface) 35%, var(--surface) 65%, var(--route-emotion-soft));
+}
+
+.home-dashboard .home-couple-profile-card::before {
+  left: 23% !important;
+  right: 23% !important;
+  height: 2px !important;
+  opacity: .62;
+  background: linear-gradient(90deg, var(--primary), var(--emotion)) !important;
+}
+
+.home-dashboard .home-couple-profile-card::after {
+  width: 34px !important;
+  height: 34px !important;
+  border: 1px solid color-mix(in srgb, var(--emotion) 16%, var(--border));
+  background: var(--surface) !important;
+  box-shadow: 0 4px 14px rgba(31, 42, 68, .08);
+}
+
+.home-dashboard .home-profile-heart {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+}
+
+.home-dashboard .home-profile-copy small {
+  opacity: .72;
+}
+
+/* Map becomes the unmistakable hero. */
+.home-dashboard .home-map-card {
+  background:
+    radial-gradient(circle at 18% 82%, color-mix(in srgb, var(--emotion) 8%, transparent), transparent 24%),
+    radial-gradient(circle at 78% 18%, color-mix(in srgb, var(--primary) 6%, transparent), transparent 23%),
+    linear-gradient(145deg, #fbfaf6 0%, #f6f7f2 48%, #edf5f1 100%) !important;
+}
+
+.home-dashboard .home-map-grid-lines {
+  opacity: .54;
+}
+
+.home-dashboard .home-map-road {
+  box-shadow: 0 0 0 1px color-mix(in srgb, #d9d3ca 74%, transparent), 0 2px 5px rgba(31, 42, 68, .025);
+}
+
+.home-dashboard .home-map-card::before {
+  content: 'OUR ROUTE  ·  TOGETHER' !important;
+  left: 20px !important;
+  bottom: 20px !important;
+  padding: 6px 10px !important;
+  border: 1px solid rgba(255, 255, 255, .86) !important;
+  color: color-mix(in srgb, var(--primary) 86%, var(--text-primary)) !important;
+  background: rgba(255, 255, 255, .80) !important;
+  box-shadow: 0 7px 20px rgba(31, 42, 68, .07);
+  letter-spacing: .10em !important;
+}
+
+.home-dashboard .home-map-card::after {
+  left: 16% !important;
+  bottom: 20% !important;
+  width: 50% !important;
+  height: 28% !important;
+  border-left-width: 2px !important;
+  border-bottom-width: 2px !important;
+  opacity: .82 !important;
+}
+
+.home-dashboard .home-location-status {
+  border: 1px solid rgba(255, 255, 255, .90) !important;
+  background: rgba(255, 255, 255, .83) !important;
+  box-shadow: 0 10px 28px rgba(31, 42, 68, .075) !important;
+}
+
+.home-dashboard .home-map-avatar {
+  border-width: 4px;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--primary) 24%, transparent);
+}
+
+.home-dashboard .home-map-halo {
+  background: color-mix(in srgb, var(--primary) 13%, transparent) !important;
+  box-shadow:
+    0 0 0 16px color-mix(in srgb, var(--primary) 4%, transparent),
+    0 0 0 34px color-mix(in srgb, var(--emotion) 2.5%, transparent) !important;
+}
+
+.home-dashboard .home-map-locate {
+  border: 1px solid var(--route-border-soft);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+/* Time is the emotional anchor: stronger number, quieter supporting text. */
+.home-dashboard .home-time-card {
+  background:
+    radial-gradient(circle at 96% 6%, color-mix(in srgb, var(--emotion) 13%, transparent), transparent 31%),
+    linear-gradient(145deg, var(--route-primary-soft), var(--surface) 62%) !important;
+}
+
+.home-dashboard .home-time-card::before {
+  width: 4px !important;
+  top: 17px !important;
+  bottom: 17px !important;
+  background: linear-gradient(180deg, var(--emotion), var(--primary)) !important;
+}
+
+.home-dashboard .home-card-title span::before {
+  content: 'ROUTE  /  ' !important;
+  font-weight: 800;
+}
+
+.home-dashboard .home-time-block strong {
+  font-weight: 800;
+  letter-spacing: -.055em;
+}
+
+.home-dashboard .home-time-block em {
+  color: var(--text-secondary);
+}
+
+/* Schedule remains useful and compact, not a competing hero. */
+.home-dashboard .home-schedule-card {
+  background: linear-gradient(180deg, var(--surface), var(--route-surface-soft));
+}
+
+.home-dashboard .home-schedule-card::before {
+  left: 14px !important;
+  right: 14px !important;
+  height: 3px !important;
+}
+
+.home-dashboard .home-schedule-add {
+  border: 1px solid var(--route-border-soft) !important;
+  border-radius: 13px !important;
+  background: var(--route-primary-soft) !important;
+  color: var(--primary) !important;
+  font-weight: 700;
+}
+
+/* Photo stays immersive; chat becomes a compact utility card. */
+.home-dashboard .home-photo-card {
+  border-color: color-mix(in srgb, var(--border) 66%, transparent) !important;
+}
+
+.home-dashboard .home-photo-shade {
+  background: linear-gradient(180deg, rgba(20, 19, 28, .03) 15%, transparent 42%, rgba(20, 19, 28, .76) 100%) !important;
+}
+
+.home-dashboard .home-photo-copy small {
+  color: var(--text-primary) !important;
+  background: rgba(255, 255, 255, .88) !important;
+}
+
+.home-dashboard .home-chat-card {
+  background: linear-gradient(145deg, var(--surface), var(--route-primary-soft)) !important;
+}
+
+.home-dashboard .home-chat-head b {
+  color: var(--text-primary);
+}
+
+/* Global cards and lists -------------------------------------------------- */
+.next-card,
+.recent-message,
+.anniversary-card,
+.event,
+.more-section,
+.theme-card,
+.more-list-button,
+.route-modal {
+  border-color: var(--route-border-soft) !important;
+  border-radius: var(--route-radius-lg) !important;
+  box-shadow: 0 8px 24px rgba(31, 42, 68, .045);
+}
+
+.next-card,
+.recent-message,
+.event,
+.more-list-button {
+  transition: transform .16s ease, border-color .16s ease, background .16s ease;
+}
+
+.next-card:hover,
+.recent-message:hover,
+.event:hover,
+.more-list-button:hover {
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--border)) !important;
+  background: var(--route-surface-soft);
+}
+
+.next-card:active,
+.recent-message:active,
+.event:active,
+.more-list-button:active {
+  transform: scale(.988);
+}
+
+.primary {
+  min-height: var(--route-control-height);
+  border-radius: 14px !important;
+  box-shadow: 0 7px 18px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+input,
+textarea,
+select {
+  border-radius: 13px;
+}
+
+/* Bottom navigation: app dock, not a browser footer. */
+.bottom-nav {
+  border: 1px solid var(--route-border-soft);
+  background: color-mix(in srgb, var(--surface) 93%, transparent);
+  box-shadow: 0 12px 38px rgba(31, 42, 68, .10);
+  backdrop-filter: blur(20px) saturate(1.08);
+}
+
+.bottom-nav button {
+  border-radius: 14px;
+}
+
+.bottom-nav .active .nav-icon {
+  background: linear-gradient(145deg, var(--route-primary-soft), var(--route-emotion-soft));
+}
+
+/* Desktop app composition ------------------------------------------------ */
+@media (min-width: 900px) {
+  .home-dashboard.page,
+  .home-page.home-dashboard {
+    width: min(1420px, calc(100vw - 80px)) !important;
+    max-width: 1420px !important;
+    height: calc(100dvh - 92px) !important;
+    min-height: 640px !important;
+    grid-template-columns: minmax(0, 1.62fr) minmax(410px, .92fr) !important;
+    grid-template-rows: 74px 68px 142px 118px minmax(150px, 1fr) 88px !important;
+    column-gap: 22px !important;
+    row-gap: 11px !important;
+    padding-bottom: 8px !important;
+  }
+
+  .home-dashboard > .topbar,
+  .home-page > .topbar {
+    height: 74px !important;
+    min-height: 74px !important;
+    padding: 0 4px !important;
+  }
+
+  .home-dashboard .home-map-card {
+    border-radius: 28px !important;
+  }
+
+  .home-dashboard .home-location-status {
+    top: 20px !important;
+    left: 20px !important;
+    width: min(430px, calc(100% - 40px)) !important;
+    min-height: 56px !important;
+    padding: 10px 14px !important;
+    border-radius: 17px !important;
+  }
+
+  .home-dashboard .home-location-status b {
+    font-size: 12px !important;
+  }
+
+  .home-dashboard .home-location-status small {
+    font-size: 9px !important;
+  }
+
+  .home-dashboard .home-couple-profile-card {
+    padding: 8px 16px !important;
+  }
+
+  .home-dashboard .home-profile-avatar {
+    width: 38px !important;
+    height: 38px !important;
+  }
+
+  .home-dashboard .home-time-card {
+    padding: 14px 18px 15px 20px !important;
+  }
+
+  .home-dashboard .home-time-block strong {
+    font-size: 30px !important;
+  }
+
+  .home-dashboard .upcoming-time strong {
+    font-size: 25px !important;
+  }
+
+  .home-dashboard .home-schedule-card {
+    padding: 12px 15px !important;
+  }
+
+  .home-dashboard .home-photo-card {
+    border-radius: 24px !important;
+  }
+
+  .home-dashboard .home-chat-card {
+    padding: 11px 15px !important;
+  }
+
+  .bottom-nav {
+    left: 50% !important;
+    right: auto !important;
+    bottom: 14px !important;
+    width: min(700px, calc(100vw - 56px)) !important;
+    max-width: 700px !important;
+    height: 64px !important;
+    padding: 5px 10px !important;
+    transform: translateX(-50%) !important;
+    border-radius: 22px !important;
+  }
+
+  .bottom-nav button {
+    min-height: 52px !important;
+    max-width: 124px !important;
+    margin: 0 auto;
+  }
+
+  .bottom-nav .nav-icon {
+    width: 38px !important;
+    height: 28px !important;
+  }
+
+  /* Give non-home tabs the same deliberate desktop content width. */
+  .page:not(.home-dashboard),
+  .chat-page {
+    border-radius: 0;
+  }
+}
+
+/* Mobile keeps the current information architecture, but gains one rhythm. */
+@media (max-width: 899px) {
+  :root {
+    --route-radius-xl: 21px;
+    --route-radius-lg: 18px;
+  }
+
+  .topbar {
+    min-height: 68px;
+  }
+
+  .home-dashboard .home-couple-profile-card,
+  .home-dashboard .home-time-card,
+  .home-dashboard .home-schedule-card,
+  .home-dashboard .home-photo-card,
+  .home-dashboard .home-chat-card,
+  .home-dashboard .home-map-card {
+    border-radius: 21px !important;
+  }
+
+  .home-dashboard .home-map-card::before {
+    left: 12px !important;
+    bottom: 13px !important;
+    padding: 4px 7px !important;
+    font-size: 6px !important;
+  }
+
+  .bottom-nav {
+    border-left: 0;
+    border-right: 0;
+    border-bottom: 0;
+    border-radius: 0;
+    box-shadow: 0 -8px 28px rgba(31, 42, 68, .045);
+  }
+}
+
+@media (min-width: 900px) and (max-height: 780px) {
+  .home-dashboard.page,
+  .home-page.home-dashboard {
+    grid-template-rows: 62px 58px 112px 98px minmax(112px, 1fr) 72px !important;
+    row-gap: 8px !important;
+  }
+
+  .home-dashboard > .topbar,
+  .home-page > .topbar {
+    height: 62px !important;
+    min-height: 62px !important;
+  }
+
+  .home-dashboard .home-time-block strong {
+    font-size: 25px !important;
+  }
+
+  .home-dashboard .upcoming-time strong {
+    font-size: 21px !important;
+  }
+
+  .bottom-nav {
+    bottom: 9px !important;
+    height: 58px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
