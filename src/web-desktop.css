@@ -2,157 +2,178 @@
 html, body, #root { min-height: 100%; }
 
 /*
- * Mobile remains the source layout. On desktop ROUTE should behave like a real
- * web messenger, not like a 480px phone mock-up centered in a large browser.
+ * Desktop is a dedicated layout. Do not inherit the 480px mobile canvas or a
+ * narrow centered phone-style column when ROUTE runs in a browser/Windows PWA.
  */
 @media (min-width: 900px) {
-  html, body, #root { min-height: 100dvh; }
+  html, body, #root {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 100dvh;
+    margin: 0 !important;
+  }
 
   body {
-    min-width: 900px;
+    overflow-x: hidden;
     background:
-      radial-gradient(circle at 8% 6%, rgba(224, 122, 95, .07), transparent 28%),
-      radial-gradient(circle at 92% 94%, rgba(61, 64, 91, .06), transparent 30%),
+      radial-gradient(circle at 8% 6%, rgba(224, 122, 95, .06), transparent 30%),
+      radial-gradient(circle at 92% 94%, rgba(61, 64, 91, .05), transparent 30%),
       var(--background);
   }
 
   .app-shell {
-    width: 100%;
-    max-width: none;
-    min-height: 100dvh;
-    margin: 0;
-    overflow: visible;
-    border: 0;
+    width: 100vw !important;
+    max-width: none !important;
+    min-height: 100dvh !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    border: 0 !important;
+    border-radius: 0 !important;
     background: var(--background);
-    box-shadow: none;
+    box-shadow: none !important;
   }
 
-  .app-shell > main {
-    width: min(100%, 1360px);
-    max-width: 1360px;
-    min-height: 100dvh;
-    margin: 0 auto;
-    padding-bottom: 92px;
+  .app-shell > main,
+  .app-shell main {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 100dvh !important;
+    margin: 0 !important;
+    padding-bottom: 92px !important;
   }
 
-  .page {
-    width: 100%;
-    max-width: none;
-    padding-left: clamp(24px, 3vw, 46px);
-    padding-right: clamp(24px, 3vw, 46px);
+  /* Main desktop canvas: almost the full browser width. */
+  .home-dashboard.page,
+  .home-page.home-dashboard {
+    width: calc(100vw - 64px) !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: calc(100dvh - 92px) !important;
+    margin: 0 auto !important;
+    padding: 0 0 22px !important;
+    overflow: visible !important;
   }
 
-  .topbar {
-    height: 78px;
-    min-height: 78px;
+  .home-dashboard > .topbar,
+  .home-page > .topbar {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 78px !important;
+    height: 78px !important;
+    padding: 0 10px !important;
+    margin: 0 0 18px !important;
   }
 
-  .wordmark strong { font-size: 27px; }
+  .wordmark strong { font-size: 28px; }
   .page-title { font-size: 19px; }
   .header-actions button { min-width: 46px; min-height: 46px; }
 
-  /* Home: use the available monitor width instead of keeping the mobile width. */
-  .home-dashboard {
-    width: 100%;
-    max-width: none;
-    height: auto;
-    min-height: calc(100dvh - 92px);
-    padding-bottom: 18px;
-    overflow: visible;
-  }
-
-  .home-dashboard .topbar { margin-bottom: 10px; }
-
   .home-dashboard-grid {
-    width: 100%;
-    max-width: none;
-    grid-template-columns: minmax(0, 1.48fr) minmax(320px, .72fr);
-    gap: clamp(16px, 1.5vw, 22px);
-    align-items: stretch;
-    overflow: visible;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1.75fr) minmax(360px, .75fr) !important;
+    gap: clamp(18px, 1.6vw, 28px) !important;
+    align-items: stretch !important;
+    overflow: visible !important;
   }
 
   .home-map-card {
-    min-height: clamp(600px, calc(100dvh - 190px), 760px);
-    border-radius: 28px;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: clamp(650px, calc(100dvh - 190px), 860px) !important;
+    border-radius: 30px !important;
   }
 
   .home-dashboard-side {
-    gap: 16px;
-    overflow: visible;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    display: grid !important;
+    grid-template-rows: auto auto minmax(260px, 1fr) auto !important;
+    gap: 18px !important;
+    overflow: visible !important;
   }
 
   .home-time-card,
   .home-photo-card,
-  .home-chat-card { border-radius: 24px; }
+  .home-chat-card {
+    width: 100% !important;
+    max-width: none !important;
+    border-radius: 24px !important;
+  }
 
-  .home-time-card { padding: 20px; }
-  .home-card-title span { font-size: 15px; }
-  .home-time-block small { font-size: 11px; }
-  .home-time-block strong { font-size: 30px; }
-  .upcoming-time strong { font-size: 25px; }
-  .home-time-block em { font-size: 11px; }
+  .home-time-card { padding: 22px !important; }
+  .home-card-title span { font-size: 16px; }
+  .home-time-block small { font-size: 12px; }
+  .home-time-block strong { font-size: 32px; }
+  .upcoming-time strong { font-size: 27px; }
+  .home-time-block em { font-size: 12px; }
 
-  .home-photo-card { min-height: 270px; }
+  .home-photo-card { min-height: 280px !important; }
   .home-photo-copy small { font-size: 10px; }
-  .home-photo-copy strong { font-size: 18px; }
+  .home-photo-copy strong { font-size: 19px; }
   .home-photo-copy em { font-size: 11px; }
 
-  .home-chat-card { min-height: 126px; padding: 18px; }
-  .home-chat-head b { font-size: 14px; }
+  .home-chat-card { min-height: 132px !important; padding: 19px !important; }
+  .home-chat-head b { font-size: 15px; }
   .home-chat-copy b { font-size: 13px; }
   .home-chat-copy small { font-size: 11px; }
-  .home-chat-avatar { width: 42px; height: 42px; font-size: 13px; }
+  .home-chat-avatar { width: 44px; height: 44px; font-size: 13px; }
 
   .home-location-status {
-    top: 20px;
-    left: 20px;
-    right: 20px;
-    min-height: 68px;
-    padding: 13px 15px;
+    top: 22px !important;
+    left: 22px !important;
+    right: 22px !important;
+    min-height: 70px !important;
+    padding: 14px 16px !important;
   }
-  .home-location-status b { font-size: 13px; }
-  .home-location-status small { font-size: 10px; }
+  .home-location-status b { font-size: 14px; }
+  .home-location-status small { font-size: 11px; }
   .home-map-place { font-size: 11px; }
-  .home-map-avatar { width: 62px; height: 62px; font-size: 19px; }
+  .home-map-avatar { width: 64px; height: 64px; font-size: 20px; }
 
-  /* Keep chat readable on a wide monitor instead of stretching bubbles edge-to-edge. */
+  /* Other tabs: wide desktop surfaces, with chat kept readable. */
+  .page:not(.home-dashboard) {
+    width: calc(100vw - 64px) !important;
+    max-width: 1480px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
   .chat-page {
-    width: min(100%, 1040px);
-    margin: 0 auto;
-  }
-
-  /* Other content pages can use a comfortable document width. */
-  .memories-page,
-  .location-page,
-  .more-page {
-    width: 100%;
-    max-width: none;
-  }
-
-  .bottom-nav {
-    left: 50%;
-    width: min(100%, 1360px);
-    max-width: 1360px;
-    height: 82px;
-    transform: translateX(-50%);
-    padding-left: clamp(24px, 3vw, 46px);
-    padding-right: clamp(24px, 3vw, 46px);
-    border: 1px solid var(--border);
-    border-bottom: 0;
-    border-radius: 22px 22px 0 0;
-    box-shadow: 0 -10px 35px rgba(31, 42, 68, .05);
-  }
-
-  .bottom-nav button {
-    max-width: 220px;
-    margin: 0 auto;
-    font-size: 11px;
+    width: min(1180px, calc(100vw - 96px)) !important;
+    max-width: 1180px !important;
+    margin: 0 auto !important;
   }
 
   .route-settings-hub {
-    width: min(860px, calc(100vw - 80px));
-    max-width: 860px;
+    width: min(900px, calc(100vw - 96px)) !important;
+    max-width: 900px !important;
+  }
+
+  .bottom-nav {
+    left: 32px !important;
+    right: 32px !important;
+    width: auto !important;
+    max-width: none !important;
+    height: 82px !important;
+    transform: none !important;
+    padding: 7px clamp(26px, 4vw, 72px) !important;
+    border: 1px solid var(--border) !important;
+    border-bottom: 0 !important;
+    border-radius: 24px 24px 0 0 !important;
+    box-shadow: 0 -10px 35px rgba(31, 42, 68, .05) !important;
+  }
+
+  .bottom-nav button {
+    max-width: 240px;
+    margin: 0 auto;
+    font-size: 11px;
   }
 
   .auth-loading,
@@ -162,21 +183,20 @@ html, body, #root { min-height: 100%; }
   }
 }
 
-/* Large desktop / Windows app window */
-@media (min-width: 1280px) {
-  .app-shell > main,
-  .bottom-nav {
-    width: min(100%, 1440px);
-    max-width: 1440px;
+@media (min-width: 1400px) {
+  .home-dashboard.page,
+  .home-page.home-dashboard {
+    width: calc(100vw - 96px) !important;
   }
 
   .home-dashboard-grid {
-    grid-template-columns: minmax(0, 1.55fr) minmax(380px, .72fr);
-    gap: 24px;
+    grid-template-columns: minmax(0, 2fr) minmax(410px, .72fr) !important;
+    gap: 28px !important;
   }
 
-  .home-map-card {
-    min-height: clamp(620px, calc(100dvh - 190px), 790px);
+  .bottom-nav {
+    left: 48px !important;
+    right: 48px !important;
   }
 }
 
