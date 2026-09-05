@@ -54,6 +54,8 @@ import './web-desktop.css';
 import './route-web-phone-preview-v12.css';
 // Native-only phase-1 stability guards intentionally load after all visual layers.
 import './route-stability-v15.css';
+// Phase-2 chat/media fixes must win over legacy bubble sizing and backgrounds.
+import './route-chat-stability-v16.css';
 
 import './input-ime-stability';
 import './route-themes';
