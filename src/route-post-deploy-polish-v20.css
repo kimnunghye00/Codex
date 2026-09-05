@@ -1,0 +1,290 @@
+/* ROUTE post-deploy phone polish v20
+ * Real-device adjustments based on the first production APK review.
+ * This layer intentionally loads after the phase-4/5 appearance runtime.
+ */
+
+/* Header ---------------------------------------------------------------- */
+.topbar .wordmark strong {
+  font-size: 20px !important;
+  letter-spacing: -1px !important;
+}
+
+.topbar .brand {
+  gap: 10px !important;
+}
+
+.topbar .page-title {
+  min-height: 22px !important;
+  padding-left: 10px !important;
+  font-size: 15px !important;
+  line-height: 1.1 !important;
+}
+
+.topbar::after {
+  width: 42px !important;
+}
+
+.header-actions button {
+  min-width: 40px !important;
+  min-height: 40px !important;
+}
+
+/* Use one navigation word consistently: the bottom tab is "추억", not "앨범". */
+.memories-page > .topbar .page-title {
+  font-size: 0 !important;
+}
+
+.memories-page > .topbar .page-title::after {
+  content: '추억';
+  font-size: 15px;
+  line-height: 1.1;
+}
+
+.chat-page > .topbar .page-title {
+  font-size: 0 !important;
+}
+
+.chat-page > .topbar .page-title::after {
+  content: '채팅';
+  font-size: 15px;
+  line-height: 1.1;
+}
+
+/* Home couple strip ------------------------------------------------------ */
+.home-dashboard .home-couple-profile-card {
+  grid-template-columns: minmax(0, 1fr) 38px minmax(0, 1fr) !important;
+  column-gap: 5px !important;
+  padding: 7px 9px !important;
+}
+
+.home-dashboard .home-person,
+.home-dashboard .home-couple-profile-card > .home-person:last-child {
+  min-width: 0 !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  text-align: center !important;
+}
+
+.home-dashboard .home-couple-profile-card > .home-person:last-child .home-profile-copy,
+.home-dashboard .home-profile-copy {
+  width: 100% !important;
+  align-items: center !important;
+}
+
+.home-dashboard .home-profile-avatar,
+.home-dashboard .home-profile-avatar.partner {
+  width: 36px !important;
+  height: 36px !important;
+  font-size: 11px !important;
+}
+
+.home-dashboard .home-profile-copy b {
+  width: 100% !important;
+  max-width: 64px;
+  text-align: center !important;
+  font-size: 9px !important;
+  line-height: 1.15 !important;
+}
+
+.home-dashboard .home-profile-copy small {
+  display: none !important;
+}
+
+.home-dashboard .home-profile-heart {
+  width: 34px !important;
+  height: 34px !important;
+}
+
+.home-dashboard .home-profile-heart::before,
+.home-dashboard .home-profile-heart::after {
+  width: 10px !important;
+}
+
+/* Memories hub: the active tab already says Album/Anniversary/etc., so the
+   second large title was redundant with the app header. */
+.memories-page .hub-head {
+  min-height: 44px !important;
+  margin: 4px 0 0 !important;
+  padding: 7px 4px 9px !important;
+  align-items: center !important;
+}
+
+.memories-page .hub-head h1 {
+  display: none !important;
+}
+
+.memories-page .hub-head small {
+  display: block;
+  margin: 0 !important;
+  font-size: 8px !important;
+  letter-spacing: .15em !important;
+}
+
+.memories-page .hub-settings {
+  width: 40px !important;
+  height: 40px !important;
+}
+
+/* Chat feedback should read like a small status, not a full-width error hero. */
+.chat-page .chat-sync-error,
+.chat-page .chat-flow-notice,
+.chat-page .chat-media-progress {
+  margin: 5px 8px !important;
+  padding: 7px 10px !important;
+  border-radius: 10px !important;
+  font-size: 9px !important;
+  line-height: 1.35 !important;
+}
+
+/* Compact messenger composer -------------------------------------------- */
+.chat-page .composer-area {
+  flex: 0 0 auto !important;
+  padding: 0 0 6px !important;
+  background: transparent !important;
+}
+
+.chat-page .composer-extra-row {
+  gap: 4px !important;
+  padding: 4px 5px 5px !important;
+}
+
+.chat-page .composer-extra-row button {
+  min-height: 50px !important;
+  padding: 4px 1px !important;
+}
+
+.chat-page .composer {
+  min-height: 60px !important;
+  gap: 6px !important;
+  margin: 0 !important;
+  padding: 7px 8px !important;
+  border: 1px solid var(--route-border-soft, var(--border)) !important;
+  border-radius: 18px !important;
+  background: var(--surface) !important;
+  box-shadow: 0 6px 18px rgba(31, 42, 68, .045);
+}
+
+.chat-page .composer textarea {
+  min-width: 0 !important;
+  min-height: 44px !important;
+  height: 44px !important;
+  max-height: 92px !important;
+  flex: 1 1 auto !important;
+  resize: none !important;
+  overflow-y: auto !important;
+  padding: 10px 14px !important;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, var(--primary) 12%) !important;
+  border-radius: 22px !important;
+  outline: none !important;
+  background: color-mix(in srgb, var(--surface) 90%, var(--background)) !important;
+  color: var(--text-primary) !important;
+  line-height: 1.4 !important;
+}
+
+.chat-page .composer textarea:focus {
+  border-color: color-mix(in srgb, var(--primary) 38%, var(--border)) !important;
+  background: var(--surface) !important;
+}
+
+.chat-page .composer > button:not(.send) {
+  min-width: 40px !important;
+  width: 40px !important;
+  min-height: 40px !important;
+  height: 40px !important;
+}
+
+.chat-page .composer .send {
+  min-width: 42px !important;
+  width: 42px !important;
+  min-height: 42px !important;
+  height: 42px !important;
+}
+
+@media (max-width: 480px) {
+  /* The schedule row now hugs its content; the photo card receives the spare
+     vertical space instead of showing a large empty schedule panel. */
+  .home-dashboard.page,
+  .home-page.home-dashboard {
+    grid-template-rows:
+      calc(62px + var(--route-safe-top, 0px))
+      72px
+      minmax(118px, 128px)
+      max-content
+      minmax(112px, 1fr)
+      82px !important;
+  }
+
+  .home-dashboard .home-couple-profile-card {
+    min-height: 72px !important;
+    height: 72px !important;
+  }
+
+  .home-dashboard .home-schedule-card {
+    min-height: 0 !important;
+    height: auto !important;
+    align-self: start !important;
+    padding: 8px 9px !important;
+  }
+
+  .home-dashboard .home-schedule-list {
+    margin-top: 5px !important;
+    gap: 4px !important;
+  }
+
+  .home-dashboard .home-schedule-empty {
+    padding: 3px 0 !important;
+  }
+
+  .home-dashboard .home-schedule-add {
+    min-height: 30px !important;
+    margin-top: 5px !important;
+    padding: 4px 6px !important;
+  }
+
+  .home-dashboard .home-photo-card {
+    min-height: 112px !important;
+  }
+
+  .topbar .wordmark strong {
+    font-size: 20px !important;
+  }
+
+  .topbar .page-title {
+    max-width: 30vw !important;
+  }
+
+  html.route-native .chat-page .composer-area {
+    padding-bottom: max(5px, env(safe-area-inset-bottom)) !important;
+  }
+}
+
+@media (max-width: 390px) {
+  .home-dashboard.page,
+  .home-page.home-dashboard {
+    grid-template-rows:
+      calc(60px + var(--route-safe-top, 0px))
+      68px
+      minmax(110px, 120px)
+      max-content
+      minmax(102px, 1fr)
+      76px !important;
+  }
+
+  .home-dashboard .home-couple-profile-card {
+    height: 68px !important;
+    min-height: 68px !important;
+  }
+
+  .home-dashboard .home-profile-avatar,
+  .home-dashboard .home-profile-avatar.partner {
+    width: 33px !important;
+    height: 33px !important;
+  }
+
+  .chat-page .composer {
+    min-height: 58px !important;
+    padding: 6px 7px !important;
+  }
+}
