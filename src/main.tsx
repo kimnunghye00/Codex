@@ -41,6 +41,8 @@ import './layout-polish-v4.css';
 import './route-design-system-v6.css';
 // Final non-home product polish: Memories, Chat, Location and More.
 import './route-product-polish-v7.css';
+// Last-mile responsive QA: clipping, Korean text, touch targets and safe areas.
+import './route-final-qa-v8.css';
 
 import './route-themes';
 import './home-map-overlay';
