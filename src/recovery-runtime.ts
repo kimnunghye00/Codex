@@ -1,3 +1,4 @@
+import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './lib/firebase';
 import { requestAlbumSyncNow } from './lib/crossDeviceAlbumSync';
 import { signalPersistentStateChange } from './utils/persistenceSignal';
@@ -78,6 +79,17 @@ function recoverRestoredBackup() {
   window.setTimeout(() => window.location.reload(), 80);
 }
 
+function clearRecoveryReloadMarkers() {
+  try {
+    for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {
+      const key = sessionStorage.key(index);
+      if (key?.startsWith(RECOVERY_RELOAD_PREFIX)) sessionStorage.removeItem(key);
+    }
+  } catch {
+    // Session storage is only a loop guard, never user data.
+  }
+}
+
 function installRuntimeRecovery() {
   setNetworkState(navigator.onLine);
 
@@ -105,6 +117,10 @@ function installRuntimeRecovery() {
       setNetworkState(navigator.onLine, false);
       flushPendingState();
     }
+  });
+
+  onAuthStateChanged(auth, (user) => {
+    if (!user) clearRecoveryReloadMarkers();
   });
 }
 
