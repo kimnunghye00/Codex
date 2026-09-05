@@ -70,12 +70,14 @@ jobs:
           grep -q "backupMedia" storage.rules
           echo "ROUTE web checks passed."
 
+      - name: Require Firebase deployment credentials
+        if: ${{ env.FIREBASE_TOKEN == '' }}
+        shell: bash
+        run: |
+          echo 'ERROR: GitHub Actions secret ROUTE_FIREBASE_TOKEN is missing.' >&2
+          echo 'The web build succeeded, but nothing can be deployed to Firebase Hosting until this secret is configured.' >&2
+          exit 1
+
       - name: Deploy to Firebase Hosting
         if: ${{ env.FIREBASE_TOKEN != '' }}
         run: npx --yes firebase-tools deploy --only hosting --project meluni-f4e00 --token "$FIREBASE_TOKEN" --non-interactive
-
-      - name: Firebase credentials not configured yet
-        if: ${{ env.FIREBASE_TOKEN == '' }}
-        run: |
-          echo 'ROUTE web build succeeded.'
-          echo 'Add GitHub Actions secret ROUTE_FIREBASE_TOKEN once to enable automatic Firebase Hosting deployment.'
