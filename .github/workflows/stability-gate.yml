@@ -1,0 +1,47 @@
+name: ROUTE Stability Gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: route-stability-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web-build:
+    name: TypeScript and web production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Production build
+        run: npm run build
+
+      - name: Verify critical release guardrails
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ROUTE_RELEASE_GUARDRAILS.md
+          test -f src/ErrorBoundary.tsx
+          test -f src/utils/naverMaps.ts
+          test -f firebase.json
+          test -f public/sw.js
+          grep -q "ncpKeyId" src/utils/naverMaps.ts
+          grep -q "hosting" firebase.json
+          grep -q "RouteErrorBoundary" src/main.tsx
+          echo "ROUTE critical static checks passed."
