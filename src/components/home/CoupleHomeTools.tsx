@@ -66,13 +66,12 @@ function saveAppointment(uid: string, schedule: Omit<Schedule, 'id'>) {
 
 async function observeCloudWrite<T>(write: Promise<T>): Promise<CloudWriteState> {
   let timeout: number | undefined;
-  const tracked = write.then<CloudWriteState>(
-    () => 'confirmed',
-    (cause) => {
+  const tracked: Promise<CloudWriteState> = write
+    .then(() => 'confirmed' as CloudWriteState)
+    .catch((cause) => {
       console.warn('[ROUTE schedule cloud save]', cause);
-      return 'failed';
-    },
-  );
+      return 'failed' as CloudWriteState;
+    });
   const delayed = new Promise<CloudWriteState>((resolve) => {
     timeout = window.setTimeout(() => resolve('queued'), CLOUD_ACK_WAIT_MS);
   });
