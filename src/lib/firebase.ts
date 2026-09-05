@@ -1,6 +1,7 @@
+import { Capacitor } from '@capacitor/core';
 import { initializeApp } from 'firebase/app';
 import { browserLocalPersistence, getAuth, setPersistence } from 'firebase/auth';
-import { initializeFirestore } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
@@ -14,7 +15,18 @@ const firebaseConfig = {
 
 export const firebaseApp = initializeApp(firebaseConfig);
 export const auth = getAuth(firebaseApp);
-export const db = initializeFirestore(firebaseApp, { ignoreUndefinedProperties: true });
+
+// Capacitor runs the web Firebase SDK inside a private app WebView. Keep its
+// Firestore cache across app restarts so previously loaded chats, schedules,
+// locations and settings remain readable during a temporary network outage.
+// Regular browser sessions intentionally keep the default in-memory cache.
+export const db = initializeFirestore(firebaseApp, Capacitor.isNativePlatform()
+  ? {
+      ignoreUndefinedProperties: true,
+      localCache: persistentLocalCache({ cacheSizeBytes: 50 * 1024 * 1024 }),
+    }
+  : { ignoreUndefinedProperties: true });
+
 export const storage = getStorage(firebaseApp);
 export const authPersistenceReady = setPersistence(auth, browserLocalPersistence).catch((cause) => {
   console.warn('[ROUTE auth persistence]', cause);
