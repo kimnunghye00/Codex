@@ -17,10 +17,13 @@ import { ChatToolsPanel, loadChatPreferences, saveChatPreferences, type ChatPref
 type ChatSchedule = { id: string; title: string; date: string; startTime: string; type: 'personal' | 'couple'; ownerId: string };
 type ScheduledDraft = { id: number; text: string; sendAt: string };
 type CallMode = 'voice' | 'video' | 'screen';
+type MediaProgress = { completed: number; total: number };
 
 const MAX_SOURCE_IMAGE_BYTES = 25 * 1024 * 1024;
 const MAX_ORIGINAL_IMAGE_BYTES = 9 * 1024 * 1024;
 const MAX_GIF_BYTES = 9 * 1024 * 1024;
+const MAX_CHAT_PHOTOS = 100;
+const CHAT_MEDIA_BATCH_SIZE = 4;
 let messageSequence = 0;
 
 function nextMessageId() {
@@ -95,6 +98,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   const [partnerTyping, setPartnerTyping] = useState(false);
   const [syncError, setSyncError] = useState('');
   const [flowNotice, setFlowNotice] = useState('');
+  const [mediaProgress, setMediaProgress] = useState<MediaProgress | null>(null);
   const [savedMediaIds, setSavedMediaIds] = useState<Set<number>>(() => loadChatMemoryMessageIds());
   const [toolsOpen, setToolsOpen] = useState(false);
   const [preferences, setPreferences] = useState(() => loadChatPreferences(currentUid || 'guest'));
@@ -110,6 +114,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   const typingTimerRef = useRef<number | undefined>(undefined);
   const typingActiveRef = useRef(false);
   const typingLastWriteRef = useRef(0);
+  const mediaSendingRef = useRef(false);
   const noticeTimerRef = useRef<number | undefined>(undefined);
   const videoRef = useRef<HTMLVideoElement>(null);
   const byId = useMemo(() => new Map(messages.map((message) => [message.id, message])), [messages]);
@@ -229,19 +234,37 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   const send = () => { const text = draft; setDraft(''); sendText(text); };
   const sendImages = async (files: File[]) => {
     if (!files.length || !currentUid) return;
+    if (mediaSendingRef.current) {
+      setSyncError('사진 전송이 끝난 뒤 다음 사진을 보내 주세요.');
+      return;
+    }
+
+    const selected = files.slice(0, MAX_CHAT_PHOTOS);
+    const messageId = nextMessageId();
+    const urls: string[] = [];
     let uploadedPaths: string[] = [];
+    mediaSendingRef.current = true;
+    setMediaProgress({ completed: 0, total: selected.length });
+
     try {
       setSyncError('');
-      showFlowNotice('사진을 전송하고 있어요.');
-      const selected = files.slice(0, 10);
-      const preparedUrls = await Promise.all(selected.map((file) => prepareImage(file, preferences.mediaQuality)));
-      const messageId = nextMessageId();
-      let urls = preparedUrls;
+      if (files.length > MAX_CHAT_PHOTOS) showFlowNotice(`한 번에 최대 ${MAX_CHAT_PHOTOS}장까지 전송할 수 있어요.`);
 
-      if (connection) {
-        const uploaded = await uploadChatMedia(connection.coupleId, currentUid, messageId, preparedUrls);
-        urls = uploaded.urls;
-        uploadedPaths = uploaded.paths;
+      for (let offset = 0; offset < selected.length; offset += CHAT_MEDIA_BATCH_SIZE) {
+        const batch = selected.slice(offset, offset + CHAT_MEDIA_BATCH_SIZE);
+        const preparedUrls = await Promise.all(batch.map((file) => prepareImage(file, preferences.mediaQuality)));
+
+        if (connection) {
+          const uploaded = await uploadChatMedia(connection.coupleId, currentUid, messageId, preparedUrls, {
+            startIndex: offset,
+            onUploaded: (completedInBatch) => setMediaProgress({ completed: offset + completedInBatch, total: selected.length }),
+          });
+          urls.push(...uploaded.urls);
+          uploadedPaths = [...uploadedPaths, ...uploaded.paths];
+        } else {
+          urls.push(...preparedUrls);
+          setMediaProgress({ completed: Math.min(offset + batch.length, selected.length), total: selected.length });
+        }
       }
 
       const message: Message = urls.length === 1
@@ -256,6 +279,9 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
       if (uploadedPaths.length) await deleteUploadedChatMedia(uploadedPaths);
       console.error('[ROUTE chat photo]', cause);
       setSyncError(mediaErrorMessage(cause, 'photo'));
+    } finally {
+      mediaSendingRef.current = false;
+      setMediaProgress(null);
     }
   };
   const sendGif = async (file: File) => {
@@ -330,6 +356,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     {nearestSchedule && <div className="chat-next-schedule"><CalendarClock size={16} /><div><small>가장 가까운 일정</small><b>{nearestSchedule.title}</b><span>{nearestSchedule.date.replaceAll('-', '.')} · {nearestSchedule.startTime}</span></div></div>}
     {syncError && <p className="chat-sync-error" role="alert">{syncError}</p>}
     {flowNotice && <p className="chat-flow-notice" role="status">{flowNotice}</p>}
+    {mediaProgress && <p className="chat-media-progress" role="status" aria-live="polite">사진 {mediaProgress.completed} / {mediaProgress.total}장 전송 중...</p>}
     <div className="messages" onClick={() => active && setActive(undefined)}>{messages.map((message, index) => {
       const date = new Date(message.timestamp).toDateString();
       const previousDate = index > 0 ? new Date(messages[index - 1].timestamp).toDateString() : '';
