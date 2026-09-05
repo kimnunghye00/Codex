@@ -1,3 +1,5 @@
+import './route-appearance-stability-v17.css';
+
 type AppIconId = 'route' | 'heart' | 'night' | 'cream';
 
 const LEGACY_THEME_KEY = 'meluni-theme';
