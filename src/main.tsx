@@ -39,6 +39,8 @@ import './home-brand-polish-v5.css';
 import './layout-polish-v4.css';
 // Final product tokens and home composition must win over legacy feature CSS.
 import './route-design-system-v6.css';
+// Final non-home product polish: Memories, Chat, Location and More.
+import './route-product-polish-v7.css';
 
 import './route-themes';
 import './home-map-overlay';
