@@ -1,0 +1,751 @@
+/* ROUTE product polish v7
+ * Applies the v6 design language to Memories, Chat, Location and More.
+ * Loaded after the design system so these are the final product-level refinements.
+ */
+
+/* Shared non-home rhythm -------------------------------------------------- */
+.memories-page,
+.chat-page,
+.location-page,
+.more-page {
+  --route-panel-border: color-mix(in srgb, var(--border) 82%, var(--primary) 18%);
+  --route-panel-soft: color-mix(in srgb, var(--surface) 96%, var(--primary) 4%);
+  --route-panel-shadow: 0 12px 34px rgba(31, 42, 68, .06);
+}
+
+.memories-page .topbar,
+.chat-page .topbar,
+.location-page .topbar,
+.more-page .topbar {
+  margin-bottom: 10px;
+}
+
+/* Memories / hub --------------------------------------------------------- */
+.route-hub .hub-head {
+  margin: 14px 0 12px;
+  padding: 0 2px;
+}
+
+.route-hub .hub-head small,
+.route-hub .hub-section-head small,
+.route-hub .hub-hero small {
+  color: var(--primary);
+  letter-spacing: .12em;
+}
+
+.route-hub .hub-head h1 {
+  margin-top: 3px;
+  font-size: 25px;
+  letter-spacing: -.04em;
+}
+
+.route-hub .hub-settings {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--route-panel-border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 6px 18px rgba(31, 42, 68, .045);
+}
+
+.route-hub .hub-tabs {
+  gap: 5px;
+  margin-bottom: 12px;
+  padding: 5px;
+  border: 1px solid var(--route-panel-border);
+  border-radius: 17px;
+  background: var(--route-panel-soft);
+}
+
+.route-hub .hub-tabs button {
+  min-height: 38px;
+  padding: 0 14px;
+  border-color: transparent;
+  border-radius: 12px;
+  background: transparent;
+  transition: background .16s ease, color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+.route-hub .hub-tabs button.active {
+  border-color: var(--route-panel-border);
+  color: var(--primary);
+  background: var(--surface);
+  box-shadow: 0 5px 16px rgba(31, 42, 68, .07);
+}
+
+.route-hub .hub-tabs button:active {
+  transform: scale(.97);
+}
+
+.route-hub .hub-hero,
+.route-hub .anniversary-row,
+.route-hub .schedule-hub-row,
+.route-hub .date-plan-card,
+.route-hub .tier-card,
+.route-hub .record-grid article,
+.route-hub .hub-list-row,
+.route-hub .last-year-card,
+.route-hub .memory-card {
+  border-color: var(--route-panel-border);
+  box-shadow: var(--route-panel-shadow);
+}
+
+.route-hub .hub-hero {
+  min-height: 94px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 96% 8%, color-mix(in srgb, var(--emotion) 7%, transparent), transparent 30%),
+    linear-gradient(145deg, var(--route-panel-soft), var(--surface));
+}
+
+.route-hub .hub-hero > svg {
+  width: 42px;
+  height: 42px;
+  padding: 9px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+}
+
+.route-hub .hub-section-head {
+  margin-top: 6px;
+  padding: 6px 2px;
+}
+
+.route-hub .hub-section-head h2 {
+  font-size: 19px;
+  letter-spacing: -.035em;
+}
+
+.route-hub .hub-section-head > button {
+  min-height: 38px;
+  padding: 0 12px;
+  border-color: var(--route-panel-border);
+  background: var(--surface);
+}
+
+.route-hub .memory-card {
+  overflow: hidden;
+  border: 1px solid var(--route-panel-border);
+  border-radius: 20px;
+  background: var(--surface);
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+
+.route-hub .memory-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 38px rgba(31, 42, 68, .09);
+}
+
+.route-hub .memory-cover {
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: var(--route-panel-soft);
+}
+
+.route-hub .memory-cover img,
+.route-hub .memory-cover video {
+  transition: transform .3s ease;
+}
+
+.route-hub .memory-card:hover .memory-cover img,
+.route-hub .memory-card:hover .memory-cover video {
+  transform: scale(1.025);
+}
+
+.route-hub .memory-card-copy {
+  padding: 13px 14px 15px;
+}
+
+.route-hub .memory-card-copy span {
+  color: var(--text-secondary);
+  font-size: 9px;
+}
+
+.route-hub .memory-card-copy h3 {
+  margin: 4px 0 0;
+  font-size: 14px;
+  letter-spacing: -.025em;
+}
+
+.route-hub .memory-card-copy p {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 9px;
+}
+
+.route-hub .memory-favorite-badge {
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(255, 255, 255, .42);
+  background: rgba(25, 24, 36, .32);
+}
+
+.route-hub .memory-favorite-badge.active {
+  border-color: rgba(255,255,255,.7);
+  color: var(--emotion);
+  background: rgba(255,255,255,.92);
+}
+
+.route-hub .hub-order-panel,
+.route-hub .hub-modal {
+  border-color: var(--route-panel-border);
+  box-shadow: 0 26px 80px rgba(24, 24, 38, .18);
+}
+
+/* Chat ------------------------------------------------------------------- */
+.chat-page {
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--primary) 4%, transparent), transparent 28%),
+    var(--background);
+}
+
+.chat-page .chat-profile {
+  margin: 0 0 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--route-panel-border);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--route-panel-shadow);
+}
+
+.chat-page .chat-profile .avatar.large {
+  border: 3px solid var(--surface);
+  box-shadow: 0 6px 18px rgba(31, 42, 68, .12);
+}
+
+.chat-page .chat-call-actions button {
+  width: 38px;
+  height: 38px;
+  border-color: var(--route-panel-border);
+  background: var(--route-panel-soft);
+}
+
+.chat-page .chat-next-schedule {
+  margin: 0 0 9px;
+  padding: 9px 12px;
+  border-color: var(--route-panel-border);
+  border-radius: 15px;
+  background: var(--surface);
+  box-shadow: 0 5px 16px rgba(31, 42, 68, .035);
+}
+
+.chat-page .messages {
+  min-height: 0;
+  margin: 0;
+  padding: 18px 14px 24px;
+  border: 1px solid var(--route-panel-border);
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, var(--primary) 4%), var(--surface));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.62);
+}
+
+.chat-page .date-chip {
+  padding: 6px 12px;
+  border: 1px solid var(--route-panel-border);
+  background: color-mix(in srgb, var(--surface) 90%, var(--primary) 10%);
+}
+
+.chat-page .bubble {
+  border-color: var(--route-panel-border);
+  box-shadow: 0 4px 14px rgba(31, 42, 68, .045);
+}
+
+.chat-page .mine .bubble {
+  background: linear-gradient(145deg, var(--primary-light), var(--primary));
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+
+.chat-page .composer {
+  margin-top: 10px;
+  padding: 9px 10px 10px;
+  border: 1px solid var(--route-panel-border);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: var(--route-panel-shadow);
+  backdrop-filter: blur(18px);
+}
+
+.chat-page .composer input {
+  min-height: 46px;
+  border: 1px solid transparent;
+  background: var(--route-panel-soft);
+}
+
+.chat-page .composer input:focus {
+  border-color: color-mix(in srgb, var(--primary) 32%, var(--border));
+}
+
+.chat-page .composer .send {
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--primary) 22%, transparent);
+}
+
+.chat-tools-sheet,
+.chat-extra-modal,
+.chat-call-modal {
+  border-color: var(--route-panel-border);
+  box-shadow: 0 28px 84px rgba(24, 24, 38, .20);
+}
+
+.chat-tools-menu > button,
+.chat-setting-card,
+.sticker-store-list article,
+.sticker-manage-list article,
+.chat-search-box,
+.chat-search-results button,
+.chat-setting-link {
+  border-color: var(--route-panel-border);
+  background: var(--surface);
+}
+
+/* Location --------------------------------------------------------------- */
+.location-page .location-tabs {
+  min-height: 48px;
+  padding: 5px;
+  border-color: var(--route-panel-border);
+  border-radius: 16px;
+  background: var(--route-panel-soft);
+}
+
+.location-page .location-tabs button {
+  min-height: 38px;
+  border-radius: 12px;
+}
+
+.location-page .location-tabs button.active {
+  color: var(--primary);
+  background: var(--surface);
+  box-shadow: 0 5px 16px rgba(31, 42, 68, .07);
+}
+
+.location-page .location-map-card,
+.location-page .location-share-card,
+.location-page .location-list,
+.location-page .location-empty,
+.location-page .footprint-daybar label,
+.location-page .footprint-daybar > button {
+  border-color: var(--route-panel-border);
+  box-shadow: var(--route-panel-shadow);
+}
+
+.location-page .location-map-card {
+  border-radius: 24px;
+  background: var(--route-panel-soft);
+}
+
+.location-page .location-map-caption {
+  top: 14px;
+  left: 14px;
+  padding: 9px 11px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .86);
+  box-shadow: 0 8px 24px rgba(31, 42, 68, .08);
+}
+
+.location-page .location-map-status {
+  border-radius: 16px;
+  background: rgba(255,255,255,.92);
+}
+
+.location-page .location-share-card {
+  padding: 14px 15px;
+  border-radius: 20px;
+  background: var(--surface);
+}
+
+.location-page .location-share-card.active {
+  border-color: color-mix(in srgb, var(--primary) 34%, var(--border));
+  background: linear-gradient(145deg, var(--surface), var(--route-panel-soft));
+}
+
+.location-page .location-share-head > span {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--primary) 9%, var(--surface));
+}
+
+.location-page .location-actions button {
+  min-height: 42px;
+  border-radius: 13px;
+}
+
+.location-page .location-list,
+.location-page .location-empty {
+  border-radius: 20px;
+  background: var(--surface);
+}
+
+.location-page .location-section-head h2 {
+  font-size: 18px;
+  letter-spacing: -.035em;
+}
+
+.location-page .location-visit {
+  min-height: 72px;
+  border-radius: 12px;
+}
+
+.location-page .location-visit:hover {
+  background: var(--route-panel-soft);
+}
+
+/* More ------------------------------------------------------------------- */
+.more-page .more-hero,
+.more-page .more-grid-button,
+.more-page .theme-card,
+.more-page .more-list {
+  border-color: var(--route-panel-border);
+  box-shadow: var(--route-panel-shadow);
+}
+
+.more-page .more-hero {
+  padding: 18px 20px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 92% 14%, color-mix(in srgb, var(--emotion) 9%, transparent), transparent 32%),
+    linear-gradient(145deg, var(--route-panel-soft), var(--surface));
+}
+
+.more-page .more-hero-copy h1 {
+  margin-top: 5px;
+  font-size: 23px;
+  letter-spacing: -.045em;
+}
+
+.more-page .more-hero-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--primary) 9%, var(--surface));
+}
+
+.more-page .more-section-head {
+  margin-bottom: 9px;
+}
+
+.more-page .more-section-head h2 {
+  font-size: 14px;
+  letter-spacing: -.025em;
+}
+
+.more-page .more-grid-button {
+  min-height: 76px;
+  border-radius: 17px;
+  background: var(--surface);
+  transition: transform .16s ease, border-color .16s ease, background .16s ease;
+}
+
+.more-page .more-grid-button:hover {
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--border));
+  background: var(--route-panel-soft);
+}
+
+.more-page .more-grid-button .more-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+}
+
+.more-page .theme-card,
+.more-page .more-list {
+  border-radius: 20px;
+  background: var(--surface);
+}
+
+.more-page .theme-option {
+  min-height: 54px;
+  border-color: var(--route-panel-border);
+  border-radius: 14px;
+}
+
+.more-page .theme-option.active {
+  border-color: color-mix(in srgb, var(--primary) 38%, var(--border));
+  background: var(--route-panel-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.more-page .more-list-button {
+  min-height: 54px;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.more-page .more-list-button:first-child {
+  border-radius: 19px 19px 0 0 !important;
+}
+
+.more-page .more-list-button:last-child {
+  border-radius: 0 0 19px 19px !important;
+}
+
+.more-page .more-list-button > .more-list-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+}
+
+/* Desktop: each major tab has a deliberate app composition -------------- */
+@media (min-width: 900px) {
+  .memories-page,
+  .location-page,
+  .more-page {
+    width: min(1180px, calc(100vw - 96px)) !important;
+    max-width: 1180px !important;
+    margin: 0 auto !important;
+  }
+
+  /* Memories becomes a content hub, not a stretched phone page. */
+  .route-hub {
+    height: auto !important;
+    min-height: calc(100dvh - 88px) !important;
+    padding-bottom: 104px !important;
+    overflow: visible !important;
+  }
+
+  .route-hub .hub-head {
+    margin-top: 16px;
+  }
+
+  .route-hub .hub-tabs {
+    width: max-content;
+    max-width: 100%;
+    margin-bottom: 18px;
+  }
+
+  .route-hub .memory-list {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px !important;
+    align-items: start;
+  }
+
+  .route-hub .memory-card {
+    min-width: 0;
+  }
+
+  .route-hub .hub-stack {
+    gap: 13px;
+  }
+
+  .route-hub .record-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .route-hub .hub-hero {
+    padding: 20px 22px;
+  }
+
+  /* Chat keeps a readable conversation width and a real messenger canvas. */
+  .chat-page {
+    width: min(900px, calc(100vw - 120px)) !important;
+    max-width: 900px !important;
+    height: calc(100dvh - 88px) !important;
+    margin: 0 auto !important;
+    padding-bottom: 90px !important;
+  }
+
+  .chat-page .messages {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  .chat-page .bubble {
+    max-width: min(520px, 68%);
+  }
+
+  .chat-tools-sheet {
+    width: min(720px, calc(100vw - 64px));
+  }
+
+  /* Location uses the desktop canvas: map left, controls/timeline right. */
+  .location-page {
+    height: calc(100dvh - 88px) !important;
+    min-height: 650px !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1.45fr) minmax(330px, .55fr);
+    grid-template-rows: 72px 50px auto minmax(0, 1fr);
+    column-gap: 18px;
+    row-gap: 10px;
+    padding-bottom: 98px !important;
+    overflow: hidden !important;
+  }
+
+  .location-page > .topbar {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    margin: 0;
+  }
+
+  .location-page > .location-tabs {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: min(360px, 100%);
+    justify-self: start;
+  }
+
+  .location-page > .location-map-card {
+    grid-column: 1;
+    grid-row: 3 / 5;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    flex: none;
+  }
+
+  .location-page > .location-share-card {
+    grid-column: 2;
+    grid-row: 3;
+    align-self: start;
+  }
+
+  .location-page > .location-history {
+    grid-column: 2;
+    grid-row: 4;
+    min-height: 0;
+  }
+
+  .location-page:has(> .footprint-daybar) {
+    grid-template-rows: 72px 50px 42px minmax(0, 1fr);
+  }
+
+  .location-page:has(> .footprint-daybar) > .footprint-daybar {
+    grid-column: 2;
+    grid-row: 3;
+  }
+
+  .location-page:has(> .footprint-daybar) > .location-map-card {
+    grid-column: 1;
+    grid-row: 3 / 5;
+  }
+
+  .location-page:has(> .footprint-daybar) > .location-history {
+    grid-column: 2;
+    grid-row: 4;
+  }
+
+  .location-page .location-map-card {
+    min-height: 480px;
+  }
+
+  .location-page .location-list {
+    padding: 4px 14px;
+  }
+
+  /* More becomes a tidy settings dashboard. */
+  .more-page {
+    height: calc(100dvh - 88px) !important;
+    padding-bottom: 94px !important;
+    overflow: hidden !important;
+  }
+
+  .more-page .more-scroll {
+    height: calc(100% - 76px) !important;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-content: start;
+    gap: 16px;
+    overflow-y: auto !important;
+    padding: 4px 2px 10px;
+    scrollbar-width: thin;
+  }
+
+  .more-page .more-hero {
+    grid-column: 1 / -1;
+  }
+
+  .more-page .more-section {
+    margin-top: 0;
+  }
+
+  .more-page .more-section:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .more-page .more-grid {
+    gap: 10px;
+  }
+
+  .more-page .more-grid-button {
+    min-height: 86px;
+  }
+
+  .more-page .theme-card {
+    padding: 12px;
+  }
+}
+
+/* Mobile: keep the current navigation model, only tighten polish ---------- */
+@media (max-width: 899px) {
+  .route-hub .hub-tabs {
+    margin-left: -2px;
+    margin-right: -2px;
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .route-hub .hub-tabs button {
+    border: 1px solid var(--route-panel-border);
+    background: var(--surface);
+  }
+
+  .route-hub .hub-tabs button.active {
+    color: #fff;
+    border-color: var(--primary);
+    background: var(--primary);
+  }
+
+  .chat-page .chat-profile {
+    padding: 10px 8px;
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .chat-page .messages {
+    margin-left: -4px;
+    margin-right: -4px;
+    padding-left: 8px;
+    padding-right: 8px;
+    border-left: 0;
+    border-right: 0;
+    border-radius: 16px;
+    box-shadow: none;
+  }
+
+  .chat-page .composer {
+    margin-left: -4px;
+    margin-right: -4px;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .location-page .location-map-card {
+    border-radius: 21px;
+  }
+
+  .more-page .more-hero {
+    padding: 14px 16px;
+  }
+
+  .more-page .more-hero-copy h1 {
+    font-size: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-hub .memory-card,
+  .route-hub .memory-cover img,
+  .route-hub .memory-cover video,
+  .more-page .more-grid-button {
+    transition: none;
+  }
+}
