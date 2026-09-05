@@ -1,0 +1,58 @@
+name: Build Windows EXE
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'electron/**'
+      - 'electron-builder.yml'
+      - 'build/icons/route.ico'
+      - '.github/workflows/windows-exe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-exe:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: Install Electron packaging tools
+        shell: pwsh
+        run: npm install --no-save --package-lock=false electron@latest electron-builder@latest
+
+      - name: Build ROUTE Windows installer
+        shell: pwsh
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder --win nsis --x64 --config electron-builder.yml
+
+      - name: Verify installer
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Path release/windows -Filter '*.exe' -File
+          if ($files.Count -lt 1) { throw 'ROUTE Windows installer was not generated.' }
+          $files | ForEach-Object { Write-Host "Generated: $($_.FullName) ($($_.Length) bytes)" }
+
+      - name: Upload ROUTE Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: ROUTE-Windows-Setup
+          path: release/windows/*.exe
+          if-no-files-found: error
+          retention-days: 30

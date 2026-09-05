@@ -1,0 +1,36 @@
+appId: com.route.couple
+productName: ROUTE
+copyright: Copyright © ROUTE
+
+asar: true
+
+files:
+  - electron/**/*
+
+extraResources:
+  - from: build/icons/route.ico
+    to: build/icons/route.ico
+
+extraMetadata:
+  main: electron/main.cjs
+
+directories:
+  output: release/windows
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icons/route.ico
+  artifactName: ROUTE-Setup-${version}-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: ROUTE
+  runAfterFinish: true
+  deleteAppDataOnUninstall: false
