@@ -19,6 +19,7 @@ import {
 const MIN_MOVE_METERS = 120;
 const ROUTE_MAP_ORIGIN = 'https://meluni-f4e00.web.app';
 const ROUTE_MAP_HOST = `${ROUTE_MAP_ORIGIN}/naver-map-host.html`;
+const LOCATION_FOCUS_KEY = 'route-pending-location-focus';
 
 type LocationTab = 'map' | 'footprints';
 type MapHostMessage = { source?: string; type?: string };
@@ -78,8 +79,10 @@ export function LocationPage({ Header, connection, focusPlace, onClearFocus, onC
   const [focusState, setFocusState] = useState<FocusState>('idle');
   const [focusStatus, setFocusStatus] = useState('');
   const [focusedVisit, setFocusedVisit] = useState<LocationVisit>();
+  const [queuedFocus] = useState(() => { try { return sessionStorage.getItem(LOCATION_FOCUS_KEY)?.trim() || ''; } catch { return ''; } });
   const watchId = useRef<number | undefined>(undefined);
   const mapFrame = useRef<HTMLIFrameElement>(null);
+  const handledFocus = useRef('');
   const partnerName = connection?.partnerProfile?.name?.trim() || connection?.partnerProfile?.nickname?.trim() || '상대방';
   const mapVisits = useMemo(() => activeTab === 'footprints' ? partnerVisits : [...visits].reverse(), [activeTab, partnerVisits, visits]);
 
@@ -110,13 +113,20 @@ export function LocationPage({ Header, connection, focusPlace, onClearFocus, onC
   }, [connection?.coupleId, connection?.partnerUid, partnerName, selectedDay]);
 
   useEffect(() => {
-    if (!focusPlace?.trim()) return;
+    const requestedFocus = focusPlace?.trim() || queuedFocus;
+    if (!requestedFocus || handledFocus.current === requestedFocus) return;
+    handledFocus.current = requestedFocus;
     let cancelled = false;
-    const query = focusPlace.trim();
+    const query = requestedFocus;
     const normalized = normalizePlace(query);
     setActiveTab('map');
     setFocusState('searching');
     setFocusStatus(`‘${query}’ 위치를 찾는 중이에요…`);
+
+    const clearRequest = () => {
+      try { sessionStorage.removeItem(LOCATION_FOCUS_KEY); } catch {}
+      onClearFocus?.();
+    };
 
     const resolvePlace = async () => {
       const localMatch = visits.find((visit) => {
@@ -127,8 +137,8 @@ export function LocationPage({ Header, connection, focusPlace, onClearFocus, onC
         if (cancelled) return;
         setFocusedVisit(localMatch);
         setFocusState('found');
-        setFocusStatus(`일정 장소 ‘${query}’를 최근 방문 기록에서 찾았어요.`);
-        onClearFocus?.();
+        setFocusStatus(`‘${query}’를 최근 방문 기록에서 찾았어요.`);
+        clearRequest();
         return;
       }
 
@@ -138,12 +148,12 @@ export function LocationPage({ Header, connection, focusPlace, onClearFocus, onC
         setFocusedVisit(undefined);
         setFocusState('failed');
         setFocusStatus(`‘${query}’ 위치를 찾지 못했어요. 장소명이나 주소를 조금 더 자세히 입력해 주세요.`);
-        onClearFocus?.();
+        clearRequest();
         return;
       }
 
       setFocusedVisit({
-        id: `schedule-place-${Date.now()}`,
+        id: `linked-place-${Date.now()}`,
         latitude: result.latitude,
         longitude: result.longitude,
         accuracy: 0,
@@ -151,13 +161,13 @@ export function LocationPage({ Header, connection, focusPlace, onClearFocus, onC
         arrivedAt: new Date().toISOString(),
       });
       setFocusState('found');
-      setFocusStatus(`일정 장소 ‘${query}’를 지도에서 열었어요.`);
-      onClearFocus?.();
+      setFocusStatus(`‘${query}’를 지도에서 열었어요.`);
+      clearRequest();
     };
 
     void resolvePlace();
     return () => { cancelled = true; };
-  }, [focusPlace]);
+  }, [focusPlace, queuedFocus]);
 
   useEffect(() => {
     const receiveMapMessage = (event: MessageEvent<MapHostMessage>) => {
@@ -337,7 +347,7 @@ export function LocationPage({ Header, connection, focusPlace, onClearFocus, onC
         }}
       />
       {mapStatus && <div className={`location-map-status ${mapFailed ? 'failed' : ''}`}><MapPin size={18} /><span>{mapStatus}</span>{mapFailed && <button type="button" onClick={retryMap}><RefreshCw size={14} />다시 불러오기</button>}</div>}
-      {focusState !== 'idle' && <div className={`location-focus-banner ${focusState}`}><MapPin size={16} /><span><b>{focusState === 'searching' ? '일정 장소 찾는 중' : focusState === 'found' ? '일정 장소' : '장소를 찾지 못했어요'}</b><small>{focusStatus}</small></span><button type="button" aria-label="장소 안내 닫기" onClick={clearFocusedPlace}><X size={14} /></button></div>}
+      {focusState !== 'idle' && <div className={`location-focus-banner ${focusState}`}><MapPin size={16} /><span><b>{focusState === 'searching' ? '연결된 장소 찾는 중' : focusState === 'found' ? '연결된 장소' : '장소를 찾지 못했어요'}</b><small>{focusStatus}</small></span><button type="button" aria-label="장소 안내 닫기" onClick={clearFocusedPlace}><X size={14} /></button></div>}
       <div className="location-map-caption"><strong>{activeTab === 'footprints' ? `${partnerName}의 발자취` : '우리의 이동 지도'}</strong><span>{mapVisits.length ? `${mapVisits.length}개의 위치 기록` : '아직 기록 없음'}</span></div>
     </section>
 
