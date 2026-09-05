@@ -1,0 +1,80 @@
+/* ROUTE phase-1 stability pass
+ * Native-only spacing/keyboard guards. This file is loaded last so it can
+ * safely override older mobile polish without changing the desktop preview.
+ */
+
+html.route-native {
+  --route-safe-top: max(env(safe-area-inset-top), 16px);
+  --route-keyboard-height: 0px;
+}
+
+html.route-native,
+html.route-native body,
+html.route-native #root,
+html.route-native .app-shell {
+  min-height: 100dvh;
+}
+
+/* Give ROUTE headers breathing room below the Android/iOS status area. */
+html.route-native .page > .topbar,
+html.route-native .chat-page > .topbar,
+html.route-native .location-page > .topbar,
+html.route-native .memories-page > .topbar,
+html.route-native .more-page > .topbar,
+html.route-native .home-page > .topbar {
+  min-height: calc(62px + var(--route-safe-top)) !important;
+  height: calc(62px + var(--route-safe-top)) !important;
+  padding-top: var(--route-safe-top) !important;
+}
+
+html.route-native .auth-shell {
+  min-height: 100dvh;
+  padding-top: var(--route-safe-top);
+}
+
+html.route-native .onboarding-shell {
+  min-height: 100dvh;
+  padding-top: var(--route-safe-top);
+}
+
+html.route-native .onboarding-header {
+  height: 82px;
+}
+
+/* Keep native text entry under the user's finger and avoid browser zoom/caret
+ * oddities while Android's Korean IME is composing text. */
+html.route-native input,
+html.route-native textarea {
+  font-size: 16px !important;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+html.route-native input:focus,
+html.route-native textarea:focus {
+  scroll-margin-block: 96px;
+}
+
+/* The WebView is resized by Capacitor when the keyboard opens. Hiding the
+ * fixed bottom navigation prevents it from competing with the keyboard and
+ * keeps the active field/composer inside the resized viewport. */
+html.route-native.route-keyboard-open .bottom-nav {
+  transform: translateY(calc(100% + env(safe-area-inset-bottom)));
+  pointer-events: none;
+}
+
+html.route-native.route-keyboard-open main {
+  padding-bottom: 12px;
+}
+
+html.route-native.route-keyboard-open .composer-area {
+  padding-bottom: 4px !important;
+}
+
+html.route-native.route-keyboard-open .profile-enabled-settings,
+html.route-native.route-keyboard-open .route-settings-body,
+html.route-native.route-keyboard-open .route-password-panel,
+html.route-native.route-keyboard-open .auth-card,
+html.route-native.route-keyboard-open .onboarding-card {
+  scroll-padding-bottom: max(28px, var(--route-keyboard-height));
+}

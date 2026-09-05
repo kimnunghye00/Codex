@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import Root from './Root';
 import { AppCrashBoundary, installGlobalCrashDiagnostics } from './AppCrashBoundary';
+import { authPersistenceReady } from './lib/firebase';
 import { initializeNativeApp } from './lib/native';
 import { preparePersistentBackup, startPersistentBackup } from './lib/persistentBackup';
 import { initializeCrossDeviceAlbumSync } from './lib/crossDeviceAlbumSync';
@@ -51,7 +52,10 @@ import './web-desktop.css';
 // The home itself intentionally keeps the established 58/42 split layout
 // from home-couple-layout.css, matching the approved reference screen.
 import './route-web-phone-preview-v12.css';
+// Native-only phase-1 stability guards intentionally load after all visual layers.
+import './route-stability-v15.css';
 
+import './input-ime-stability';
 import './route-themes';
 import './home-map-overlay';
 import './native-back-ui';
@@ -109,6 +113,7 @@ async function bootstrap() {
   if (mountDesktopPhonePreview()) return;
 
   void initializeNativeApp();
+  await authPersistenceReady;
   initializeRoutePwa();
 
   // Restore durable Firebase records before React reads local caches.
