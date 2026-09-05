@@ -37,11 +37,18 @@ jobs:
         run: |
           set -euo pipefail
           test -f ROUTE_RELEASE_GUARDRAILS.md
-          test -f src/ErrorBoundary.tsx
-          test -f src/utils/naverMaps.ts
+          test -f src/AppCrashBoundary.tsx
+          test -f src/lib/persistentBackup.ts
+          test -f public/naver-map-host.html
+          test -f firestore.rules
+          test -f storage.rules
           test -f firebase.json
           test -f public/sw.js
-          grep -q "ncpKeyId" src/utils/naverMaps.ts
-          grep -q "hosting" firebase.json
-          grep -q "RouteErrorBoundary" src/main.tsx
+          grep -q "AppCrashBoundary" src/main.tsx
+          grep -q "preparePersistentBackup" src/main.tsx
+          grep -q "meluni-f4e00.web.app" src/components/location/LocationPage.tsx
+          grep -q "ncpKeyId" public/naver-map-host.html
+          grep -q '"storage"' firebase.json
+          grep -q "backups" firestore.rules
+          grep -q "backupMedia" storage.rules
           echo "ROUTE critical static checks passed."
