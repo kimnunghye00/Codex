@@ -1,5 +1,7 @@
 /* ROUTE feature flow v9
- * First real cross-feature connection: chat media <-> memories.
+ * Cross-feature connections:
+ * - chat media <-> memories
+ * - anniversaries -> date plans -> shared schedules
  */
 
 .chat-flow-notice {
@@ -38,6 +40,107 @@
   color: var(--emotion);
 }
 
+/* Anniversary -> date plan ------------------------------------------------ */
+.route-hub .anniversary-row {
+  min-width: 0;
+}
+
+.route-hub .anniversary-row > div:nth-child(2) {
+  min-width: 0;
+}
+
+.route-hub .anniversary-flow-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.route-hub .anniversary-flow-actions > strong {
+  color: var(--primary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.route-hub .anniversary-flow-actions > button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border));
+  border-radius: 11px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--surface) 94%, var(--primary) 6%);
+  font-size: 8px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.route-hub .anniversary-flow-actions > button.planned {
+  border-color: color-mix(in srgb, var(--emotion) 30%, var(--border));
+  color: color-mix(in srgb, var(--emotion) 82%, var(--text-primary));
+  background: color-mix(in srgb, var(--surface) 93%, var(--emotion) 7%);
+}
+
+/* Date plan -> shared schedule ------------------------------------------- */
+.route-hub .date-flow-hint {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 6px;
+  padding: 10px 11px;
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--border));
+  border-radius: 12px;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--surface) 95%, var(--primary) 5%);
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.route-hub .date-flow-hint svg {
+  flex: 0 0 auto;
+  color: var(--primary);
+}
+
+.route-hub .date-flow-feedback {
+  border: 1px solid color-mix(in srgb, var(--primary) 16%, var(--border));
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--surface) 96%, var(--primary) 4%);
+}
+
+.route-hub .date-flow-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.route-hub .date-flow-actions > span {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border-radius: 999px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--surface) 91%, var(--primary) 9%);
+  font-size: 7px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.route-hub .date-flow-actions > button {
+  min-height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-secondary);
+  background: var(--surface);
+  font-size: 8px;
+}
+
 @keyframes route-flow-notice-in {
   from { opacity: 0; transform: translateY(-3px); }
   to { opacity: 1; transform: translateY(0); }
@@ -51,6 +154,12 @@
     margin-right: auto;
     padding: 10px 14px;
     font-size: 10px;
+  }
+
+  .route-hub .anniversary-flow-actions > button {
+    min-height: 36px;
+    padding: 0 12px;
+    font-size: 9px;
   }
 }
 
@@ -66,6 +175,37 @@
 
   .chat-page .message-actions button {
     white-space: nowrap;
+  }
+
+  .route-hub .anniversary-row {
+    gap: 8px;
+  }
+
+  .route-hub .anniversary-flow-actions {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+  }
+
+  .route-hub .anniversary-flow-actions > button {
+    min-height: 30px;
+    padding: 0 8px;
+    font-size: 7px;
+  }
+
+  .route-hub .date-flow-actions {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+  }
+
+  .route-hub .date-flow-actions > span {
+    min-height: 24px;
+    padding: 0 6px;
+  }
+
+  .route-hub .date-flow-actions > button {
+    min-height: 29px;
   }
 }
 
