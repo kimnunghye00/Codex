@@ -26,7 +26,6 @@ export function setSystemDarkEnabled(enabled: boolean) {
 }
 
 const handleSystemAppearanceChange = () => applySystemDarkMode();
-if ('addEventListener' in systemDarkQuery) systemDarkQuery.addEventListener('change', handleSystemAppearanceChange);
-else systemDarkQuery.addListener(handleSystemAppearanceChange);
+systemDarkQuery.addEventListener('change', handleSystemAppearanceChange);
 
 applySystemDarkMode();
