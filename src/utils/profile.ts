@@ -1,3 +1,5 @@
+import { signalPersistentStateChange } from './persistenceSignal';
+
 export type Gender = 'male' | 'female' | 'other';
 export type NicknameSetBy = 'partner' | 'self';
 
@@ -29,6 +31,7 @@ export function loadProfile(uid: string): UserProfile | null {
 
 export function saveProfile(uid: string, profile: UserProfile) {
   localStorage.setItem(profileKey(uid), JSON.stringify(profile));
+  signalPersistentStateChange();
 }
 
 export function calculateAge(birthDate: string, today = new Date()) {
