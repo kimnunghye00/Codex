@@ -2,17 +2,6 @@ name: Build ROUTE Web
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'public/**'
-      - 'index.html'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'vite.config.ts'
-      - 'firebase.json'
-      - '.github/workflows/web-build.yml'
 
 concurrency:
   group: route-web-main
