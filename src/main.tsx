@@ -49,6 +49,8 @@ import './route-place-timeline-v10.css';
 import './web-desktop.css';
 // Desktop browsers now present the app inside a real phone-sized viewport.
 import './route-web-phone-preview-v12.css';
+// Inside that viewport, the home follows a true single-column phone composition.
+import './route-mobile-home-v13.css';
 
 import './route-themes';
 import './home-map-overlay';
