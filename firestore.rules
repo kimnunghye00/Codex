@@ -27,6 +27,10 @@ service cloud.firestore {
       allow read: if signedIn() && (request.auth.uid == uid || sharesCoupleWith(uid));
       allow update: if signedIn() && request.auth.uid == uid;
       allow delete: if false;
+
+      match /backups/{backupId} {
+        allow read, create, update, delete: if signedIn() && request.auth.uid == uid;
+      }
     }
 
     match /coupleInvites/{code} {
