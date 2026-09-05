@@ -7,8 +7,13 @@ android {
         applicationId "com.route.couple"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+
+        // Every GitHub Actions build gets a larger Android versionCode so it can
+        // be installed as an update over the previous ROUTE APK.
+        def routeBuildNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInteger()
+        versionCode routeBuildNumber
+        versionName "1.0.${routeBuildNumber}"
+
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
