@@ -47,12 +47,10 @@ import './route-feature-flow-v9.css';
 // Place-centered story view connects visits, memories, dates and schedules.
 import './route-place-timeline-v10.css';
 import './web-desktop.css';
-// Desktop browsers now present the app inside a real phone-sized viewport.
+// Desktop browsers present the app inside a real phone-sized viewport.
+// The home itself intentionally keeps the established 58/42 split layout
+// from home-couple-layout.css, matching the approved reference screen.
 import './route-web-phone-preview-v12.css';
-// Inside that viewport, the home follows a true single-column phone composition.
-import './route-mobile-home-v13.css';
-// Remove the leftover document scroll and size the phone home to one viewport.
-import './route-mobile-home-fit-v14.css';
 
 import './route-themes';
 import './home-map-overlay';
