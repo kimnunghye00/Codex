@@ -10,6 +10,12 @@ export type LocationVisit = {
   leftAt?: string;
 };
 
+export type LocationSearchResult = {
+  latitude: number;
+  longitude: number;
+  placeName: string;
+};
+
 export type LocationSharingState = {
   enabled: boolean;
   updatedAt: string;
@@ -74,5 +80,28 @@ export async function reverseGeocode(latitude: number, longitude: number): Promi
     return data.name || address.amenity || address.shop || address.building || address.road || address.suburb || address.neighbourhood || data.display_name?.split(',').slice(0, 2).join(', ');
   } catch {
     return undefined;
+  }
+}
+
+export async function searchLocation(query: string): Promise<LocationSearchResult | null> {
+  const value = query.trim();
+  if (!value) return null;
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(value)}&limit=1&accept-language=ko&countrycodes=kr`;
+    const response = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!response.ok) return null;
+    const rows = await response.json() as Array<{ lat?: string; lon?: string; name?: string; display_name?: string }>;
+    const first = rows[0];
+    if (!first) return null;
+    const latitude = Number(first.lat);
+    const longitude = Number(first.lon);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+    return {
+      latitude,
+      longitude,
+      placeName: first.name || first.display_name?.split(',').slice(0, 2).join(', ') || value,
+    };
+  } catch {
+    return null;
   }
 }
