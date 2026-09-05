@@ -13,11 +13,13 @@ import {
   saveLocationVisits,
   type LocationVisit,
 } from '../../utils/location';
-import { loadNaverMaps, naverApi, naverMapDiagnostic, type NaverMap, type NaverOverlay } from '../../utils/naverMaps';
 
 const MIN_MOVE_METERS = 120;
+const ROUTE_MAP_ORIGIN = 'https://meluni-f4e00.web.app';
+const ROUTE_MAP_HOST = `${ROUTE_MAP_ORIGIN}/naver-map-host.html`;
 
 type LocationTab = 'map' | 'footprints';
+type MapHostMessage = { source?: string; type?: string };
 
 function todayKey() {
   const now = new Date();
@@ -36,28 +38,6 @@ function dayText(value: string) {
   return new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }).format(new Date(value));
 }
 
-function escapeHtml(value: string) {
-  return value.replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character] ?? character));
-}
-
-function markerHtml(current: boolean, index?: number) {
-  const color = current ? '#FF6F61' : '#1F2A44';
-  const size = current ? 24 : 20;
-  const label = typeof index === 'number' ? `<span style="font-size:9px;color:#fff;font-weight:800">${index + 1}</span>` : '';
-  return `<div style="width:${size}px;height:${size}px;border:3px solid #fff;border-radius:50%;background:${color};box-shadow:0 3px 10px #0003;display:grid;place-items:center">${label}</div>`;
-}
-
-function mapErrorMessage(error: unknown) {
-  const code = error instanceof Error ? error.message : String(error);
-  const diagnostic = naverMapDiagnostic();
-  if (code === 'NAVER_MAP_AUTH_FAILED') return `네이버 지도 인증이 거부됐어요. NAVER Cloud의 Web 서비스 URL에 ${diagnostic.origin} 을 등록해 주세요.`;
-  if (code === 'NAVER_MAP_LOAD_TIMEOUT') return '네이버 지도 서버 응답이 늦어요. 네트워크를 확인한 뒤 다시 시도해 주세요.';
-  if (code === 'NAVER_MAP_SCRIPT_FAILED') return '네이버 지도 SDK를 불러오지 못했어요. 네트워크 또는 브라우저 차단 여부를 확인해 주세요.';
-  if (code === 'NAVER_MAP_INIT_FAILED') return '네이버 지도 SDK는 받았지만 초기화에 실패했어요. 다시 불러오기를 눌러 주세요.';
-  if (code === 'NAVER_CLIENT_ID_MISSING') return '네이버 지도 Client ID를 찾지 못했어요.';
-  return `네이버 지도를 불러오지 못했어요. 현재 Web 서비스 URL: ${diagnostic.origin}`;
-}
-
 export function LocationPage({ Header, connection, onActivity }: {
   Header: ({ title }: { title?: string }) => React.ReactNode;
   connection: RealCoupleConnection | null;
@@ -74,12 +54,16 @@ export function LocationPage({ Header, connection, onActivity }: {
   const [tracking, setTracking] = useState(false);
   const [mapStatus, setMapStatus] = useState('네이버 지도를 불러오는 중이에요…');
   const [mapFailed, setMapFailed] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
   const [mapAttempt, setMapAttempt] = useState(0);
   const watchId = useRef<number | undefined>(undefined);
-  const mapElement = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<NaverMap | undefined>(undefined);
-  const overlaysRef = useRef<NaverOverlay[]>([]);
+  const mapFrame = useRef<HTMLIFrameElement>(null);
   const partnerName = connection?.partnerProfile?.name?.trim() || connection?.partnerProfile?.nickname?.trim() || '상대방';
+  const mapVisits = useMemo(() => activeTab === 'footprints' ? partnerVisits : [...visits].reverse(), [activeTab, partnerVisits, visits]);
+
+  const postMapMessage = (payload: Record<string, unknown>) => {
+    mapFrame.current?.contentWindow?.postMessage({ source: 'route-map-parent', ...payload }, ROUTE_MAP_ORIGIN);
+  };
 
   const stopWatching = (announce = true) => {
     if (watchId.current !== undefined) navigator.geolocation.clearWatch(watchId.current);
@@ -104,77 +88,61 @@ export function LocationPage({ Header, connection, onActivity }: {
   }, [connection?.coupleId, connection?.partnerUid, partnerName, selectedDay]);
 
   useEffect(() => {
-    let cancelled = false;
-    setMapFailed(false);
-    setMapStatus('네이버 지도를 불러오는 중이에요…');
-    void loadNaverMaps().then((naver) => {
-      if (cancelled || !mapElement.current || mapRef.current) return;
-      const rect = mapElement.current.getBoundingClientRect();
-      if (rect.width < 20 || rect.height < 20) throw new Error('NAVER_MAP_CONTAINER_EMPTY');
-      mapRef.current = new naver.maps.Map(mapElement.current, {
-        center: new naver.maps.LatLng(37.5666103, 126.9783882),
-        zoom: 15,
-        zoomControl: true,
-        zoomControlOptions: { position: naver.maps.Position.TOP_RIGHT },
-      });
-      const resize = () => {
-        if (!mapRef.current) return;
-        naver.maps.Event.trigger(mapRef.current, 'resize');
-      };
-      window.requestAnimationFrame(() => window.requestAnimationFrame(resize));
-      window.setTimeout(resize, 350);
-      setMapStatus('');
-    }).catch((error) => {
-      console.error('[ROUTE NAVER location map]', error, naverMapDiagnostic());
-      if (!cancelled) { setMapFailed(true); setMapStatus(mapErrorMessage(error)); }
-    });
-    return () => {
-      cancelled = true;
-      overlaysRef.current.forEach((overlay) => overlay.setMap(null));
-      overlaysRef.current = [];
-      mapRef.current?.destroy?.();
-      mapRef.current = undefined;
-    };
-  }, [mapAttempt]);
+    const receiveMapMessage = (event: MessageEvent<MapHostMessage>) => {
+      if (event.origin !== ROUTE_MAP_ORIGIN) return;
+      if (event.source !== mapFrame.current?.contentWindow) return;
+      if (event.data?.source !== 'route-map-host') return;
 
-  const mapVisits = useMemo(() => activeTab === 'footprints' ? partnerVisits : [...visits].reverse(), [activeTab, partnerVisits, visits]);
+      if (event.data.type === 'ready') {
+        setMapReady(true);
+        setMapFailed(false);
+        setMapStatus('');
+        window.setTimeout(() => postMapMessage({ type: 'render', visits: mapVisits, mode: activeTab }), 0);
+        return;
+      }
+
+      if (event.data.type === 'auth-error') {
+        setMapReady(false);
+        setMapFailed(true);
+        setMapStatus('네이버 지도 고정 호스트 인증이 거부됐어요. NAVER Cloud에는 meluni-f4e00.web.app 주소 하나만 유지하면 돼요.');
+        return;
+      }
+
+      if (event.data.type === 'script-error') {
+        setMapReady(false);
+        setMapFailed(true);
+        setMapStatus('네이버 지도 서버에 연결하지 못했어요. 네트워크를 확인한 뒤 다시 시도해 주세요.');
+        return;
+      }
+
+      if (event.data.type === 'init-error') {
+        setMapReady(false);
+        setMapFailed(true);
+        setMapStatus('네이버 지도 초기화에 실패했어요. 다시 불러오기를 눌러 주세요.');
+      }
+    };
+
+    window.addEventListener('message', receiveMapMessage);
+    return () => window.removeEventListener('message', receiveMapMessage);
+  }, [activeTab, mapVisits]);
 
   useEffect(() => {
-    const naver = naverApi();
-    const map = mapRef.current;
-    if (!naver?.maps || !map) return;
-    naver.maps.Event.trigger(map, 'resize');
-    overlaysRef.current.forEach((overlay) => overlay.setMap(null));
-    overlaysRef.current = [];
+    if (!mapReady) return;
+    postMapMessage({ type: 'render', visits: mapVisits, mode: activeTab });
+  }, [activeTab, mapReady, mapVisits]);
 
-    if (!mapVisits.length) {
-      map.setCenter(new naver.maps.LatLng(37.5666103, 126.9783882));
-      map.setZoom(15);
-      return;
-    }
+  useEffect(() => {
+    const resize = () => mapReady && postMapMessage({ type: 'resize' });
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, [mapReady]);
 
-    const points = mapVisits.map((visit) => new naver.maps.LatLng(visit.latitude, visit.longitude));
-    if (points.length > 1) overlaysRef.current.push(new naver.maps.Polyline({ map, path: points, strokeColor: '#FF6F61', strokeWeight: 5, strokeOpacity: 0.76 }));
-
-    mapVisits.forEach((visit, index) => {
-      const current = !visit.leftAt && index === mapVisits.length - 1;
-      const marker = new naver.maps.Marker({ map, position: points[index], icon: { content: markerHtml(current, activeTab === 'footprints' ? index : undefined) } });
-      const popup = new naver.maps.InfoWindow({
-        content: `<div style="padding:10px 12px;font-size:12px;line-height:1.45"><strong>${escapeHtml(visit.placeName || '위치 기록')}</strong><br>${escapeHtml(dayText(visit.arrivedAt))} · ${escapeHtml(timeText(visit.arrivedAt))}${visit.leftAt ? ` ~ ${escapeHtml(timeText(visit.leftAt))}` : ' · 현재'}</div>`,
-        borderWidth: 0,
-        backgroundColor: '#fff',
-      });
-      naver.maps.Event.addListener(marker, 'click', () => popup.open(map, marker));
-      overlaysRef.current.push(marker);
-    });
-
-    if (points.length === 1) { map.setCenter(points[0]); map.setZoom(17); }
-    else {
-      const bounds = new naver.maps.LatLngBounds();
-      points.forEach((point) => bounds.extend(point));
-      map.fitBounds(bounds, { top: 34, right: 34, bottom: 34, left: 34 });
-    }
-  }, [mapVisits, activeTab]);
+  const retryMap = () => {
+    setMapFailed(false);
+    setMapReady(false);
+    setMapStatus('네이버 지도를 다시 불러오는 중이에요…');
+    setMapAttempt((value) => value + 1);
+  };
 
   const persistVisits = (next: LocationVisit[]) => {
     setVisits(next);
@@ -218,9 +186,12 @@ export function LocationPage({ Header, connection, onActivity }: {
       (error) => {
         stopWatching(false);
         if (error.code === error.PERMISSION_DENIED) {
-          saveLocationSharing(uid, false); setSharing(false);
+          saveLocationSharing(uid, false);
+          setSharing(false);
           setStatus('위치 권한이 거부됐어요. 브라우저의 사이트 권한에서 위치를 허용해 주세요.');
-        } else setStatus('현재 위치를 가져오지 못했어요. 잠시 뒤 다시 시도해 주세요.');
+        } else {
+          setStatus('현재 위치를 가져오지 못했어요. 잠시 뒤 다시 시도해 주세요.');
+        }
       },
       { enableHighAccuracy: true, maximumAge: 45_000, timeout: 20_000 },
     );
@@ -236,10 +207,8 @@ export function LocationPage({ Header, connection, onActivity }: {
   };
 
   const focusVisit = (visit: LocationVisit) => {
-    const naver = naverApi();
-    if (!naver?.maps || !mapRef.current) return;
-    mapRef.current.setCenter(new naver.maps.LatLng(visit.latitude, visit.longitude));
-    mapRef.current.setZoom(17);
+    if (!mapReady) return;
+    postMapMessage({ type: 'focus', visit });
   };
 
   const moveDay = (amount: number) => {
@@ -259,8 +228,18 @@ export function LocationPage({ Header, connection, onActivity }: {
     {activeTab === 'footprints' && <div className="footprint-daybar"><button type="button" onClick={() => moveDay(-1)}>‹</button><label><CalendarDays size={14} /><input type="date" value={selectedDay} max={todayKey()} onChange={(event) => setSelectedDay(event.target.value)} /></label><button type="button" disabled={selectedDay >= todayKey()} onClick={() => moveDay(1)}>›</button></div>}
 
     <section className="location-map-card" aria-label={activeTab === 'footprints' ? `${partnerName}의 발자취 지도` : '네이버 이동 지도'}>
-      <div ref={mapElement} className="location-real-map" />
-      {mapStatus && <div className={`location-map-status ${mapFailed ? 'failed' : ''}`}><MapPin size={18} /><span>{mapStatus}</span>{mapFailed && <button type="button" onClick={() => setMapAttempt((value) => value + 1)}><RefreshCw size={14} />다시 불러오기</button>}</div>}
+      <iframe
+        key={mapAttempt}
+        ref={mapFrame}
+        className="location-real-map route-map-frame"
+        title="ROUTE 네이버 지도"
+        src={`${ROUTE_MAP_HOST}?v=2&attempt=${mapAttempt}`}
+        onLoad={() => {
+          setMapStatus('네이버 지도를 준비하는 중이에요…');
+          setMapFailed(false);
+        }}
+      />
+      {mapStatus && <div className={`location-map-status ${mapFailed ? 'failed' : ''}`}><MapPin size={18} /><span>{mapStatus}</span>{mapFailed && <button type="button" onClick={retryMap}><RefreshCw size={14} />다시 불러오기</button>}</div>}
       <div className="location-map-caption"><strong>{activeTab === 'footprints' ? `${partnerName}의 발자취` : '우리의 이동 지도'}</strong><span>{mapVisits.length ? `${mapVisits.length}개의 위치 기록` : '아직 기록 없음'}</span></div>
     </section>
 
