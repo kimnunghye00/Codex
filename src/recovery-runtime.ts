@@ -5,7 +5,21 @@ import { signalPersistentStateChange } from './utils/persistenceSignal';
 
 const NETWORK_BANNER_ID = 'route-network-status';
 const RECOVERY_RELOAD_PREFIX = 'route.backup.reloadApplied:';
+const ACCOUNT_SWITCH_RELOAD_KEY = 'route.accountSwitch.reload';
+const LOCAL_DATA_OWNER_KEY = 'route.localData.ownerUid';
 const ALBUM_PENDING_KEY = 'route.albumSync.pending';
+const ACCOUNT_SHARED_CACHE_KEYS = [
+  'route.messages.v2',
+  'route.memories.v2',
+  'route.memories.deleted.v1',
+  'route.albumSync.pending',
+] as const;
+
+// Capture the native Storage methods before bootstrap installs ROUTE's persistence
+// observer. Account-isolation cleanup must not look like a user edit and trigger a
+// backup of another account's cleared cache during an auth transition.
+const rawStorageSetItem = typeof Storage !== 'undefined' ? Storage.prototype.setItem : undefined;
+const rawStorageRemoveItem = typeof Storage !== 'undefined' ? Storage.prototype.removeItem : undefined;
 let onlineHideTimer: number | undefined;
 
 function banner() {
@@ -90,6 +104,43 @@ function clearRecoveryReloadMarkers() {
   }
 }
 
+function prepareAccountLocalCache(uid: string) {
+  let previousOwner = '';
+  try { previousOwner = localStorage.getItem(LOCAL_DATA_OWNER_KEY) || ''; } catch {}
+
+  if (!previousOwner) {
+    try {
+      if (rawStorageSetItem) rawStorageSetItem.call(localStorage, LOCAL_DATA_OWNER_KEY, uid);
+      else localStorage.setItem(LOCAL_DATA_OWNER_KEY, uid);
+    } catch {}
+    return false;
+  }
+
+  if (previousOwner === uid) return false;
+
+  try {
+    ACCOUNT_SHARED_CACHE_KEYS.forEach((key) => {
+      if (rawStorageRemoveItem) rawStorageRemoveItem.call(localStorage, key);
+      else localStorage.removeItem(key);
+    });
+    if (rawStorageSetItem) rawStorageSetItem.call(localStorage, LOCAL_DATA_OWNER_KEY, uid);
+    else localStorage.setItem(LOCAL_DATA_OWNER_KEY, uid);
+  } catch (error) {
+    console.warn('[ROUTE account cache isolation]', error);
+  }
+
+  return true;
+}
+
+function reloadForAccountSwitch(uid: string) {
+  try {
+    const marker = sessionStorage.getItem(ACCOUNT_SWITCH_RELOAD_KEY);
+    if (marker === uid) return;
+    sessionStorage.setItem(ACCOUNT_SWITCH_RELOAD_KEY, uid);
+  } catch {}
+  window.setTimeout(() => window.location.reload(), 0);
+}
+
 function installRuntimeRecovery() {
   setNetworkState(navigator.onLine);
 
@@ -120,7 +171,13 @@ function installRuntimeRecovery() {
   });
 
   onAuthStateChanged(auth, (user) => {
-    if (!user) clearRecoveryReloadMarkers();
+    if (!user) {
+      clearRecoveryReloadMarkers();
+      try { sessionStorage.removeItem(ACCOUNT_SWITCH_RELOAD_KEY); } catch {}
+      return;
+    }
+
+    if (prepareAccountLocalCache(user.uid)) reloadForAccountSwitch(user.uid);
   });
 }
 
