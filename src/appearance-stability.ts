@@ -37,8 +37,8 @@ function syncIconDom(icon: AppIconId) {
       const label = document.createElement('small');
       label.textContent = '사용 중';
       button.appendChild(label);
-    } else if (active && currentLabel?.textContent !== '사용 중') {
-      currentLabel.textContent = '사용 중';
+    } else if (active && currentLabel) {
+      if (currentLabel.textContent !== '사용 중') currentLabel.textContent = '사용 중';
     } else if (!active && currentLabel) {
       currentLabel.remove();
     }
