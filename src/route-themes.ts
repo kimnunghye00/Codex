@@ -26,23 +26,26 @@ const validTheme = (value: string | null) => themes.some((theme) => theme.id ===
 const activeTheme = () => validTheme(localStorage.getItem(STORAGE_KEY));
 const themeById = (id: string) => themes.find((theme) => theme.id === id) ?? themes[0];
 
+const LEGACY_INLINE_THEME_VARS = [
+  '--primary', '--primary-light', '--primary-soft', '--background', '--surface', '--surface-elevated',
+  '--text-primary', '--text-secondary', '--border', '--emotion', '--route-accent', '--route-accent-soft',
+  '--accent-text', '--on-primary', '--on-accent', '--control-bg', '--placeholder',
+] as const;
+
 function applyTheme(id: string) {
   const next = validTheme(id);
-  const theme = themeById(next);
-  const [accent, secondary, surface, primary] = theme.colors;
+
+  // Older builds wrote palette colors directly on <html>. Inline styles outrank the
+  // stylesheet and caused combinations such as green-on-green or dark-on-dark.
+  // Clear those values first and let the contrast-safe semantic palette CSS own them.
+  LEGACY_INLINE_THEME_VARS.forEach((name) => document.documentElement.style.removeProperty(name));
+
   document.documentElement.dataset.routeTheme = next;
-  document.documentElement.style.setProperty('--primary', primary);
-  document.documentElement.style.setProperty('--primary-light', accent);
-  document.documentElement.style.setProperty('--primary-soft', secondary);
-  document.documentElement.style.setProperty('--background', surface);
-  document.documentElement.style.setProperty('--surface', surface);
-  document.documentElement.style.setProperty('--text-primary', primary);
-  document.documentElement.style.setProperty('--border', secondary);
-  document.documentElement.style.setProperty('--emotion', accent);
-  document.documentElement.style.setProperty('--route-accent', accent);
-  document.documentElement.style.setProperty('--route-accent-soft', secondary);
   localStorage.setItem(STORAGE_KEY, next);
-  localStorage.setItem('meluni-theme', next);
+
+  // The old three-theme system uses data-meluni-theme. Keep it neutral so its dark/
+  // lavender rules can never overwrite the current ROUTE palette.
+  document.documentElement.dataset.meluniTheme = 'default';
 }
 
 function makeThemeButton(theme: RouteTheme, selectedId: string, onSelect: (id: string) => void) {
