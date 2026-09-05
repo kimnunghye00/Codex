@@ -51,6 +51,8 @@ import './web-desktop.css';
 import './route-web-phone-preview-v12.css';
 // Inside that viewport, the home follows a true single-column phone composition.
 import './route-mobile-home-v13.css';
+// Remove the leftover document scroll and size the phone home to one viewport.
+import './route-mobile-home-fit-v14.css';
 
 import './route-themes';
 import './home-map-overlay';
