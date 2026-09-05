@@ -19,9 +19,9 @@ function iconFromUnknown(value: unknown): AppIconId {
 function syncIconDom(icon: AppIconId) {
   const intro = document.querySelector<HTMLElement>('.more-service-intro > .more-app-icon-preview');
   if (intro) {
-    intro.classList.remove(...VALID_ICONS);
-    intro.classList.add(icon);
-    intro.textContent = icon === 'heart' ? '♥' : 'R';
+    VALID_ICONS.forEach((id) => intro.classList.toggle(id, id === icon));
+    const mark = icon === 'heart' ? '♥' : 'R';
+    if (intro.textContent !== mark) intro.textContent = mark;
   }
 
   document.querySelectorAll<HTMLButtonElement>('.app-icon-picker button').forEach((button) => {
@@ -29,11 +29,16 @@ function syncIconDom(icon: AppIconId) {
     const buttonIcon = VALID_ICONS.find((id) => preview?.classList.contains(id));
     const active = buttonIcon === icon;
     button.classList.toggle('active', active);
-    button.querySelectorAll(':scope > small').forEach((small) => small.remove());
-    if (active) {
+
+    const currentLabel = Array.from(button.children).find((child) => child.tagName === 'SMALL') as HTMLElement | undefined;
+    if (active && !currentLabel) {
       const label = document.createElement('small');
       label.textContent = '사용 중';
       button.appendChild(label);
+    } else if (active && currentLabel?.textContent !== '사용 중') {
+      currentLabel.textContent = '사용 중';
+    } else if (!active && currentLabel) {
+      currentLabel.remove();
     }
   });
 }
@@ -53,9 +58,15 @@ window.addEventListener('route-app-icon-changed', (event) => {
   syncIconDom(icon);
 });
 
+let moreSyncQueued = false;
 const moreObserver = new MutationObserver(() => {
-  const saved = iconFromUnknown(localStorage.getItem('route-app-icon'));
-  syncIconDom(saved);
-  neutralizeLegacyTheme();
+  if (moreSyncQueued) return;
+  moreSyncQueued = true;
+  window.requestAnimationFrame(() => {
+    moreSyncQueued = false;
+    const saved = iconFromUnknown(localStorage.getItem('route-app-icon'));
+    syncIconDom(saved);
+    neutralizeLegacyTheme();
+  });
 });
 moreObserver.observe(document.documentElement, { childList: true, subtree: true });
