@@ -27,6 +27,8 @@
       let activeScript = null;
       let map;
       let overlays = [];
+      let focusOverlay = null;
+      let focusPopup = null;
       let lastRender = { visits: [], mode: 'map' };
 
       const send = (type, detail = {}) => {
@@ -61,6 +63,13 @@
         overlays = [];
       };
 
+      const clearFocus = () => {
+        try { focusPopup?.close(); } catch {}
+        try { focusOverlay?.setMap(null); } catch {}
+        focusPopup = null;
+        focusOverlay = null;
+      };
+
       const render = ({ visits = [], mode = 'map' } = {}) => {
         lastRender = { visits: Array.isArray(visits) ? visits : [], mode };
         if (!map || !window.naver?.maps) return;
@@ -69,8 +78,10 @@
         clearOverlays();
 
         if (!lastRender.visits.length) {
-          map.setCenter(new naver.maps.LatLng(37.5666103, 126.9783882));
-          map.setZoom(15);
+          if (!focusOverlay) {
+            map.setCenter(new naver.maps.LatLng(37.5666103, 126.9783882));
+            map.setZoom(15);
+          }
           return;
         }
 
@@ -95,6 +106,7 @@
           overlays.push(marker);
         });
 
+        if (focusOverlay) return;
         if (points.length === 1) {
           map.setCenter(points[0]);
           map.setZoom(17);
@@ -105,10 +117,29 @@
         }
       };
 
-      const focus = (visit) => {
+      const focus = (visit, showPopup = true) => {
         if (!map || !window.naver?.maps || !visit) return;
-        map.setCenter(new window.naver.maps.LatLng(Number(visit.latitude), Number(visit.longitude)));
+        const latitude = Number(visit.latitude);
+        const longitude = Number(visit.longitude);
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+        const naver = window.naver;
+        const point = new naver.maps.LatLng(latitude, longitude);
+        clearFocus();
+        focusOverlay = new naver.maps.Marker({
+          map,
+          position: point,
+          icon: { content: markerHtml(true) },
+          zIndex: 2000,
+        });
+        focusPopup = new naver.maps.InfoWindow({
+          content: `<div style="padding:10px 12px;font-size:12px;line-height:1.45"><strong>${escapeHtml(visit.placeName || '일정 장소')}</strong><br><span style="color:#777">ROUTE에서 연결한 장소</span></div>`,
+          borderWidth: 0,
+          backgroundColor: '#fff',
+        });
+        naver.maps.Event.addListener(focusOverlay, 'click', () => focusPopup?.open(map, focusOverlay));
+        map.setCenter(point);
         map.setZoom(17);
+        if (showPopup !== false) focusPopup.open(map, focusOverlay);
       };
 
       window.addEventListener('message', (event) => {
@@ -116,11 +147,13 @@
         const data = event.data || {};
         if (data.source !== 'route-map-parent') return;
         if (data.type === 'render') render(data);
-        if (data.type === 'focus') focus(data.visit);
+        if (data.type === 'focus') focus(data.visit, data.showPopup);
+        if (data.type === 'clear-focus') { clearFocus(); render(lastRender); }
         if (data.type === 'resize' && map && window.naver?.maps) window.naver.maps.Event.trigger(map, 'resize');
       });
 
       const cleanupSdk = () => {
+        clearFocus();
         try { activeScript?.remove(); } catch {}
         activeScript = null;
         try { delete window.naver; } catch { window.naver = undefined; }
@@ -174,7 +207,6 @@
         script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?${authParam}=${encodeURIComponent(CLIENT_ID)}`;
         script.onload = () => {
           if (attempt !== activeAttempt || rejected) return;
-          /* Authentication callbacks can fire immediately after script load. */
           window.setTimeout(() => {
             if (attempt !== activeAttempt || rejected) return;
             initializeMap(attempt);
