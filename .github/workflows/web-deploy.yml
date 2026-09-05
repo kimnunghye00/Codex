@@ -12,6 +12,8 @@ on:
       - 'package-lock.json'
       - 'vite.config.ts'
       - 'firebase.json'
+      - 'firestore.rules'
+      - 'storage.rules'
       - '.github/workflows/web-deploy.yml'
 
 concurrency:
@@ -75,9 +77,9 @@ jobs:
         shell: bash
         run: |
           echo 'ERROR: GitHub Actions secret ROUTE_FIREBASE_TOKEN is missing.' >&2
-          echo 'The web build succeeded, but nothing can be deployed to Firebase Hosting until this secret is configured.' >&2
+          echo 'The build succeeded, but Hosting and Firebase rules cannot be deployed until this secret is configured.' >&2
           exit 1
 
-      - name: Deploy to Firebase Hosting
+      - name: Deploy Hosting and Firebase rules
         if: ${{ env.FIREBASE_TOKEN != '' }}
-        run: npx --yes firebase-tools deploy --only hosting --project meluni-f4e00 --token "$FIREBASE_TOKEN" --non-interactive
+        run: npx --yes firebase-tools deploy --only hosting,firestore:rules,storage --project meluni-f4e00 --token "$FIREBASE_TOKEN" --non-interactive
