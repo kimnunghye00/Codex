@@ -11,7 +11,7 @@ import { auth } from './lib/firebase';
 import { getRealCoupleConnection, type RealCoupleConnection } from './lib/coupleConnection';
 import { saveRelationshipStartDate, subscribeCoupleShared } from './lib/coupleShared';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import type { Memory, Message } from './types';
+import type { Memory, MemoryDraft, Message } from './types';
 import { loadMemories, loadMessages, saveMemories, saveMessages } from './utils/storage';
 import { displayName, loadProfile, type UserProfile } from './utils/profile';
 import {
@@ -135,6 +135,8 @@ function App() {
   const [messages, setMessages] = useState<Message[]>(() => loadMessages(initialMessages));
   const [memories, setMemories] = useState<Memory[]>(() => loadMemories(initialMemories));
   const [memoryToOpen, setMemoryToOpen] = useState<number>();
+  const [memoryDraft, setMemoryDraft] = useState<MemoryDraft>();
+  const [locationFocus, setLocationFocus] = useState<string>();
   const previousMessages = useRef(messages);
   const previousMemories = useRef(memories);
   const tabHistory = useRef<Tab[]>(['home']);
@@ -247,10 +249,10 @@ function App() {
   const AppHeader = ({ title }: { title?: string }) => <Header title={title} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />;
   return <>
     <div className="app-shell"><main>
-      {tab === 'home' && <HomePage uid={user.uid} profile={profile} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} memories={memories} messages={messages} onNavigate={navigateTab} onOpenMemory={(id) => { setMemoryToOpen(id); navigateTab('memories'); }} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
+      {tab === 'home' && <HomePage uid={user.uid} profile={profile} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} memories={memories} messages={messages} onNavigate={navigateTab} onOpenMemory={(id) => { setMemoryDraft(undefined); setMemoryToOpen(id); navigateTab('memories'); }} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} connection={connection} />}
-      {tab === 'memories' && <MemoriesPage Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} onClearInitial={() => setMemoryToOpen(undefined)} />}
-      {tab === 'location' && <LocationPage Header={AppHeader} connection={connection} onActivity={(title, detail) => addActivity({ actor: 'me', kind: 'location', title, detail })} />}
+      {tab === 'memories' && <MemoriesPage Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={(place) => { setLocationFocus(place); navigateTab('location'); }} />}
+      {tab === 'location' && <LocationPage Header={AppHeader} connection={connection} focusPlace={locationFocus} onClearFocus={() => setLocationFocus(undefined)} onCreateMemory={(draft) => { setMemoryToOpen(undefined); setMemoryDraft(draft); navigateTab('memories'); }} onActivity={(title, detail) => addActivity({ actor: 'me', kind: 'location', title, detail })} />}
       {tab === 'anniversary' && <AnniversaryPage connected={Boolean(connection)} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} onSaveStartDate={saveStartDate} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'more' && <MorePage onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
     </main><BottomNav tab={tab} setTab={navigateTab} /></div>
