@@ -140,7 +140,7 @@ export async function restoreCoreBackup(uid: string) {
 async function waitForInitialAuth(): Promise<User | null> {
   return new Promise((resolve) => {
     let done = false;
-    let unsubscribe = () => undefined;
+    let unsubscribe: () => void = () => {};
     const finish = (user: User | null) => {
       if (done) return;
       done = true;
