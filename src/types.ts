@@ -29,3 +29,5 @@ export type Memory = {
   createdBy: Sender;
   favorite?: boolean;
 };
+
+export type MemoryDraft = Pick<Memory, 'title' | 'date' | 'description'> & Partial<Pick<Memory, 'location' | 'tags'>>;
