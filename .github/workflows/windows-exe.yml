@@ -40,7 +40,7 @@ jobs:
         shell: pwsh
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npx electron-builder --win nsis --x64 --config electron-builder.yml
+        run: npx electron-builder --win nsis --x64 --config electron-builder.yml --publish never
 
       - name: Verify installer
         shell: pwsh
