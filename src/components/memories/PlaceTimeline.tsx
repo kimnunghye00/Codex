@@ -172,6 +172,17 @@ export function PlaceTimeline({ memories, visits, schedules, datePlans, initialP
     onConsumeInitialPlace?.();
   }, [initialPlace, onConsumeInitialPlace]);
 
+  useEffect(() => {
+    if (!selectedPlace) return;
+    const handleBack = (event: Event) => {
+      if (event.defaultPrevented) return;
+      event.preventDefault();
+      setSelectedPlace(undefined);
+    };
+    window.addEventListener('route-native-back', handleBack);
+    return () => window.removeEventListener('route-native-back', handleBack);
+  }, [selectedPlace]);
+
   const selected = selectedPlace ? groups.find((group) => samePlace(group.name, selectedPlace)) : undefined;
   const totalEvents = groups.reduce((sum, group) => sum + group.events.length, 0);
 
