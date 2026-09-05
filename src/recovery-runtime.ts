@@ -1,5 +1,5 @@
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from './lib/firebase';
+import { auth, clearNativeFirestorePersistence } from './lib/firebase';
 import { requestAlbumSyncNow } from './lib/crossDeviceAlbumSync';
 import { signalPersistentStateChange } from './utils/persistenceSignal';
 
@@ -15,12 +15,13 @@ const ACCOUNT_SHARED_CACHE_KEYS = [
   'route.albumSync.pending',
 ] as const;
 
-// Capture the native Storage methods before bootstrap installs ROUTE's persistence
-// observer. Account-isolation cleanup must not look like a user edit and trigger a
-// backup of another account's cleared cache during an auth transition.
+// Capture native Storage methods before bootstrap installs ROUTE's persistence
+// observer. Account-isolation cleanup must not look like a user edit and trigger
+// a backup of another account's cleared cache during an auth transition.
 const rawStorageSetItem = typeof Storage !== 'undefined' ? Storage.prototype.setItem : undefined;
 const rawStorageRemoveItem = typeof Storage !== 'undefined' ? Storage.prototype.removeItem : undefined;
 let onlineHideTimer: number | undefined;
+let accountResetInProgress = false;
 
 function banner() {
   let node = document.getElementById(NETWORK_BANNER_ID);
@@ -64,11 +65,8 @@ function setNetworkState(online: boolean, announceReconnect = false) {
 }
 
 function flushPendingState() {
-  if (!navigator.onLine) return;
+  if (!navigator.onLine || accountResetInProgress) return;
 
-  // Album sync can upload media, so only retry it when the album layer itself
-  // recorded a pending local change. Backup signaling is cheap: its own snapshot
-  // guard prevents network writes when nothing changed.
   if (localStorage.getItem(ALBUM_PENDING_KEY) === '1') {
     try { requestAlbumSyncNow(); } catch (error) { console.warn('[ROUTE reconnect album]', error); }
   }
@@ -78,7 +76,7 @@ function flushPendingState() {
 
 function recoverRestoredBackup() {
   const uid = auth.currentUser?.uid;
-  if (!uid) return;
+  if (!uid || accountResetInProgress) return;
   const key = `${RECOVERY_RELOAD_PREFIX}${uid}`;
   try {
     if (sessionStorage.getItem(key) === '1') return;
@@ -87,9 +85,6 @@ function recoverRestoredBackup() {
     // A reload is still safer than leaving React mounted with stale pre-restore state.
   }
 
-  // Login-time backup restoration happens after React may already have read the
-  // empty device cache. Reload once so the restored profile/messages/memories
-  // become the app's initial state. The session marker prevents a reload loop.
   window.setTimeout(() => window.location.reload(), 80);
 }
 
@@ -104,41 +99,56 @@ function clearRecoveryReloadMarkers() {
   }
 }
 
-function prepareAccountLocalCache(uid: string) {
-  let previousOwner = '';
-  try { previousOwner = localStorage.getItem(LOCAL_DATA_OWNER_KEY) || ''; } catch {}
+function localDataOwner() {
+  try { return localStorage.getItem(LOCAL_DATA_OWNER_KEY) || ''; }
+  catch { return ''; }
+}
 
-  if (!previousOwner) {
-    try {
-      if (rawStorageSetItem) rawStorageSetItem.call(localStorage, LOCAL_DATA_OWNER_KEY, uid);
-      else localStorage.setItem(LOCAL_DATA_OWNER_KEY, uid);
-    } catch {}
-    return false;
-  }
-
-  if (previousOwner === uid) return false;
-
+function removeSharedLocalCache(clearOwner: boolean) {
   try {
     ACCOUNT_SHARED_CACHE_KEYS.forEach((key) => {
       if (rawStorageRemoveItem) rawStorageRemoveItem.call(localStorage, key);
       else localStorage.removeItem(key);
     });
-    if (rawStorageSetItem) rawStorageSetItem.call(localStorage, LOCAL_DATA_OWNER_KEY, uid);
-    else localStorage.setItem(LOCAL_DATA_OWNER_KEY, uid);
+    if (clearOwner) {
+      if (rawStorageRemoveItem) rawStorageRemoveItem.call(localStorage, LOCAL_DATA_OWNER_KEY);
+      else localStorage.removeItem(LOCAL_DATA_OWNER_KEY);
+    }
   } catch (error) {
     console.warn('[ROUTE account cache isolation]', error);
   }
-
-  return true;
 }
 
-function reloadForAccountSwitch(uid: string) {
+function setLocalDataOwner(uid: string) {
   try {
-    const marker = sessionStorage.getItem(ACCOUNT_SWITCH_RELOAD_KEY);
-    if (marker === uid) return;
-    sessionStorage.setItem(ACCOUNT_SWITCH_RELOAD_KEY, uid);
+    if (rawStorageSetItem) rawStorageSetItem.call(localStorage, LOCAL_DATA_OWNER_KEY, uid);
+    else localStorage.setItem(LOCAL_DATA_OWNER_KEY, uid);
   } catch {}
-  window.setTimeout(() => window.location.reload(), 0);
+}
+
+async function clearFirestoreAndReload(marker: string) {
+  if (accountResetInProgress) return;
+  accountResetInProgress = true;
+  try { sessionStorage.setItem(ACCOUNT_SWITCH_RELOAD_KEY, marker); } catch {}
+  try {
+    await clearNativeFirestorePersistence();
+  } catch {
+    // Reload still reinitializes Firestore. The warning was logged by firebase.ts.
+  }
+  window.location.reload();
+}
+
+function prepareAccountLocalCache(uid: string) {
+  const previousOwner = localDataOwner();
+  if (!previousOwner) {
+    setLocalDataOwner(uid);
+    return false;
+  }
+  if (previousOwner === uid) return false;
+
+  removeSharedLocalCache(false);
+  setLocalDataOwner(uid);
+  return true;
 }
 
 function installRuntimeRecovery() {
@@ -173,11 +183,21 @@ function installRuntimeRecovery() {
   onAuthStateChanged(auth, (user) => {
     if (!user) {
       clearRecoveryReloadMarkers();
+      const previousOwner = localDataOwner();
       try { sessionStorage.removeItem(ACCOUNT_SWITCH_RELOAD_KEY); } catch {}
+      if (!previousOwner) return;
+
+      // Sign-out is a privacy boundary: clear ROUTE's shared local cache and the
+      // persistent Firestore cache before another account can use this WebView.
+      removeSharedLocalCache(true);
+      void clearFirestoreAndReload(`signed-out:${previousOwner}`);
       return;
     }
 
-    if (prepareAccountLocalCache(user.uid)) reloadForAccountSwitch(user.uid);
+    if (prepareAccountLocalCache(user.uid)) {
+      // Direct A -> B account switches also clear Firestore's IndexedDB cache.
+      void clearFirestoreAndReload(user.uid);
+    }
   });
 }
 

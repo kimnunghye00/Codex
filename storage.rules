@@ -7,6 +7,8 @@ service firebase.storage {
 
     function memberOf(coupleId) {
       return signedIn()
+        && firestore.exists(/databases/(default)/documents/couples/$(coupleId))
+        && firestore.get(/databases/(default)/documents/couples/$(coupleId)).data.memberUids.size() == 2
         && request.auth.uid in firestore.get(/databases/(default)/documents/couples/$(coupleId)).data.memberUids;
     }
 
