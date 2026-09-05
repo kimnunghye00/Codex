@@ -67,6 +67,8 @@ import './couple-date-enhance';
 import './settings-hub';
 import './mobile-polish-v3';
 import './more-enhance';
+// Real-device post-deploy polish must win over the phase-4/5 runtime CSS loaded above.
+import './route-post-deploy-polish-v20.css';
 
 const DESKTOP_PREVIEW_PARAM = 'routeMobilePreview';
 
