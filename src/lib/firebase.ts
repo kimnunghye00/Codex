@@ -19,8 +19,10 @@ export const auth = getAuth(firebaseApp);
 // Capacitor runs the web Firebase SDK inside a private app WebView. Keep its
 // Firestore cache across app restarts so previously loaded chats, schedules,
 // locations and settings remain readable during a temporary network outage.
-// Regular browser sessions intentionally keep the default in-memory cache.
-export const db = initializeFirestore(firebaseApp, Capacitor.isNativePlatform()
+// If a future WebView does not expose IndexedDB, fall back to Firestore's
+// standard in-memory cache instead of risking a startup failure.
+const canPersistNativeFirestore = Capacitor.isNativePlatform() && typeof indexedDB !== 'undefined';
+export const db = initializeFirestore(firebaseApp, canPersistNativeFirestore
   ? {
       ignoreUndefinedProperties: true,
       localCache: persistentLocalCache({ cacheSizeBytes: 50 * 1024 * 1024 }),
