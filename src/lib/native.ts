@@ -67,7 +67,16 @@ export async function initializeNativeApp() {
     await SplashScreen.hide();
   } catch {}
 
+  App.addListener('appStateChange', ({ isActive }) => {
+    window.dispatchEvent(new Event(isActive ? 'route-app-resume' : 'route-app-pause'));
+  }).catch(() => undefined);
+
+  let lastBackAt = 0;
   App.addListener('backButton', ({ canGoBack }) => {
+    const now = Date.now();
+    if (now - lastBackAt < 320) return;
+    lastBackAt = now;
+
     // Give ROUTE overlays/details/tabs the first chance to consume Android back.
     const routeBack = new Event('route-native-back', { cancelable: true });
     window.dispatchEvent(routeBack);
