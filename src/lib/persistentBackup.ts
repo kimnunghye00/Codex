@@ -262,7 +262,9 @@ export function startPersistentBackup() {
       .then((changed) => {
         sessionStorage.setItem(RESTORED_SESSION_KEY, user.uid);
         schedule(user.uid);
-        if (changed) window.location.reload();
+        if (changed) {
+          window.dispatchEvent(new CustomEvent('route-backup-restored'));
+        }
       })
       .catch((error) => {
         console.warn('[ROUTE backup login restore]', error);

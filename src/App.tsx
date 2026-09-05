@@ -208,6 +208,16 @@ function App() {
   }, [messages]);
 
   useEffect(() => {
+    const handleRemoteMemories = (event: Event) => {
+      const next = (event as CustomEvent<Memory[]>).detail;
+      if (Array.isArray(next)) setMemories(next);
+    };
+
+    window.addEventListener('route-memories-remote-change', handleRemoteMemories);
+    return () => window.removeEventListener('route-memories-remote-change', handleRemoteMemories);
+  }, []);
+
+  useEffect(() => {
     saveMemories(memories);
     const before = previousMemories.current;
     const beforeById = new Map(before.map((memory) => [memory.id, memory]));

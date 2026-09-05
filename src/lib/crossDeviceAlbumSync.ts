@@ -8,6 +8,7 @@ const MEMORY_KEY = 'route.memories.v2';
 const LIVE_BACKUP_KEY = 'memories-live';
 const DEVICE_KEY = 'route.albumSync.deviceId';
 const CHANGE_EVENT = 'route-memories-local-change';
+const REMOTE_CHANGE_EVENT = 'route-memories-remote-change';
 
 function getDeviceId() {
   try {
@@ -31,7 +32,6 @@ let localDirty = false;
 let saving = false;
 let saveAgain = false;
 let saveTimer: number | undefined;
-let reloadPending = false;
 let unsubscribeCloud: (() => void) | undefined;
 
 function liveRef(uid: string) {
@@ -120,8 +120,7 @@ function applyCloudMemories(value: Memory[]) {
   try {
     writeMemories(remote);
     localStorage.setItem('route.albumSync.lastReceived', new Date().toISOString());
-    if (document.visibilityState === 'visible') window.location.reload();
-    else reloadPending = true;
+    window.dispatchEvent(new CustomEvent(REMOTE_CHANGE_EVENT, { detail: remote }));
   } catch (error) {
     console.warn('[ROUTE album sync apply]', error);
   }
@@ -167,11 +166,6 @@ export function initializeCrossDeviceAlbumSync() {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden' && activeUid && cloudReady && localDirty) {
       void pushCurrentMemories(activeUid);
-      return;
-    }
-    if (document.visibilityState === 'visible' && reloadPending) {
-      reloadPending = false;
-      window.location.reload();
     }
   });
 
