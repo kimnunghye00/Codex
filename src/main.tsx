@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import Root from './Root';
 import { initializeNativeApp } from './lib/native';
+import { initializeRoutePwa } from './pwa';
 import './styles.css';
 import './auth-onboarding.css';
 import './nickname.css';
@@ -27,6 +28,7 @@ import './home-map-overlay';
 import './close-standard.css';
 import './mobile-apk-fixes.css';
 import './mobile-polish-v3.css';
+import './web-desktop.css';
 import './native-back-ui';
 import './app-icon-native';
 import './profile-enhance';
@@ -36,5 +38,6 @@ import './mobile-polish-v3';
 import './more-enhance';
 
 void initializeNativeApp();
+initializeRoutePwa();
 
 createRoot(document.getElementById('root')!).render(<StrictMode><Root /></StrictMode>);
