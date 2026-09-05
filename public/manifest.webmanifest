@@ -1,0 +1,23 @@
+{
+  "id": "./",
+  "name": "ROUTE - 우리 둘만의 공간",
+  "short_name": "ROUTE",
+  "description": "우리 둘의 채팅, 추억, 일정, 위치를 함께 기록하는 ROUTE",
+  "lang": "ko-KR",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "orientation": "any",
+  "background_color": "#FAF8F5",
+  "theme_color": "#E07A5F",
+  "categories": ["social", "lifestyle"],
+  "icons": [
+    {
+      "src": "route-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
