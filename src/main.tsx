@@ -45,7 +45,7 @@ import './route-product-polish-v7.css';
 import './route-final-qa-v8.css';
 // Cross-feature interaction feedback must remain visible above all legacy layers.
 import './route-feature-flow-v9.css';
-// Place-centered story view connects visits, memories, dates and schedules. Build retry marker.
+// Place-centered story view connects visits, memories, dates and schedules. Retry after Actions budget update.
 import './route-place-timeline-v10.css';
 
 import './route-themes';
