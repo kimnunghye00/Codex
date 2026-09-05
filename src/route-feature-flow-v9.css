@@ -4,6 +4,7 @@
  * - anniversaries -> date plans -> shared schedules
  * - schedule/date places -> map
  * - location visits -> prefilled memories
+ * - memory places -> map + same-place history
  */
 
 .chat-flow-notice {
@@ -270,6 +271,267 @@
   margin-bottom: 10px;
 }
 
+/* Memory -> place history ------------------------------------------------- */
+.memory-detail .detail-place-flow {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.memory-detail .detail-location-link {
+  width: 100%;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border));
+  border-radius: 15px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--surface) 95%, var(--primary) 5%);
+  text-align: left;
+}
+
+.memory-detail .detail-location-link > span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.memory-detail .detail-location-link b {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memory-detail .detail-location-link small {
+  color: var(--text-secondary);
+  font-size: 8px;
+}
+
+.memory-detail .detail-place-related {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 17px;
+  background: var(--surface);
+}
+
+.memory-detail .detail-place-related > header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.memory-detail .detail-place-related > header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.memory-detail .detail-place-related > header small {
+  color: var(--primary);
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+.memory-detail .detail-place-related > header h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.memory-detail .detail-place-related > header strong {
+  color: var(--text-secondary);
+  font-size: 8px;
+  white-space: nowrap;
+}
+
+.memory-detail .detail-visit-summary {
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 9px;
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--background) 75%, var(--surface));
+}
+
+.memory-detail .detail-visit-summary > svg {
+  color: var(--primary);
+}
+
+.memory-detail .detail-visit-summary > span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.memory-detail .detail-visit-summary b {
+  font-size: 9px;
+}
+
+.memory-detail .detail-visit-summary small {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memory-detail .detail-visit-summary > button {
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--border));
+  border-radius: 9px;
+  color: var(--primary);
+  background: var(--surface);
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.memory-detail .detail-related-memories {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.memory-detail .detail-related-memories > button {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 0 0 7px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text-primary);
+  background: var(--surface);
+  text-align: left;
+}
+
+.memory-detail .detail-related-memories > button > span {
+  aspect-ratio: 1.28;
+  overflow: hidden;
+  background: var(--background);
+}
+
+.memory-detail .detail-related-memories img,
+.memory-detail .detail-related-memories video {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.memory-detail .detail-related-memories b,
+.memory-detail .detail-related-memories small {
+  margin: 0 7px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memory-detail .detail-related-memories b {
+  font-size: 8px;
+}
+
+.memory-detail .detail-related-memories small {
+  color: var(--text-secondary);
+  font-size: 7px;
+}
+
+.related-memory-backdrop {
+  position: fixed;
+  z-index: 1900;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(21, 24, 38, .52);
+  backdrop-filter: blur(8px);
+}
+
+.related-memory-preview {
+  position: relative;
+  width: min(460px, 100%);
+  max-height: min(78vh, 680px);
+  overflow: auto;
+  padding: 12px 12px 16px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, white 20%);
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: 0 24px 70px rgba(24, 29, 48, .22);
+}
+
+.related-memory-preview > img,
+.related-memory-preview > video {
+  width: 100%;
+  max-height: 360px;
+  display: block;
+  object-fit: cover;
+  border-radius: 15px;
+  background: var(--background);
+}
+
+.related-memory-preview > small {
+  display: block;
+  margin-top: 12px;
+  color: var(--primary);
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.related-memory-preview > h2 {
+  margin: 3px 0 6px;
+  color: var(--text-primary);
+  font-size: 18px;
+}
+
+.related-memory-preview > p {
+  margin: 0 0 10px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.related-memory-close {
+  position: absolute;
+  z-index: 2;
+  top: 20px;
+  right: 20px;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.7);
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(24, 29, 48, .54);
+  backdrop-filter: blur(8px);
+}
+
+.related-memory-map {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 11px;
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border));
+  border-radius: 11px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--surface) 94%, var(--primary) 6%);
+  font-size: 9px;
+  font-weight: 800;
+}
+
 @keyframes route-flow-notice-in {
   from { opacity: 0; transform: translateY(-3px); }
   to { opacity: 1; transform: translateY(0); }
@@ -299,6 +561,14 @@
 
   .location-page .location-memory-button {
     width: 54px;
+  }
+
+  .memory-detail .detail-place-related {
+    padding: 14px;
+  }
+
+  .memory-detail .detail-related-memories {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
@@ -361,6 +631,21 @@
   .location-page .location-memory-button {
     width: 44px;
     min-height: 44px;
+  }
+
+  .memory-detail .detail-related-memories {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .related-memory-backdrop {
+    align-items: end;
+    padding: 12px;
+  }
+
+  .related-memory-preview {
+    width: 100%;
+    max-height: 82vh;
+    border-radius: 22px 22px 16px 16px;
   }
 }
 
