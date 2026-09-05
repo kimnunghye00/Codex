@@ -15,6 +15,27 @@ export const nativePlatform = () => Capacitor.getPlatform();
 export async function initializeNativeApp() {
   if (!isNativePlatform()) return;
 
+  const root = document.documentElement;
+  root.classList.add('route-native', `route-native-${nativePlatform()}`);
+
+  if (root.dataset.routeKeyboardWired !== '1') {
+    root.dataset.routeKeyboardWired = '1';
+
+    const showKeyboard = (height: number) => {
+      root.classList.add('route-keyboard-open');
+      root.style.setProperty('--route-keyboard-height', `${Math.max(0, height)}px`);
+    };
+    const hideKeyboard = () => {
+      root.classList.remove('route-keyboard-open');
+      root.style.setProperty('--route-keyboard-height', '0px');
+    };
+
+    Keyboard.addListener('keyboardWillShow', (info) => showKeyboard(info.keyboardHeight)).catch(() => undefined);
+    Keyboard.addListener('keyboardDidShow', (info) => showKeyboard(info.keyboardHeight)).catch(() => undefined);
+    Keyboard.addListener('keyboardWillHide', hideKeyboard).catch(() => undefined);
+    Keyboard.addListener('keyboardDidHide', hideKeyboard).catch(() => undefined);
+  }
+
   try {
     await StatusBar.setOverlaysWebView({ overlay: false });
     await StatusBar.setStyle({ style: Style.Light });
