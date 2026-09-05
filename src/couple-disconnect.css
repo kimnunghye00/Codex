@@ -1,0 +1,144 @@
+.route-disconnect-trigger {
+  width: 100%;
+  margin-top: 10px;
+  border: 1px solid rgba(196, 69, 69, 0.24);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: rgba(196, 69, 69, 0.06);
+  color: #b23b3b;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.route-disconnect-trigger:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.route-disconnect-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 16000;
+  display: grid;
+  place-items: center;
+  padding: max(18px, env(safe-area-inset-top)) 18px max(18px, env(safe-area-inset-bottom));
+  background: rgba(20, 24, 34, 0.48);
+  backdrop-filter: blur(6px);
+}
+
+.route-disconnect-dialog {
+  width: min(100%, 390px);
+  border-radius: 24px;
+  background: var(--surface, #fff);
+  color: var(--text, #1f2a44);
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.22);
+  overflow: hidden;
+}
+
+.route-disconnect-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 18px 12px;
+}
+
+.route-disconnect-head > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.route-disconnect-head span {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: rgba(196, 69, 69, 0.09);
+  color: #b23b3b;
+}
+
+.route-disconnect-head strong {
+  font-size: 17px;
+}
+
+.route-disconnect-close {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 6px;
+  cursor: pointer;
+}
+
+.route-disconnect-body {
+  padding: 2px 18px 18px;
+}
+
+.route-disconnect-body > p {
+  margin: 0 0 12px;
+  color: var(--muted, #667085);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.route-disconnect-warning {
+  margin: 0 0 14px;
+  padding: 14px 15px;
+  border: 1px solid rgba(196, 69, 69, 0.18);
+  border-radius: 16px;
+  background: rgba(196, 69, 69, 0.055);
+}
+
+.route-disconnect-warning b {
+  display: block;
+  margin-bottom: 7px;
+  color: #a63838;
+  font-size: 13px;
+}
+
+.route-disconnect-warning ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted, #667085);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.route-disconnect-feedback {
+  margin: 0 0 12px !important;
+  color: #b23b3b !important;
+  font-weight: 700;
+}
+
+.route-disconnect-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 9px;
+}
+
+.route-disconnect-actions button {
+  min-height: 46px;
+  border-radius: 14px;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.route-disconnect-cancel {
+  border: 1px solid rgba(31, 42, 68, 0.13);
+  background: var(--surface-subtle, #f7f8fb);
+  color: var(--text, #1f2a44);
+}
+
+.route-disconnect-confirm {
+  border: 0;
+  background: #c44545;
+  color: #fff;
+}
+
+.route-disconnect-actions button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
