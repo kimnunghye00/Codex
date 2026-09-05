@@ -6,6 +6,7 @@ import { initializeNativeApp } from './lib/native';
 import { preparePersistentBackup, startPersistentBackup } from './lib/persistentBackup';
 import { initializeCrossDeviceAlbumSync } from './lib/crossDeviceAlbumSync';
 import { initializeRoutePwa } from './pwa';
+import { installPersistentStorageObserver } from './utils/persistenceSignal';
 import './styles.css';
 import './auth-onboarding.css';
 import './nickname.css';
@@ -49,6 +50,7 @@ import './more-enhance';
 
 async function bootstrap() {
   installGlobalCrashDiagnostics();
+  installPersistentStorageObserver();
   void initializeNativeApp();
   initializeRoutePwa();
 
