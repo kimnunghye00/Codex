@@ -26,10 +26,13 @@ import './home-map-overlay.css';
 import './home-map-overlay';
 import './close-standard.css';
 import './mobile-apk-fixes.css';
+import './mobile-polish-v3.css';
 import './native-back-ui';
 import './app-icon-native';
 import './profile-enhance';
 import './couple-date-enhance';
+import './settings-hub';
+import './mobile-polish-v3';
 import './more-enhance';
 
 void initializeNativeApp();
