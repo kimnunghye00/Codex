@@ -3,7 +3,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import '../../route-chat-gallery-v21.css';
 import '../../route-chat-hotfix-v24.css';
-import { chatMediaPreviewUrl, downloadOriginalChatMedia } from '../../lib/chatMediaReference';
+import { chatMediaPreviewUrl, downloadOriginalChatMedia, hasOptimizedChatPreview } from '../../lib/chatMediaReference';
 import type { Message } from '../../types';
 import { messageTime } from '../../utils/dates';
 import { ReactionPicker } from './ReactionPicker';
@@ -22,28 +22,60 @@ function DeferredMediaImage({ src, alt, className, onClick }: {
   src: string;
   alt: string;
   className?: string;
-  onClick?: (event: React.MouseEvent<HTMLImageElement>) => void;
+  onClick?: (event: React.MouseEvent<HTMLElement>) => void;
 }) {
   const ref = useRef<HTMLImageElement>(null);
-  const [ready, setReady] = useState(false);
+  const optimizedPreview = hasOptimizedChatPreview(src);
+  const [nearby, setNearby] = useState(false);
+  const [legacyRequested, setLegacyRequested] = useState(false);
 
   useEffect(() => {
+    if (!optimizedPreview) return;
     const node = ref.current;
     if (!node) return;
     if (typeof IntersectionObserver === 'undefined') {
-      setReady(true);
+      setNearby(true);
       return;
     }
     const observer = new IntersectionObserver((entries) => {
       if (!entries.some((entry) => entry.isIntersecting)) return;
-      setReady(true);
+      setNearby(true);
       observer.disconnect();
-    }, { rootMargin: '140px 0px', threshold: 0.01 });
+    }, { rootMargin: '120px 0px', threshold: 0.01 });
     observer.observe(node);
     return () => observer.disconnect();
-  }, []);
+  }, [optimizedPreview]);
 
-  return <img ref={ref} className={className} src={ready ? chatMediaPreviewUrl(src) : undefined} alt={alt} decoding="async" onClick={onClick} />;
+  // Photos sent before the compact-preview rollout only have an original URL.
+  // Never attach that URL to <img> automatically; the user explicitly opts in.
+  if (!optimizedPreview && !legacyRequested) {
+    return <span
+      className={`chat-legacy-media-gate ${className ?? ''}`}
+      role="button"
+      tabIndex={0}
+      aria-label="이전 사진 불러오기"
+      onClick={(event) => {
+        event.stopPropagation();
+        setLegacyRequested(true);
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        event.stopPropagation();
+        setLegacyRequested(true);
+      }}
+    ><ImageIcon size={20} /><small>사진 보기</small></span>;
+  }
+
+  return <img
+    ref={ref}
+    className={className}
+    src={legacyRequested || nearby ? chatMediaPreviewUrl(src) : undefined}
+    alt={alt}
+    loading="lazy"
+    decoding="async"
+    onClick={onClick}
+  />;
 }
 
 function GalleryViewer({ urls, initialIndex, onClose }: { urls: string[]; initialIndex: number; onClose: () => void }) {
