@@ -1,8 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import Root from './Root';
-import { RouteEnhancementLayer } from './RouteEnhancementLayer';
 import { AppCrashBoundary, installGlobalCrashDiagnostics } from './AppCrashBoundary';
+import { applySavedRouteAppIcon } from './components/more/MoreServices';
 import { authPersistenceReady } from './lib/firebase';
 import { initializeNativeApp } from './lib/native';
 import { preparePersistentBackup, startPersistentBackup } from './lib/persistentBackup';
@@ -111,6 +111,7 @@ function mountDesktopPhonePreview() {
 async function bootstrap() {
   installGlobalCrashDiagnostics();
   installPersistentStorageObserver();
+  applySavedRouteAppIcon();
 
   // On desktop web, show the exact responsive mobile app instead of stretching
   // the layout into a tablet/desktop dashboard. The iframe is same-origin, so
@@ -130,10 +131,7 @@ async function bootstrap() {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <AppCrashBoundary>
-        <>
-          <Root />
-          <RouteEnhancementLayer />
-        </>
+        <Root />
       </AppCrashBoundary>
     </StrictMode>,
   );
