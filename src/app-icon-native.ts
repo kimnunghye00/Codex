@@ -1,5 +1,4 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
-import './appearance-stability';
 
 type IconId = 'route' | 'heart' | 'night' | 'cream';
 type RouteAppIconPlugin = {
