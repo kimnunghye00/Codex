@@ -14,6 +14,7 @@ import { getRealCoupleConnection, type RealCoupleConnection } from '../../lib/co
 import { savePartnerNickname } from '../../lib/coupleShared';
 import { CoupleConnect } from '../couple/CoupleConnect';
 import { CoupleDisconnectControl } from './CoupleDisconnectControl';
+import { PartnerProfileCard } from './PartnerProfileCard';
 import {
   calculateAge,
   displayName,
@@ -202,6 +203,8 @@ export function AccountSettings({ user, profile, onProfileChange, onClose }: {
           <button className="settings-profile-summary" type="button" onClick={() => setProfileOpen((open) => !open)}><span className="settings-profile-avatar">{photoDataUrl ? <img src={photoDataUrl} alt="프로필" /> : <UserRound size={24} />}</span><span className="settings-profile-copy"><small>내 기본 프로필</small><strong>{profile.name}</strong><em>{profile.birthDate} · 만 {calculateAge(profile.birthDate)}세</em></span><span className="settings-edit-label">{profileOpen ? '닫기' : '수정'}</span></button>
           {profileOpen && <div className="settings-profile-editor"><div className="settings-photo-row"><button type="button" className="settings-photo-picker" onClick={() => fileRef.current?.click()}>{photoDataUrl ? <img src={photoDataUrl} alt="선택한 프로필" /> : <UserRound size={28} />}<span><Camera size={13} /></span></button><div><strong>프로필 사진</strong><button type="button" onClick={() => fileRef.current?.click()}>사진 변경</button>{photoDataUrl && <button type="button" onClick={() => setPhotoDataUrl('')}>사진 삭제</button>}</div><input ref={fileRef} hidden type="file" accept="image/*" onChange={(event) => readPhoto(event.target.files?.[0])} /></div><label>이름<input type="text" maxLength={20} value={name} onChange={(event) => setName(event.target.value)} /></label><label>생년월일<input type="date" max={new Date().toISOString().slice(0, 10)} value={birthDate} onChange={(event) => setBirthDate(event.target.value)} /></label>{birthDate && <div className="settings-age"><span>현재 나이</span><strong>만 {age}세</strong></div>}<div className="settings-gender"><span>성별</span><div>{([['male', '남성'], ['female', '여성'], ['other', '기타']] as const).map(([value, label]) => <button type="button" key={value} className={gender === value ? 'selected' : ''} onClick={() => setGender(value)}>{label}</button>)}</div></div>{profileFeedback && <p className="account-feedback">{profileFeedback}</p>}<button className="primary settings-save-profile" type="button" onClick={saveEditedProfile}>프로필 저장</button></div>}
         </section>
+
+        <PartnerProfileCard />
 
         <div className="account-summary"><span>전화번호</span><strong>{user.phoneNumber ?? '등록되지 않음'}</strong><CheckCircle2 size={18} /></div>
 
