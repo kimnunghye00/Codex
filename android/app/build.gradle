@@ -25,7 +25,8 @@ android {
         // can restart at versionCode 1 and Android will reject it as a downgrade.
         // Use epoch minutes instead: it stays safely below Android's max versionCode
         // while increasing across every workflow and local CI build over time.
-        def routeVersionCode = (System.getenv("ROUTE_VERSION_CODE") ?: (System.currentTimeMillis() / 60000L).toString()).toInteger()
+        def fallbackVersionCode = Math.floorDiv(System.currentTimeMillis(), 60000L)
+        def routeVersionCode = (System.getenv("ROUTE_VERSION_CODE") ?: fallbackVersionCode.toString()).toInteger()
         versionCode routeVersionCode
         versionName "1.0.${routeVersionCode}"
 
