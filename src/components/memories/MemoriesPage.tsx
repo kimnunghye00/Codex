@@ -14,14 +14,14 @@ import { MemoryForm } from './MemoryForm';
 import { PlaceTimeline } from './PlaceTimeline';
 
 type Filter = 'all' | 'favorite' | string;
-type HubTab = 'album' | 'anniversary' | 'record' | 'tier' | 'schedule' | 'date';
+export type HubTabId = 'album' | 'anniversary' | 'record' | 'tier' | 'schedule' | 'date';
 type ScheduleType = 'personal' | 'couple';
 type Schedule = { id: string; title: string; date: string; startTime: string; endTime?: string; type: ScheduleType; ownerId: string; memo?: string; location?: string; localOnly?: boolean; source?: 'date-plan'; sourceId?: string };
 type DatePlan = { id: number; title: string; date: string; time: string; location: string; memo: string; scheduleId?: string; anniversaryKey?: string };
 type AnniversaryItem = { title: string; date: string; icon: string; special?: boolean };
 
-const DEFAULT_TABS: HubTab[] = ['album', 'anniversary', 'record', 'tier', 'schedule', 'date'];
-const TAB_LABEL: Record<HubTab, string> = { album: '앨범', anniversary: '기념일', record: '기록', tier: '티어', schedule: '일정', date: '데이트' };
+const DEFAULT_TABS: HubTabId[] = ['album', 'anniversary', 'record', 'tier', 'schedule', 'date'];
+const TAB_LABEL: Record<HubTabId, string> = { album: '앨범', anniversary: '기념일', record: '기록', tier: '티어', schedule: '일정', date: '데이트' };
 const DAY = 86400000;
 const todayKey = () => new Date().toISOString().slice(0, 10);
 const dayDiff = (date: string) => Math.ceil((new Date(`${date}T00:00:00`).getTime() - new Date(`${todayKey()}T00:00:00`).getTime()) / DAY);
@@ -68,7 +68,8 @@ function anniversaryPlanKey(item: AnniversaryItem) {
   return `${item.title}:${item.date}`;
 }
 
-export function MemoriesPage({ Header, memories, setMemories, initialMemoryId, initialDraft, onClearInitial, onClearInitialDraft, onOpenLocation }: {
+export function MemoriesPage({ requestedTab, Header, memories, setMemories, initialMemoryId, initialDraft, onClearInitial, onClearInitialDraft, onOpenLocation }: {
+  requestedTab?: HubTabId;
   Header: ({ title }: { title?: string }) => React.ReactNode;
   memories: Memory[];
   setMemories: React.Dispatch<React.SetStateAction<Memory[]>>;
@@ -82,9 +83,9 @@ export function MemoriesPage({ Header, memories, setMemories, initialMemoryId, i
   const profile = uid ? loadProfile(uid) : null;
   const [connection, setConnection] = useState<RealCoupleConnection | null>(null);
   const [relationshipStartDate, setRelationshipStartDate] = useState<string>();
-  const [activeTab, setActiveTab] = useState<HubTab>('album');
-  const [tabOrder, setTabOrder] = useState<HubTab[]>(() => {
-    try { const parsed = JSON.parse(localStorage.getItem(`route-hub-tabs:${uid}`) || '[]') as HubTab[]; return parsed.length === DEFAULT_TABS.length ? parsed : DEFAULT_TABS; } catch { return DEFAULT_TABS; }
+  const [activeTab, setActiveTab] = useState<HubTabId>(requestedTab ?? 'album');
+  const [tabOrder, setTabOrder] = useState<HubTabId[]>(() => {
+    try { const parsed = JSON.parse(localStorage.getItem(`route-hub-tabs:${uid}`) || '[]') as HubTabId[]; return parsed.length === DEFAULT_TABS.length ? parsed : DEFAULT_TABS; } catch { return DEFAULT_TABS; }
   });
   const [orderOpen, setOrderOpen] = useState(false);
   const [filter, setFilter] = useState<Filter>('all');
@@ -114,6 +115,10 @@ export function MemoriesPage({ Header, memories, setMemories, initialMemoryId, i
     setActiveTab('album');
     setEditing(null);
   }, [initialDraft]);
+  useEffect(() => {
+    if (!requestedTab) return;
+    setActiveTab(requestedTab);
+  }, [requestedTab]);
 
   useEffect(() => {
     const handleBack = (event: Event) => {
@@ -165,8 +170,8 @@ export function MemoriesPage({ Header, memories, setMemories, initialMemoryId, i
   const placeCounts = visits.reduce<Record<string, number>>((acc, visit) => { const key = visit.placeName || '기록된 장소'; acc[key] = (acc[key] || 0) + 1; return acc; }, {});
   const topPlace = Object.entries(placeCounts).sort((a, b) => b[1] - a[1])[0];
 
-  const moveTab = (tab: HubTab, direction: -1 | 1) => setTabOrder((items) => { const index = items.indexOf(tab); const nextIndex = index + direction; if (nextIndex < 0 || nextIndex >= items.length) return items; const next = [...items]; [next[index], next[nextIndex]] = [next[nextIndex], next[index]]; return next; });
-  const resetScheduleForm = () => setScheduleForm({ title: '', date: todayKey(), startTime: '19:00', type: 'couple', location: '' });
+  const moveTab = (tab: HubTabId, direction: -1 | 1) => setTabOrder((items) => { const index = items.indexOf(tab); const nextIndex = index + direction; if (nextIndex < 0 || nextIndex >= items.length) return items; const next = [...items]; [next[index], next[nextIndex]] = [next[nextIndex], next[index]]; return next; });
+  const resetScheduleForm = () => setScheduleForm({ title: '', date: todayKey(), startTime: '19:00', type: 'couple' as ScheduleType, location: '' });
   const resetDateForm = () => { setDateForm({ title: '', date: todayKey(), time: '18:00', location: '', memo: '' }); setDateSourceKey(undefined); };
   const saveSchedule = async () => {
     const title = scheduleForm.title.trim();
@@ -276,7 +281,7 @@ export function MemoriesPage({ Header, memories, setMemories, initialMemoryId, i
 
   if (selectedMemory) return <><MemoryDetail memory={selectedMemory} onBack={() => { setSelected(undefined); onClearInitial(); }} onFavorite={() => favorite(selectedMemory.id)} onEdit={() => setEditing(selectedMemory)} onDelete={() => { setMemories((items) => items.filter((item) => item.id !== selectedMemory.id)); setSelected(undefined); }} onOpenPlaceTimeline={(place) => { setSelected(undefined); onClearInitial(); setActiveTab('record'); setPlaceTimelineFocus(place); }} />{editing && <MemoryForm memory={editing} onClose={() => setEditing(undefined)} onSave={(memory) => { update(memory); setEditing(undefined); }} />}</>;
 
-  return <div className="page memories-page route-hub"><Header title="앨범" />
+  return <div className="page memories-page route-hub"><Header title="추억" />
     <div className="hub-head"><div><small>ROUTE TOGETHER</small><h1>{TAB_LABEL[activeTab]}</h1></div><button type="button" className="hub-settings" onClick={() => setOrderOpen(true)}><Settings2 size={18} /></button></div>
     <div className="hub-tabs">{tabOrder.map((tab) => <button key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>{TAB_LABEL[tab]}</button>)}</div>
 
@@ -298,7 +303,7 @@ export function MemoriesPage({ Header, memories, setMemories, initialMemoryId, i
 
     {activeTab === 'date' && <div className="hub-stack"><div className="hub-section-head"><div><small>DATE PLAN</small><h2>데이트</h2></div><button type="button" onClick={() => openDatePlan()}><Plus size={15} />데이트 추가</button></div>{dateFeedback && <p className="hub-note date-flow-feedback">{dateFeedback}</p>}{[...datePlans].sort((a,b) => a.date.localeCompare(b.date)).map((item) => <article key={item.id} className="hub-list-row date-row"><Heart size={17} /><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')} · {item.time}{item.location ? ` · ${item.location}` : ''}</small>{item.memo && <em>{item.memo}</em>}</div><div className="date-flow-actions">{item.scheduleId && <span><CalendarDays size={11} />일정 연결</span>}{item.location && <button type="button" className="map-link" onClick={() => onOpenLocation?.(item.location)}><MapPin size={11} />지도</button>}<button type="button" onClick={() => void deleteDatePlan(item)}>삭제</button></div></article>)}{!datePlans.length && <div className="memory-empty">다음 데이트를 계획해보세요 ❤️</div>}</div>}
 
-    {orderOpen && <div className="hub-order-backdrop"><section className="hub-order-panel"><header><div><small>앨범 구성</small><h2>탭 순서 편집</h2></div><button onClick={() => setOrderOpen(false)}><X size={18} /></button></header>{tabOrder.map((tab, index) => <div className="hub-order-row" key={tab}><GripVertical size={16} /><b>{TAB_LABEL[tab]}</b><span><button disabled={index === 0} onClick={() => moveTab(tab,-1)}>↑</button><button disabled={index === tabOrder.length-1} onClick={() => moveTab(tab,1)}>↓</button></span></div>)}</section></div>}
+    {orderOpen && <div className="hub-order-backdrop"><section className="hub-order-panel"><header><div><small>추억 구성</small><h2>탭 순서 편집</h2></div><button onClick={() => setOrderOpen(false)}><X size={18} /></button></header>{tabOrder.map((tab, index) => <div className="hub-order-row" key={tab}><GripVertical size={16} /><b>{TAB_LABEL[tab]}</b><span><button disabled={index === 0} onClick={() => moveTab(tab,-1)}>↑</button><button disabled={index === tabOrder.length-1} onClick={() => moveTab(tab,1)}>↓</button></span></div>)}</section></div>}
 
     {scheduleOpen && <div className="hub-order-backdrop"><section className="hub-order-panel compact"><header><div><small>NEW SCHEDULE</small><h2>일정 추가</h2></div><button onClick={() => setScheduleOpen(false)}><X size={18} /></button></header><label>제목<input value={scheduleForm.title} onChange={(e) => setScheduleForm({...scheduleForm,title:e.target.value})} /></label><label>날짜<input type="date" value={scheduleForm.date} onChange={(e) => setScheduleForm({...scheduleForm,date:e.target.value})} /></label><label>시간<input type="time" value={scheduleForm.startTime} onChange={(e) => setScheduleForm({...scheduleForm,startTime:e.target.value})} /></label><label>종류<select value={scheduleForm.type} onChange={(e) => setScheduleForm({...scheduleForm,type:e.target.value as ScheduleType})}><option value="personal">내 일정</option><option value="couple">우리 일정</option></select></label><label>장소<input value={scheduleForm.location} onChange={(e) => setScheduleForm({...scheduleForm,location:e.target.value})} /></label><button className="primary" disabled={!scheduleForm.title.trim()} onClick={() => void saveSchedule()}>저장</button></section></div>}
 
