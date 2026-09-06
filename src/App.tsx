@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChatPage } from './components/chat/ChatPage';
-import { StableMemoriesPage, type HubTabId } from './components/memories/StableMemoriesPage';
-import { StableLocationPage, type LocationTabId } from './components/location/StableLocationPage';
+import { MemoriesPage, type HubTabId } from './components/memories/MemoriesPage';
+import { LocationPage, type LocationTabId } from './components/location/LocationPage';
 import { AccountSettings } from './components/auth/AccountSettings';
 import { AuthFlow, Wordmark } from './components/auth/AuthFlow';
 import { ProfileSetup } from './components/auth/ProfileSetup';
@@ -265,8 +265,8 @@ function App() {
     <div className="app-shell"><main>
       {tab === 'home' && <HomePage uid={user.uid} profile={profile} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} memories={memories} messages={messages} onNavigate={navigateTab} onOpenMemory={(id) => { setMemoryDraft(undefined); setMemoryToOpen(id); setRequestedHubTab('album'); navigateTab('memories'); }} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} connection={connection} />}
-      {tab === 'memories' && <StableMemoriesPage requestedTab={requestedHubTab} Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={(place) => { setLocationFocus(place); setRequestedLocationTab('map'); navigateTab('location'); }} />}
-      {tab === 'location' && <StableLocationPage requestedTab={requestedLocationTab} Header={AppHeader} connection={connection} focusPlace={locationFocus} onClearFocus={() => setLocationFocus(undefined)} onCreateMemory={(draft) => { setMemoryToOpen(undefined); setMemoryDraft(draft); setRequestedHubTab('album'); navigateTab('memories'); }} onActivity={(title, detail) => addActivity({ actor: 'me', kind: 'location', title, detail })} />}
+      {tab === 'memories' && <MemoriesPage requestedTab={requestedHubTab} Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={(place) => { setLocationFocus(place); setRequestedLocationTab('map'); navigateTab('location'); }} />}
+      {tab === 'location' && <LocationPage requestedTab={requestedLocationTab} Header={AppHeader} connection={connection} focusPlace={locationFocus} onClearFocus={() => setLocationFocus(undefined)} onCreateMemory={(draft) => { setMemoryToOpen(undefined); setMemoryDraft(draft); setRequestedHubTab('album'); navigateTab('memories'); }} onActivity={(title, detail) => addActivity({ actor: 'me', kind: 'location', title, detail })} />}
       {tab === 'anniversary' && <AnniversaryPage connected={Boolean(connection)} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} onSaveStartDate={saveStartDate} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'more' && <MorePage onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} onNavigate={navigateMoreTarget} />}
     </main><BottomNav tab={tab} onNavigate={navigateTab} /></div>
