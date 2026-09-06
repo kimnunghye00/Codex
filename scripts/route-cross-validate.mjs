@@ -68,6 +68,9 @@ const retiredFiles = [
   'src/ai-test.css',
   'src/route-appearance-stability-v17.css',
   'src/route-theme-preview-stability-v18.css',
+  'src/route-web-home-v11.css',
+  'src/route-mobile-home-v13.css',
+  'src/route-mobile-home-fit-v14.css',
   'src/components/memories/StableMemoriesPage.tsx',
   'src/components/location/StableLocationPage.tsx',
 ];
@@ -80,6 +83,9 @@ const bannedReferences = [
   'StableLocationPage',
   'route-appearance-stability-v17.css',
   'route-theme-preview-stability-v18.css',
+  'route-web-home-v11.css',
+  'route-mobile-home-v13.css',
+  'route-mobile-home-fit-v14.css',
 ];
 for (const reference of bannedReferences) {
   const owners = allTextFiles.filter((file) => read(file).includes(reference));
@@ -87,6 +93,11 @@ for (const reference of bannedReferences) {
 }
 
 const main = read('src/main.tsx');
+const app = read('src/App.tsx');
+const recovery = read('src/recovery-runtime.ts');
+const coupleConnection = read('src/lib/coupleConnection.ts');
+const coupleConnect = read('src/components/couple/CoupleConnect.tsx');
+const releaseGuard = read('src/route-release-stability-v24.css');
 const appIconNative = read('src/app-icon-native.ts');
 const native = read('src/lib/native.ts');
 const manifest = read('android/app/src/main/AndroidManifest.xml');
@@ -97,12 +108,28 @@ const workflow = read('.github/workflows/stability-gate.yml');
 check('single React root remains', (main.match(/createRoot\(/g) || []).length === 1);
 check('runtime recovery is directly loaded', main.includes("import './recovery-runtime';"));
 check('runtime recovery CSS is directly loaded', main.includes("import './route-runtime-stability-v19.css';"));
+check('phase 12 release CSS is directly loaded', main.includes("import './route-release-stability-v24.css';"));
 check('native icon bridge is directly loaded', main.includes("import './app-icon-native';"));
 check('native icon bridge has no retired wrapper import', !appIconNative.includes('appearance-stability'));
 
-check('native keyboard lifecycle is wired', native.includes("keyboardWillShow") && native.includes("keyboardDidHide") && native.includes('route-keyboard-open'));
-check('native Android back bridge is wired', native.includes("App.addListener('backButton'") && native.includes("route-native-back"));
-check('native resume bridge is wired', native.includes("route-app-resume"));
+check('App realtime connection replaces always-on polling', app.includes('subscribeRealCoupleConnection') && !app.includes('window.setInterval(check, 3000)'));
+check('couple library has user/couple/partner snapshots',
+  coupleConnection.includes('subscribeRealCoupleConnection')
+  && coupleConnection.includes("onSnapshot(doc(db, 'couples', coupleId)")
+  && coupleConnection.includes("onSnapshot(doc(db, 'users', partnerUid)"));
+check('couple invite state is snapshot driven', coupleConnection.includes('subscribeCoupleInviteState') && coupleConnect.includes('subscribeCoupleInviteState'));
+check('CoupleConnect has no interval polling', !coupleConnect.includes('setInterval('));
+check('owner finalize no longer always returns null',
+  coupleConnection.includes('partnerProfile: result.partnerName')
+  && !coupleConnection.includes('if (!result?.coupleId || !result.partnerUid) return null;\n  return null;'));
+check('legacy unowned couple cache is rejected', recovery.includes('hasSharedLocalCache') && recovery.includes('orphanedLegacyCache'));
+check('unfinished call controls are hidden from release UI',
+  ['음성 통화', '영상 통화', '화면 공유'].every((label) => releaseGuard.includes(`aria-label="${label}"`))
+  && releaseGuard.includes('display: none'));
+
+check('native keyboard lifecycle is wired', native.includes('keyboardWillShow') && native.includes('keyboardDidHide') && native.includes('route-keyboard-open'));
+check('native Android back bridge is wired', native.includes("App.addListener('backButton'") && native.includes('route-native-back'));
+check('native resume bridge is wired', native.includes('route-app-resume'));
 check('camera permission helper exists', native.includes('ensureCameraPermission'));
 check('location permission helper exists', native.includes('ensureLocationPermission'));
 check('notification permission helper exists', native.includes('ensureNotificationPermission'));
@@ -153,4 +180,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('\nIndependent repository, native, and cleanup invariants agree.');
+console.log('\nIndependent repository, native, privacy, and realtime invariants agree.');
