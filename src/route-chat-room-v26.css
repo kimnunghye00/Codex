@@ -1,6 +1,6 @@
 /* ROUTE chat-room boundary v26
- * The chat tab is an inbox. Opening a conversation creates a full-screen room
- * above the app, with an explicit back boundary like native messengers.
+ * The chat tab enters one full-screen room directly, with an explicit back
+ * boundary like native messengers.
  */
 
 .chat-inbox-page {
@@ -242,7 +242,8 @@
   box-shadow: 0 3px 10px rgba(31,42,68,.06);
 }
 
-/* Legacy photos have no compact preview. Keep them off the network until tapped. */
+/* Pre-preview photos are converted in the background. Never let the old
+ * full-resolution URL become the inline image while that conversion is pending. */
 .chat-legacy-media-gate {
   width: 100%;
   height: 100%;
@@ -254,12 +255,18 @@
   color: var(--text-secondary);
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--surface) 94%, var(--primary) 6%), color-mix(in srgb, var(--surface) 98%, #ddd 2%));
-  cursor: pointer;
+  cursor: progress;
+  pointer-events: none;
 }
 
 .chat-legacy-media-gate small {
-  font-size: 9px;
+  font-size: 0 !important;
   font-weight: 700;
+}
+
+.chat-legacy-media-gate small::after {
+  content: '사진 최적화 중…';
+  font-size: 9px;
 }
 
 .chat-page .chat-image.chat-legacy-media-gate {
