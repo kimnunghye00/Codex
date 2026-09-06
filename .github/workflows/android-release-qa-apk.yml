@@ -6,7 +6,15 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/android-release-qa-apk.yml'
-      - 'android/app/build.gradle'
+      - 'android/**'
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'capacitor.config.ts'
+      - 'vite.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/**'
 
 concurrency:
   group: android-release-qa-apk-main

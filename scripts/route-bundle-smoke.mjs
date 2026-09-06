@@ -2,7 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const assetsDir = path.resolve('dist/assets');
-const MAX_JS_CHUNK_BYTES = 450 * 1024;
+// ROUTE's native WebView startup is more reliable with a simpler entry graph.
+// Route-level lazy loading stays enabled, but vendor code is allowed to remain
+// in a larger startup file instead of being forced into many tiny dependencies.
+const MAX_JS_CHUNK_BYTES = 1536 * 1024;
 
 if (!fs.existsSync(assetsDir)) {
   console.error('ROUTE bundle gate: dist/assets is missing. Run the production build first.');
@@ -29,7 +32,7 @@ if (oversized.length) {
   for (const chunk of oversized) {
     console.error(`Oversized chunk: ${chunk.name} = ${(chunk.bytes / 1024).toFixed(1)} KiB`);
   }
-  console.error('A ROUTE JavaScript chunk exceeded the P3 performance budget. Keep route/vendor code splitting intact or split the new dependency.');
+  console.error('A ROUTE JavaScript chunk exceeded the startup-safe bundle budget. Keep feature screens lazy-loaded or split only the new heavy feature.');
   process.exit(1);
 }
 

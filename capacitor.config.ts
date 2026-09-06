@@ -20,10 +20,11 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      // React/Firebase bootstrap이 끝날 때까지 네이티브 스플래시를 유지하고
-      // src/main.tsx에서 첫 화면이 실제로 그려진 뒤 직접 숨깁니다.
-      launchShowDuration: 0,
-      launchAutoHide: false,
+      // Native auto-hide is the last-resort launch guard. src/main.tsx still
+      // hides the splash as soon as ROUTE paints, but a module-load failure can
+      // no longer strand the user behind the native splash forever.
+      launchShowDuration: 1800,
+      launchAutoHide: true,
       backgroundColor: '#fffaf8',
       showSpinner: false,
     },
