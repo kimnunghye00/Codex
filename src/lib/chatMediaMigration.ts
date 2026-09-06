@@ -1,119 +1,126 @@
-import { collection, getDocs, orderBy, query, updateDoc, doc } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
+import type { Message } from '../types';
 import { db } from './firebase';
 import { createLegacyChatMediaReference } from './chatMedia';
 import { hasOptimizedChatPreview } from './chatMediaReference';
 
-const runningRooms = new Map<string, Promise<void>>();
-const completedRooms = new Set<string>();
-const MEDIA_CONCURRENCY = 2;
+const MIGRATION_GAP_MS = 850;
 
-type LegacyCloudMessage = {
-  id?: number;
-  type?: 'text' | 'image' | 'gallery' | 'gif';
-  imageUrl?: string;
-  imageUrls?: string[];
+type RoomState = {
+  coupleId: string;
+  ownerUid: string;
+  messages: Message[];
+  attempted: Set<string>;
+  running: boolean;
+  timer?: number;
 };
 
-function isMigratableReference(value?: string) {
-  return Boolean(value && !value.startsWith('blob:') && !hasOptimizedChatPreview(value));
+type Candidate = {
+  message: Message;
+  url: string;
+  index: number;
+};
+
+const rooms = new Map<string, RoomState>();
+
+function roomKey(coupleId: string, ownerUid: string) {
+  return `${coupleId}:${ownerUid}`;
 }
 
-async function mapWithConcurrency<T, R>(items: T[], concurrency: number, worker: (item: T, index: number) => Promise<R>) {
-  const results = new Array<R>(items.length);
-  let cursor = 0;
-  const runners = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-    while (cursor < items.length) {
-      const index = cursor;
-      cursor += 1;
-      results[index] = await worker(items[index], index);
+function migratable(value?: string) {
+  return Boolean(value && !value.startsWith('blob:') && !value.startsWith('data:') && !hasOptimizedChatPreview(value));
+}
+
+function candidateKey(candidate: Candidate) {
+  return `${candidate.message.id}:${candidate.index}:${candidate.url}`;
+}
+
+function nextCandidate(state: RoomState): Candidate | undefined {
+  for (const message of state.messages) {
+    if (message.type === 'image' && migratable(message.imageUrl)) {
+      const candidate = { message, url: message.imageUrl!, index: 0 };
+      if (!state.attempted.has(candidateKey(candidate))) return candidate;
     }
-  });
-  await Promise.all(runners);
-  return results;
-}
-
-async function migrateMessage(coupleId: string, migrationOwnerUid: string, snapshotId: string, data: LegacyCloudMessage) {
-  const messageId = Number(data.id || snapshotId);
-  if (!Number.isFinite(messageId)) return false;
-
-  if (data.type === 'image' && isMigratableReference(data.imageUrl)) {
-    const next = await createLegacyChatMediaReference(coupleId, migrationOwnerUid, messageId, 0, data.imageUrl!);
-    await updateDoc(doc(db, 'couples', coupleId, 'messages', snapshotId), { imageUrl: next });
-    return true;
-  }
-
-  if (data.type === 'gallery' && data.imageUrls?.some(isMigratableReference)) {
-    const originals = data.imageUrls;
-    const next = await mapWithConcurrency(originals, MEDIA_CONCURRENCY, async (url, index) => {
-      if (!isMigratableReference(url)) return url;
-      try {
-        return await createLegacyChatMediaReference(coupleId, migrationOwnerUid, messageId, index, url);
-      } catch (error) {
-        console.warn('[ROUTE legacy chat preview item]', messageId, index, error);
-        return url;
+    if (message.type === 'gallery' && message.imageUrls?.length) {
+      for (let index = 0; index < message.imageUrls.length; index += 1) {
+        const url = message.imageUrls[index];
+        if (!migratable(url)) continue;
+        const candidate = { message, url, index };
+        if (!state.attempted.has(candidateKey(candidate))) return candidate;
       }
-    });
-    if (next.some((url, index) => url !== originals[index])) {
-      await updateDoc(doc(db, 'couples', coupleId, 'messages', snapshotId), { imageUrls: next });
-      return true;
     }
   }
+  return undefined;
+}
 
-  return false;
+function schedule(state: RoomState, delay = MIGRATION_GAP_MS) {
+  if (state.running || state.timer !== undefined || document.visibilityState === 'hidden') return;
+  if (!nextCandidate(state)) return;
+  state.timer = window.setTimeout(() => {
+    state.timer = undefined;
+    void migrateOne(state);
+  }, delay);
+}
+
+async function migrateOne(state: RoomState) {
+  if (state.running || document.visibilityState === 'hidden') return;
+  const candidate = nextCandidate(state);
+  if (!candidate) return;
+
+  const attemptKey = candidateKey(candidate);
+  state.attempted.add(attemptKey);
+  state.running = true;
+  try {
+    const reference = await createLegacyChatMediaReference(
+      state.coupleId,
+      state.ownerUid,
+      candidate.message.id,
+      candidate.index,
+      candidate.url,
+    );
+
+    const messageDoc = doc(db, 'couples', state.coupleId, 'messages', String(candidate.message.id));
+    if (candidate.message.type === 'image') {
+      await updateDoc(messageDoc, { imageUrl: reference });
+    } else {
+      const latest = state.messages.find((message) => message.id === candidate.message.id);
+      const currentUrls = latest?.imageUrls ?? candidate.message.imageUrls ?? [];
+      const nextUrls = [...currentUrls];
+      if (candidate.index < nextUrls.length && nextUrls[candidate.index] === candidate.url) {
+        nextUrls[candidate.index] = reference;
+        await updateDoc(messageDoc, { imageUrls: nextUrls });
+      }
+    }
+  } catch (error) {
+    console.warn('[ROUTE incremental legacy preview]', candidate.message.id, candidate.index, error);
+  } finally {
+    state.running = false;
+    schedule(state);
+  }
 }
 
 /**
- * One-time-in-this-session migration for pre-preview chat photos.
- *
- * The old original URL is never overwritten in Storage or deleted. We download
- * it once, create a tiny derivative, upload only that derivative, then store a
- * reference that carries both URLs. New and migrated clients therefore render
- * only the preview while the explicit download action still resolves to the
- * untouched original.
+ * Feed only the currently loaded chat window into the migration queue. This
+ * avoids a full Firestore history scan and converts at most one legacy photo per
+ * idle gap. As pagination reveals older messages they naturally join the queue.
  */
-export function startLegacyChatMediaMigration(coupleId: string, migrationOwnerUid: string) {
-  const roomKey = `${coupleId}:${migrationOwnerUid}`;
-  if (completedRooms.has(roomKey)) return Promise.resolve();
-  const existing = runningRooms.get(roomKey);
-  if (existing) return existing;
-
-  const task = (async () => {
-    let hadFailure = false;
-    try {
-      const snapshot = await getDocs(query(
-        collection(db, 'couples', coupleId, 'messages'),
-        orderBy('timestamp', 'desc'),
-      ));
-      const candidates = snapshot.docs.filter((item) => {
-        const data = item.data() as LegacyCloudMessage;
-        return (data.type === 'image' && isMigratableReference(data.imageUrl))
-          || (data.type === 'gallery' && data.imageUrls?.some(isMigratableReference));
-      });
-
-      let completed = 0;
-      for (const item of candidates) {
-        try {
-          await migrateMessage(coupleId, migrationOwnerUid, item.id, item.data() as LegacyCloudMessage);
-        } catch (error) {
-          hadFailure = true;
-          console.warn('[ROUTE legacy chat preview migration]', item.id, error);
-        }
-        completed += 1;
-        window.dispatchEvent(new CustomEvent('route-chat-media-migration-progress', {
-          detail: { completed, total: candidates.length },
-        }));
-        // Yield between messages so a large historical gallery migration does
-        // not monopolize the Android WebView main thread.
-        await new Promise((resolve) => window.setTimeout(resolve, 40));
-      }
-
-      if (!hadFailure) completedRooms.add(roomKey);
-    } finally {
-      runningRooms.delete(roomKey);
-      window.dispatchEvent(new CustomEvent('route-chat-media-migration-complete'));
-    }
-  })();
-
-  runningRooms.set(roomKey, task);
-  return task;
+export function migrateLoadedLegacyChatMedia(coupleId: string, ownerUid: string, messages: Message[]) {
+  if (!coupleId || !ownerUid || !messages.length) return;
+  const key = roomKey(coupleId, ownerUid);
+  const existing = rooms.get(key);
+  const state = existing ?? {
+    coupleId,
+    ownerUid,
+    messages: [],
+    attempted: new Set<string>(),
+    running: false,
+  };
+  state.messages = messages;
+  rooms.set(key, state);
+  schedule(state, 250);
 }
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  rooms.forEach((state) => schedule(state, 300));
+});
