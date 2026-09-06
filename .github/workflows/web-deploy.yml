@@ -20,11 +20,15 @@ concurrency:
   group: route-web-deploy-main
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.ROUTE_FIREBASE_SERVICE_ACCOUNT }}
       FIREBASE_TOKEN: ${{ secrets.ROUTE_FIREBASE_TOKEN }}
     steps:
       - name: Checkout
@@ -72,14 +76,38 @@ jobs:
           grep -q "backupMedia" storage.rules
           echo "ROUTE web checks passed."
 
-      - name: Require Firebase deployment credentials
-        if: ${{ env.FIREBASE_TOKEN == '' }}
+      - name: Prepare recommended Firebase ADC credentials
+        if: ${{ env.FIREBASE_SERVICE_ACCOUNT_JSON != '' }}
         shell: bash
         run: |
-          echo 'ERROR: GitHub Actions secret ROUTE_FIREBASE_TOKEN is missing.' >&2
-          echo 'The build succeeded, but Hosting and Firebase rules cannot be deployed until this secret is configured.' >&2
-          exit 1
+          set -euo pipefail
+          ADC_FILE="$RUNNER_TEMP/route-firebase-service-account.json"
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$ADC_FILE"
+          chmod 600 "$ADC_FILE"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$ADC_FILE" >> "$GITHUB_ENV"
+
+      - name: Explain skipped deployment
+        if: ${{ env.FIREBASE_SERVICE_ACCOUNT_JSON == '' && env.FIREBASE_TOKEN == '' }}
+        shell: bash
+        run: |
+          echo '::warning::ROUTE build is healthy, but Firebase deployment credentials are not configured.'
+          echo '### Firebase deployment skipped' >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Add the **ROUTE_FIREBASE_SERVICE_ACCOUNT** repository secret (recommended), or the legacy **ROUTE_FIREBASE_TOKEN** secret, to enable automatic deployment.' >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo 'The build and release guardrails passed; only the external Firebase credential is missing.' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Deploy Hosting and Firebase rules
-        if: ${{ env.FIREBASE_TOKEN != '' }}
-        run: npx --yes firebase-tools deploy --only hosting,firestore:rules,storage --project meluni-f4e00 --token "$FIREBASE_TOKEN" --non-interactive
+        if: ${{ env.FIREBASE_SERVICE_ACCOUNT_JSON != '' || env.FIREBASE_TOKEN != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Firebase recommends ADC for CI. If both credentials exist, prefer ADC
+          # instead of the legacy FIREBASE_TOKEN environment variable.
+          if [[ -n "$FIREBASE_SERVICE_ACCOUNT_JSON" ]]; then
+            unset FIREBASE_TOKEN
+          fi
+          npx --yes firebase-tools@15.29.0 deploy \
+            --only hosting,firestore:rules,storage \
+            --project meluni-f4e00 \
+            --non-interactive
