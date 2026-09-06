@@ -1,6 +1,8 @@
 name: ROUTE Stability Gate
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -11,7 +13,7 @@ concurrency:
 
 jobs:
   web-build:
-    name: TypeScript and web production build
+    name: Build and critical user-flow smoke checks
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -29,6 +31,9 @@ jobs:
 
       - name: Production build
         run: npm run build
+
+      - name: Verify critical user-flow wiring
+        run: npm run stability:flow
 
       - name: Verify critical release guardrails
         shell: bash
