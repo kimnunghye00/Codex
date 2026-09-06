@@ -104,6 +104,17 @@ function localDataOwner() {
   catch { return ''; }
 }
 
+function hasSharedLocalCache() {
+  try {
+    return ACCOUNT_SHARED_CACHE_KEYS.some((key) => {
+      const value = localStorage.getItem(key);
+      return value !== null && value !== '' && value !== '[]' && value !== '{}';
+    });
+  } catch {
+    return false;
+  }
+}
+
 function removeSharedLocalCache(clearOwner: boolean) {
   try {
     ACCOUNT_SHARED_CACHE_KEYS.forEach((key) => {
@@ -141,8 +152,13 @@ async function clearFirestoreAndReload(marker: string) {
 function prepareAccountLocalCache(uid: string) {
   const previousOwner = localDataOwner();
   if (!previousOwner) {
+    // Builds before account ownership tracking used global message/memory keys.
+    // Their owner cannot be proven after an upgrade, so never silently attach
+    // orphaned private couple data to the first account that signs in.
+    const orphanedLegacyCache = hasSharedLocalCache();
+    if (orphanedLegacyCache) removeSharedLocalCache(false);
     setLocalDataOwner(uid);
-    return false;
+    return orphanedLegacyCache;
   }
   if (previousOwner === uid) return false;
 
@@ -195,7 +211,8 @@ function installRuntimeRecovery() {
     }
 
     if (prepareAccountLocalCache(user.uid)) {
-      // Direct A -> B account switches also clear Firestore's IndexedDB cache.
+      // Direct A -> B switches and unowned legacy cache both require a clean
+      // Firestore instance before the current account continues booting.
       void clearFirestoreAndReload(user.uid);
     }
   });
