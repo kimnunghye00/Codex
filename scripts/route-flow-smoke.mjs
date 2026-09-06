@@ -1,0 +1,113 @@
+import { readFileSync, existsSync } from 'node:fs';
+
+const read = (path) => readFileSync(path, 'utf8');
+const failures = [];
+const passes = [];
+
+function check(name, condition, detail = '') {
+  if (condition) {
+    passes.push(name);
+    return;
+  }
+  failures.push(`${name}${detail ? ` — ${detail}` : ''}`);
+}
+
+function includesAll(source, values) {
+  return values.every((value) => source.includes(value));
+}
+
+const requiredFiles = [
+  'src/App.tsx',
+  'src/Root.tsx',
+  'src/main.tsx',
+  'src/components/navigation/AppHeader.tsx',
+  'src/components/navigation/BottomNav.tsx',
+  'src/components/more/MoreServices.tsx',
+  'src/components/chat/ChatPage.tsx',
+  'src/components/memories/MemoriesPage.tsx',
+  'src/components/location/LocationPage.tsx',
+  'src/components/auth/AccountSettings.tsx',
+  'src/components/auth/PartnerProfileCard.tsx',
+  'public/naver-map-host.html',
+];
+
+for (const file of requiredFiles) {
+  check(`required file: ${file}`, existsSync(file));
+}
+
+if (failures.length) {
+  console.error('\nROUTE flow smoke gate failed before source checks:\n');
+  failures.forEach((failure) => console.error(`  ✗ ${failure}`));
+  process.exit(1);
+}
+
+const app = read('src/App.tsx');
+const root = read('src/Root.tsx');
+const main = read('src/main.tsx');
+const header = read('src/components/navigation/AppHeader.tsx');
+const bottomNav = read('src/components/navigation/BottomNav.tsx');
+const more = read('src/components/more/MoreServices.tsx');
+const chat = read('src/components/chat/ChatPage.tsx');
+const memories = read('src/components/memories/MemoriesPage.tsx');
+const location = read('src/components/location/LocationPage.tsx');
+const account = read('src/components/auth/AccountSettings.tsx');
+
+check(
+  'primary navigation terminology',
+  includesAll(bottomNav, ["'홈'", "'추억'", "'대화'", "'지도'", "'더보기'"]),
+  'BottomNav must keep the approved five labels',
+);
+check('shared header owns notifications', header.includes('notification-button') && header.includes('onNotifications'));
+check('shared header owns settings', header.includes('onSettings') && header.includes('aria-label="설정"'));
+
+check('App routes home', app.includes("tab === 'home'"));
+check('App routes memories', app.includes("tab === 'memories'"));
+check('App routes chat', app.includes("tab === 'chat'"));
+check('App routes location', app.includes("tab === 'location'"));
+check('App routes more', app.includes("tab === 'more'"));
+check('native back handler remains connected', app.includes("route-native-back"));
+
+check('More uses callback navigation', more.includes('onNavigate: (target: MoreNavigationTarget) => void'));
+check('More profile opens through callback', more.includes("id === 'profile'") && more.includes('onOpenSettings()'));
+check('More notifications open through callback', more.includes("id === 'notifications'") && more.includes('onOpenNotifications()'));
+check('More does not search DOM for navigation', !more.includes('querySelector'));
+check('More does not use delayed text-click navigation', !more.includes('setTimeout') && !more.includes('clickBottomNav'));
+
+check('chat screen title is 대화', chat.includes('<Header title="대화"'));
+check('chat realtime subscription is present', chat.includes('subscribeCoupleMessages'));
+check('chat media upload path is present', chat.includes('uploadChatMedia'));
+check('chat composer remains mounted', chat.includes('<ChatComposer'));
+
+check('memories exposes album tab', memories.includes("album: '앨범'"));
+check('memories exposes anniversary tab', memories.includes("anniversary: '기념일'"));
+check('memories exposes schedule tab', memories.includes("schedule: '일정'"));
+check('memories exposes date tab', memories.includes("date: '데이트'"));
+check('memories can open map from a place', memories.includes('onOpenLocation'));
+
+check('location screen title is 지도', location.includes('<Header title="지도"'));
+check('location map tab is present', location.includes("activeTab === 'map'"));
+check('location footprints tab is present', location.includes("activeTab === 'footprints'"));
+check('location can create a memory', location.includes('onCreateMemory'));
+check('Naver map host remains configured', location.includes('meluni-f4e00.web.app'));
+
+check('Root protects unauthenticated flow', root.includes('if (!user) return <App />'));
+check('Root protects first profile setup flow', root.includes('<ProfileSetup'));
+check('account settings can link an email login', account.includes('linkWithCredential'));
+check('account settings keeps couple connection flow', account.includes('<CoupleConnect'));
+check('partner profile is directly integrated', account.includes('<PartnerProfileCard'));
+
+check('single React application root', (main.match(/createRoot\(/g) || []).length === 1);
+check('legacy enhancement layer is gone', !main.includes('RouteEnhancementLayer'));
+check('legacy more enhancer is gone', !main.includes('more-enhance'));
+check('legacy profile enhancer is gone', !main.includes('profile-enhance'));
+
+console.log(`\nROUTE flow smoke gate: ${passes.length} checks passed.`);
+for (const pass of passes) console.log(`  ✓ ${pass}`);
+
+if (failures.length) {
+  console.error(`\n${failures.length} check(s) failed:`);
+  for (const failure of failures) console.error(`  ✗ ${failure}`);
+  process.exit(1);
+}
+
+console.log('\nCritical user-flow wiring is intact.');
