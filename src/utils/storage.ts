@@ -5,6 +5,7 @@ const MESSAGE_KEY = 'route.messages.v2';
 const MEMORY_KEY = 'route.memories.v2';
 export const MEMORY_DELETED_KEY = 'route.memories.deleted.v1';
 const MEMORY_CHANGE_EVENT = 'route-memories-local-change';
+const CHAT_CACHE_LIMIT = 40;
 
 export type MemoryDeletionMap = Record<string, string>;
 
@@ -45,6 +46,10 @@ function sanitizeMessagesForStorage(messages: Message[]) {
     if (message.type === 'gallery' && message.imageUrls?.some(isEphemeralMediaUrl)) return false;
     return true;
   });
+}
+
+function recentChatCache(messages: Message[]) {
+  return sanitizeMessagesForStorage(messages).slice(-CHAT_CACHE_LIMIT);
 }
 
 export function loadDeletedMemories(): MemoryDeletionMap {
@@ -89,13 +94,16 @@ function reconcileDeletionMap(previous: Memory[], next: Memory[]) {
 // Real-couple testing starts with a clean slate. Old MELUNI/SAI demo keys are intentionally ignored.
 export const loadMessages = (_fallback: Message[]) => {
   const stored = load<Message[]>(MESSAGE_KEY, []);
-  const safe = sanitizeMessagesForStorage(stored);
-  // Migrate away any previously cached base64 galleries on first launch after this update.
-  if (safe.length !== stored.length) save(MESSAGE_KEY, safe);
-  return safe;
+  const recent = recentChatCache(stored);
+  // Migrate away both old base64 galleries and oversized chat-history caches.
+  if (recent.length !== stored.length) save(MESSAGE_KEY, recent);
+  return recent;
 };
 export const saveMessages = (messages: Message[]) => {
-  if (save(MESSAGE_KEY, sanitizeMessagesForStorage(messages))) signalPersistentStateChange();
+  // Firestore is the durable chat history. Local storage is only a fast startup
+  // cache, so keeping the latest page prevents Android WebView from parsing a
+  // growing multi-year conversation every time the app starts.
+  if (save(MESSAGE_KEY, recentChatCache(messages))) signalPersistentStateChange();
 };
 export const loadMemories = (_fallback: Memory[]) => {
   const deleted = loadDeletedMemories();
