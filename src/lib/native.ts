@@ -103,7 +103,11 @@ export async function ensureCameraPermission() {
   if (!isNativePlatform()) return true;
   try {
     let permissions = await Camera.checkPermissions();
-    if (permissions.camera !== 'granted') permissions = await Camera.requestPermissions({ permissions: ['camera', 'photos'] });
+    // Gallery selection is handled by the platform picker and must not be tied to
+    // camera capture permission. Request only the permission this helper owns.
+    if (permissions.camera !== 'granted') {
+      permissions = await Camera.requestPermissions({ permissions: ['camera'] });
+    }
     return permissions.camera === 'granted';
   } catch {
     return false;
