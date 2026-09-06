@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChatPage } from './components/chat/ChatPage';
-import { MemoriesPage } from './components/memories/MemoriesPage';
-import { LocationPage } from './components/location/LocationPage';
+import { StableMemoriesPage, type HubTabId } from './components/memories/StableMemoriesPage';
+import { StableLocationPage, type LocationTabId } from './components/location/StableLocationPage';
 import { AccountSettings } from './components/auth/AccountSettings';
 import { AuthFlow, Wordmark } from './components/auth/AuthFlow';
 import { ProfileSetup } from './components/auth/ProfileSetup';
 import { NotificationPanel } from './components/notifications/NotificationPanel';
 import { CoupleHomeTools } from './components/home/CoupleHomeTools';
-import { MoreServices } from './components/more/MoreServices';
+import { MoreServices, type MoreNavigationTarget } from './components/more/MoreServices';
+import { AppHeader as SharedAppHeader } from './components/navigation/AppHeader';
+import { BottomNav, type AppTab } from './components/navigation/BottomNav';
 import { auth } from './lib/firebase';
 import { getRealCoupleConnection, type RealCoupleConnection } from './lib/coupleConnection';
 import { saveRelationshipStartDate, subscribeCoupleShared } from './lib/coupleShared';
@@ -22,12 +24,9 @@ import {
   saveNotifications,
   type AppNotification,
 } from './utils/notifications';
-import {
-  Bell, ChevronRight, Ellipsis, Heart, Home,
-  Image, MapPin, MapPinned, MessageCircle, Plus, Settings,
-} from 'lucide-react';
+import { ChevronRight, Heart, Image, MapPin, MapPinned, Plus } from 'lucide-react';
 
-type Tab = 'home' | 'chat' | 'memories' | 'location' | 'anniversary' | 'more';
+type Tab = AppTab;
 type Anniversary = { id: string; icon: string; title: string; date: Date; recurring?: boolean };
 
 const DAY = 86_400_000;
@@ -137,6 +136,8 @@ function App() {
   const [memoryToOpen, setMemoryToOpen] = useState<number>();
   const [memoryDraft, setMemoryDraft] = useState<MemoryDraft>();
   const [locationFocus, setLocationFocus] = useState<string>();
+  const [requestedHubTab, setRequestedHubTab] = useState<HubTabId>();
+  const [requestedLocationTab, setRequestedLocationTab] = useState<LocationTabId>();
   const previousMessages = useRef(messages);
   const previousMemories = useRef(memories);
   const tabHistory = useRef<Tab[]>(['home']);
@@ -149,6 +150,20 @@ function App() {
     if (next === tab) return;
     tabHistory.current.push(next);
     setTab(next);
+  };
+
+  const navigateMoreTarget = (target: MoreNavigationTarget) => {
+    if (target.area === 'chat') {
+      navigateTab('chat');
+      return;
+    }
+    if (target.area === 'memories') {
+      setRequestedHubTab(target.tab);
+      navigateTab('memories');
+      return;
+    }
+    setRequestedLocationTab(target.tab);
+    navigateTab('location');
   };
 
   const addActivity = (input: Omit<AppNotification, 'id' | 'createdAt' | 'read'>) => {
@@ -214,7 +229,6 @@ function App() {
       const next = (event as CustomEvent<Memory[]>).detail;
       if (Array.isArray(next)) setMemories(next);
     };
-
     window.addEventListener('route-memories-remote-change', handleRemoteMemories);
     return () => window.removeEventListener('route-memories-remote-change', handleRemoteMemories);
   }, []);
@@ -246,23 +260,19 @@ function App() {
   if (!user) return <AuthFlow />;
   if (!profile) return <ProfileSetup user={user} onComplete={handleProfileChange} />;
 
-  const AppHeader = ({ title }: { title?: string }) => <Header title={title} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />;
+  const AppHeader = ({ title }: { title?: string }) => <SharedAppHeader title={title} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />;
   return <>
     <div className="app-shell"><main>
-      {tab === 'home' && <HomePage uid={user.uid} profile={profile} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} memories={memories} messages={messages} onNavigate={navigateTab} onOpenMemory={(id) => { setMemoryDraft(undefined); setMemoryToOpen(id); navigateTab('memories'); }} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
+      {tab === 'home' && <HomePage uid={user.uid} profile={profile} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} memories={memories} messages={messages} onNavigate={navigateTab} onOpenMemory={(id) => { setMemoryDraft(undefined); setMemoryToOpen(id); setRequestedHubTab('album'); navigateTab('memories'); }} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} connection={connection} />}
-      {tab === 'memories' && <MemoriesPage Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={(place) => { setLocationFocus(place); navigateTab('location'); }} />}
-      {tab === 'location' && <LocationPage Header={AppHeader} connection={connection} focusPlace={locationFocus} onClearFocus={() => setLocationFocus(undefined)} onCreateMemory={(draft) => { setMemoryToOpen(undefined); setMemoryDraft(draft); navigateTab('memories'); }} onActivity={(title, detail) => addActivity({ actor: 'me', kind: 'location', title, detail })} />}
+      {tab === 'memories' && <StableMemoriesPage requestedTab={requestedHubTab} Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={(place) => { setLocationFocus(place); setRequestedLocationTab('map'); navigateTab('location'); }} />}
+      {tab === 'location' && <StableLocationPage requestedTab={requestedLocationTab} Header={AppHeader} connection={connection} focusPlace={locationFocus} onClearFocus={() => setLocationFocus(undefined)} onCreateMemory={(draft) => { setMemoryToOpen(undefined); setMemoryDraft(draft); setRequestedHubTab('album'); navigateTab('memories'); }} onActivity={(title, detail) => addActivity({ actor: 'me', kind: 'location', title, detail })} />}
       {tab === 'anniversary' && <AnniversaryPage connected={Boolean(connection)} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} onSaveStartDate={saveStartDate} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
-      {tab === 'more' && <MorePage onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
-    </main><BottomNav tab={tab} setTab={navigateTab} /></div>
+      {tab === 'more' && <MorePage onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} onNavigate={navigateMoreTarget} />}
+    </main><BottomNav tab={tab} onNavigate={navigateTab} /></div>
     {settingsOpen && <AccountSettings user={user} profile={profile} onProfileChange={handleProfileChange} onClose={() => setSettingsOpen(false)} />}
     {notificationsOpen && <NotificationPanel items={notifications} onClose={() => setNotificationsOpen(false)} onReadAll={() => { const next = markAllNotificationsRead(notifications); setNotifications(next); saveNotifications(user.uid, next); }} onClear={clearNotifications} />}
   </>;
-}
-
-function Header({ title, onSettings, onNotifications, unreadCount }: { title?: string; onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
-  return <header className="topbar"><div className="brand"><Wordmark />{title && <span className="page-title">{title}</span>}</div><div className="header-actions"><button className="notification-button" aria-label={`알림 ${unreadCount ? `${unreadCount}개` : ''}`} onClick={onNotifications}><Bell size={20} />{unreadCount > 0 && <em className="notification-count">{unreadCount > 99 ? '99+' : unreadCount}</em>}</button><button aria-label="설정" onClick={onSettings}><Settings size={20} /></button></div></header>;
 }
 
 function HomePage({ uid, profile, connection, relationshipStartDate, coupleDay, anniversaries, memories, messages, onNavigate, onOpenMemory, onSettings, onNotifications, unreadCount }: { uid: string; profile: UserProfile; connection: RealCoupleConnection | null; relationshipStartDate?: string; coupleDay: number; anniversaries: Anniversary[]; memories: Memory[]; messages: Message[]; onNavigate: (tab: Tab) => void; onOpenMemory: (id: number) => void; onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
@@ -274,7 +284,7 @@ function HomePage({ uid, profile, connection, relationshipStartDate, coupleDay, 
   const partnerInitial = partnerName.slice(0, 1) || '상';
 
   return <div className="page home-page home-dashboard">
-    <Header onSettings={onSettings} onNotifications={onNotifications} unreadCount={unreadCount} />
+    <SharedAppHeader onSettings={onSettings} onNotifications={onNotifications} unreadCount={unreadCount} />
     <CoupleHomeTools uid={uid} profile={profile} connection={connection} relationshipStartDate={relationshipStartDate} onOpenMyProfile={onSettings} onOpenConnect={onSettings} />
     <div className="home-dashboard-grid">
       <button className="home-map-card" type="button" aria-label="우리의 지도 열기" onClick={() => onNavigate('location')}>
@@ -310,7 +320,7 @@ function AnniversaryPage({ connected, relationshipStartDate, coupleDay, annivers
     catch { setFeedback('기념일 저장 중 문제가 생겼어요.'); }
     finally { setSaving(false); }
   };
-  return <div className="page"><Header title="기념일" onSettings={onSettings} onNotifications={onNotifications} unreadCount={unreadCount} />
+  return <div className="page"><SharedAppHeader title="기념일" onSettings={onSettings} onNotifications={onNotifications} unreadCount={unreadCount} />
     <div className="title-block"><small>OUR DAYS</small><h1>함께 기다리는 날</h1><p>우리 둘의 생일과 소중한 기념일을 한곳에서 확인해요.</p></div>
     {connected && !relationshipStartDate && <div className="anniversary-card"><div className="rings"><Heart fill="currentColor" /></div><span>처음 한 번만 설정해 주세요</span><strong>우리의 시작일</strong><p>한 사람이 저장하면 두 사람에게 동일하게 적용돼요.</p><label style={{display:'grid',gap:8,marginTop:14}}>서로 만나기 시작한 날짜<input type="date" value={date} max={new Date().toISOString().slice(0,10)} onChange={(e) => setDate(e.target.value)} /></label><button className="primary" type="button" disabled={saving || !date} onClick={() => void save()}>{saving ? '저장 중...' : '기념일 저장'}</button>{feedback && <p>{feedback}</p>}</div>}
     {!connected && <div className="anniversary-card"><div className="rings"><Heart fill="currentColor" /></div><span>상대방 연결 필요</span><strong>둘만의 기념일</strong><p>설정에서 상대방 계정을 먼저 연결하면 생일과 기념일을 함께 볼 수 있어요.</p></div>}
@@ -322,16 +332,11 @@ function AnniversaryPage({ connected, relationshipStartDate, coupleDay, annivers
   </div>;
 }
 
-function MorePage({ onSettings, onNotifications, unreadCount }: { onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
+function MorePage({ onSettings, onNotifications, unreadCount, onNavigate }: { onSettings: () => void; onNotifications: () => void; unreadCount: number; onNavigate: (target: MoreNavigationTarget) => void }) {
   return <div className="page more-page">
-    <Header title="더보기" onSettings={onSettings} onNotifications={onNotifications} unreadCount={unreadCount} />
-    <div className="more-scroll"><MoreServices /></div>
+    <SharedAppHeader title="더보기" onSettings={onSettings} onNotifications={onNotifications} unreadCount={unreadCount} />
+    <div className="more-scroll"><MoreServices onOpenSettings={onSettings} onOpenNotifications={onNotifications} onNavigate={onNavigate} /></div>
   </div>;
-}
-
-function BottomNav({ tab, setTab }: { tab: Tab; setTab: (tab: Tab) => void }) {
-  const items: [Tab, string, typeof Home][] = [['home', '홈', Home], ['memories', '추억', Image], ['chat', '채팅', MessageCircle], ['location', '위치', MapPinned], ['more', '더보기', Ellipsis]];
-  return <nav className="bottom-nav" aria-label="주요 메뉴">{items.map(([id, label, Icon]) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}><span className="nav-icon"><Icon size={21} strokeWidth={tab === id ? 2.4 : 1.8} /></span><span>{label}</span></button>)}</nav>;
 }
 
 export default App;
