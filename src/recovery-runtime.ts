@@ -1,6 +1,5 @@
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, clearNativeFirestorePersistence } from './lib/firebase';
-import { requestAlbumSyncNow } from './lib/crossDeviceAlbumSync';
 import { decideAccountIsolation } from './utils/accountIsolationPolicy';
 import { signalPersistentStateChange } from './utils/persistenceSignal';
 
@@ -68,7 +67,11 @@ function flushPendingState() {
   if (!navigator.onLine || accountResetInProgress) return;
 
   if (localStorage.getItem(ALBUM_PENDING_KEY) === '1') {
-    try { requestAlbumSyncNow(); } catch (error) { console.warn('[ROUTE reconnect album]', error); }
+    // Album sync is a comparatively heavy Firestore/Storage module. Keep it out
+    // of the bootstrap chunk and only load it when recovery actually needs it.
+    void import('./lib/crossDeviceAlbumSync')
+      .then(({ requestAlbumSyncNow }) => requestAlbumSyncNow())
+      .catch((error) => console.warn('[ROUTE reconnect album]', error));
   }
   try { signalPersistentStateChange(); } catch (error) { console.warn('[ROUTE reconnect backup]', error); }
   window.dispatchEvent(new Event('route-network-restored'));
@@ -178,9 +181,6 @@ async function applyAccountIsolation(uid: string | null, markInitialReady: () =>
   }
 
   if (action === 'reset-orphan') {
-    // Builds before ownership tracking used global private message/memory keys.
-    // Clear those orphaned caches before React is allowed to mount, even when
-    // the first screen is signed out, so a later login can never inherit them.
     removeSharedLocalCache(!uid);
     if (uid) setLocalDataOwner(uid);
     await clearFirestoreAndReload(`orphaned-cache:${uid ?? 'signed-out'}`);
