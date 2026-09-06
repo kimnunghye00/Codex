@@ -1,5 +1,5 @@
 import { Check, Copy, HeartHandshake, Link2, RefreshCw, Share2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { User } from 'firebase/auth';
 import type { UserProfile } from '../../utils/profile';
 import {
@@ -11,6 +11,12 @@ import {
   subscribeRealCoupleConnection,
   type RealCoupleConnection,
 } from '../../lib/coupleConnection';
+import {
+  coupleConnectSessionKey,
+  parseCoupleConnectSession,
+  serializeCoupleConnectSession,
+  type CoupleConnectSession,
+} from '../../utils/coupleConnectSession';
 
 type CoupleConnectProps = {
   user: User;
@@ -41,50 +47,95 @@ function messageFor(error: unknown) {
   return messages[code] ?? `연결 중 문제가 생겼어요.${code ? ` (${code})` : ''}`;
 }
 
+function loadPersistedSession(uid: string) {
+  try { return parseCoupleConnectSession(localStorage.getItem(coupleConnectSessionKey(uid))); }
+  catch { return null; }
+}
+
 export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps) {
-  const [mode, setMode] = useState<Mode>('choose');
-  const [inviteCode, setInviteCode] = useState('');
+  const [restoredSession] = useState(() => loadPersistedSession(user.uid));
+  const [mode, setMode] = useState<Mode>(restoredSession?.mode ?? 'choose');
+  const [inviteCode, setInviteCode] = useState(restoredSession?.mode === 'invite' ? restoredSession.code : '');
   const [joinCode, setJoinCode] = useState('');
-  const [pendingJoinCode, setPendingJoinCode] = useState('');
+  const [pendingJoinCode, setPendingJoinCode] = useState(restoredSession?.mode === 'waiting' ? restoredSession.code : '');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
 
+  const clearPersistedSession = useCallback(() => {
+    try { localStorage.removeItem(coupleConnectSessionKey(user.uid)); } catch {}
+  }, [user.uid]);
+
+  const persistSession = useCallback((session: Omit<CoupleConnectSession, 'savedAt'>) => {
+    try {
+      localStorage.setItem(coupleConnectSessionKey(user.uid), serializeCoupleConnectSession({ ...session, savedAt: Date.now() }));
+    } catch {}
+  }, [user.uid]);
+
+  const finishConnection = useCallback((connection: RealCoupleConnection) => {
+    clearPersistedSession();
+    onConnected(connection);
+  }, [clearPersistedSession, onConnected]);
+
+  const resetPendingFlow = useCallback((message?: string) => {
+    clearPersistedSession();
+    setInviteCode('');
+    setPendingJoinCode('');
+    setMode('choose');
+    if (message) setError(message);
+  }, [clearPersistedSession]);
+
   useEffect(() => subscribeRealCoupleConnection(
     user.uid,
-    (connection) => { if (connection) onConnected(connection); },
+    (connection) => { if (connection) finishConnection(connection); },
     () => undefined,
-  ), [onConnected, user.uid]);
+  ), [finishConnection, user.uid]);
 
   useEffect(() => {
     if (mode !== 'invite' || !inviteCode) return;
     let finalizing = false;
     let cancelled = false;
     return subscribeCoupleInviteState(inviteCode, (invite) => {
-      if (cancelled || finalizing || !invite) return;
+      if (cancelled || finalizing) return;
+      if (!invite) {
+        resetPendingFlow('초대 정보를 찾지 못했어요. 새 초대 코드를 만들어 주세요.');
+        return;
+      }
+      if (invite.expiresAt < Date.now()) {
+        resetPendingFlow('초대 코드가 만료됐어요. 새 코드를 만들어 주세요.');
+        return;
+      }
       if (invite.ownerUid !== user.uid || invite.status !== 'requested') return;
       finalizing = true;
       void finalizeInviteAsOwner(user.uid, profile.name, inviteCode)
-        .then((connection) => { if (!cancelled && connection) onConnected(connection); })
+        .then((connection) => { if (!cancelled && connection) finishConnection(connection); })
         .catch((cause) => { if (!cancelled) setError(messageFor(cause)); })
         .finally(() => { finalizing = false; });
     }, (cause) => { if (!cancelled) setError(messageFor(cause)); });
-  }, [inviteCode, mode, onConnected, profile.name, user.uid]);
+  }, [finishConnection, inviteCode, mode, profile.name, resetPendingFlow, user.uid]);
 
   useEffect(() => {
     if (mode !== 'waiting' || !pendingJoinCode) return;
     let completing = false;
     let cancelled = false;
     return subscribeCoupleInviteState(pendingJoinCode, (invite) => {
-      if (cancelled || completing || !invite) return;
+      if (cancelled || completing) return;
+      if (!invite) {
+        resetPendingFlow('연결 요청 정보를 찾지 못했어요. 초대 코드를 다시 입력해 주세요.');
+        return;
+      }
+      if (invite.expiresAt < Date.now()) {
+        resetPendingFlow('연결 요청이 만료됐어요. 초대 코드를 다시 받아 주세요.');
+        return;
+      }
       if (invite.status !== 'accepted' || invite.joinerUid !== user.uid) return;
       completing = true;
       void completeJoinerConnection(user.uid, pendingJoinCode)
-        .then((connection) => { if (!cancelled && connection) onConnected(connection); })
+        .then((connection) => { if (!cancelled && connection) finishConnection(connection); })
         .catch((cause) => { if (!cancelled) setError(messageFor(cause)); })
         .finally(() => { completing = false; });
     }, (cause) => { if (!cancelled) setError(messageFor(cause)); });
-  }, [mode, onConnected, pendingJoinCode, user.uid]);
+  }, [finishConnection, mode, pendingJoinCode, resetPendingFlow, user.uid]);
 
   const makeInvite = async () => {
     setBusy(true);
@@ -92,6 +143,7 @@ export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps
     try {
       const invite = await createCoupleInvite(user.uid, profile.name);
       setInviteCode(invite.code);
+      persistSession({ mode: 'invite', code: invite.code });
       setMode('invite');
     } catch (cause) {
       console.error('[ROUTE couple invite]', cause);
@@ -125,6 +177,7 @@ export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps
     try {
       const result = await connectWithInviteCode(user.uid, profile.name, joinCode);
       setPendingJoinCode(result.code);
+      persistSession({ mode: 'waiting', code: result.code });
       setMode('waiting');
     } catch (cause) {
       console.error('[ROUTE couple join]', cause);
@@ -145,7 +198,7 @@ export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps
         {mode === 'choose' && '두 계정을 연결하면 채팅, 추억, 기념일과 위치 기록을 둘만의 공간에서 함께 사용할 수 있어요.'}
         {mode === 'invite' && '상대방이 ROUTE에 가입한 뒤 아래 코드를 입력하면 두 계정이 연결돼요.'}
         {mode === 'join' && '상대방에게 받은 ROUTE 초대 코드를 입력해 주세요.'}
-        {mode === 'waiting' && '상대방의 ROUTE 화면에서 연결 요청을 확인하고 있어요. 잠시만 기다려 주세요.'}
+        {mode === 'waiting' && '상대방의 ROUTE 화면에서 연결 요청을 확인하고 있어요. 앱을 닫아도 이 상태를 기억해요.'}
       </p>
 
       {mode === 'choose' && <div className="couple-connect-options">
@@ -178,7 +231,7 @@ export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps
       {error && <p className="couple-connect-error" role="alert">{error}</p>}
 
       {(mode === 'invite' || mode === 'join') && <div className="couple-connect-footer">
-        <button type="button" onClick={() => { setError(''); setMode('choose'); }}>이전</button>
+        <button type="button" onClick={() => { clearPersistedSession(); setInviteCode(''); setError(''); setMode('choose'); }}>이전</button>
       </div>}
     </main>
   </div>;
