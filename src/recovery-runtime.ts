@@ -1,6 +1,7 @@
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, clearNativeFirestorePersistence } from './lib/firebase';
 import { requestAlbumSyncNow } from './lib/crossDeviceAlbumSync';
+import { decideAccountIsolation } from './utils/accountIsolationPolicy';
 import { signalPersistentStateChange } from './utils/persistenceSignal';
 
 const NETWORK_BANNER_ID = 'route-network-status';
@@ -22,6 +23,8 @@ const rawStorageSetItem = typeof Storage !== 'undefined' ? Storage.prototype.set
 const rawStorageRemoveItem = typeof Storage !== 'undefined' ? Storage.prototype.removeItem : undefined;
 let onlineHideTimer: number | undefined;
 let accountResetInProgress = false;
+let runtimeListenersInstalled = false;
+let runtimeRecoveryPromise: Promise<void> | undefined;
 
 function banner() {
   let node = document.getElementById(NETWORK_BANNER_ID);
@@ -149,25 +152,52 @@ async function clearFirestoreAndReload(marker: string) {
   window.location.reload();
 }
 
-function prepareAccountLocalCache(uid: string) {
-  const previousOwner = localDataOwner();
-  if (!previousOwner) {
-    // Builds before account ownership tracking used global message/memory keys.
-    // Their owner cannot be proven after an upgrade, so never silently attach
-    // orphaned private couple data to the first account that signs in.
-    const orphanedLegacyCache = hasSharedLocalCache();
-    if (orphanedLegacyCache) removeSharedLocalCache(false);
-    setLocalDataOwner(uid);
-    return orphanedLegacyCache;
+async function applyAccountIsolation(uid: string | null, markInitialReady: () => void) {
+  if (!uid) {
+    clearRecoveryReloadMarkers();
+    try { sessionStorage.removeItem(ACCOUNT_SWITCH_RELOAD_KEY); } catch {}
   }
-  if (previousOwner === uid) return false;
 
-  removeSharedLocalCache(false);
-  setLocalDataOwner(uid);
-  return true;
+  const previousOwner = localDataOwner();
+  const sharedCachePresent = hasSharedLocalCache();
+  const action = decideAccountIsolation(previousOwner, sharedCachePresent, uid);
+
+  if (action === 'ready') {
+    markInitialReady();
+    return;
+  }
+
+  if (action === 'adopt-owner') {
+    if (uid) setLocalDataOwner(uid);
+    markInitialReady();
+    return;
+  }
+
+  if (action === 'reset-signout') {
+    removeSharedLocalCache(true);
+    await clearFirestoreAndReload(`signed-out:${previousOwner}`);
+    return;
+  }
+
+  if (action === 'reset-switch') {
+    removeSharedLocalCache(false);
+    if (uid) setLocalDataOwner(uid);
+    await clearFirestoreAndReload(`account-switch:${uid ?? 'signed-out'}`);
+    return;
+  }
+
+  // Builds before ownership tracking used global private message/memory keys.
+  // Clear those orphaned caches before React is allowed to mount, even when the
+  // first screen is signed out, so a later login can never briefly inherit them.
+  removeSharedLocalCache(!uid);
+  if (uid) setLocalDataOwner(uid);
+  await clearFirestoreAndReload(`orphaned-cache:${uid ?? 'signed-out'}`);
 }
 
-function installRuntimeRecovery() {
+function installRuntimeListeners() {
+  if (runtimeListenersInstalled) return;
+  runtimeListenersInstalled = true;
+
   setNetworkState(navigator.onLine);
 
   window.addEventListener('offline', () => setNetworkState(false));
@@ -195,27 +225,30 @@ function installRuntimeRecovery() {
       flushPendingState();
     }
   });
-
-  onAuthStateChanged(auth, (user) => {
-    if (!user) {
-      clearRecoveryReloadMarkers();
-      const previousOwner = localDataOwner();
-      try { sessionStorage.removeItem(ACCOUNT_SWITCH_RELOAD_KEY); } catch {}
-      if (!previousOwner) return;
-
-      // Sign-out is a privacy boundary: clear ROUTE's shared local cache and the
-      // persistent Firestore cache before another account can use this WebView.
-      removeSharedLocalCache(true);
-      void clearFirestoreAndReload(`signed-out:${previousOwner}`);
-      return;
-    }
-
-    if (prepareAccountLocalCache(user.uid)) {
-      // Direct A -> B switches and unowned legacy cache both require a clean
-      // Firestore instance before the current account continues booting.
-      void clearFirestoreAndReload(user.uid);
-    }
-  });
 }
 
-installRuntimeRecovery();
+export function initializeRuntimeRecovery() {
+  if (runtimeRecoveryPromise) return runtimeRecoveryPromise;
+  installRuntimeListeners();
+
+  runtimeRecoveryPromise = new Promise<void>((resolve) => {
+    let initialReady = false;
+    const markInitialReady = () => {
+      if (initialReady) return;
+      initialReady = true;
+      resolve();
+    };
+
+    onAuthStateChanged(auth, (user) => {
+      void applyAccountIsolation(user?.uid ?? null, markInitialReady).catch((cause) => {
+        console.error('[ROUTE account isolation]', cause);
+        if (!accountResetInProgress) markInitialReady();
+      });
+    }, (cause) => {
+      console.error('[ROUTE auth isolation listener]', cause);
+      markInitialReady();
+    });
+  });
+
+  return runtimeRecoveryPromise;
+}
