@@ -32,6 +32,9 @@ jobs:
       - name: Production build
         run: npm run build
 
+      - name: Execute runtime privacy and state tests
+        run: npm run stability:runtime
+
       - name: Verify critical user-flow wiring
         run: npm run stability:flow
 
@@ -55,7 +58,8 @@ jobs:
           test -f public/sw.js
           grep -q "AppCrashBoundary" src/main.tsx
           grep -q "preparePersistentBackup" src/main.tsx
-          grep -q "recovery-runtime" src/main.tsx
+          grep -q "initializeRuntimeRecovery" src/main.tsx
+          grep -q "await initializeRuntimeRecovery" src/main.tsx
           grep -q "initializeNativeApp" src/main.tsx
           grep -q "meluni-f4e00.web.app" src/components/location/LocationPage.tsx
           grep -q "ncpKeyId" public/naver-map-host.html
