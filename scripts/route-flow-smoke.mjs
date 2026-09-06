@@ -35,6 +35,9 @@ for (const file of requiredFiles) {
   check(`required file: ${file}`, existsSync(file));
 }
 
+check('legacy memories bridge removed', !existsSync('src/components/memories/StableMemoriesPage.tsx'));
+check('legacy location bridge removed', !existsSync('src/components/location/StableLocationPage.tsx'));
+
 if (failures.length) {
   console.error('\nROUTE flow smoke gate failed before source checks:\n');
   failures.forEach((failure) => console.error(`  ✗ ${failure}`));
@@ -61,13 +64,15 @@ check('shared header owns notifications', header.includes('notification-button')
 check('shared header owns settings', header.includes('onSettings') && header.includes('aria-label="설정"'));
 
 check('App routes home', app.includes("tab === 'home'"));
-check('App routes memories', app.includes("tab === 'memories'"));
+check('App routes memories directly', app.includes("from './components/memories/MemoriesPage'") && app.includes('<MemoriesPage requestedTab={requestedHubTab}'));
 check('App routes chat', app.includes("tab === 'chat'"));
-check('App routes location', app.includes("tab === 'location'"));
+check('App routes location directly', app.includes("from './components/location/LocationPage'") && app.includes('<LocationPage requestedTab={requestedLocationTab}'));
 check('App routes more', app.includes("tab === 'more'"));
-check('native back handler remains connected', app.includes("route-native-back"));
+check('App has no Stable page bridge references', !app.includes('StableMemoriesPage') && !app.includes('StableLocationPage'));
+check('native back handler remains connected', app.includes('route-native-back'));
 
 check('More uses callback navigation', more.includes('onNavigate: (target: MoreNavigationTarget) => void'));
+check('More imports direct page navigation types', more.includes("from '../memories/MemoriesPage'") && more.includes("from '../location/LocationPage'"));
 check('More profile opens through callback', more.includes("id === 'profile'") && more.includes('onOpenSettings()'));
 check('More notifications open through callback', more.includes("id === 'notifications'") && more.includes('onOpenNotifications()'));
 check('More does not search DOM for navigation', !more.includes('querySelector'));
@@ -78,12 +83,14 @@ check('chat realtime subscription is present', chat.includes('subscribeCoupleMes
 check('chat media upload path is present', chat.includes('uploadChatMedia'));
 check('chat composer remains mounted', chat.includes('<ChatComposer'));
 
+check('memories exposes requested tab state', memories.includes('requestedTab?: HubTabId') && memories.includes('setActiveTab(requestedTab)'));
 check('memories exposes album tab', memories.includes("album: '앨범'"));
 check('memories exposes anniversary tab', memories.includes("anniversary: '기념일'"));
 check('memories exposes schedule tab', memories.includes("schedule: '일정'"));
 check('memories exposes date tab', memories.includes("date: '데이트'"));
 check('memories can open map from a place', memories.includes('onOpenLocation'));
 
+check('location exposes requested tab state', location.includes('requestedTab?: LocationTabId') && location.includes('setActiveTab(requestedTab)'));
 check('location screen title is 지도', location.includes('<Header title="지도"'));
 check('location map tab is present', location.includes("activeTab === 'map'"));
 check('location footprints tab is present', location.includes("activeTab === 'footprints'"));
