@@ -63,28 +63,40 @@ export async function initializeNativeApp() {
     await Keyboard.setAccessoryBarVisible({ isVisible: true });
   } catch {}
 
+  // App lifecycle/back listeners are app-lifetime listeners. Guard them so an
+  // accidental second native initialization cannot register duplicate handlers.
+  if (root.dataset.routeNativeLifecycleWired !== '1') {
+    root.dataset.routeNativeLifecycleWired = '1';
+
+    App.addListener('appStateChange', ({ isActive }) => {
+      window.dispatchEvent(new Event(isActive ? 'route-app-resume' : 'route-app-pause'));
+    }).catch(() => undefined);
+
+    let lastBackAt = 0;
+    App.addListener('backButton', ({ canGoBack }) => {
+      const now = Date.now();
+      if (now - lastBackAt < 320) return;
+      lastBackAt = now;
+
+      // Give ROUTE overlays/details/tabs the first chance to consume Android back.
+      const routeBack = new Event('route-native-back', { cancelable: true });
+      window.dispatchEvent(routeBack);
+      if (routeBack.defaultPrevented) return;
+
+      if (canGoBack) window.history.back();
+      else App.minimizeApp();
+    }).catch(() => undefined);
+  }
+}
+
+export async function hideNativeSplash() {
+  if (!isNativePlatform()) return;
   try {
     await SplashScreen.hide();
-  } catch {}
-
-  App.addListener('appStateChange', ({ isActive }) => {
-    window.dispatchEvent(new Event(isActive ? 'route-app-resume' : 'route-app-pause'));
-  }).catch(() => undefined);
-
-  let lastBackAt = 0;
-  App.addListener('backButton', ({ canGoBack }) => {
-    const now = Date.now();
-    if (now - lastBackAt < 320) return;
-    lastBackAt = now;
-
-    // Give ROUTE overlays/details/tabs the first chance to consume Android back.
-    const routeBack = new Event('route-native-back', { cancelable: true });
-    window.dispatchEvent(routeBack);
-    if (routeBack.defaultPrevented) return;
-
-    if (canGoBack) window.history.back();
-    else App.minimizeApp();
-  }).catch(() => undefined);
+  } catch {
+    // The web/PWA build has no native splash and older devices can reject a
+    // repeated hide call. Neither case should block ROUTE from starting.
+  }
 }
 
 export async function ensureCameraPermission() {
