@@ -7,7 +7,8 @@ import {
   connectWithInviteCode,
   createCoupleInvite,
   finalizeInviteAsOwner,
-  getRealCoupleConnection,
+  subscribeCoupleInviteState,
+  subscribeRealCoupleConnection,
   type RealCoupleConnection,
 } from '../../lib/coupleConnection';
 
@@ -49,45 +50,40 @@ export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      void getRealCoupleConnection(user.uid).then((connection) => {
-        if (connection) onConnected(connection);
-      }).catch(() => undefined);
-    }, 4000);
-    return () => window.clearInterval(timer);
-  }, [onConnected, user.uid]);
+  useEffect(() => subscribeRealCoupleConnection(
+    user.uid,
+    (connection) => { if (connection) onConnected(connection); },
+    () => undefined,
+  ), [onConnected, user.uid]);
 
   useEffect(() => {
     if (mode !== 'invite' || !inviteCode) return;
+    let finalizing = false;
     let cancelled = false;
-    const check = async () => {
-      try {
-        const connection = await finalizeInviteAsOwner(user.uid, profile.name, inviteCode);
-        if (!cancelled && connection) onConnected(connection);
-      } catch (cause) {
-        if (!cancelled) setError(messageFor(cause));
-      }
-    };
-    void check();
-    const timer = window.setInterval(() => void check(), 2500);
-    return () => { cancelled = true; window.clearInterval(timer); };
+    return subscribeCoupleInviteState(inviteCode, (invite) => {
+      if (cancelled || finalizing || !invite) return;
+      if (invite.ownerUid !== user.uid || invite.status !== 'requested') return;
+      finalizing = true;
+      void finalizeInviteAsOwner(user.uid, profile.name, inviteCode)
+        .then((connection) => { if (!cancelled && connection) onConnected(connection); })
+        .catch((cause) => { if (!cancelled) setError(messageFor(cause)); })
+        .finally(() => { finalizing = false; });
+    }, (cause) => { if (!cancelled) setError(messageFor(cause)); });
   }, [inviteCode, mode, onConnected, profile.name, user.uid]);
 
   useEffect(() => {
     if (mode !== 'waiting' || !pendingJoinCode) return;
+    let completing = false;
     let cancelled = false;
-    const check = async () => {
-      try {
-        const connection = await completeJoinerConnection(user.uid, pendingJoinCode);
-        if (!cancelled && connection) onConnected(connection);
-      } catch (cause) {
-        if (!cancelled) setError(messageFor(cause));
-      }
-    };
-    void check();
-    const timer = window.setInterval(() => void check(), 2000);
-    return () => { cancelled = true; window.clearInterval(timer); };
+    return subscribeCoupleInviteState(pendingJoinCode, (invite) => {
+      if (cancelled || completing || !invite) return;
+      if (invite.status !== 'accepted' || invite.joinerUid !== user.uid) return;
+      completing = true;
+      void completeJoinerConnection(user.uid, pendingJoinCode)
+        .then((connection) => { if (!cancelled && connection) onConnected(connection); })
+        .catch((cause) => { if (!cancelled) setError(messageFor(cause)); })
+        .finally(() => { completing = false; });
+    }, (cause) => { if (!cancelled) setError(messageFor(cause)); });
   }, [mode, onConnected, pendingJoinCode, user.uid]);
 
   const makeInvite = async () => {
@@ -167,7 +163,7 @@ export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps
           <button type="button" onClick={copyCode}>{copied ? <Check size={17} /> : <Copy size={17} />}{copied ? '복사됨' : '코드 복사'}</button>
           <button type="button" onClick={shareCode}><Share2 size={17} />공유하기</button>
         </div>
-        <p className="couple-waiting"><RefreshCw size={14} /> 상대방이 연결 요청을 보내면 자동으로 연결돼요.</p>
+        <p className="couple-waiting"><RefreshCw size={14} /> 상대방이 연결 요청을 보내면 바로 연결을 마무리해요.</p>
       </>}
 
       {mode === 'join' && <>
@@ -177,7 +173,7 @@ export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps
         <button className="couple-connect-submit" type="button" disabled={busy || joinCode.trim().length < 10} onClick={join}>{busy ? '요청 보내는 중...' : '상대방과 연결하기'}</button>
       </>}
 
-      {mode === 'waiting' && <div className="couple-waiting"><RefreshCw size={18} /> 연결 요청을 확인하는 중이에요…</div>}
+      {mode === 'waiting' && <div className="couple-waiting"><RefreshCw size={18} /> 연결 요청을 실시간으로 확인하는 중이에요…</div>}
 
       {error && <p className="couple-connect-error" role="alert">{error}</p>}
 
