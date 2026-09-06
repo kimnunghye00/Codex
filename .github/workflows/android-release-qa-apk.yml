@@ -2,19 +2,6 @@ name: Build Android Release QA APK
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/android-release-qa-apk.yml'
-      - 'android/**'
-      - 'src/**'
-      - 'public/**'
-      - 'index.html'
-      - 'capacitor.config.ts'
-      - 'vite.config.ts'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'scripts/**'
 
 concurrency:
   group: android-release-qa-apk-main
@@ -134,4 +121,4 @@ jobs:
           name: ROUTE-release-qa-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 5
