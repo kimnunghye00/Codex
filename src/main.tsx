@@ -183,17 +183,13 @@ function waitForFirstPaint() {
 }
 
 function startDeferredRuntimeServices() {
-  const start = () => {
+  // These services are important for durability/sync but do not need to compete
+  // with the first visible ROUTE frame for CPU time.
+  window.setTimeout(() => {
     initializeRoutePwa();
     startEfficientPersistentBackup();
     initializeCrossDeviceAlbumSync();
-  };
-
-  if ('requestIdleCallback' in window) {
-    window.requestIdleCallback(start, { timeout: 1200 });
-    return;
-  }
-  window.setTimeout(start, 0);
+  }, 0);
 }
 
 async function bootstrap() {
@@ -213,8 +209,6 @@ async function bootstrap() {
     await authPersistenceReady;
     await initializeRuntimeRecovery();
 
-    // Restore durable records before React reads local caches. Background sync,
-    // periodic safety work and PWA setup start only after the first app paint.
     await preparePersistentBackup();
 
     const root = document.getElementById('root');
