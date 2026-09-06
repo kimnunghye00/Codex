@@ -168,6 +168,10 @@ function App() {
   const anniversaries = useMemo(() => profile ? buildAnniversaries(profile, connection?.partnerProfile ?? null, relationshipStartDate) : [], [connection?.partnerProfile, profile, relationshipStartDate]);
 
   const navigateTab = (next: Tab) => {
+    if (next === 'chat') {
+      setChatRoomOpen(true);
+      return;
+    }
     if (chatRoomOpen) setChatRoomOpen(false);
     if (next === tab) return;
     tabHistory.current.push(next);
@@ -176,7 +180,7 @@ function App() {
 
   const navigateMoreTarget = (target: MoreNavigationTarget) => {
     if (target.area === 'chat') {
-      navigateTab('chat');
+      setChatRoomOpen(true);
       return;
     }
     if (target.area === 'memories') {
