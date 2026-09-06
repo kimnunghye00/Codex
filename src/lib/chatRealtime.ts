@@ -1,4 +1,4 @@
-import { collection, deleteDoc, doc, getDocs, limit, limitToLast, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, startAfter, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, limitToLast, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Message, Reaction } from '../types';
 
@@ -19,6 +19,10 @@ type CloudMessage = {
   savedBy?: string[];
   scheduledFor?: string;
 };
+
+const INITIAL_CHAT_PAGE = 40;
+const CHAT_PAGE_STEP = 40;
+const HISTORY_TRIGGER_PX = 110;
 
 function messageRef(coupleId: string, id: number) {
   return doc(db, 'couples', coupleId, 'messages', String(id));
@@ -52,32 +56,90 @@ export function subscribeCoupleMessages(
   currentUid: string,
   onMessages: (messages: Message[]) => void,
   onError?: (error: unknown) => void,
-  pageSize = 40,
+  pageSize = INITIAL_CHAT_PAGE,
 ) {
-  const q = query(
-    collection(db, 'couples', coupleId, 'messages'),
-    orderBy('timestamp', 'asc'),
-    limitToLast(Math.max(1, pageSize)),
-  );
-  return onSnapshot(q, (snapshot) => {
-    onMessages(snapshot.docs.map((snapshotDoc) => toMessage(snapshotDoc, currentUid)));
-  }, onError);
-}
+  let disposed = false;
+  let requestedCount = Math.max(1, pageSize);
+  let lastSnapshotCount = 0;
+  let snapshotUnsubscribe: (() => void) | undefined;
+  let messageScroller: HTMLElement | null = null;
+  let loadingOlder = false;
+  let previousHeight = 0;
+  let previousTop = 0;
+  let attachTimer: number | undefined;
 
-export async function loadOlderCoupleMessages(
-  coupleId: string,
-  currentUid: string,
-  beforeTimestamp: string,
-  pageSize = 40,
-) {
-  const q = query(
-    collection(db, 'couples', coupleId, 'messages'),
-    orderBy('timestamp', 'desc'),
-    startAfter(beforeTimestamp),
-    limit(Math.max(1, pageSize)),
-  );
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map((snapshotDoc) => toMessage(snapshotDoc, currentUid)).reverse();
+  const restoreScrollPosition = () => {
+    if (!messageScroller || !loadingOlder) return;
+    const restore = () => {
+      if (!messageScroller) return;
+      const addedHeight = Math.max(0, messageScroller.scrollHeight - previousHeight);
+      messageScroller.scrollTop = previousTop + addedHeight;
+    };
+    requestAnimationFrame(() => requestAnimationFrame(restore));
+    window.setTimeout(restore, 90);
+    window.setTimeout(() => {
+      restore();
+      loadingOlder = false;
+      messageScroller?.removeAttribute('data-history-loading');
+    }, 240);
+  };
+
+  const listen = () => {
+    snapshotUnsubscribe?.();
+    const q = query(
+      collection(db, 'couples', coupleId, 'messages'),
+      orderBy('timestamp', 'asc'),
+      limitToLast(requestedCount),
+    );
+    snapshotUnsubscribe = onSnapshot(q, (snapshot) => {
+      lastSnapshotCount = snapshot.size;
+      onMessages(snapshot.docs.map((snapshotDoc) => toMessage(snapshotDoc, currentUid)));
+      if (loadingOlder) restoreScrollPosition();
+    }, (error) => {
+      loadingOlder = false;
+      messageScroller?.removeAttribute('data-history-loading');
+      onError?.(error);
+    });
+  };
+
+  const requestOlder = () => {
+    if (disposed || loadingOlder || !messageScroller) return;
+    if (lastSnapshotCount < requestedCount) return;
+    previousHeight = messageScroller.scrollHeight;
+    previousTop = messageScroller.scrollTop;
+    loadingOlder = true;
+    messageScroller.setAttribute('data-history-loading', 'true');
+    requestedCount += CHAT_PAGE_STEP;
+    listen();
+  };
+
+  const handleScroll = () => {
+    if (!messageScroller || messageScroller.scrollTop > HISTORY_TRIGGER_PX) return;
+    requestOlder();
+  };
+
+  const attachScroller = (attempt = 0) => {
+    if (disposed) return;
+    const next = document.querySelector<HTMLElement>('.route-chat-room-layer .chat-page .messages, .chat-page .messages');
+    if (!next) {
+      if (attempt < 30) attachTimer = window.setTimeout(() => attachScroller(attempt + 1), 100);
+      return;
+    }
+    if (messageScroller === next) return;
+    messageScroller?.removeEventListener('scroll', handleScroll);
+    messageScroller = next;
+    messageScroller.addEventListener('scroll', handleScroll, { passive: true });
+  };
+
+  listen();
+  attachTimer = window.setTimeout(() => attachScroller(), 0);
+
+  return () => {
+    disposed = true;
+    snapshotUnsubscribe?.();
+    if (attachTimer) window.clearTimeout(attachTimer);
+    messageScroller?.removeEventListener('scroll', handleScroll);
+  };
 }
 
 export async function sendCoupleMessage(coupleId: string, currentUid: string, message: Message) {
