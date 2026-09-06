@@ -15,18 +15,8 @@ app = replaceOnce(
   `import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';\nimport type { HubTabId } from './components/memories/MemoriesPage';\nimport type { LocationTabId } from './components/location/LocationPage';`,
   'App heavy imports',
 );
-app = replaceOnce(
-  app,
-  `import { NotificationPanel } from './components/notifications/NotificationPanel';`,
-  ``,
-  'NotificationPanel import',
-);
-app = replaceOnce(
-  app,
-  `import { MoreServices, type MoreNavigationTarget } from './components/more/MoreServices';`,
-  `import type { MoreNavigationTarget } from './components/more/MoreServices';`,
-  'MoreServices import',
-);
+app = replaceOnce(app, `import { NotificationPanel } from './components/notifications/NotificationPanel';`, ``, 'NotificationPanel import');
+app = replaceOnce(app, `import { MoreServices, type MoreNavigationTarget } from './components/more/MoreServices';`, `import type { MoreNavigationTarget } from './components/more/MoreServices';`, 'MoreServices import');
 app = replaceOnce(
   app,
   `type Tab = AppTab;`,
@@ -59,18 +49,15 @@ root = replaceOnce(root, `import { useEffect, useState } from 'react';`, `import
 root = replaceOnce(root, `import App from './App';\n`, ``, 'Root App import');
 root = replaceOnce(root, `import { AuthFlow, SIGNUP_PENDING_KEY } from './components/auth/AuthFlow';`, `import { AuthFlow, SIGNUP_PENDING_KEY, Wordmark } from './components/auth/AuthFlow';`, 'Root Wordmark import');
 root = replaceOnce(root, `import { loadProfile, saveProfile, type UserProfile } from './utils/profile';\n`, `import { loadProfile, saveProfile, type UserProfile } from './utils/profile';\n\nconst App = lazy(() => import('./App'));\n`, 'Root lazy App');
-root = replaceOnce(root, `  if (!user) return <App />;`, `  if (!user) return <AuthFlow />;`, 'Root signed-out route');
 root = replaceOnce(root, `  return <App />;`, `  return <Suspense fallback={<div className="app-shell auth-loading" role="status" aria-live="polite"><Wordmark /><div className="loading-mark" /><p>ROUTE를 불러오는 중이에요</p></div>}><App /></Suspense>;`, 'Root App Suspense');
 fs.writeFileSync(rootPath, root);
 
 const mainPath = 'src/main.tsx';
 let main = fs.readFileSync(mainPath, 'utf8');
-main = replaceOnce(
-  main,
-  `import { applySavedRouteAppIcon } from './components/more/MoreServices';`,
-  `import { applySavedRouteAppIcon } from './utils/appIcon';`,
-  'startup app icon import',
-);
+main = replaceOnce(main, `import { applySavedRouteAppIcon } from './components/more/MoreServices';`, `import { applySavedRouteAppIcon } from './utils/appIcon';`, 'startup app icon import');
 fs.writeFileSync(mainPath, main);
 
-console.log('P3 route-level code splitting migration applied.');
+const vitePath = 'vite.config.ts';
+fs.writeFileSync(vitePath, `import { defineConfig } from 'vite';\nimport react from '@vitejs/plugin-react';\n\nexport default defineConfig({\n  plugins: [react()],\n  build: {\n    rolldownOptions: {\n      output: {\n        codeSplitting: {\n          groups: [\n            {\n              name: 'firebase-vendor',\n              test: /[\\\\/]node_modules[\\\\/](?:firebase|@firebase)[\\\\/]/,\n              maxSize: 280_000,\n              priority: 40,\n            },\n            {\n              name: 'capacitor-vendor',\n              test: /[\\\\/]node_modules[\\\\/]@capacitor[\\\\/]/,\n              maxSize: 180_000,\n              priority: 30,\n            },\n            {\n              name: 'react-vendor',\n              test: /[\\\\/]node_modules[\\\\/](?:react|react-dom|scheduler)[\\\\/]/,\n              priority: 20,\n            },\n            {\n              name: 'icons-vendor',\n              test: /[\\\\/]node_modules[\\\\/]lucide-react[\\\\/]/,\n              priority: 10,\n            },\n          ],\n        },\n      },\n    },\n  },\n});\n`);
+
+console.log('P3 route-level and vendor code splitting migration applied.');
