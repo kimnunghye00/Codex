@@ -1,0 +1,10 @@
+/* ROUTE phase 12 release stability
+ * Voice/video/screen-share buttons currently open only local device media.
+ * Hide them from the release UI until real peer-to-peer calling is complete,
+ * so users are never presented with controls that imply a working call.
+ */
+.chat-call-actions button[aria-label="음성 통화"],
+.chat-call-actions button[aria-label="영상 통화"],
+.chat-call-actions button[aria-label="화면 공유"] {
+  display: none !important;
+}
