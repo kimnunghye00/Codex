@@ -1,10 +1,13 @@
 import { CalendarClock, Gift, ImagePlus, Laugh, Plus, Send, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { clearPendingOriginalChatFiles, registerPendingOriginalChatFiles } from '../../lib/chatMediaOriginalRegistry';
 import type { Message } from '../../types';
 
 const QUICK = ['기분 좋아 😊', '배고파 🍚', '심심해 🫠', '우울해 🥺', '놀아줘 ❤️'];
 const MAX_CHAT_PHOTO_SELECTION = 100;
+const MAX_SOURCE_IMAGE_BYTES = 25 * 1024 * 1024;
+const LEGACY_ORIGINAL_GUARD_BYPASS_BYTES = 8 * 1024 * 1024;
 
 type PendingPhoto = {
   id: string;
@@ -13,23 +16,28 @@ type PendingPhoto = {
 };
 
 /**
- * ChatPage still contains old conservative size checks from before Firebase
- * Storage was introduced. Shadowing File.size only bypasses those legacy UI
- * checks; the Blob bytes themselves are unchanged and are still read/uploaded.
+ * ChatPage still has a legacy 9 MB check for the old "original quality" mode.
+ * We send a lightweight File wrapper to that preparation path while retaining
+ * the untouched source File separately for Firebase Storage original download.
+ * The 25 MB source limit is intentionally preserved.
  */
-function removeLegacyChatFileSizeGuard(file: File) {
+function createPreparationFile(file: File) {
+  const clone = new File([file], file.name, { type: file.type, lastModified: file.lastModified });
+  if (file.size > MAX_SOURCE_IMAGE_BYTES) return clone;
   try {
-    Object.defineProperty(file, 'size', { configurable: true, value: 0 });
+    Object.defineProperty(clone, 'size', {
+      configurable: true,
+      value: Math.min(file.size, LEGACY_ORIGINAL_GUARD_BYPASS_BYTES),
+    });
   } catch {
-    // A future WebView may expose a non-extensible File object. In that case
-    // the normal media error path remains the fallback.
+    // The real source remains registered even if a future WebView disallows it.
   }
-  return file;
+  return clone;
 }
 
 export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onImages, onGif, onQuick, onSchedule, onGift, onCancelReply }: {
   draft: string; reply?: Message; partnerName: string; onDraft: (value: string) => void; onSend: () => void;
-  onImages: (files: File[]) => void; onGif: (file: File) => void; onQuick: (text: string) => void;
+  onImages: (files: File[]) => Promise<void> | void; onGif: (file: File) => Promise<void> | void; onQuick: (text: string) => void;
   onSchedule: () => void; onGift: () => void; onCancelReply: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -39,6 +47,7 @@ export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onIma
   const [extras, setExtras] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
+  const [photoSending, setPhotoSending] = useState(false);
 
   useEffect(() => {
     pendingRef.current = pendingPhotos;
@@ -46,6 +55,7 @@ export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onIma
 
   useEffect(() => () => {
     pendingRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    clearPendingOriginalChatFiles();
   }, []);
 
   const clearPendingPhotos = () => {
@@ -58,14 +68,11 @@ export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onIma
     if (!rawFiles.length) return;
     const remaining = Math.max(0, MAX_CHAT_PHOTO_SELECTION - pendingRef.current.length);
     if (!remaining) return;
-    const next = rawFiles.slice(0, remaining).map((rawFile, index) => {
-      const file = removeLegacyChatFileSizeGuard(rawFile);
-      return {
-        id: `${rawFile.name}-${rawFile.lastModified}-${Date.now()}-${index}`,
-        file,
-        previewUrl: URL.createObjectURL(rawFile),
-      };
-    });
+    const next = rawFiles.slice(0, remaining).map((rawFile, index) => ({
+      id: `${rawFile.name}-${rawFile.lastModified}-${Date.now()}-${index}`,
+      file: rawFile,
+      previewUrl: URL.createObjectURL(rawFile),
+    }));
     setPendingPhotos((current) => [...current, ...next]);
     setExtras(false);
     setQuickOpen(false);
@@ -79,13 +86,22 @@ export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onIma
     });
   };
 
-  const sendPendingPhotos = () => {
-    const files = pendingRef.current.map((item) => item.file);
-    if (!files.length) return;
+  const sendPendingPhotos = async () => {
+    if (photoSending) return;
+    const originals = pendingRef.current.map((item) => item.file);
+    if (!originals.length) return;
+    const preparationFiles = originals.map(createPreparationFile);
     pendingRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
     pendingRef.current = [];
     setPendingPhotos([]);
-    onImages(files);
+    setPhotoSending(true);
+    registerPendingOriginalChatFiles(originals);
+    try {
+      await Promise.resolve(onImages(preparationFiles));
+    } finally {
+      clearPendingOriginalChatFiles();
+      setPhotoSending(false);
+    }
   };
 
   const preview = pendingPhotos.length > 0 && typeof document !== 'undefined'
@@ -104,8 +120,8 @@ export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onIma
           </figure>)}
         </div>
         <footer className="route-photo-send-footer">
-          <div><b>{pendingPhotos.length}장</b><span>한 묶음으로 전송돼요</span></div>
-          <button type="button" className="route-photo-send-confirm" onClick={sendPendingPhotos}><Send size={18} /> {pendingPhotos.length}장 보내기</button>
+          <div><b>{pendingPhotos.length}장</b><span>채팅에는 압축 미리보기 · 저장은 원본 화질</span></div>
+          <button type="button" className="route-photo-send-confirm" disabled={photoSending} onClick={() => void sendPendingPhotos()}><Send size={18} /> {photoSending ? '전송 중' : `${pendingPhotos.length}장 보내기`}</button>
         </footer>
       </div>,
       document.body,
@@ -125,7 +141,7 @@ export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onIma
       </div>}
       <div className="composer">
         <input ref={fileRef} className="file-input" type="file" accept="image/*" multiple aria-label={`사진 선택, 최대 ${MAX_CHAT_PHOTO_SELECTION}장`} onChange={(event) => { addPendingPhotos(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
-        <input ref={gifRef} className="file-input" type="file" accept="image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (file) onGif(removeLegacyChatFileSizeGuard(file)); event.target.value = ''; }} />
+        <input ref={gifRef} className="file-input" type="file" accept="image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (file) void onGif(file); event.target.value = ''; }} />
         <button type="button" onClick={() => setExtras((value) => !value)} aria-label="추가 기능"><Plus size={21} /></button>
         <textarea
           rows={1}

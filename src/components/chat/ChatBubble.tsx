@@ -1,8 +1,9 @@
-import { Bookmark, ChevronLeft, ChevronRight, CornerUpLeft, Image as ImageIcon, X } from 'lucide-react';
+import { Bookmark, ChevronLeft, ChevronRight, CornerUpLeft, Download, Image as ImageIcon, X } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import '../../route-chat-gallery-v21.css';
 import '../../route-chat-hotfix-v24.css';
+import { chatMediaPreviewUrl, downloadOriginalChatMedia } from '../../lib/chatMediaReference';
 import type { Message } from '../../types';
 import { messageTime } from '../../utils/dates';
 import { ReactionPicker } from './ReactionPicker';
@@ -15,6 +16,34 @@ function replyLabel(message: Message) {
   if (message.type === 'gallery') return `사진 ${message.imageUrls?.length ?? 0}장`;
   if (message.type === 'gif') return '움짤';
   return message.text?.slice(0, 45);
+}
+
+function DeferredMediaImage({ src, alt, className, onClick }: {
+  src: string;
+  alt: string;
+  className?: string;
+  onClick?: (event: React.MouseEvent<HTMLImageElement>) => void;
+}) {
+  const ref = useRef<HTMLImageElement>(null);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      setReady(true);
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      setReady(true);
+      observer.disconnect();
+    }, { rootMargin: '140px 0px', threshold: 0.01 });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  return <img ref={ref} className={className} src={ready ? chatMediaPreviewUrl(src) : undefined} alt={alt} decoding="async" onClick={onClick} />;
 }
 
 function GalleryViewer({ urls, initialIndex, onClose }: { urls: string[]; initialIndex: number; onClose: () => void }) {
@@ -56,17 +85,18 @@ function GalleryViewer({ urls, initialIndex, onClose }: { urls: string[]; initia
       >
         <header className="route-gallery-viewer-head">
           <strong>{index + 1} / {urls.length}</strong>
+          <button type="button" className="route-gallery-download" aria-label="현재 사진 원본 저장" onClick={() => void downloadOriginalChatMedia(urls[index], index + 1)}><Download /></button>
           <button type="button" aria-label="사진 닫기" onClick={onClose}><X /></button>
         </header>
         <div className="route-gallery-viewer-media">
           {urls.length > 1 && <button type="button" className="route-gallery-arrow route-gallery-prev" aria-label="이전 사진" onClick={() => move(-1)}><ChevronLeft /></button>}
-          <img src={urls[index]} alt={`묶음 사진 ${index + 1} / ${urls.length}`} decoding="async" />
+          <img src={chatMediaPreviewUrl(urls[index])} alt={`묶음 사진 ${index + 1} / ${urls.length}`} decoding="async" />
           {urls.length > 1 && <button type="button" className="route-gallery-arrow route-gallery-next" aria-label="다음 사진" onClick={() => move(1)}><ChevronRight /></button>}
         </div>
         {urls.length > 1 && <div className="route-gallery-thumbs" aria-label="묶음 사진 목록">
-          {urls.map((url, thumbIndex) => <button key={`${url.slice(0, 32)}-${thumbIndex}`} type="button" className={thumbIndex === index ? 'active' : ''} onClick={() => setIndex(thumbIndex)} aria-label={`${thumbIndex + 1}번째 사진`}><img src={url} alt="" loading="lazy" decoding="async" /></button>)}
+          {urls.map((url, thumbIndex) => <button key={`${thumbIndex}-${chatMediaPreviewUrl(url).slice(-20)}`} type="button" className={thumbIndex === index ? 'active' : ''} onClick={() => setIndex(thumbIndex)} aria-label={`${thumbIndex + 1}번째 사진`}><DeferredMediaImage src={url} alt="" /></button>)}
         </div>}
-        <div className="route-gallery-swipe-hint">좌우로 밀어서 사진을 넘길 수 있어요</div>
+        <div className="route-gallery-swipe-hint">미리보기는 데이터 절약 화질 · 저장하면 원본 화질</div>
       </section>
     </div>,
     document.body,
@@ -115,14 +145,15 @@ function ChatBubbleView({ message, reply, partnerName, partnerInitial, active, h
         {active && <><ReactionPicker onSelect={onReact} /><div className="message-actions"><button onClick={onReply}><CornerUpLeft size={14} />답장</button><button onClick={onSave}>{message.saved ? <Bookmark size={14} fill="currentColor" /> : <Bookmark size={14} />} {saveLabel}</button></div></>}
         <button type="button" className={`bubble ${message.type === 'gallery' ? 'gallery-bubble' : ''} ${mediaBubble ? 'media-bubble' : ''}`} onClick={(event) => { event.stopPropagation(); onAction(); }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); onAction(); }}>
           {reply && <span className="reply-preview" onClick={(event) => { event.stopPropagation(); onJump(reply.id); }}><b>{reply.sender === 'me' ? '나' : partnerName}</b>{reply.type !== 'text' ? <><ImageIcon size={12} /> {replyLabel(reply)}</> : replyLabel(reply)}</span>}
-          {message.type === 'image' && message.imageUrl && <img className="chat-image" src={message.imageUrl} alt="채팅으로 보낸 사진" loading="lazy" decoding="async" onClick={(event) => { event.stopPropagation(); onImage(message.imageUrl!); }} />}
-          {message.type === 'gif' && message.imageUrl && <img className="chat-image chat-gif" src={message.imageUrl} alt="채팅으로 보낸 움짤" loading="lazy" decoding="async" onClick={(event) => { event.stopPropagation(); onImage(message.imageUrl!); }} />}
+          {message.type === 'image' && message.imageUrl && <DeferredMediaImage className="chat-image" src={message.imageUrl} alt="채팅으로 보낸 사진" onClick={(event) => { event.stopPropagation(); onImage(message.imageUrl!); }} />}
+          {message.type === 'gif' && message.imageUrl && <DeferredMediaImage className="chat-image chat-gif" src={message.imageUrl} alt="채팅으로 보낸 움짤" onClick={(event) => { event.stopPropagation(); onImage(message.imageUrl!); }} />}
           {message.type === 'gallery' && !!galleryUrls.length && <span className="chat-gallery-bundle">
             <span className="chat-gallery-total">사진 {galleryUrls.length}장</span>
-            <span className="chat-gallery route-gallery-grid">{visibleGalleryUrls.map((url, index) => <span key={`${url.slice(0, 24)}-${index}`} className="chat-gallery-item"><img src={url} alt={`묶음 사진 ${index + 1} / ${galleryUrls.length}`} loading="lazy" decoding="async" onClick={(event) => { event.stopPropagation(); setGalleryIndex(index); }} />{index === visibleGalleryUrls.length - 1 && hiddenGalleryCount > 0 && <em>+{hiddenGalleryCount}</em>}</span>)}</span>
+            <span className="chat-gallery route-gallery-grid">{visibleGalleryUrls.map((url, index) => <span key={`${message.id}-${index}`} className="chat-gallery-item"><DeferredMediaImage src={url} alt={`묶음 사진 ${index + 1} / ${galleryUrls.length}`} onClick={(event) => { event.stopPropagation(); setGalleryIndex(index); }} />{index === visibleGalleryUrls.length - 1 && hiddenGalleryCount > 0 && <em>+{hiddenGalleryCount}</em>}</span>)}</span>
           </span>}
           {message.type === 'text' && <span className="message-text">{message.text}</span>}
         </button>
+        {mediaBubble && message.imageUrl && <button type="button" className="chat-original-download" aria-label="원본 화질로 저장" onClick={(event) => { event.stopPropagation(); void downloadOriginalChatMedia(message.imageUrl!, 1); }}><Download size={13} /><span>원본</span></button>}
         <div className="message-meta">{message.saved && <Bookmark className="saved-mark" size={12} fill="currentColor" />}{message.scheduledFor && <span className="scheduled-mark">예약</span>}{galleryUrls.length > 1 && <span className="message-gallery-count">{galleryUrls.length}장</span>}<time>{messageTime(message.timestamp)}</time>{mine && <span>{message.read ? '읽음' : '전송됨'}</span>}</div>
         {!!message.reactions?.length && <div className="reaction-list">{Object.entries(message.reactions.reduce<Record<string, number>>((counts, reaction) => ({ ...counts, [reaction.emoji]: (counts[reaction.emoji] ?? 0) + 1 }), {})).map(([emoji, count]) => <button key={emoji} onClick={() => onReact(emoji)}>{emoji}{count > 1 && ` ${count}`}</button>)}</div>}
       </div>
