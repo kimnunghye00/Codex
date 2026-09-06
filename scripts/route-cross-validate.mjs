@@ -71,6 +71,7 @@ const retiredFiles = [
   'src/route-web-home-v11.css',
   'src/route-mobile-home-v13.css',
   'src/route-mobile-home-fit-v14.css',
+  'src/route-release-stability-v24.css',
   'src/components/memories/StableMemoriesPage.tsx',
   'src/components/location/StableLocationPage.tsx',
 ];
@@ -86,6 +87,7 @@ const bannedReferences = [
   'route-web-home-v11.css',
   'route-mobile-home-v13.css',
   'route-mobile-home-fit-v14.css',
+  'route-release-stability-v24.css',
 ];
 for (const reference of bannedReferences) {
   const owners = allTextFiles.filter((file) => read(file).includes(reference));
@@ -95,9 +97,14 @@ for (const reference of bannedReferences) {
 const main = read('src/main.tsx');
 const app = read('src/App.tsx');
 const recovery = read('src/recovery-runtime.ts');
+const accountPolicy = read('src/utils/accountIsolationPolicy.ts');
 const coupleConnection = read('src/lib/coupleConnection.ts');
 const coupleConnect = read('src/components/couple/CoupleConnect.tsx');
-const releaseGuard = read('src/route-release-stability-v24.css');
+const coupleSession = read('src/utils/coupleConnectSession.ts');
+const chat = read('src/components/chat/ChatPage.tsx');
+const messageId = read('src/utils/messageId.ts');
+const releaseFlags = read('src/config/releaseFlags.ts');
+const runtimeTests = read('tests/route-runtime.test.ts');
 const appIconNative = read('src/app-icon-native.ts');
 const native = read('src/lib/native.ts');
 const manifest = read('android/app/src/main/AndroidManifest.xml');
@@ -106,9 +113,9 @@ const pkg = JSON.parse(read('package.json'));
 const workflow = read('.github/workflows/stability-gate.yml');
 
 check('single React root remains', (main.match(/createRoot\(/g) || []).length === 1);
-check('runtime recovery is directly loaded', main.includes("import './recovery-runtime';"));
+check('runtime recovery is explicitly imported', main.includes("import { initializeRuntimeRecovery } from './recovery-runtime';"));
+check('runtime recovery blocks React bootstrap', main.indexOf('await initializeRuntimeRecovery()') > -1 && main.indexOf('await initializeRuntimeRecovery()') < main.indexOf('createRoot('));
 check('runtime recovery CSS is directly loaded', main.includes("import './route-runtime-stability-v19.css';"));
-check('phase 12 release CSS is directly loaded', main.includes("import './route-release-stability-v24.css';"));
 check('native icon bridge is directly loaded', main.includes("import './app-icon-native';"));
 check('native icon bridge has no retired wrapper import', !appIconNative.includes('appearance-stability'));
 
@@ -122,10 +129,22 @@ check('CoupleConnect has no interval polling', !coupleConnect.includes('setInter
 check('owner finalize no longer always returns null',
   coupleConnection.includes('partnerProfile: result.partnerName')
   && !coupleConnection.includes('if (!result?.coupleId || !result.partnerUid) return null;\n  return null;'));
-check('legacy unowned couple cache is rejected', recovery.includes('hasSharedLocalCache') && recovery.includes('orphanedLegacyCache'));
-check('unfinished call controls are hidden from release UI',
-  ['음성 통화', '영상 통화', '화면 공유'].every((label) => releaseGuard.includes(`aria-label="${label}"`))
-  && releaseGuard.includes('display: none'));
+check('pending couple connection survives restart', coupleConnect.includes('loadPersistedSession') && coupleSession.includes("mode: 'invite' | 'waiting'"));
+
+check('account isolation is policy-driven', recovery.includes('decideAccountIsolation') && accountPolicy.includes('export function decideAccountIsolation'));
+check('orphaned cache is cleared before initial mount', recovery.includes("action === 'reset-orphan'") && main.includes('await initializeRuntimeRecovery()'));
+check('recovery initialization is idempotent', recovery.includes('runtimeRecoveryPromise') && recovery.includes('runtimeListenersInstalled'));
+check('recovery no longer self-installs on import', !recovery.includes('installRuntimeRecovery();'));
+
+check('message ids use secure random words', messageId.includes('cryptoApi?.getRandomValues') && messageId.includes('messageIdFromRandomWords'));
+check('chat no longer uses timestamp-only message ids', chat.includes('createMessageId') && !chat.includes('Date.now() * 1000'));
+check('unfinished calls are render-gated', releaseFlags.includes('CALLING_ENABLED = false') && chat.includes('CALLING_ENABLED &&'));
+
+check('runtime tests execute production helpers',
+  runtimeTests.includes("../src/utils/messageId.ts")
+  && runtimeTests.includes("../src/utils/accountIsolationPolicy.ts")
+  && runtimeTests.includes("../src/utils/coupleConnectSession.ts")
+  && runtimeTests.includes("../src/config/releaseFlags.ts"));
 
 check('native keyboard lifecycle is wired', native.includes('keyboardWillShow') && native.includes('keyboardDidHide') && native.includes('route-keyboard-open'));
 check('native Android back bridge is wired', native.includes("App.addListener('backButton'") && native.includes('route-native-back'));
@@ -162,13 +181,16 @@ check('Android WebView uses adjustResize', manifest.includes('android:windowSoft
 check('Android backup is disabled', manifest.includes('android:allowBackup="false"'));
 check('launcher icon aliases remain configured', ['RouteDefaultIcon', 'RouteHeartIcon', 'RouteNightIcon', 'RouteCreamIcon'].every((name) => manifest.includes(name)));
 
+check('package exposes runtime gate', pkg.scripts?.['stability:runtime'] === 'node --experimental-strip-types --test tests/route-runtime.test.ts');
 check('package exposes flow gate', pkg.scripts?.['stability:flow'] === 'node scripts/route-flow-smoke.mjs');
 check('package exposes native gate', pkg.scripts?.['stability:native'] === 'node scripts/route-native-smoke.mjs');
 check('package exposes cross gate', pkg.scripts?.['stability:cross'] === 'node scripts/route-cross-validate.mjs');
-check('full stability command runs all independent gates', typeof pkg.scripts?.stability === 'string'
+check('full stability command runs runtime and static gates', typeof pkg.scripts?.stability === 'string'
+  && pkg.scripts.stability.includes('stability:runtime')
   && pkg.scripts.stability.includes('stability:flow')
   && pkg.scripts.stability.includes('stability:native')
   && pkg.scripts.stability.includes('stability:cross'));
+check('CI executes runtime validation', workflow.includes('npm run stability:runtime'));
 check('CI executes cross validation', workflow.includes('npm run stability:cross'));
 
 console.log(`\nROUTE cross validation: ${passes.length} checks passed.`);
@@ -180,4 +202,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('\nIndependent repository, native, privacy, and realtime invariants agree.');
+console.log('\nIndependent repository, native, privacy, runtime, and cleanup invariants agree.');
