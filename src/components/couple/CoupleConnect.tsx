@@ -95,7 +95,7 @@ export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps
     if (mode !== 'invite' || !inviteCode) return;
     let finalizing = false;
     let cancelled = false;
-    return subscribeCoupleInviteState(inviteCode, (invite) => {
+    const unsubscribe = subscribeCoupleInviteState(inviteCode, (invite) => {
       if (cancelled || finalizing) return;
       if (!invite) {
         resetPendingFlow('초대 정보를 찾지 못했어요. 새 초대 코드를 만들어 주세요.');
@@ -112,13 +112,17 @@ export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps
         .catch((cause) => { if (!cancelled) setError(messageFor(cause)); })
         .finally(() => { finalizing = false; });
     }, (cause) => { if (!cancelled) setError(messageFor(cause)); });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, [finishConnection, inviteCode, mode, profile.name, resetPendingFlow, user.uid]);
 
   useEffect(() => {
     if (mode !== 'waiting' || !pendingJoinCode) return;
     let completing = false;
     let cancelled = false;
-    return subscribeCoupleInviteState(pendingJoinCode, (invite) => {
+    const unsubscribe = subscribeCoupleInviteState(pendingJoinCode, (invite) => {
       if (cancelled || completing) return;
       if (!invite) {
         resetPendingFlow('연결 요청 정보를 찾지 못했어요. 초대 코드를 다시 입력해 주세요.');
@@ -135,6 +139,10 @@ export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps
         .catch((cause) => { if (!cancelled) setError(messageFor(cause)); })
         .finally(() => { completing = false; });
     }, (cause) => { if (!cancelled) setError(messageFor(cause)); });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, [finishConnection, mode, pendingJoinCode, resetPendingFlow, user.uid]);
 
   const makeInvite = async () => {
