@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/android-release-qa-apk.yml'
+      - 'android/app/build.gradle'
 
 concurrency:
   group: android-release-qa-apk-main
@@ -88,7 +89,7 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug --stacktrace
 
-      - name: Verify APK signing identity and package
+      - name: Verify APK signing identity, package and update version
         shell: bash
         run: |
           set -euo pipefail
@@ -103,6 +104,10 @@ jobs:
           BADGING="$(${AAPT} dump badging "${APK}" | head -n 1)"
           echo "${BADGING}"
           printf '%s' "${BADGING}" | grep -q "name='com.route.couple'"
+          VERSION_CODE="$(printf '%s\n' "${BADGING}" | sed -n "s/.*versionCode='\([0-9][0-9]*\)'.*/\1/p")"
+          test -n "${VERSION_CODE}"
+          test "${VERSION_CODE}" -gt 1000000
+          echo "ROUTE QA APK versionCode: ${VERSION_CODE}"
 
       - name: Write QA build summary
         shell: bash
@@ -112,6 +117,7 @@ jobs:
           echo '- Source: current main branch' >> "$GITHUB_STEP_SUMMARY"
           echo '- Stability suite: passed before native build' >> "$GITHUB_STEP_SUMMARY"
           echo '- Package: com.route.couple' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Uses monotonic Android versionCode for update installs' >> "$GITHUB_STEP_SUMMARY"
           echo '- Artifact: ROUTE-release-qa-apk' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload QA APK
