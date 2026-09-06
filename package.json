@@ -8,6 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview --host 0.0.0.0",
+    "stability:flow": "node scripts/route-flow-smoke.mjs",
+    "stability": "npm run build && npm run stability:flow",
     "native:sync": "npm run build && npx cap sync",
     "native:add:android": "npx cap add android",
     "native:add:ios": "npx cap add ios",
