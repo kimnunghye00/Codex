@@ -11,7 +11,7 @@ import { MoreServices, type MoreNavigationTarget } from './components/more/MoreS
 import { AppHeader as SharedAppHeader } from './components/navigation/AppHeader';
 import { BottomNav, type AppTab } from './components/navigation/BottomNav';
 import { auth } from './lib/firebase';
-import { getRealCoupleConnection, type RealCoupleConnection } from './lib/coupleConnection';
+import { subscribeRealCoupleConnection, type RealCoupleConnection } from './lib/coupleConnection';
 import { saveRelationshipStartDate, subscribeCoupleShared } from './lib/coupleShared';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import type { Memory, MemoryDraft, Message } from './types';
@@ -185,11 +185,11 @@ function App() {
 
   useEffect(() => {
     if (!user) { setConnection(null); return; }
-    let cancelled = false;
-    const check = () => void getRealCoupleConnection(user.uid).then((next) => { if (!cancelled) setConnection(next); }).catch(() => { if (!cancelled) setConnection(null); });
-    check();
-    const timer = window.setInterval(check, 3000);
-    return () => { cancelled = true; window.clearInterval(timer); };
+    return subscribeRealCoupleConnection(
+      user.uid,
+      setConnection,
+      () => setConnection(null),
+    );
   }, [user?.uid]);
 
   useEffect(() => {
