@@ -5,10 +5,6 @@ import { AppCrashBoundary, installGlobalCrashDiagnostics } from './AppCrashBound
 import { applySavedRouteAppIcon } from './utils/appIcon';
 import { authPersistenceReady } from './lib/firebase';
 import { hideNativeSplash, initializeNativeApp } from './lib/native';
-import { preparePersistentBackup } from './lib/persistentBackup';
-import { startEfficientPersistentBackup } from './lib/persistentBackupEfficient';
-import { initializeCrossDeviceAlbumSync } from './lib/crossDeviceAlbumSync';
-import { initializeRoutePwa } from './pwa';
 import { initializeRuntimeRecovery } from './recovery-runtime';
 import { installPersistentStorageObserver } from './utils/persistenceSignal';
 import './styles.css';
@@ -183,12 +179,25 @@ function waitForFirstPaint() {
 }
 
 function startDeferredRuntimeServices() {
-  // These services are important for durability/sync but do not need to compete
-  // with the first visible ROUTE frame for CPU time.
+  // Keep backup restore, PWA setup and live album sync out of the startup bundle's
+  // hot execution path. Account isolation has already completed before React
+  // mounts, so these durability services can safely start after the first frame.
   window.setTimeout(() => {
-    initializeRoutePwa();
-    startEfficientPersistentBackup();
-    initializeCrossDeviceAlbumSync();
+    void import('./pwa')
+      .then(({ initializeRoutePwa }) => initializeRoutePwa())
+      .catch((error) => console.warn('[ROUTE deferred PWA]', error));
+
+    void Promise.all([
+      import('./lib/persistentBackup'),
+      import('./lib/persistentBackupEfficient'),
+      import('./lib/crossDeviceAlbumSync'),
+    ]).then(async ([backup, efficientBackup, albumSync]) => {
+      await backup.preparePersistentBackup();
+      efficientBackup.startEfficientPersistentBackup();
+      albumSync.initializeCrossDeviceAlbumSync();
+    }).catch((error) => {
+      console.warn('[ROUTE deferred durability]', error);
+    });
   }, 0);
 }
 
@@ -208,8 +217,6 @@ async function bootstrap() {
     await initializeNativeApp();
     await authPersistenceReady;
     await initializeRuntimeRecovery();
-
-    await preparePersistentBackup();
 
     const root = document.getElementById('root');
     if (!root) throw new Error('ROUTE_ROOT_MISSING');
