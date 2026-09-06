@@ -2,6 +2,7 @@ import { Bot, CalendarClock, Gift, Heart, MonitorUp, MoreHorizontal, Phone, Vide
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { collection, doc, onSnapshot, orderBy, query, setDoc } from 'firebase/firestore';
+import { CALLING_ENABLED } from '../../config/releaseFlags';
 import { auth, db } from '../../lib/firebase';
 import { AI_TEST_PARTNER_NAME, loadLocalAiPartner } from '../../lib/coupleData';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
@@ -10,6 +11,7 @@ import { deleteUploadedChatMedia, uploadChatMedia } from '../../lib/chatMedia';
 import type { Message } from '../../types';
 import { messageDateLabel } from '../../utils/dates';
 import { isChatMediaMessage, loadChatMemoryMessageIds, toggleChatMessageMemory } from '../../utils/featureFlow';
+import { createMessageId } from '../../utils/messageId';
 import { ChatBubble } from './ChatBubble';
 import { ChatComposer } from './ChatComposer';
 import { ChatToolsPanel, loadChatPreferences, saveChatPreferences, type ChatPreferences } from './ChatToolsPanel';
@@ -24,12 +26,6 @@ const MAX_ORIGINAL_IMAGE_BYTES = 9 * 1024 * 1024;
 const MAX_GIF_BYTES = 9 * 1024 * 1024;
 const MAX_CHAT_PHOTOS = 100;
 const CHAT_MEDIA_BATCH_SIZE = 4;
-let messageSequence = 0;
-
-function nextMessageId() {
-  messageSequence = (messageSequence + 1) % 1000;
-  return Date.now() * 1000 + messageSequence;
-}
 
 function aiReplyFor(text: string) {
   const value = text.trim();
@@ -201,7 +197,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     if (!usingAiPartner) return;
     setAiTyping(true);
     if (aiTimerRef.current) window.clearTimeout(aiTimerRef.current);
-    aiTimerRef.current = window.setTimeout(() => { setMessages((items) => [...items, { id: nextMessageId(), sender: 'partner', type: 'text', text: aiReplyFor(text), timestamp: new Date().toISOString(), read: true, replyTo: replyTarget }]); setAiTyping(false); }, Math.min(2400, Math.max(900, 700 + text.length * 35)));
+    aiTimerRef.current = window.setTimeout(() => { setMessages((items) => [...items, { id: createMessageId(), sender: 'partner', type: 'text', text: aiReplyFor(text), timestamp: new Date().toISOString(), read: true, replyTo: replyTarget }]); setAiTyping(false); }, Math.min(2400, Math.max(900, 700 + text.length * 35)));
   };
 
   const deliver = (message: Message) => {
@@ -217,7 +213,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
 
   const sendText = (text: string, scheduledFor?: string) => {
     if (!text.trim() || !currentUid) return;
-    const message: Message = { id: nextMessageId(), sender: 'me', type: 'text', text: text.trim(), timestamp: new Date().toISOString(), read: usingAiPartner, replyTo, scheduledFor };
+    const message: Message = { id: createMessageId(), sender: 'me', type: 'text', text: text.trim(), timestamp: new Date().toISOString(), read: usingAiPartner, replyTo, scheduledFor };
     deliver(message); setReplyTo(undefined);
   };
 
@@ -240,7 +236,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     }
 
     const selected = files.slice(0, MAX_CHAT_PHOTOS);
-    const messageId = nextMessageId();
+    const messageId = createMessageId();
     const urls: string[] = [];
     let uploadedPaths: string[] = [];
     mediaSendingRef.current = true;
@@ -292,7 +288,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
       if (file.size > MAX_GIF_BYTES) throw new Error('gif-too-large');
       showFlowNotice('움짤을 전송하고 있어요.');
       const preparedUrl = await readFile(file);
-      const messageId = nextMessageId();
+      const messageId = createMessageId();
       let imageUrl = preparedUrl;
 
       if (connection) {
@@ -315,7 +311,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
 
   const reserveMessage = () => {
     if (!scheduleForm.text.trim() || !scheduleForm.sendAt || new Date(scheduleForm.sendAt).getTime() <= Date.now()) return;
-    setScheduledDrafts((items) => [...items, { id: nextMessageId(), text: scheduleForm.text.trim(), sendAt: scheduleForm.sendAt }]);
+    setScheduledDrafts((items) => [...items, { id: createMessageId(), text: scheduleForm.text.trim(), sendAt: scheduleForm.sendAt }]);
     setScheduleForm({ text: '', sendAt: '' }); setScheduleOpen(false);
   };
   const startMedia = async (mode: CallMode) => {
@@ -352,7 +348,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
 
   return <div className={`page full-page chat-page chat-bg-${preferences.background} chat-font-${preferences.fontSize}`}>
     <Header title="대화" />
-    <div className="chat-profile"><div className="avatar large">{usingAiPartner ? <Bot size={22} /> : partnerInitial}</div><div><b>{partnerName}</b><span className={aiTyping || partnerTyping ? 'chat-status typing' : 'chat-status'}><i /> {aiTyping || partnerTyping ? '입력 중...' : connection ? '실시간 연결됨' : usingAiPartner ? 'AI 테스트 파트너 · 연결됨' : '상대방 연결 대기'}</span></div><div className="chat-call-actions"><button aria-label="음성 통화" onClick={() => void startMedia('voice')}><Phone size={17} /></button><button aria-label="영상 통화" onClick={() => void startMedia('video')}><Video size={17} /></button><button aria-label="화면 공유" onClick={() => void startMedia('screen')}><MonitorUp size={17} /></button><button aria-label="대화 메뉴" onClick={() => setToolsOpen(true)}><MoreHorizontal /></button></div></div>
+    <div className="chat-profile"><div className="avatar large">{usingAiPartner ? <Bot size={22} /> : partnerInitial}</div><div><b>{partnerName}</b><span className={aiTyping || partnerTyping ? 'chat-status typing' : 'chat-status'}><i /> {aiTyping || partnerTyping ? '입력 중...' : connection ? '실시간 연결됨' : usingAiPartner ? 'AI 테스트 파트너 · 연결됨' : '상대방 연결 대기'}</span></div><div className="chat-call-actions">{CALLING_ENABLED && <><button aria-label="음성 통화" onClick={() => void startMedia('voice')}><Phone size={17} /></button><button aria-label="영상 통화" onClick={() => void startMedia('video')}><Video size={17} /></button><button aria-label="화면 공유" onClick={() => void startMedia('screen')}><MonitorUp size={17} /></button></>}<button aria-label="대화 메뉴" onClick={() => setToolsOpen(true)}><MoreHorizontal /></button></div></div>
     {nearestSchedule && <div className="chat-next-schedule"><CalendarClock size={16} /><div><small>가장 가까운 일정</small><b>{nearestSchedule.title}</b><span>{nearestSchedule.date.replaceAll('-', '.')} · {nearestSchedule.startTime}</span></div></div>}
     {syncError && <p className="chat-sync-error" role="alert">{syncError}</p>}
     {flowNotice && <p className="chat-flow-notice" role="status">{flowNotice}</p>}
@@ -372,6 +368,6 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
 
     {giftOpen && <div className="chat-extra-backdrop" onMouseDown={() => setGiftOpen(false)}><section className="chat-extra-modal gift-modal" onMouseDown={(event) => event.stopPropagation()}><button className="chat-extra-close" onClick={() => setGiftOpen(false)}><X /></button><Gift className="modal-accent-icon" /><h2>선물하기</h2><p>생일이나 기념일에 바로 선물 메시지를 보낼 수 있어요. 결제 연결은 다음 단계에서 추가할 수 있어요.</p><div className="gift-options">{['🎂 생일 선물', '💐 기념일 선물', '☕ 커피 선물', '🍰 달콤한 선물'].map((gift) => <button key={gift} onClick={() => { sendText(`🎁 ${gift}을(를) 보내고 싶어요 ❤️`); setGiftOpen(false); }}>{gift}</button>)}</div><button className="gift-ai" disabled>AI 선물 추천 · 준비 중</button></section></div>}
 
-    {callMode && <div className="chat-extra-backdrop"><section className="chat-call-modal"><div className="call-heart"><Heart fill="currentColor" /></div><h2>{callMode === 'voice' ? '음성 통화' : callMode === 'video' ? '영상 통화' : '화면 공유'}</h2><p>{partnerName}과 연결할 준비를 하고 있어요.</p>{callMode !== 'voice' && <video ref={videoRef} autoPlay muted playsInline />}{callMode === 'voice' && <div className="voice-wave"><span /><span /><span /><span /><span /></div>}<small>현재는 내 기기 미디어 연결까지 동작하며, 상대방과의 실제 WebRTC 연결은 시그널링 서버 연결 단계에서 완성됩니다.</small><button className="call-end" onClick={stopMedia}>종료</button></section></div>}
+    {CALLING_ENABLED && callMode && <div className="chat-extra-backdrop"><section className="chat-call-modal"><div className="call-heart"><Heart fill="currentColor" /></div><h2>{callMode === 'voice' ? '음성 통화' : callMode === 'video' ? '영상 통화' : '화면 공유'}</h2><p>{partnerName}과 연결할 준비를 하고 있어요.</p>{callMode !== 'voice' && <video ref={videoRef} autoPlay muted playsInline />}{callMode === 'voice' && <div className="voice-wave"><span /><span /><span /><span /><span /></div>}<small>현재는 내 기기 미디어 연결까지 동작하며, 상대방과의 실제 WebRTC 연결은 시그널링 서버 연결 단계에서 완성됩니다.</small><button className="call-end" onClick={stopMedia}>종료</button></section></div>}
   </div>;
 }
