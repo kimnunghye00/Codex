@@ -67,7 +67,9 @@ export function openHomeMap() {
   document.body.classList.add('home-map-overlay-open');
 
   const uid = auth.currentUser?.uid ?? '';
-  const visits = uid ? loadLocationVisits(uid) : [];
+  // LocationPage sends visits to the shared map host in chronological order.
+  // Keep the home map on the same ordering so the route line and current marker match.
+  const visits = uid ? [...loadLocationVisits(uid)].reverse() : [];
   let ready = false;
   let closed = false;
   let mapTimeout: number | undefined;
