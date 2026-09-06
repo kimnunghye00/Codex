@@ -1,0 +1,33 @@
+/* ROUTE runtime performance v27
+ * Let Chromium/WebView skip layout + paint for cards well outside the viewport.
+ * Intrinsic sizes keep scroll geometry stable while skipped content is dormant.
+ */
+@supports (content-visibility: auto) {
+  .memory-card {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 280px;
+  }
+
+  .notification-list > article {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 78px;
+  }
+
+  .location-list > .location-visit-row,
+  .location-list > .location-visit,
+  .place-timeline-grid > .place-timeline-card,
+  .place-timeline-events > .place-timeline-event,
+  .hub-stack > .hub-list-row,
+  .hub-stack > .anniversary-row,
+  .detail-related-memories > button {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 96px;
+  }
+}
+
+/* Prevent media outside its box from expanding paint bounds on long feeds. */
+.memory-cover,
+.detail-thumbnails > button,
+.detail-related-memories > button > span {
+  contain: paint;
+}
