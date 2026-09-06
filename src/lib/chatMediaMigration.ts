@@ -99,11 +99,6 @@ async function migrateOne(state: RoomState) {
   }
 }
 
-/**
- * Feed only the currently loaded chat window into the migration queue. This
- * avoids a full Firestore history scan and converts at most one legacy photo per
- * idle gap. As pagination reveals older messages they naturally join the queue.
- */
 export function migrateLoadedLegacyChatMedia(coupleId: string, ownerUid: string, messages: Message[]) {
   if (!coupleId || !ownerUid || !messages.length) return;
   const key = roomKey(coupleId, ownerUid);
@@ -118,6 +113,15 @@ export function migrateLoadedLegacyChatMedia(coupleId: string, ownerUid: string,
   state.messages = messages;
   rooms.set(key, state);
   schedule(state, 250);
+}
+
+/**
+ * Backward-compatible no-op for older chatRealtime wiring. The actual migration
+ * is now driven by migrateLoadedLegacyChatMedia(), which only sees the paged
+ * messages already on screen and therefore never performs a full history scan.
+ */
+export async function startLegacyChatMediaMigration(_coupleId: string, _ownerUid: string) {
+  return Promise.resolve();
 }
 
 document.addEventListener('visibilitychange', () => {
