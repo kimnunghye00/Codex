@@ -1,13 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChatPage } from './components/chat/ChatPage';
-import { MemoriesPage, type HubTabId } from './components/memories/MemoriesPage';
-import { LocationPage, type LocationTabId } from './components/location/LocationPage';
-import { AccountSettings } from './components/auth/AccountSettings';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import type { HubTabId } from './components/memories/MemoriesPage';
+import type { LocationTabId } from './components/location/LocationPage';
 import { AuthFlow, Wordmark } from './components/auth/AuthFlow';
 import { ProfileSetup } from './components/auth/ProfileSetup';
-import { NotificationPanel } from './components/notifications/NotificationPanel';
+
 import { CoupleHomeTools } from './components/home/CoupleHomeTools';
-import { MoreServices, type MoreNavigationTarget } from './components/more/MoreServices';
+import type { MoreNavigationTarget } from './components/more/MoreServices';
 import { AppHeader as SharedAppHeader } from './components/navigation/AppHeader';
 import { BottomNav, type AppTab } from './components/navigation/BottomNav';
 import { auth } from './lib/firebase';
@@ -25,6 +23,13 @@ import {
   type AppNotification,
 } from './utils/notifications';
 import { ChevronRight, Heart, Image, MapPin, MapPinned, Plus } from 'lucide-react';
+
+const ChatPage = lazy(() => import('./components/chat/ChatPage').then((module) => ({ default: module.ChatPage })));
+const MemoriesPage = lazy(() => import('./components/memories/MemoriesPage').then((module) => ({ default: module.MemoriesPage })));
+const LocationPage = lazy(() => import('./components/location/LocationPage').then((module) => ({ default: module.LocationPage })));
+const AccountSettings = lazy(() => import('./components/auth/AccountSettings').then((module) => ({ default: module.AccountSettings })));
+const NotificationPanel = lazy(() => import('./components/notifications/NotificationPanel').then((module) => ({ default: module.NotificationPanel })));
+const MoreServices = lazy(() => import('./components/more/MoreServices').then((module) => ({ default: module.MoreServices })));
 
 type Tab = AppTab;
 type Anniversary = { id: string; icon: string; title: string; date: Date; recurring?: boolean };
@@ -262,16 +267,18 @@ function App() {
 
   const AppHeader = ({ title }: { title?: string }) => <SharedAppHeader title={title} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />;
   return <>
-    <div className="app-shell"><main>
+    <div className="app-shell"><main><Suspense fallback={<div className="page auth-loading" role="status" aria-live="polite"><div className="loading-mark" /><p>화면을 불러오는 중이에요</p></div>}>
       {tab === 'home' && <HomePage uid={user.uid} profile={profile} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} memories={memories} messages={messages} onNavigate={navigateTab} onOpenMemory={(id) => { setMemoryDraft(undefined); setMemoryToOpen(id); setRequestedHubTab('album'); navigateTab('memories'); }} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} connection={connection} />}
       {tab === 'memories' && <MemoriesPage requestedTab={requestedHubTab} Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={(place) => { setLocationFocus(place); setRequestedLocationTab('map'); navigateTab('location'); }} />}
       {tab === 'location' && <LocationPage requestedTab={requestedLocationTab} Header={AppHeader} connection={connection} focusPlace={locationFocus} onClearFocus={() => setLocationFocus(undefined)} onCreateMemory={(draft) => { setMemoryToOpen(undefined); setMemoryDraft(draft); setRequestedHubTab('album'); navigateTab('memories'); }} onActivity={(title, detail) => addActivity({ actor: 'me', kind: 'location', title, detail })} />}
       {tab === 'anniversary' && <AnniversaryPage connected={Boolean(connection)} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} onSaveStartDate={saveStartDate} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'more' && <MorePage onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} onNavigate={navigateMoreTarget} />}
-    </main><BottomNav tab={tab} onNavigate={navigateTab} /></div>
-    {settingsOpen && <AccountSettings user={user} profile={profile} onProfileChange={handleProfileChange} onClose={() => setSettingsOpen(false)} />}
-    {notificationsOpen && <NotificationPanel items={notifications} onClose={() => setNotificationsOpen(false)} onReadAll={() => { const next = markAllNotificationsRead(notifications); setNotifications(next); saveNotifications(user.uid, next); }} onClear={clearNotifications} />}
+    </Suspense></main><BottomNav tab={tab} onNavigate={navigateTab} /></div>
+    <Suspense fallback={null}>
+      {settingsOpen && <AccountSettings user={user} profile={profile} onProfileChange={handleProfileChange} onClose={() => setSettingsOpen(false)} />}
+      {notificationsOpen && <NotificationPanel items={notifications} onClose={() => setNotificationsOpen(false)} onReadAll={() => { const next = markAllNotificationsRead(notifications); setNotifications(next); saveNotifications(user.uid, next); }} onClear={clearNotifications} />}
+    </Suspense>
   </>;
 }
 

@@ -2,7 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import Root from './Root';
 import { AppCrashBoundary, installGlobalCrashDiagnostics } from './AppCrashBoundary';
-import { applySavedRouteAppIcon } from './components/more/MoreServices';
+import { applySavedRouteAppIcon } from './utils/appIcon';
 import { authPersistenceReady } from './lib/firebase';
 import { hideNativeSplash, initializeNativeApp } from './lib/native';
 import { preparePersistentBackup, startPersistentBackup } from './lib/persistentBackup';

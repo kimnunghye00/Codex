@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import App from './App';
-import { AuthFlow, SIGNUP_PENDING_KEY } from './components/auth/AuthFlow';
+import { AuthFlow, SIGNUP_PENDING_KEY, Wordmark } from './components/auth/AuthFlow';
 import { ProfileSetup } from './components/auth/ProfileSetup';
 import { auth } from './lib/firebase';
 import { loadCloudProfile } from './lib/coupleData';
 import { loadProfile, saveProfile, type UserProfile } from './utils/profile';
+
+const App = lazy(() => import('./App'));
 
 export default function Root() {
   const [user, setUser] = useState<User | null>(auth.currentUser);
@@ -55,5 +56,5 @@ export default function Root() {
     return <ProfileSetup user={user} onComplete={(nextProfile) => setProfile(nextProfile)} />;
   }
 
-  return <App />;
+  return <Suspense fallback={<div className="app-shell auth-loading" role="status" aria-live="polite"><Wordmark /><div className="loading-mark" /><p>ROUTE를 불러오는 중이에요</p></div>}><App /></Suspense>;
 }
