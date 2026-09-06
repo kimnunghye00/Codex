@@ -1,24 +1,28 @@
 import { CalendarClock, Gift, ImagePlus, Laugh, Plus, Send, X } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Message } from '../../types';
 
 const QUICK = ['기분 좋아 😊', '배고파 🍚', '심심해 🫠', '우울해 🥺', '놀아줘 ❤️'];
 const MAX_CHAT_PHOTO_SELECTION = 100;
 
+type PendingPhoto = {
+  id: string;
+  file: File;
+  previewUrl: string;
+};
+
 /**
- * ChatPage historically used File.size as a conservative 9/25MB guard before
- * Firebase Storage uploads were introduced. Storage now owns the media bytes,
- * so a selected image must not be rejected just because a modern phone created
- * a large original. Shadowing the readonly Web File size accessor removes that
- * legacy UI guard without altering the underlying Blob bytes: FileReader and
- * Firebase still receive the complete original file.
+ * ChatPage still contains old conservative size checks from before Firebase
+ * Storage was introduced. Shadowing File.size only bypasses those legacy UI
+ * checks; the Blob bytes themselves are unchanged and are still read/uploaded.
  */
 function removeLegacyChatFileSizeGuard(file: File) {
   try {
     Object.defineProperty(file, 'size', { configurable: true, value: 0 });
   } catch {
-    // WebView File objects are normally extensible. If a future engine is not,
-    // keep the original object and let the normal media error path handle it.
+    // A future WebView may expose a non-extensible File object. In that case
+    // the normal media error path remains the fallback.
   }
   return file;
 }
@@ -31,41 +35,119 @@ export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onIma
   const fileRef = useRef<HTMLInputElement>(null);
   const gifRef = useRef<HTMLInputElement>(null);
   const composingRef = useRef(false);
+  const pendingRef = useRef<PendingPhoto[]>([]);
   const [extras, setExtras] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
-  return <div className="composer-area">
-    {reply && <div className="composer-reply"><div><b>{reply.sender === 'partner' ? `${partnerName}에게 답장` : '내 메시지에 답장'}</b><span>{reply.type === 'image' || reply.type === 'gallery' || reply.type === 'gif' ? '미디어' : reply.text}</span></div><button onClick={onCancelReply} aria-label="답장 취소"><X size={17} /></button></div>}
-    {quickOpen && <div className="quick-contact-strip">{QUICK.map((item) => <button key={item} type="button" onClick={() => { onQuick(item); setQuickOpen(false); }}>{item}</button>)}</div>}
-    {extras && <div className="composer-extra-row">
-      <button type="button" onClick={() => fileRef.current?.click()}><ImagePlus size={18} /><span>사진</span></button>
-      <button type="button" onClick={() => gifRef.current?.click()}><Laugh size={18} /><span>움짤</span></button>
-      <button type="button" onClick={() => { setQuickOpen((value) => !value); }}><span className="extra-heart">♥</span><span>빠른 연락</span></button>
-      <button type="button" onClick={onSchedule}><CalendarClock size={18} /><span>예약</span></button>
-      <button type="button" onClick={onGift}><Gift size={18} /><span>선물</span></button>
-    </div>}
-    <div className="composer">
-      <input ref={fileRef} className="file-input" type="file" accept="image/*" multiple aria-label={`사진 선택, 최대 ${MAX_CHAT_PHOTO_SELECTION}장`} onChange={(event) => { const files = Array.from(event.target.files ?? []).map(removeLegacyChatFileSizeGuard); if (files.length) onImages(files); event.target.value = ''; }} />
-      <input ref={gifRef} className="file-input" type="file" accept="image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (file) onGif(removeLegacyChatFileSizeGuard(file)); event.target.value = ''; }} />
-      <button type="button" onClick={() => setExtras((value) => !value)} aria-label="추가 기능"><Plus size={21} /></button>
-      <textarea
-        rows={1}
-        value={draft}
-        onChange={(event) => onDraft(event.target.value)}
-        onCompositionStart={() => { composingRef.current = true; }}
-        onCompositionEnd={(event) => { composingRef.current = false; onDraft(event.currentTarget.value); }}
-        onKeyDown={(event) => {
-          const nativeEvent = event.nativeEvent as KeyboardEvent;
-          if (event.key === 'Enter' && !event.shiftKey && !composingRef.current && !nativeEvent.isComposing) {
-            event.preventDefault();
-            onSend();
-          }
-        }}
-        enterKeyHint="send"
-        autoCorrect="on"
-        spellCheck
-        placeholder="메시지를 입력하세요..."
-      />
-      <button type="button" className={`send ${draft.trim() ? 'ready' : ''}`} disabled={!draft.trim()} onClick={onSend} aria-label="전송"><Send size={18} /></button>
+  const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
+
+  useEffect(() => {
+    pendingRef.current = pendingPhotos;
+  }, [pendingPhotos]);
+
+  useEffect(() => () => {
+    pendingRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+  }, []);
+
+  const clearPendingPhotos = () => {
+    pendingRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    pendingRef.current = [];
+    setPendingPhotos([]);
+  };
+
+  const addPendingPhotos = (rawFiles: File[]) => {
+    if (!rawFiles.length) return;
+    const remaining = Math.max(0, MAX_CHAT_PHOTO_SELECTION - pendingRef.current.length);
+    if (!remaining) return;
+    const next = rawFiles.slice(0, remaining).map((rawFile, index) => {
+      const file = removeLegacyChatFileSizeGuard(rawFile);
+      return {
+        id: `${rawFile.name}-${rawFile.lastModified}-${Date.now()}-${index}`,
+        file,
+        previewUrl: URL.createObjectURL(rawFile),
+      };
+    });
+    setPendingPhotos((current) => [...current, ...next]);
+    setExtras(false);
+    setQuickOpen(false);
+  };
+
+  const removePendingPhoto = (id: string) => {
+    setPendingPhotos((current) => {
+      const removed = current.find((item) => item.id === id);
+      if (removed) URL.revokeObjectURL(removed.previewUrl);
+      return current.filter((item) => item.id !== id);
+    });
+  };
+
+  const sendPendingPhotos = () => {
+    const files = pendingRef.current.map((item) => item.file);
+    if (!files.length) return;
+    pendingRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    pendingRef.current = [];
+    setPendingPhotos([]);
+    onImages(files);
+  };
+
+  const preview = pendingPhotos.length > 0 && typeof document !== 'undefined'
+    ? createPortal(
+      <div className="route-photo-send-preview" role="dialog" aria-modal="true" aria-label={`사진 ${pendingPhotos.length}장 전송 미리보기`}>
+        <header className="route-photo-send-head">
+          <button type="button" aria-label="사진 선택 취소" onClick={clearPendingPhotos}><X /></button>
+          <div><strong>사진 보내기</strong><span>{pendingPhotos.length} / {MAX_CHAT_PHOTO_SELECTION}장 선택</span></div>
+          <button type="button" className="route-photo-add-more" onClick={() => fileRef.current?.click()}><Plus size={18} /> 추가</button>
+        </header>
+        <div className="route-photo-send-grid">
+          {pendingPhotos.map((item, index) => <figure key={item.id}>
+            <img src={item.previewUrl} alt={`전송할 사진 ${index + 1}`} />
+            <span className="route-photo-order">{index + 1}</span>
+            <button type="button" className="route-photo-remove" aria-label={`${index + 1}번째 사진 선택 해제`} onClick={() => removePendingPhoto(item.id)}><X size={16} /></button>
+          </figure>)}
+        </div>
+        <footer className="route-photo-send-footer">
+          <div><b>{pendingPhotos.length}장</b><span>한 묶음으로 전송돼요</span></div>
+          <button type="button" className="route-photo-send-confirm" onClick={sendPendingPhotos}><Send size={18} /> {pendingPhotos.length}장 보내기</button>
+        </footer>
+      </div>,
+      document.body,
+    )
+    : null;
+
+  return <>
+    <div className="composer-area">
+      {reply && <div className="composer-reply"><div><b>{reply.sender === 'partner' ? `${partnerName}에게 답장` : '내 메시지에 답장'}</b><span>{reply.type === 'image' || reply.type === 'gallery' || reply.type === 'gif' ? '미디어' : reply.text}</span></div><button onClick={onCancelReply} aria-label="답장 취소"><X size={17} /></button></div>}
+      {quickOpen && <div className="quick-contact-strip">{QUICK.map((item) => <button key={item} type="button" onClick={() => { onQuick(item); setQuickOpen(false); }}>{item}</button>)}</div>}
+      {extras && <div className="composer-extra-row">
+        <button type="button" onClick={() => fileRef.current?.click()}><ImagePlus size={18} /><span>사진</span></button>
+        <button type="button" onClick={() => gifRef.current?.click()}><Laugh size={18} /><span>움짤</span></button>
+        <button type="button" onClick={() => { setQuickOpen((value) => !value); }}><span className="extra-heart">♥</span><span>빠른 연락</span></button>
+        <button type="button" onClick={onSchedule}><CalendarClock size={18} /><span>예약</span></button>
+        <button type="button" onClick={onGift}><Gift size={18} /><span>선물</span></button>
+      </div>}
+      <div className="composer">
+        <input ref={fileRef} className="file-input" type="file" accept="image/*" multiple aria-label={`사진 선택, 최대 ${MAX_CHAT_PHOTO_SELECTION}장`} onChange={(event) => { addPendingPhotos(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
+        <input ref={gifRef} className="file-input" type="file" accept="image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (file) onGif(removeLegacyChatFileSizeGuard(file)); event.target.value = ''; }} />
+        <button type="button" onClick={() => setExtras((value) => !value)} aria-label="추가 기능"><Plus size={21} /></button>
+        <textarea
+          rows={1}
+          value={draft}
+          onChange={(event) => onDraft(event.target.value)}
+          onCompositionStart={() => { composingRef.current = true; }}
+          onCompositionEnd={(event) => { composingRef.current = false; onDraft(event.currentTarget.value); }}
+          onKeyDown={(event) => {
+            const nativeEvent = event.nativeEvent as KeyboardEvent;
+            if (event.key === 'Enter' && !event.shiftKey && !composingRef.current && !nativeEvent.isComposing) {
+              event.preventDefault();
+              onSend();
+            }
+          }}
+          enterKeyHint="send"
+          autoCorrect="on"
+          spellCheck
+          placeholder="메시지를 입력하세요..."
+        />
+        <button type="button" className={`send ${draft.trim() ? 'ready' : ''}`} disabled={!draft.trim()} onClick={onSend} aria-label="전송"><Send size={18} /></button>
+      </div>
     </div>
-  </div>;
+    {preview}
+  </>;
 }
