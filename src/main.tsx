@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import Root from './Root';
+import { RouteEnhancementLayer } from './RouteEnhancementLayer';
 import { AppCrashBoundary, installGlobalCrashDiagnostics } from './AppCrashBoundary';
 import { authPersistenceReady } from './lib/firebase';
 import { initializeNativeApp } from './lib/native';
@@ -62,11 +63,9 @@ import './route-themes';
 import './home-map-overlay';
 import './native-back-ui';
 import './app-icon-native';
-import './profile-enhance';
 import './couple-date-enhance';
 import './settings-hub';
 import './mobile-polish-v3';
-import './more-enhance';
 // Real-device post-deploy polish must win over the phase-4/5 runtime CSS loaded above.
 import './route-post-deploy-polish-v20.css';
 // App-wide stability layer now owns shared gutters, header/nav geometry and overflow guards.
@@ -131,7 +130,10 @@ async function bootstrap() {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <AppCrashBoundary>
-        <Root />
+        <>
+          <Root />
+          <RouteEnhancementLayer />
+        </>
       </AppCrashBoundary>
     </StrictMode>,
   );
