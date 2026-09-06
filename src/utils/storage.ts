@@ -28,6 +28,25 @@ function save<T>(key: string, value: T) {
   }
 }
 
+function isEphemeralMediaUrl(value?: string) {
+  return Boolean(value && (value.startsWith('data:') || value.startsWith('blob:')));
+}
+
+/**
+ * Base64/blob chat media can be several megabytes per photo. Persisting those
+ * strings in localStorage makes every later message write stringify and copy the
+ * full image payload again, which can freeze Android WebView after a gallery is
+ * sent. Firebase/HTTP media URLs remain persistent; session-only media stays in
+ * React state but is intentionally excluded from the local cache.
+ */
+function sanitizeMessagesForStorage(messages: Message[]) {
+  return messages.filter((message) => {
+    if ((message.type === 'image' || message.type === 'gif') && isEphemeralMediaUrl(message.imageUrl)) return false;
+    if (message.type === 'gallery' && message.imageUrls?.some(isEphemeralMediaUrl)) return false;
+    return true;
+  });
+}
+
 export function loadDeletedMemories(): MemoryDeletionMap {
   return load<MemoryDeletionMap>(MEMORY_DELETED_KEY, {});
 }
@@ -68,9 +87,15 @@ function reconcileDeletionMap(previous: Memory[], next: Memory[]) {
 }
 
 // Real-couple testing starts with a clean slate. Old MELUNI/SAI demo keys are intentionally ignored.
-export const loadMessages = (_fallback: Message[]) => load<Message[]>(MESSAGE_KEY, []);
+export const loadMessages = (_fallback: Message[]) => {
+  const stored = load<Message[]>(MESSAGE_KEY, []);
+  const safe = sanitizeMessagesForStorage(stored);
+  // Migrate away any previously cached base64 galleries on first launch after this update.
+  if (safe.length !== stored.length) save(MESSAGE_KEY, safe);
+  return safe;
+};
 export const saveMessages = (messages: Message[]) => {
-  if (save(MESSAGE_KEY, messages)) signalPersistentStateChange();
+  if (save(MESSAGE_KEY, sanitizeMessagesForStorage(messages))) signalPersistentStateChange();
 };
 export const loadMemories = (_fallback: Memory[]) => {
   const deleted = loadDeletedMemories();
