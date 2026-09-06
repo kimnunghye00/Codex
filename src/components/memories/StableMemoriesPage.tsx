@@ -1,18 +1,8 @@
-import { useEffect } from 'react';
 import type React from 'react';
 import type { Memory, MemoryDraft } from '../../types';
-import { MemoriesPage } from './MemoriesPage';
+import { MemoriesPage, type HubTabId } from './MemoriesPage';
 
-export type HubTabId = 'album' | 'anniversary' | 'record' | 'tier' | 'schedule' | 'date';
-
-const HUB_TAB_INDEX: Record<HubTabId, number> = {
-  album: 0,
-  anniversary: 1,
-  record: 2,
-  tier: 3,
-  schedule: 4,
-  date: 5,
-};
+export type { HubTabId } from './MemoriesPage';
 
 export function StableMemoriesPage({ requestedTab, ...props }: {
   requestedTab?: HubTabId;
@@ -25,11 +15,5 @@ export function StableMemoriesPage({ requestedTab, ...props }: {
   onClearInitialDraft: () => void;
   onOpenLocation?: (place: string) => void;
 }) {
-  useEffect(() => {
-    if (!requestedTab) return;
-    const buttons = document.querySelectorAll<HTMLButtonElement>('.memories-page .hub-tabs button');
-    buttons[HUB_TAB_INDEX[requestedTab]]?.click();
-  }, [requestedTab]);
-
-  return <MemoriesPage {...props} />;
+  return <MemoriesPage requestedTab={requestedTab} {...props} />;
 }
