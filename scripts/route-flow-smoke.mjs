@@ -22,7 +22,10 @@ const requiredFiles = [
   'src/main.tsx',
   'src/recovery-runtime.ts',
   'src/route-runtime-stability-v19.css',
-  'src/route-release-stability-v24.css',
+  'src/config/releaseFlags.ts',
+  'src/utils/accountIsolationPolicy.ts',
+  'src/utils/coupleConnectSession.ts',
+  'src/utils/messageId.ts',
   'src/lib/coupleConnection.ts',
   'src/components/couple/CoupleConnect.tsx',
   'src/components/navigation/AppHeader.tsx',
@@ -50,6 +53,7 @@ const obsoleteFiles = [
   'src/route-web-home-v11.css',
   'src/route-mobile-home-v13.css',
   'src/route-mobile-home-fit-v14.css',
+  'src/route-release-stability-v24.css',
 ];
 
 for (const file of obsoleteFiles) {
@@ -66,9 +70,12 @@ const app = read('src/App.tsx');
 const root = read('src/Root.tsx');
 const main = read('src/main.tsx');
 const recovery = read('src/recovery-runtime.ts');
+const accountPolicy = read('src/utils/accountIsolationPolicy.ts');
 const coupleConnection = read('src/lib/coupleConnection.ts');
 const coupleConnect = read('src/components/couple/CoupleConnect.tsx');
-const releaseGuard = read('src/route-release-stability-v24.css');
+const coupleSession = read('src/utils/coupleConnectSession.ts');
+const releaseFlags = read('src/config/releaseFlags.ts');
+const messageId = read('src/utils/messageId.ts');
 const header = read('src/components/navigation/AppHeader.tsx');
 const bottomNav = read('src/components/navigation/BottomNav.tsx');
 const more = read('src/components/more/MoreServices.tsx');
@@ -96,9 +103,10 @@ check('App uses realtime couple subscription', app.includes('subscribeRealCouple
 
 check('couple connection exposes realtime user subscription', coupleConnection.includes('export function subscribeRealCoupleConnection') && coupleConnection.includes('onSnapshot(userRef'));
 check('couple invite exposes realtime state subscription', coupleConnection.includes('export function subscribeCoupleInviteState') && coupleConnection.includes("'coupleInvites'"));
-check('owner invite finalize returns a connection object', coupleConnection.includes('partnerProfile: result.partnerName') && !coupleConnection.includes('return null;\n}\n\nexport async function completeJoinerConnection'));
+check('owner invite finalize returns a connection object', coupleConnection.includes('partnerProfile: result.partnerName') && !coupleConnection.includes('if (!result?.coupleId || !result.partnerUid) return null;\n  return null;'));
 check('CoupleConnect has no interval polling', !coupleConnect.includes('setInterval('));
 check('CoupleConnect consumes realtime invite snapshots', coupleConnect.includes('subscribeCoupleInviteState') && coupleConnect.includes('subscribeRealCoupleConnection'));
+check('pending couple connection is restart-persisted', coupleConnect.includes('persistSession') && coupleConnect.includes('loadPersistedSession') && coupleSession.includes('route.coupleConnect.pending:'));
 
 check('More uses callback navigation', more.includes('onNavigate: (target: MoreNavigationTarget) => void'));
 check('More imports direct page navigation types', more.includes("from '../memories/MemoriesPage'") && more.includes("from '../location/LocationPage'"));
@@ -111,11 +119,8 @@ check('chat screen title is 대화', chat.includes('<Header title="대화"'));
 check('chat realtime subscription is present', chat.includes('subscribeCoupleMessages'));
 check('chat media upload path is present', chat.includes('uploadChatMedia'));
 check('chat composer remains mounted', chat.includes('<ChatComposer'));
-check('unfinished call controls are release-hidden',
-  releaseGuard.includes('aria-label="음성 통화"')
-  && releaseGuard.includes('aria-label="영상 통화"')
-  && releaseGuard.includes('aria-label="화면 공유"')
-  && releaseGuard.includes('display: none'));
+check('chat uses collision-resistant message ids', chat.includes('createMessageId') && messageId.includes('cryptoApi?.getRandomValues') && !chat.includes('Date.now() * 1000'));
+check('unfinished call controls are render-gated', releaseFlags.includes('CALLING_ENABLED = false') && chat.includes('CALLING_ENABLED &&'));
 
 check('memories exposes requested tab state', memories.includes('requestedTab?: HubTabId') && memories.includes('setActiveTab(requestedTab)'));
 check('memories exposes album tab', memories.includes("album: '앨범'"));
@@ -138,14 +143,17 @@ check('account settings keeps couple connection flow', account.includes('<Couple
 check('partner profile is directly integrated', account.includes('<PartnerProfileCard'));
 
 check('single React application root', (main.match(/createRoot\(/g) || []).length === 1);
-check('recovery runtime is loaded directly', main.includes("import './recovery-runtime';"));
+check('runtime recovery is explicitly initialized', main.includes("import { initializeRuntimeRecovery } from './recovery-runtime';"));
+check('account isolation blocks React mount', main.indexOf('await initializeRuntimeRecovery()') > -1 && main.indexOf('await initializeRuntimeRecovery()') < main.indexOf('createRoot('));
 check('runtime recovery styles are loaded directly', main.includes("import './route-runtime-stability-v19.css';"));
-check('phase 12 release guard loads last', main.includes("import './route-release-stability-v24.css';"));
+check('runtime recovery exports an idempotent initializer', recovery.includes('export function initializeRuntimeRecovery()') && recovery.includes('runtimeRecoveryPromise'));
+check('runtime recovery has no import-time installer', !recovery.includes('installRuntimeRecovery();'));
+check('account isolation policy is used', recovery.includes('decideAccountIsolation') && accountPolicy.includes("'reset-orphan'") && accountPolicy.includes("'reset-switch'"));
+check('runtime recovery rejects unowned legacy shared cache', recovery.includes('hasSharedLocalCache') && recovery.includes("action === 'reset-orphan'"));
 check('obsolete appearance wrapper is not imported', !main.includes('appearance-stability'));
 check('unused ai test stylesheet is not imported', !main.includes('ai-test.css'));
 check('runtime recovery still handles connectivity', recovery.includes("window.addEventListener('offline'") && recovery.includes("window.addEventListener('online'"));
-check('runtime recovery keeps account cache isolation', recovery.includes('prepareAccountLocalCache') && recovery.includes('clearNativeFirestorePersistence'));
-check('runtime recovery rejects unowned legacy shared cache', recovery.includes('hasSharedLocalCache') && recovery.includes('orphanedLegacyCache'));
+check('runtime recovery keeps Firestore cache isolation', recovery.includes('clearNativeFirestorePersistence'));
 check('legacy enhancement layer is gone', !main.includes('RouteEnhancementLayer'));
 check('legacy more enhancer is gone', !main.includes('more-enhance'));
 check('legacy profile enhancer is gone', !main.includes('profile-enhance'));
