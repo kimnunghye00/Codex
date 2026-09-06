@@ -1,12 +1,13 @@
 import { Bookmark, ChevronLeft, ChevronRight, CornerUpLeft, Image as ImageIcon, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import '../../route-chat-gallery-v21.css';
+import '../../route-chat-hotfix-v24.css';
 import type { Message } from '../../types';
 import { messageTime } from '../../utils/dates';
 import { ReactionPicker } from './ReactionPicker';
 
-const MAX_INLINE_GALLERY_ITEMS = 18;
+const MAX_INLINE_GALLERY_ITEMS = 4;
 const SWIPE_THRESHOLD = 42;
 
 function replyLabel(message: Message) {
@@ -59,11 +60,11 @@ function GalleryViewer({ urls, initialIndex, onClose }: { urls: string[]; initia
         </header>
         <div className="route-gallery-viewer-media">
           {urls.length > 1 && <button type="button" className="route-gallery-arrow route-gallery-prev" aria-label="이전 사진" onClick={() => move(-1)}><ChevronLeft /></button>}
-          <img src={urls[index]} alt={`묶음 사진 ${index + 1} / ${urls.length}`} />
+          <img src={urls[index]} alt={`묶음 사진 ${index + 1} / ${urls.length}`} decoding="async" />
           {urls.length > 1 && <button type="button" className="route-gallery-arrow route-gallery-next" aria-label="다음 사진" onClick={() => move(1)}><ChevronRight /></button>}
         </div>
         {urls.length > 1 && <div className="route-gallery-thumbs" aria-label="묶음 사진 목록">
-          {urls.map((url, thumbIndex) => <button key={`${url.slice(0, 32)}-${thumbIndex}`} type="button" className={thumbIndex === index ? 'active' : ''} onClick={() => setIndex(thumbIndex)} aria-label={`${thumbIndex + 1}번째 사진`}><img src={url} alt="" /></button>)}
+          {urls.map((url, thumbIndex) => <button key={`${url.slice(0, 32)}-${thumbIndex}`} type="button" className={thumbIndex === index ? 'active' : ''} onClick={() => setIndex(thumbIndex)} aria-label={`${thumbIndex + 1}번째 사진`}><img src={url} alt="" loading="lazy" decoding="async" /></button>)}
         </div>}
         <div className="route-gallery-swipe-hint">좌우로 밀어서 사진을 넘길 수 있어요</div>
       </section>
@@ -72,11 +73,30 @@ function GalleryViewer({ urls, initialIndex, onClose }: { urls: string[]; initia
   );
 }
 
-export function ChatBubble({ message, reply, partnerName, partnerInitial, active, highlighted, onAction, onReact, onReply, onSave, onImage, onJump }: {
+type ChatBubbleProps = {
   message: Message; reply?: Message; partnerName: string; partnerInitial: string; active: boolean; highlighted: boolean;
   onAction: () => void; onReact: (emoji: string) => void; onReply: () => void;
   onSave: () => void; onImage: (url: string) => void; onJump: (id: number) => void;
-}) {
+};
+
+function sameMessage(a?: Message, b?: Message) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return a.id === b.id
+    && a.sender === b.sender
+    && a.type === b.type
+    && a.text === b.text
+    && a.imageUrl === b.imageUrl
+    && a.imageUrls === b.imageUrls
+    && a.timestamp === b.timestamp
+    && a.read === b.read
+    && a.replyTo === b.replyTo
+    && a.reactions === b.reactions
+    && a.saved === b.saved
+    && a.scheduledFor === b.scheduledFor;
+}
+
+function ChatBubbleView({ message, reply, partnerName, partnerInitial, active, highlighted, onAction, onReact, onReply, onSave, onImage, onJump }: ChatBubbleProps) {
   const [galleryIndex, setGalleryIndex] = useState<number>();
   const mine = message.sender === 'me';
   const mediaBubble = message.type === 'image' || message.type === 'gif';
@@ -95,11 +115,11 @@ export function ChatBubble({ message, reply, partnerName, partnerInitial, active
         {active && <><ReactionPicker onSelect={onReact} /><div className="message-actions"><button onClick={onReply}><CornerUpLeft size={14} />답장</button><button onClick={onSave}>{message.saved ? <Bookmark size={14} fill="currentColor" /> : <Bookmark size={14} />} {saveLabel}</button></div></>}
         <button type="button" className={`bubble ${message.type === 'gallery' ? 'gallery-bubble' : ''} ${mediaBubble ? 'media-bubble' : ''}`} onClick={(event) => { event.stopPropagation(); onAction(); }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); onAction(); }}>
           {reply && <span className="reply-preview" onClick={(event) => { event.stopPropagation(); onJump(reply.id); }}><b>{reply.sender === 'me' ? '나' : partnerName}</b>{reply.type !== 'text' ? <><ImageIcon size={12} /> {replyLabel(reply)}</> : replyLabel(reply)}</span>}
-          {message.type === 'image' && message.imageUrl && <img className="chat-image" src={message.imageUrl} alt="채팅으로 보낸 사진" onClick={(event) => { event.stopPropagation(); onImage(message.imageUrl!); }} />}
-          {message.type === 'gif' && message.imageUrl && <img className="chat-image chat-gif" src={message.imageUrl} alt="채팅으로 보낸 움짤" onClick={(event) => { event.stopPropagation(); onImage(message.imageUrl!); }} />}
+          {message.type === 'image' && message.imageUrl && <img className="chat-image" src={message.imageUrl} alt="채팅으로 보낸 사진" loading="lazy" decoding="async" onClick={(event) => { event.stopPropagation(); onImage(message.imageUrl!); }} />}
+          {message.type === 'gif' && message.imageUrl && <img className="chat-image chat-gif" src={message.imageUrl} alt="채팅으로 보낸 움짤" loading="lazy" decoding="async" onClick={(event) => { event.stopPropagation(); onImage(message.imageUrl!); }} />}
           {message.type === 'gallery' && !!galleryUrls.length && <span className="chat-gallery-bundle">
             <span className="chat-gallery-total">사진 {galleryUrls.length}장</span>
-            <span className="chat-gallery route-gallery-grid">{visibleGalleryUrls.map((url, index) => <span key={`${url.slice(0, 24)}-${index}`} className="chat-gallery-item"><img src={url} alt={`묶음 사진 ${index + 1} / ${galleryUrls.length}`} onClick={(event) => { event.stopPropagation(); setGalleryIndex(index); }} />{index === visibleGalleryUrls.length - 1 && hiddenGalleryCount > 0 && <em>+{hiddenGalleryCount}</em>}</span>)}</span>
+            <span className="chat-gallery route-gallery-grid">{visibleGalleryUrls.map((url, index) => <span key={`${url.slice(0, 24)}-${index}`} className="chat-gallery-item"><img src={url} alt={`묶음 사진 ${index + 1} / ${galleryUrls.length}`} loading="lazy" decoding="async" onClick={(event) => { event.stopPropagation(); setGalleryIndex(index); }} />{index === visibleGalleryUrls.length - 1 && hiddenGalleryCount > 0 && <em>+{hiddenGalleryCount}</em>}</span>)}</span>
           </span>}
           {message.type === 'text' && <span className="message-text">{message.text}</span>}
         </button>
@@ -110,3 +130,12 @@ export function ChatBubble({ message, reply, partnerName, partnerInitial, active
     {galleryIndex != null && <GalleryViewer urls={galleryUrls} initialIndex={galleryIndex} onClose={() => setGalleryIndex(undefined)} />}
   </>;
 }
+
+export const ChatBubble = memo(ChatBubbleView, (previous, next) => (
+  sameMessage(previous.message, next.message)
+  && sameMessage(previous.reply, next.reply)
+  && previous.partnerName === next.partnerName
+  && previous.partnerInitial === next.partnerInitial
+  && previous.active === next.active
+  && previous.highlighted === next.highlighted
+));
