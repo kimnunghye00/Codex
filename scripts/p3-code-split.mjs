@@ -57,6 +57,7 @@ const rootPath = 'src/Root.tsx';
 let root = fs.readFileSync(rootPath, 'utf8');
 root = replaceOnce(root, `import { useEffect, useState } from 'react';`, `import { lazy, Suspense, useEffect, useState } from 'react';`, 'Root React import');
 root = replaceOnce(root, `import App from './App';\n`, ``, 'Root App import');
+root = replaceOnce(root, `import { AuthFlow, SIGNUP_PENDING_KEY } from './components/auth/AuthFlow';`, `import { AuthFlow, SIGNUP_PENDING_KEY, Wordmark } from './components/auth/AuthFlow';`, 'Root Wordmark import');
 root = replaceOnce(root, `import { loadProfile, saveProfile, type UserProfile } from './utils/profile';\n`, `import { loadProfile, saveProfile, type UserProfile } from './utils/profile';\n\nconst App = lazy(() => import('./App'));\n`, 'Root lazy App');
 root = replaceOnce(root, `  if (!user) return <App />;`, `  if (!user) return <AuthFlow />;`, 'Root signed-out route');
 root = replaceOnce(root, `  return <App />;`, `  return <Suspense fallback={<div className="app-shell auth-loading" role="status" aria-live="polite"><Wordmark /><div className="loading-mark" /><p>ROUTE를 불러오는 중이에요</p></div>}><App /></Suspense>;`, 'Root App Suspense');
