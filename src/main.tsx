@@ -5,7 +5,8 @@ import { AppCrashBoundary, installGlobalCrashDiagnostics } from './AppCrashBound
 import { applySavedRouteAppIcon } from './utils/appIcon';
 import { authPersistenceReady } from './lib/firebase';
 import { hideNativeSplash, initializeNativeApp } from './lib/native';
-import { preparePersistentBackup, startPersistentBackup } from './lib/persistentBackup';
+import { preparePersistentBackup } from './lib/persistentBackup';
+import { startEfficientPersistentBackup } from './lib/persistentBackupEfficient';
 import { initializeCrossDeviceAlbumSync } from './lib/crossDeviceAlbumSync';
 import { initializeRoutePwa } from './pwa';
 import { initializeRuntimeRecovery } from './recovery-runtime';
@@ -33,31 +34,19 @@ import './close-standard.css';
 import './mobile-apk-fixes.css';
 import './mobile-polish-v3.css';
 import './crash-recovery.css';
-// Contrast safety first, then runtime appearance/layout overrides.
 import './route-theme-accessibility.css';
 import './system-dark.css';
 import './home-brand-polish-v5.css';
 import './layout-polish-v4.css';
-// Final product tokens and home composition must win over legacy feature CSS.
 import './route-design-system-v6.css';
-// Final non-home product polish: Memories, Chat, Location and More.
 import './route-product-polish-v7.css';
-// Last-mile responsive QA: clipping, Korean text, touch targets and safe areas.
 import './route-final-qa-v8.css';
-// Cross-feature interaction feedback must remain visible above all legacy layers.
 import './route-feature-flow-v9.css';
-// Place-centered story view connects visits, memories, dates and schedules.
 import './route-place-timeline-v10.css';
 import './web-desktop.css';
-// Desktop browsers present the app inside a real phone-sized viewport.
-// The home itself intentionally keeps the established 58/42 split layout
-// from home-couple-layout.css, matching the approved reference screen.
 import './route-web-phone-preview-v12.css';
-// Native-only phase-1 stability guards intentionally load after all visual layers.
 import './route-stability-v15.css';
-// Phase-2 chat/media fixes must win over legacy bubble sizing and backgrounds.
 import './route-chat-stability-v16.css';
-// Network/recovery feedback is loaded directly; the obsolete appearance wrapper is gone.
 import './route-runtime-stability-v19.css';
 
 import './input-ime-stability';
@@ -68,9 +57,7 @@ import './app-icon-native';
 import './couple-date-enhance';
 import './settings-hub';
 import './mobile-polish-v3';
-// Real-device post-deploy polish must win over the phase-4/5 runtime CSS loaded above.
 import './route-post-deploy-polish-v20.css';
-// App-wide stability layer owns shared gutters, header/nav geometry and overflow guards.
 import './route-ui-stability-v23.css';
 
 const DESKTOP_PREVIEW_PARAM = 'routeMobilePreview';
@@ -195,18 +182,27 @@ function waitForFirstPaint() {
   });
 }
 
+function startDeferredRuntimeServices() {
+  const start = () => {
+    initializeRoutePwa();
+    startEfficientPersistentBackup();
+    initializeCrossDeviceAlbumSync();
+  };
+
+  if ('requestIdleCallback' in window) {
+    window.requestIdleCallback(start, { timeout: 1200 });
+    return;
+  }
+  window.setTimeout(start, 0);
+}
+
 async function bootstrap() {
   installGlobalCrashDiagnostics();
   installPersistentStorageObserver();
   applySavedRouteAppIcon();
 
-  // On desktop web, show the exact responsive mobile app instead of stretching
-  // the layout into a tablet/desktop dashboard. The iframe is same-origin, so
-  // auth and local app data remain shared with the normal web app.
   if (mountDesktopPhonePreview()) return;
 
-  // If Firebase recovery takes longer than expected, this shell is already
-  // present when the native splash fail-safe disappears, preventing a white flash.
   mountBootstrapShell();
   const splashFailsafe = window.setTimeout(() => {
     void hideNativeSplash();
@@ -215,16 +211,11 @@ async function bootstrap() {
   try {
     await initializeNativeApp();
     await authPersistenceReady;
-
-    // Account isolation is a hard bootstrap barrier. React cannot read global
-    // message/memory caches until ownership is verified or stale caches are reset.
     await initializeRuntimeRecovery();
-    initializeRoutePwa();
 
-    // Restore durable Firebase records before React reads local caches.
+    // Restore durable records before React reads local caches. Background sync,
+    // periodic safety work and PWA setup start only after the first app paint.
     await preparePersistentBackup();
-    startPersistentBackup();
-    initializeCrossDeviceAlbumSync();
 
     const root = document.getElementById('root');
     if (!root) throw new Error('ROUTE_ROOT_MISSING');
@@ -237,8 +228,8 @@ async function bootstrap() {
       </StrictMode>,
     );
 
-    // Do not reveal the WebView until React has had two paint opportunities.
     await waitForFirstPaint();
+    startDeferredRuntimeServices();
   } catch (error) {
     console.error('[ROUTE bootstrap]', error);
     mountBootstrapFailure();
