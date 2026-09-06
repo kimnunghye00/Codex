@@ -22,7 +22,8 @@ import {
   saveNotifications,
   type AppNotification,
 } from './utils/notifications';
-import { ChevronRight, Heart, Image, MapPin, MapPinned, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Heart, Image, MapPin, MapPinned, Plus } from 'lucide-react';
+import './route-chat-room-v26.css';
 
 const ChatPage = lazy(() => import('./components/chat/ChatPage').then((module) => ({ default: module.ChatPage })));
 const MemoriesPage = lazy(() => import('./components/memories/MemoriesPage').then((module) => ({ default: module.MemoriesPage })));
@@ -126,6 +127,14 @@ function formatShortDate(value?: string) {
   return value ? value.replaceAll('-', '.') : '기념일 설정 필요';
 }
 
+function chatPreview(message?: Message) {
+  if (!message) return '아직 대화가 없어요.';
+  if (message.type === 'image') return '사진을 보냈어요.';
+  if (message.type === 'gallery') return `사진 ${message.imageUrls?.length ?? 0}장을 보냈어요.`;
+  if (message.type === 'gif') return '움짤을 보냈어요.';
+  return message.text || '메시지';
+}
+
 function App() {
   const [user, setUser] = useState<User | null>(auth.currentUser);
   const [authReady, setAuthReady] = useState(false);
@@ -134,6 +143,7 @@ function App() {
   const [relationshipStartDate, setRelationshipStartDate] = useState<string>();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [chatRoomOpen, setChatRoomOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>(() => auth.currentUser ? loadNotifications(auth.currentUser.uid) : []);
   const [tab, setTab] = useState<Tab>('home');
   const [messages, setMessages] = useState<Message[]>(() => loadMessages(initialMessages));
@@ -152,6 +162,7 @@ function App() {
   const anniversaries = useMemo(() => profile ? buildAnniversaries(profile, connection?.partnerProfile ?? null, relationshipStartDate) : [], [connection?.partnerProfile, profile, relationshipStartDate]);
 
   const navigateTab = (next: Tab) => {
+    if (chatRoomOpen) setChatRoomOpen(false);
     if (next === tab) return;
     tabHistory.current.push(next);
     setTab(next);
@@ -207,6 +218,7 @@ function App() {
       if (event.defaultPrevented) return;
       if (settingsOpen) { event.preventDefault(); setSettingsOpen(false); return; }
       if (notificationsOpen) { event.preventDefault(); setNotificationsOpen(false); return; }
+      if (chatRoomOpen) { event.preventDefault(); setChatRoomOpen(false); return; }
       if (tabHistory.current.length > 1) {
         event.preventDefault();
         tabHistory.current.pop();
@@ -217,7 +229,16 @@ function App() {
     };
     window.addEventListener('route-native-back', handleBack);
     return () => window.removeEventListener('route-native-back', handleBack);
-  }, [notificationsOpen, settingsOpen, tab]);
+  }, [chatRoomOpen, notificationsOpen, settingsOpen, tab]);
+
+  useEffect(() => {
+    if (!chatRoomOpen) return;
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setChatRoomOpen(false);
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [chatRoomOpen]);
 
   useEffect(() => {
     saveMessages(messages);
@@ -265,16 +286,30 @@ function App() {
   if (!user) return <AuthFlow />;
   if (!profile) return <ProfileSetup user={user} onComplete={handleProfileChange} />;
 
+  const partnerName = connection?.partnerProfile ? displayName(connection.partnerProfile) : '상대방';
   const AppHeader = ({ title }: { title?: string }) => <SharedAppHeader title={title} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />;
+  const ChatRoomHeader = () => <header className="chat-room-header">
+    <button className="chat-room-back" type="button" aria-label="대화방 나가기" onClick={() => setChatRoomOpen(false)}><ChevronLeft size={26} /></button>
+    <div className="chat-room-header-copy"><b>{partnerName}</b><span>{connection ? '실시간 대화' : 'ROUTE 대화'}</span></div>
+    <span className="chat-room-header-spacer" aria-hidden="true" />
+  </header>;
+
   return <>
     <div className="app-shell"><main><Suspense fallback={<div className="page auth-loading" role="status" aria-live="polite"><div className="loading-mark" /><p>화면을 불러오는 중이에요</p></div>}>
-      {tab === 'home' && <HomePage uid={user.uid} profile={profile} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} memories={memories} messages={messages} onNavigate={navigateTab} onOpenMemory={(id) => { setMemoryDraft(undefined); setMemoryToOpen(id); setRequestedHubTab('album'); navigateTab('memories'); }} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
-      {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} connection={connection} />}
+      {tab === 'home' && <HomePage uid={user.uid} profile={profile} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} memories={memories} messages={messages} onNavigate={navigateTab} onOpenChat={() => setChatRoomOpen(true)} onOpenMemory={(id) => { setMemoryDraft(undefined); setMemoryToOpen(id); setRequestedHubTab('album'); navigateTab('memories'); }} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
+      {tab === 'chat' && <ChatInboxPage connection={connection} messages={messages} onOpenRoom={() => setChatRoomOpen(true)} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'memories' && <MemoriesPage requestedTab={requestedHubTab} Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={(place) => { setLocationFocus(place); setRequestedLocationTab('map'); navigateTab('location'); }} />}
       {tab === 'location' && <LocationPage requestedTab={requestedLocationTab} Header={AppHeader} connection={connection} focusPlace={locationFocus} onClearFocus={() => setLocationFocus(undefined)} onCreateMemory={(draft) => { setMemoryToOpen(undefined); setMemoryDraft(draft); setRequestedHubTab('album'); navigateTab('memories'); }} onActivity={(title, detail) => addActivity({ actor: 'me', kind: 'location', title, detail })} />}
       {tab === 'anniversary' && <AnniversaryPage connected={Boolean(connection)} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} onSaveStartDate={saveStartDate} onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'more' && <MorePage onSettings={() => setSettingsOpen(true)} onNotifications={openNotifications} unreadCount={unreadCount} onNavigate={navigateMoreTarget} />}
     </Suspense></main><BottomNav tab={tab} onNavigate={navigateTab} /></div>
+
+    {chatRoomOpen && <div className="chat-room-layer" role="dialog" aria-modal="true" aria-label={`${partnerName} 대화방`}>
+      <Suspense fallback={<div className="page auth-loading" role="status"><div className="loading-mark" /><p>대화방을 여는 중이에요</p></div>}>
+        <ChatPage Header={ChatRoomHeader} messages={messages} setMessages={setMessages} connection={connection} />
+      </Suspense>
+    </div>}
+
     <Suspense fallback={null}>
       {settingsOpen && <AccountSettings user={user} profile={profile} onProfileChange={handleProfileChange} onClose={() => setSettingsOpen(false)} />}
       {notificationsOpen && <NotificationPanel items={notifications} onClose={() => setNotificationsOpen(false)} onReadAll={() => { const next = markAllNotificationsRead(notifications); setNotifications(next); saveNotifications(user.uid, next); }} onClear={clearNotifications} />}
@@ -282,7 +317,7 @@ function App() {
   </>;
 }
 
-function HomePage({ uid, profile, connection, relationshipStartDate, coupleDay, anniversaries, memories, messages, onNavigate, onOpenMemory, onSettings, onNotifications, unreadCount }: { uid: string; profile: UserProfile; connection: RealCoupleConnection | null; relationshipStartDate?: string; coupleDay: number; anniversaries: Anniversary[]; memories: Memory[]; messages: Message[]; onNavigate: (tab: Tab) => void; onOpenMemory: (id: number) => void; onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
+function HomePage({ uid, profile, connection, relationshipStartDate, coupleDay, anniversaries, memories, messages, onNavigate, onOpenChat, onOpenMemory, onSettings, onNotifications, unreadCount }: { uid: string; profile: UserProfile; connection: RealCoupleConnection | null; relationshipStartDate?: string; coupleDay: number; anniversaries: Anniversary[]; memories: Memory[]; messages: Message[]; onNavigate: (tab: Tab) => void; onOpenChat: () => void; onOpenMemory: (id: number) => void; onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
   const nearest = anniversaries[0];
   const latestMemory = memories[0];
   const latestPartnerMessage = [...messages].reverse().find((message) => message.sender === 'partner');
@@ -308,8 +343,27 @@ function HomePage({ uid, profile, connection, relationshipStartDate, coupleDay, 
           {nearest ? <div className="home-time-block upcoming-time"><small>다가오는 날</small><strong>D-{daysUntil(nearest.date)}</strong><em>{nearest.title}</em></div> : <div className="home-time-block upcoming-time"><small>다가오는 날</small><strong>-</strong><em>생일과 기념일을 준비하고 있어요</em></div>}
         </button>
         {latestMemory ? <button className="home-photo-card" type="button" onClick={() => onOpenMemory(latestMemory.id)}><img src={latestMemory.images[0]} alt={latestMemory.title} /><span className="home-photo-shade" /><span className="home-photo-copy"><small>최근 추억</small><strong>{latestMemory.title}</strong><em>{latestMemory.date.replaceAll('-', '.')}</em></span><span className="home-photo-heart"><Heart size={16} /></span></button> : <button className="home-photo-card empty" type="button" onClick={() => onNavigate('memories')}><Image size={24} /><span>첫 추억을 남겨보세요</span></button>}
-        <button className="home-chat-card" type="button" onClick={() => onNavigate('chat')}><span className="home-chat-head"><b>최근 대화</b><ChevronRight size={17} /></span><span className="home-chat-preview"><span className="home-chat-avatar">{partnerInitial}</span><span className="home-chat-copy"><b>{partnerName}</b><small>{latestPartnerMessage?.text ?? '아직 대화가 없어요.'}</small></span></span></button>
+        <button className="home-chat-card" type="button" onClick={onOpenChat}><span className="home-chat-head"><b>최근 대화</b><ChevronRight size={17} /></span><span className="home-chat-preview"><span className="home-chat-avatar">{partnerInitial}</span><span className="home-chat-copy"><b>{partnerName}</b><small>{chatPreview(latestPartnerMessage)}</small></span></span></button>
       </div>
+    </div>
+  </div>;
+}
+
+function ChatInboxPage({ connection, messages, onOpenRoom, onSettings, onNotifications, unreadCount }: { connection: RealCoupleConnection | null; messages: Message[]; onOpenRoom: () => void; onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
+  const partnerName = connection?.partnerProfile ? displayName(connection.partnerProfile) : '상대방';
+  const partnerInitial = partnerName.slice(0, 1) || '상';
+  const latest = messages[messages.length - 1];
+  const latestTime = latest ? new Date(latest.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '';
+
+  return <div className="page chat-inbox-page">
+    <SharedAppHeader title="대화" onSettings={onSettings} onNotifications={onNotifications} unreadCount={unreadCount} />
+    <div className="chat-inbox-intro"><small>CONVERSATIONS</small><h1>우리의 대화</h1><p>대화방을 선택하면 별도의 톡방으로 들어가요.</p></div>
+    <div className="chat-room-list">
+      <button className="chat-room-list-item" type="button" onClick={onOpenRoom}>
+        <span className="chat-room-list-avatar">{partnerInitial}</span>
+        <span className="chat-room-list-copy"><span><b>{partnerName}</b>{latestTime && <time>{latestTime}</time>}</span><p>{chatPreview(latest)}</p></span>
+        <ChevronRight size={20} />
+      </button>
     </div>
   </div>;
 }
