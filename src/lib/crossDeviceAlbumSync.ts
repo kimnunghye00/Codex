@@ -14,7 +14,8 @@ const MEMORY_KEY = 'route.memories.v2';
 const LIVE_BACKUP_KEY = 'memories-live';
 const LATEST_BACKUP_KEY = 'memories-latest';
 const DEVICE_KEY = 'route.albumSync.deviceId';
-const DIRTY_KEY = 'route.albumSync.pending';
+const LEGACY_DIRTY_KEY = 'route.albumSync.pending';
+const DIRTY_KEY_PREFIX = 'route.albumSync.pending:';
 const CHANGE_EVENT = 'route-memories-local-change';
 const REMOTE_CHANGE_EVENT = 'route-memories-remote-change';
 
@@ -38,9 +39,11 @@ let activeUid = '';
 let cloudReady = false;
 let localDirty = false;
 let saving = false;
-let saveAgain = false;
+let saveAgainUid = '';
 let saveTimer: number | undefined;
 let unsubscribeCloud: (() => void) | undefined;
+let albumSyncInitialized = false;
+let authGeneration = 0;
 
 function backupRef(uid: string, key: string) {
   return doc(db, 'users', uid, 'backups', key);
@@ -48,6 +51,10 @@ function backupRef(uid: string, key: string) {
 
 function liveRef(uid: string) {
   return backupRef(uid, LIVE_BACKUP_KEY);
+}
+
+function dirtyKey(uid: string) {
+  return `${DIRTY_KEY_PREFIX}${uid}`;
 }
 
 function safeSegment(value: string | number) {
@@ -77,12 +84,27 @@ function mergeDeleted(a: MemoryDeletionMap, b: MemoryDeletionMap) {
   return merged;
 }
 
-function setDirty(value: boolean) {
-  localDirty = value;
+function loadDirty(uid: string) {
   try {
-    if (value) localStorage.setItem(DIRTY_KEY, '1');
-    else localStorage.removeItem(DIRTY_KEY);
-  } catch { /* localDirty still protects this session */ }
+    const scoped = localStorage.getItem(dirtyKey(uid)) === '1';
+    const legacy = localStorage.getItem(LEGACY_DIRTY_KEY) === '1';
+    if (legacy) {
+      localStorage.setItem(dirtyKey(uid), '1');
+      localStorage.removeItem(LEGACY_DIRTY_KEY);
+    }
+    return scoped || legacy;
+  } catch {
+    return false;
+  }
+}
+
+function setDirty(value: boolean, uid = activeUid) {
+  if (uid === activeUid) localDirty = value;
+  if (!uid) return;
+  try {
+    if (value) localStorage.setItem(dirtyKey(uid), '1');
+    else localStorage.removeItem(dirtyKey(uid));
+  } catch { /* in-memory state still protects the active session */ }
 }
 
 async function persistMedia(uid: string, memoryId: number, index: number, value: string) {
@@ -101,9 +123,9 @@ async function prepareMemory(uid: string, memory: Memory): Promise<Memory> {
 }
 
 async function pushCurrentMemories(uid: string) {
-  if (!uid) return;
+  if (!uid || uid !== activeUid) return;
   if (saving) {
-    saveAgain = true;
+    saveAgainUid = uid;
     return;
   }
 
@@ -129,26 +151,36 @@ async function pushCurrentMemories(uid: string) {
       setDoc(backupRef(uid, LATEST_BACKUP_KEY), envelope, { merge: true }),
     ]);
 
-    setDirty(false);
-    localStorage.setItem('route.albumSync.lastSuccess', new Date().toISOString());
-    localStorage.removeItem('route.albumSync.lastError');
+    setDirty(false, uid);
+    if (uid === activeUid) {
+      localStorage.setItem('route.albumSync.lastSuccess', new Date().toISOString());
+      localStorage.removeItem('route.albumSync.lastError');
+    }
   } catch (error) {
     console.error('[ROUTE album sync]', error);
-    setDirty(true);
-    localStorage.setItem('route.albumSync.lastError', error instanceof Error ? error.message : String(error));
+    setDirty(true, uid);
+    if (uid === activeUid) {
+      localStorage.setItem('route.albumSync.lastError', error instanceof Error ? error.message : String(error));
+    }
   } finally {
     saving = false;
-    if (saveAgain) {
-      saveAgain = false;
-      window.setTimeout(() => void pushCurrentMemories(activeUid), 80);
+    const rerunUid = saveAgainUid;
+    saveAgainUid = '';
+    if (rerunUid && rerunUid === activeUid) {
+      window.setTimeout(() => void pushCurrentMemories(rerunUid), 80);
     }
   }
 }
 
 function schedulePush(delay = 120) {
-  if (!activeUid || !cloudReady) return;
+  const uid = activeUid;
+  if (!uid || !cloudReady) return;
   if (saveTimer !== undefined) window.clearTimeout(saveTimer);
-  saveTimer = window.setTimeout(() => void pushCurrentMemories(activeUid), delay);
+  saveTimer = window.setTimeout(() => {
+    saveTimer = undefined;
+    if (uid !== activeUid || !cloudReady) return;
+    void pushCurrentMemories(uid);
+  }, delay);
 }
 
 function applyCloudMemories(value: Memory[], cloudDeleted: MemoryDeletionMap) {
@@ -176,6 +208,7 @@ function subscribe(uid: string) {
   unsubscribeCloud?.();
   cloudReady = false;
   unsubscribeCloud = onSnapshot(liveRef(uid), (snapshot) => {
+    if (uid !== activeUid) return;
     const firstSnapshot = !cloudReady;
     cloudReady = true;
 
@@ -198,13 +231,14 @@ function subscribe(uid: string) {
     // A reload used to clear the in-memory dirty flag and let an older cloud
     // snapshot resurrect a just-deleted photo. Pending state and tombstones now win.
     if (localDirty || hasLocalOnlyDeletion) {
-      setDirty(true);
+      setDirty(true, uid);
       schedulePush(0);
       return;
     }
 
     applyCloudMemories(data.value, cloudDeleted);
   }, (error) => {
+    if (uid !== activeUid) return;
     cloudReady = true;
     console.warn('[ROUTE album sync subscribe]', error);
   });
@@ -216,30 +250,40 @@ export function requestAlbumSyncNow() {
 }
 
 export function initializeCrossDeviceAlbumSync() {
+  if (albumSyncInitialized) return;
+  albumSyncInitialized = true;
+
   onAuthStateChanged(auth, (user) => {
+    const generation = ++authGeneration;
+    if (saveTimer !== undefined) window.clearTimeout(saveTimer);
+    saveTimer = undefined;
+    saveAgainUid = '';
     unsubscribeCloud?.();
     unsubscribeCloud = undefined;
     activeUid = user?.uid ?? '';
     cloudReady = false;
-    localDirty = localStorage.getItem(DIRTY_KEY) === '1';
-    if (activeUid) subscribe(activeUid);
+    localDirty = activeUid ? loadDirty(activeUid) : false;
+    if (activeUid && generation === authGeneration) subscribe(activeUid);
   });
 
   window.addEventListener(CHANGE_EVENT, (event) => {
     const detail = (event as CustomEvent<{ deleted?: boolean }>).detail;
-    setDirty(true);
+    if (!activeUid) return;
+    setDirty(true, activeUid);
     // Deletions are flushed immediately; additions/edits keep a tiny debounce so
     // multiple local writes can coalesce into one cloud update.
     schedulePush(detail?.deleted ? 0 : 120);
   });
 
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden' && activeUid && cloudReady && localDirty) {
-      void pushCurrentMemories(activeUid);
+    const uid = activeUid;
+    if (document.visibilityState === 'hidden' && uid && cloudReady && localDirty) {
+      void pushCurrentMemories(uid);
     }
   });
 
   window.addEventListener('pagehide', () => {
-    if (activeUid && cloudReady && localDirty) void pushCurrentMemories(activeUid);
+    const uid = activeUid;
+    if (uid && cloudReady && localDirty) void pushCurrentMemories(uid);
   });
 }
