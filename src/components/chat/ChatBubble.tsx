@@ -1,6 +1,7 @@
 import { Bookmark, ChevronLeft, ChevronRight, CornerUpLeft, Image as ImageIcon, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import '../../route-chat-gallery-v21.css';
 import type { Message } from '../../types';
 import { messageTime } from '../../utils/dates';
 import { ReactionPicker } from './ReactionPicker';
