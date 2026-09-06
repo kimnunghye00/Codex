@@ -32,6 +32,9 @@ jobs:
       - name: Production build
         run: npm run build
 
+      - name: Verify P3 JavaScript bundle budget
+        run: npm run stability:bundle
+
       - name: Execute runtime privacy and state tests
         run: npm run stability:runtime
 
@@ -59,6 +62,7 @@ jobs:
           test -f storage.rules
           test -f firebase.json
           test -f public/sw.js
+          test -f scripts/route-bundle-smoke.mjs
           grep -q "AppCrashBoundary" src/main.tsx
           grep -q "preparePersistentBackup" src/main.tsx
           grep -q "initializeRuntimeRecovery" src/main.tsx
