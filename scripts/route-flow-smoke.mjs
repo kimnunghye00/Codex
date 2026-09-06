@@ -94,7 +94,15 @@ check('shared header owns settings', header.includes('onSettings') && header.inc
 
 check('App routes home', app.includes("tab === 'home'"));
 check('App routes memories directly', app.includes("from './components/memories/MemoriesPage'") && app.includes('<MemoriesPage requestedTab={requestedHubTab}'));
-check('App routes chat', app.includes("tab === 'chat'"));
+check(
+  'App routes chat directly into room',
+  app.includes("if (next === 'chat')")
+    && app.includes('setChatRoomOpen(true)')
+    && app.includes("chatRoomOpen && <div className=\"chat-room-layer\"")
+    && app.includes('<ChatPage Header={ChatRoomHeader}')
+    && !app.includes('function ChatInboxPage'),
+  '대화 탭은 중간 목록 없이 전체 화면 대화방을 즉시 열어야 합니다',
+);
 check('App routes location directly', app.includes("from './components/location/LocationPage'") && app.includes('<LocationPage requestedTab={requestedLocationTab}'));
 check('App routes more', app.includes("tab === 'more'"));
 check('App has no Stable page bridge references', !app.includes('StableMemoriesPage') && !app.includes('StableLocationPage'));
