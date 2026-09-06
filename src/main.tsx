@@ -12,7 +12,6 @@ import { installPersistentStorageObserver } from './utils/persistenceSignal';
 import './styles.css';
 import './auth-onboarding.css';
 import './nickname.css';
-import './ai-test.css';
 import './chat-typing.css';
 import './chat-tools.css';
 import './chat-extras.css';
@@ -57,6 +56,8 @@ import './route-web-phone-preview-v12.css';
 import './route-stability-v15.css';
 // Phase-2 chat/media fixes must win over legacy bubble sizing and backgrounds.
 import './route-chat-stability-v16.css';
+// Network/recovery feedback is loaded directly; the obsolete appearance wrapper is gone.
+import './route-runtime-stability-v19.css';
 
 import './input-ime-stability';
 import './route-themes';
@@ -66,6 +67,7 @@ import './app-icon-native';
 import './couple-date-enhance';
 import './settings-hub';
 import './mobile-polish-v3';
+import './recovery-runtime';
 // Real-device post-deploy polish must win over the phase-4/5 runtime CSS loaded above.
 import './route-post-deploy-polish-v20.css';
 // App-wide stability layer now owns shared gutters, header/nav geometry and overflow guards.
