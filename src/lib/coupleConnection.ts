@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, onSnapshot, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { loadProfile, type UserProfile } from '../utils/profile';
 
@@ -13,6 +13,13 @@ export type CoupleInvite = {
   ownerUid: string;
   ownerName: string;
   expiresAt: number;
+};
+
+export type CoupleInviteState = CoupleInvite & {
+  status: string;
+  joinerUid?: string;
+  joinerName?: string;
+  coupleId?: string;
 };
 
 const INVITE_TTL = 7 * 24 * 60 * 60 * 1000;
@@ -33,6 +40,38 @@ function sameProfile(a: unknown, b: UserProfile) {
   try { return JSON.stringify(a ?? null) === JSON.stringify(b); } catch { return false; }
 }
 
+function partnerProfileFromData(coupleData: Record<string, any>, partnerUid: string, partnerData: Record<string, any>): UserProfile | null {
+  const cloudProfile = (partnerData?.profile as UserProfile | undefined) ?? null;
+  const fallbackName = String(coupleData?.members?.[partnerUid]?.displayName ?? '').trim();
+  const sharedNickname = String(coupleData?.nicknames?.[partnerUid] ?? '').trim();
+  if (cloudProfile) return { ...cloudProfile, nickname: sharedNickname || cloudProfile.nickname };
+  if (!fallbackName) return null;
+  return { name: fallbackName, birthDate: '', gender: 'other', completedAt: '', nickname: sharedNickname || undefined };
+}
+
+function connectionFromData(
+  uid: string,
+  coupleId: string,
+  expectedPartnerUid: string,
+  coupleData: Record<string, any>,
+  partnerData: Record<string, any>,
+): RealCoupleConnection | null {
+  if (coupleData?.testMode) return null;
+  const memberUids = (coupleData?.memberUids ?? []) as string[];
+  if (memberUids.length !== 2 || !memberUids.includes(uid) || !memberUids.includes(expectedPartnerUid)) return null;
+
+  const partnerUid = memberUids.find((memberUid) => memberUid !== uid);
+  if (!partnerUid || partnerUid !== expectedPartnerUid) return null;
+  if (String(partnerData?.coupleId ?? '') !== coupleId) return null;
+  if (String(partnerData?.partnerUid ?? '') !== uid) return null;
+
+  return {
+    coupleId,
+    partnerUid,
+    partnerProfile: partnerProfileFromData(coupleData, partnerUid, partnerData),
+  };
+}
+
 export async function getRealCoupleConnection(uid: string): Promise<RealCoupleConnection | null> {
   const userRef = doc(db, 'users', uid);
   const userSnap = await getDoc(userRef);
@@ -48,36 +87,124 @@ export async function getRealCoupleConnection(uid: string): Promise<RealCoupleCo
   const expectedPartnerUid = String(userData?.partnerUid ?? '');
   if (!coupleId || !expectedPartnerUid || isTestCouple(coupleId)) return null;
 
-  const coupleSnap = await getDoc(doc(db, 'couples', coupleId));
-  if (!coupleSnap.exists() || coupleSnap.data()?.testMode) return null;
+  const [coupleSnap, partnerSnap] = await Promise.all([
+    getDoc(doc(db, 'couples', coupleId)),
+    getDoc(doc(db, 'users', expectedPartnerUid)),
+  ]);
+  if (!coupleSnap.exists() || !partnerSnap.exists()) return null;
+  return connectionFromData(uid, coupleId, expectedPartnerUid, coupleSnap.data(), partnerSnap.data());
+}
 
-  const coupleData = coupleSnap.data();
-  const memberUids = (coupleData?.memberUids ?? []) as string[];
-  if (memberUids.length !== 2 || !memberUids.includes(uid) || !memberUids.includes(expectedPartnerUid)) return null;
+export function subscribeRealCoupleConnection(
+  uid: string,
+  onChange: (connection: RealCoupleConnection | null) => void,
+  onError: (error: unknown) => void = () => undefined,
+) {
+  let activePair = '';
+  let generation = 0;
+  let unsubscribeCouple = () => undefined;
+  let unsubscribePartner = () => undefined;
 
-  const partnerUid = memberUids.find((memberUid) => memberUid !== uid);
-  if (!partnerUid || partnerUid !== expectedPartnerUid) return null;
+  const clearNested = () => {
+    generation += 1;
+    unsubscribeCouple();
+    unsubscribePartner();
+    unsubscribeCouple = () => undefined;
+    unsubscribePartner = () => undefined;
+    activePair = '';
+  };
 
-  try {
-    const partnerSnap = await getDoc(doc(db, 'users', partnerUid));
-    if (!partnerSnap.exists()) return null;
-    const partnerData = partnerSnap.data();
-    if (String(partnerData?.coupleId ?? '') !== coupleId) return null;
-    if (String(partnerData?.partnerUid ?? '') !== uid) return null;
+  const userRef = doc(db, 'users', uid);
+  const unsubscribeUser = onSnapshot(userRef, (userSnap) => {
+    if (!userSnap.exists()) {
+      clearNested();
+      onChange(null);
+      return;
+    }
 
-    const cloudProfile = (partnerData?.profile as UserProfile | undefined) ?? null;
-    const fallbackName = String(coupleData?.members?.[partnerUid]?.displayName ?? '').trim();
-    const sharedNickname = String(coupleData?.nicknames?.[partnerUid] ?? '').trim();
-    const partnerProfile: UserProfile | null = cloudProfile
-      ? { ...cloudProfile, nickname: sharedNickname || cloudProfile.nickname }
-      : fallbackName
-        ? { name: fallbackName, birthDate: '', gender: 'other', completedAt: '', nickname: sharedNickname || undefined }
-        : null;
+    const userData = userSnap.data();
+    const localProfile = loadProfile(uid);
+    if (localProfile && !sameProfile(userData?.profile, localProfile)) {
+      void setDoc(userRef, { uid, profile: localProfile, updatedAt: serverTimestamp() }, { merge: true }).catch(onError);
+    }
 
-    return { coupleId, partnerUid, partnerProfile };
-  } catch {
-    return null;
+    const coupleId = String(userData?.coupleId ?? '');
+    const partnerUid = String(userData?.partnerUid ?? '');
+    if (!coupleId || !partnerUid || isTestCouple(coupleId)) {
+      clearNested();
+      onChange(null);
+      return;
+    }
+
+    const pair = `${coupleId}:${partnerUid}`;
+    if (pair === activePair) return;
+
+    clearNested();
+    activePair = pair;
+    const currentGeneration = generation;
+    let coupleReady = false;
+    let partnerReady = false;
+    let coupleData: Record<string, any> | null = null;
+    let partnerData: Record<string, any> | null = null;
+
+    const emit = () => {
+      if (currentGeneration !== generation || !coupleReady || !partnerReady) return;
+      if (!coupleData || !partnerData) {
+        onChange(null);
+        return;
+      }
+      onChange(connectionFromData(uid, coupleId, partnerUid, coupleData, partnerData));
+    };
+
+    unsubscribeCouple = onSnapshot(doc(db, 'couples', coupleId), (snapshot) => {
+      if (currentGeneration !== generation) return;
+      coupleReady = true;
+      coupleData = snapshot.exists() ? snapshot.data() : null;
+      emit();
+    }, onError);
+
+    unsubscribePartner = onSnapshot(doc(db, 'users', partnerUid), (snapshot) => {
+      if (currentGeneration !== generation) return;
+      partnerReady = true;
+      partnerData = snapshot.exists() ? snapshot.data() : null;
+      emit();
+    }, onError);
+  }, onError);
+
+  return () => {
+    unsubscribeUser();
+    clearNested();
+  };
+}
+
+export function subscribeCoupleInviteState(
+  rawCode: string,
+  onChange: (invite: CoupleInviteState | null) => void,
+  onError: (error: unknown) => void = () => undefined,
+) {
+  const code = normalizeCode(rawCode);
+  if (!/^ROUTE-[A-Z2-9]{6}$/.test(code)) {
+    queueMicrotask(() => onChange(null));
+    return () => undefined;
   }
+
+  return onSnapshot(doc(db, 'coupleInvites', code), (snapshot) => {
+    if (!snapshot.exists()) {
+      onChange(null);
+      return;
+    }
+    const data = snapshot.data();
+    onChange({
+      code,
+      ownerUid: String(data.ownerUid ?? ''),
+      ownerName: String(data.ownerName ?? ''),
+      expiresAt: Number(data.expiresAt ?? 0),
+      status: String(data.status ?? ''),
+      joinerUid: data.joinerUid ? String(data.joinerUid) : undefined,
+      joinerName: data.joinerName ? String(data.joinerName) : undefined,
+      coupleId: data.coupleId ? String(data.coupleId) : undefined,
+    });
+  }, onError);
 }
 
 export async function createCoupleInvite(uid: string, ownerName: string): Promise<CoupleInvite> {
@@ -152,7 +279,13 @@ export async function finalizeInviteAsOwner(uid: string, ownerName: string, rawC
     const invite = inviteSnap.data();
     if (String(invite.ownerUid ?? '') !== uid) return null;
 
-    if (invite.status === 'accepted') return { coupleId: String(invite.coupleId ?? ''), partnerUid: String(invite.joinerUid ?? '') };
+    if (invite.status === 'accepted') {
+      return {
+        coupleId: String(invite.coupleId ?? ''),
+        partnerUid: String(invite.joinerUid ?? ''),
+        partnerName: String(invite.joinerName ?? '상대방'),
+      };
+    }
     if (invite.status !== 'requested') return null;
 
     const joinerUid = String(invite.joinerUid ?? '');
@@ -176,11 +309,17 @@ export async function finalizeInviteAsOwner(uid: string, ownerName: string, rawC
     });
     transaction.set(ownerUserRef, { coupleId, partnerUid: joinerUid, updatedAt: serverTimestamp() }, { merge: true });
     transaction.update(inviteRef, { status: 'accepted', coupleId, acceptedAt: serverTimestamp() });
-    return { coupleId, partnerUid: joinerUid };
+    return { coupleId, partnerUid: joinerUid, partnerName: joinerName };
   });
 
   if (!result?.coupleId || !result.partnerUid) return null;
-  return null;
+  return {
+    coupleId: result.coupleId,
+    partnerUid: result.partnerUid,
+    partnerProfile: result.partnerName
+      ? { name: result.partnerName, birthDate: '', gender: 'other', completedAt: '' }
+      : null,
+  };
 }
 
 export async function completeJoinerConnection(uid: string, rawCode: string): Promise<RealCoupleConnection | null> {
