@@ -23,7 +23,7 @@ const ROUTE_MAP_HOST = `${ROUTE_MAP_ORIGIN}/naver-map-host.html`;
 const LOCATION_FOCUS_KEY = 'route-pending-location-focus';
 const MAP_READY_TIMEOUT_MS = 12_000;
 
-type LocationTab = 'map' | 'footprints';
+export type LocationTabId = 'map' | 'footprints';
 type MapHostMessage = { source?: string; type?: string; origin?: string; code?: string };
 type FocusState = 'idle' | 'searching' | 'found' | 'failed';
 
@@ -71,7 +71,8 @@ function locationErrorMessage(error: RouteLocationError) {
   return { permissionDenied: false, message: '현재 위치를 가져오지 못했어요. 네트워크와 위치 서비스를 확인한 뒤 다시 시도해 주세요.' };
 }
 
-export function LocationPage({ Header, connection, focusPlace, onClearFocus, onCreateMemory, onActivity }: {
+export function LocationPage({ requestedTab, Header, connection, focusPlace, onClearFocus, onCreateMemory, onActivity }: {
+  requestedTab?: LocationTabId;
   Header: ({ title }: { title?: string }) => React.ReactNode;
   connection: RealCoupleConnection | null;
   focusPlace?: string;
@@ -81,7 +82,7 @@ export function LocationPage({ Header, connection, focusPlace, onClearFocus, onC
 }) {
   const uid = auth.currentUser?.uid ?? '';
   const initialVisits = uid ? loadLocationVisits(uid) : [];
-  const [activeTab, setActiveTab] = useState<LocationTab>('map');
+  const [activeTab, setActiveTab] = useState<LocationTabId>(requestedTab ?? 'map');
   const [sharing, setSharing] = useState(() => uid ? loadLocationSharing(uid).enabled : false);
   const [visits, setVisits] = useState<LocationVisit[]>(initialVisits);
   const [partnerVisits, setPartnerVisits] = useState<LocationVisit[]>([]);
@@ -390,6 +391,12 @@ export function LocationPage({ Header, connection, focusPlace, onClearFocus, onC
     setFocusedVisit(undefined);
     if (mapReady) postMapMessage({ type: 'clear-focus' });
   };
+
+  useEffect(() => {
+    if (!requestedTab) return;
+    if (requestedTab === 'footprints') clearFocusedPlace();
+    setActiveTab(requestedTab);
+  }, [requestedTab]);
 
   const createMemoryFromVisit = (visit: LocationVisit) => {
     if (!onCreateMemory) return;
