@@ -4,7 +4,7 @@ import Root from './Root';
 import { AppCrashBoundary, installGlobalCrashDiagnostics } from './AppCrashBoundary';
 import { applySavedRouteAppIcon } from './components/more/MoreServices';
 import { authPersistenceReady } from './lib/firebase';
-import { initializeNativeApp } from './lib/native';
+import { hideNativeSplash, initializeNativeApp } from './lib/native';
 import { preparePersistentBackup, startPersistentBackup } from './lib/persistentBackup';
 import { initializeCrossDeviceAlbumSync } from './lib/crossDeviceAlbumSync';
 import { initializeRoutePwa } from './pwa';
@@ -74,6 +74,7 @@ import './route-post-deploy-polish-v20.css';
 import './route-ui-stability-v23.css';
 
 const DESKTOP_PREVIEW_PARAM = 'routeMobilePreview';
+const NATIVE_SPLASH_FAILSAFE_MS = 2500;
 
 function shouldUseDesktopPhonePreview() {
   const params = new URLSearchParams(window.location.search);
@@ -110,6 +111,90 @@ function mountDesktopPhonePreview() {
   return true;
 }
 
+function mountBootstrapShell() {
+  const root = document.getElementById('root');
+  if (!root) return;
+
+  const shell = document.createElement('div');
+  shell.setAttribute('role', 'status');
+  shell.setAttribute('aria-live', 'polite');
+  shell.style.cssText = [
+    'min-height:100dvh',
+    'box-sizing:border-box',
+    'display:flex',
+    'flex-direction:column',
+    'align-items:center',
+    'justify-content:center',
+    'gap:12px',
+    'padding:32px',
+    'background:#fffaf8',
+    'color:#3d405b',
+    'font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+    'text-align:center',
+  ].join(';');
+
+  const brand = document.createElement('strong');
+  brand.textContent = 'ROUTE.';
+  brand.style.cssText = 'font-size:26px;letter-spacing:-1px;font-weight:900';
+
+  const message = document.createElement('span');
+  message.textContent = '우리의 기록을 준비하고 있어요';
+  message.style.cssText = 'font-size:12px;line-height:1.5;color:#777687';
+
+  const indicator = document.createElement('span');
+  indicator.textContent = '•••';
+  indicator.setAttribute('aria-hidden', 'true');
+  indicator.style.cssText = 'font-size:13px;letter-spacing:4px;color:#e07a5f';
+
+  shell.append(brand, message, indicator);
+  root.replaceChildren(shell);
+}
+
+function mountBootstrapFailure() {
+  const root = document.getElementById('root');
+  if (!root) return;
+
+  const shell = document.createElement('div');
+  shell.setAttribute('role', 'alert');
+  shell.style.cssText = [
+    'min-height:100dvh',
+    'box-sizing:border-box',
+    'display:flex',
+    'flex-direction:column',
+    'align-items:center',
+    'justify-content:center',
+    'gap:12px',
+    'padding:32px',
+    'background:#fffaf8',
+    'color:#3d405b',
+    'font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+    'text-align:center',
+  ].join(';');
+
+  const brand = document.createElement('strong');
+  brand.textContent = 'ROUTE.';
+  brand.style.cssText = 'font-size:26px;letter-spacing:-1px;font-weight:900';
+
+  const message = document.createElement('span');
+  message.textContent = '앱을 준비하는 중 문제가 생겼어요. 다시 실행해 주세요.';
+  message.style.cssText = 'max-width:280px;font-size:12px;line-height:1.6;color:#777687';
+
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.textContent = '다시 시도';
+  retry.style.cssText = 'min-height:44px;padding:0 20px;border:0;border-radius:14px;background:#3d405b;color:white;font-size:12px;font-weight:800';
+  retry.addEventListener('click', () => window.location.reload());
+
+  shell.append(brand, message, retry);
+  root.replaceChildren(shell);
+}
+
+function waitForFirstPaint() {
+  return new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+}
+
 async function bootstrap() {
   installGlobalCrashDiagnostics();
   installPersistentStorageObserver();
@@ -120,28 +205,48 @@ async function bootstrap() {
   // auth and local app data remain shared with the normal web app.
   if (mountDesktopPhonePreview()) return;
 
-  void initializeNativeApp();
-  await authPersistenceReady;
+  // If Firebase recovery takes longer than expected, this shell is already
+  // present when the native splash fail-safe disappears, preventing a white flash.
+  mountBootstrapShell();
+  const splashFailsafe = window.setTimeout(() => {
+    void hideNativeSplash();
+  }, NATIVE_SPLASH_FAILSAFE_MS);
 
-  // Account isolation is now a hard bootstrap barrier. React cannot read global
-  // message/memory caches until ownership has been verified or stale caches have
-  // been cleared and the app has reloaded with a clean Firestore instance.
-  await initializeRuntimeRecovery();
-  initializeRoutePwa();
+  try {
+    await initializeNativeApp();
+    await authPersistenceReady;
 
-  // Restore durable Firebase records before React reads local caches.
-  // This is what makes reinstalling the app recover recent ROUTE data.
-  await preparePersistentBackup();
-  startPersistentBackup();
-  initializeCrossDeviceAlbumSync();
+    // Account isolation is a hard bootstrap barrier. React cannot read global
+    // message/memory caches until ownership is verified or stale caches are reset.
+    await initializeRuntimeRecovery();
+    initializeRoutePwa();
 
-  createRoot(document.getElementById('root')!).render(
-    <StrictMode>
-      <AppCrashBoundary>
-        <Root />
-      </AppCrashBoundary>
-    </StrictMode>,
-  );
+    // Restore durable Firebase records before React reads local caches.
+    await preparePersistentBackup();
+    startPersistentBackup();
+    initializeCrossDeviceAlbumSync();
+
+    const root = document.getElementById('root');
+    if (!root) throw new Error('ROUTE_ROOT_MISSING');
+
+    createRoot(root).render(
+      <StrictMode>
+        <AppCrashBoundary>
+          <Root />
+        </AppCrashBoundary>
+      </StrictMode>,
+    );
+
+    // Do not reveal the WebView until React has had two paint opportunities.
+    await waitForFirstPaint();
+  } catch (error) {
+    console.error('[ROUTE bootstrap]', error);
+    mountBootstrapFailure();
+    await waitForFirstPaint();
+  } finally {
+    window.clearTimeout(splashFailsafe);
+    await hideNativeSplash();
+  }
 }
 
 void bootstrap();
