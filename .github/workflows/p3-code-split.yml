@@ -1,0 +1,53 @@
+name: Apply ROUTE P3 Code Splitting
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/p3-code-split.mjs'
+      - '.github/workflows/p3-code-split.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply code splitting migration
+        run: node scripts/p3-code-split.mjs
+
+      - name: Verify production build and stability
+        run: npm run stability
+
+      - name: Remove one-time migration files
+        run: git rm scripts/p3-code-split.mjs .github/workflows/p3-code-split.yml
+
+      - name: Commit optimized app
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.tsx src/Root.tsx src/main.tsx src/utils/appIcon.ts
+          if git diff --cached --quiet; then
+            echo 'No P3 code-splitting changes to commit.'
+            exit 0
+          fi
+          git commit -m 'perf: lazy load heavy ROUTE feature screens'
+          git push origin HEAD:main
