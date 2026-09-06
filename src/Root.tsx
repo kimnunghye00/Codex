@@ -5,6 +5,7 @@ import { ProfileSetup } from './components/auth/ProfileSetup';
 import { auth } from './lib/firebase';
 import { loadCloudProfile } from './lib/coupleData';
 import { loadProfile, saveProfile, type UserProfile } from './utils/profile';
+import './route-performance-v27.css';
 
 const App = lazy(() => import('./App'));
 
