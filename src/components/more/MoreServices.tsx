@@ -1,9 +1,16 @@
 import { Bell, CalendarDays, Clock3, Heart, Image, MapPinned, MessageCircle, Palette, Settings, Smartphone, Smile, Sparkles, Trophy, UserRound, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import type { HubTabId } from '../memories/StableMemoriesPage';
+import type { LocationTabId } from '../location/StableLocationPage';
 
 type MoreServiceId = 'profile' | 'notifications' | 'theme' | 'app-icon' | 'emoticon' | 'album' | 'anniversary' | 'record' | 'tier' | 'schedule' | 'date' | 'chat' | 'map' | 'footprint';
 type AppIconId = 'route' | 'heart' | 'night' | 'cream';
 type ThemeId = 'default' | 'lavender' | 'dark';
+
+export type MoreNavigationTarget =
+  | { area: 'chat' }
+  | { area: 'memories'; tab: HubTabId }
+  | { area: 'location'; tab: LocationTabId };
 
 type Service = {
   id: MoreServiceId;
@@ -17,13 +24,13 @@ const SERVICES: Service[] = [
   { id: 'theme', label: '테마', icon: Palette },
   { id: 'app-icon', label: '앱 아이콘', icon: Smartphone },
   { id: 'emoticon', label: '이모티콘', icon: Smile },
-  { id: 'album', label: '앨범', icon: Image },
+  { id: 'album', label: '추억', icon: Image },
   { id: 'anniversary', label: '기념일', icon: Heart },
   { id: 'record', label: '기록', icon: Clock3 },
   { id: 'tier', label: '티어', icon: Trophy },
   { id: 'schedule', label: '일정', icon: CalendarDays },
   { id: 'date', label: '데이트', icon: Sparkles },
-  { id: 'chat', label: '채팅', icon: MessageCircle },
+  { id: 'chat', label: '대화', icon: MessageCircle },
   { id: 'map', label: '지도', icon: MapPinned },
   { id: 'footprint', label: '발자취', icon: MapPinned },
 ];
@@ -41,27 +48,6 @@ const EMOTICON_PACKS = [
   { id: 'love', name: '사랑 가득', preview: ['💕', '💌', '😘', '🫶'], price: '1,500원' },
   { id: 'date', name: '데이트 가자', preview: ['🍿', '☕', '🚗', '🌙'], price: '2,000원' },
 ];
-
-function clickBottomNav(label: string) {
-  const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('.bottom-nav button'));
-  buttons.find((button) => button.textContent?.trim() === label)?.click();
-}
-
-function clickHubTab(label: string) {
-  clickBottomNav('추억');
-  window.setTimeout(() => {
-    const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('.hub-tabs button'));
-    buttons.find((button) => button.textContent?.trim() === label)?.click();
-  }, 80);
-}
-
-function clickLocationTab(label: string) {
-  clickBottomNav('위치');
-  window.setTimeout(() => {
-    const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('.location-tabs button'));
-    buttons.find((button) => button.textContent?.trim() === label)?.click();
-  }, 80);
-}
 
 function updateFavicon(iconId: AppIconId) {
   const icon = APP_ICONS.find((item) => item.id === iconId) ?? APP_ICONS[0];
@@ -87,7 +73,11 @@ function HeaderBar({ title, onClose }: { title: string; onClose: () => void }) {
   return <div className="more-sheet-head"><strong>{title}</strong><button type="button" onClick={onClose} aria-label="닫기"><X size={19} /></button></div>;
 }
 
-export function MoreServices() {
+export function MoreServices({ onOpenSettings, onOpenNotifications, onNavigate }: {
+  onOpenSettings: () => void;
+  onOpenNotifications: () => void;
+  onNavigate: (target: MoreNavigationTarget) => void;
+}) {
   const [sheet, setSheet] = useState<'theme' | 'app-icon' | 'emoticon' | null>(null);
   const [theme, setTheme] = useState<ThemeId>(() => {
     const saved = localStorage.getItem('meluni-theme');
@@ -127,20 +117,20 @@ export function MoreServices() {
 
   const openService = (id: MoreServiceId) => {
     setNotice('');
-    if (id === 'profile') return document.querySelector<HTMLButtonElement>('.header-actions button[aria-label="설정"]')?.click();
-    if (id === 'notifications') return document.querySelector<HTMLButtonElement>('.header-actions .notification-button')?.click();
+    if (id === 'profile') return onOpenSettings();
+    if (id === 'notifications') return onOpenNotifications();
     if (id === 'theme') return setSheet('theme');
     if (id === 'app-icon') return setSheet('app-icon');
     if (id === 'emoticon') return setSheet('emoticon');
-    if (id === 'album') return clickHubTab('앨범');
-    if (id === 'anniversary') return clickHubTab('기념일');
-    if (id === 'record') return clickHubTab('기록');
-    if (id === 'tier') return clickHubTab('티어');
-    if (id === 'schedule') return clickHubTab('일정');
-    if (id === 'date') return clickHubTab('데이트');
-    if (id === 'chat') return clickBottomNav('채팅');
-    if (id === 'map') return clickLocationTab('지도');
-    if (id === 'footprint') return clickLocationTab('발자취');
+    if (id === 'album') return onNavigate({ area: 'memories', tab: 'album' });
+    if (id === 'anniversary') return onNavigate({ area: 'memories', tab: 'anniversary' });
+    if (id === 'record') return onNavigate({ area: 'memories', tab: 'record' });
+    if (id === 'tier') return onNavigate({ area: 'memories', tab: 'tier' });
+    if (id === 'schedule') return onNavigate({ area: 'memories', tab: 'schedule' });
+    if (id === 'date') return onNavigate({ area: 'memories', tab: 'date' });
+    if (id === 'chat') return onNavigate({ area: 'chat' });
+    if (id === 'map') return onNavigate({ area: 'location', tab: 'map' });
+    if (id === 'footprint') return onNavigate({ area: 'location', tab: 'footprints' });
   };
 
   return <div className="route-more-services">
@@ -155,7 +145,7 @@ export function MoreServices() {
       </button>)}
     </section>
 
-    <section className="more-couple-strip"><span>♥</span><div><b>우리 둘의 ROUTE</b><small>앨범, 기록, 일정과 발자취를 이어가요.</small></div></section>
+    <section className="more-couple-strip"><span>♥</span><div><b>우리 둘의 ROUTE</b><small>추억, 기록, 일정과 발자취를 이어가요.</small></div></section>
 
     {sheet && <div className="more-sheet-backdrop" role="dialog" aria-modal="true" onMouseDown={(event) => { if (event.target === event.currentTarget) setSheet(null); }}>
       <section className="more-sheet">
@@ -167,7 +157,7 @@ export function MoreServices() {
           {APP_ICONS.map((item) => <button type="button" key={item.id} className={appIcon === item.id ? 'active' : ''} onClick={() => chooseIcon(item.id)}><span className={`more-app-icon-preview ${item.className}`}>{item.mark}</span><b>{item.label}</b>{appIcon === item.id && <small>사용 중</small>}</button>)}
         </div></>}
 
-        {sheet === 'emoticon' && <><HeaderBar title="이모티콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">채팅에서 사용할 ROUTE 이모티콘을 모아보세요.</p><div className="emoticon-store">
+        {sheet === 'emoticon' && <><HeaderBar title="이모티콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">대화에서 사용할 ROUTE 이모티콘을 모아보세요.</p><div className="emoticon-store">
           {EMOTICON_PACKS.map((pack) => <article key={pack.id}><div className="emoticon-preview">{pack.preview.map((emoji) => <span key={emoji}>{emoji}</span>)}</div><div className="emoticon-copy"><b>{pack.name}</b><small>{pack.price}</small></div><button type="button" disabled={owned.includes(pack.id)} onClick={() => addPack(pack.id, pack.price)}>{owned.includes(pack.id) ? '보유 중' : pack.price === '무료' ? '받기' : '구매하기'}</button></article>)}
         </div></>}
         {notice && <p className="more-sheet-notice">{notice}</p>}
