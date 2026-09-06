@@ -8,13 +8,18 @@ import { loadProfile, saveProfile, type UserProfile } from './utils/profile';
 
 const App = lazy(() => import('./App'));
 
+const initialUser = auth.currentUser;
+const initialProfile = initialUser ? loadProfile(initialUser.uid) : null;
+
 export default function Root() {
-  const [user, setUser] = useState<User | null>(auth.currentUser);
-  const [profile, setProfile] = useState<UserProfile | null>(() => auth.currentUser ? loadProfile(auth.currentUser.uid) : null);
-  const [ready, setReady] = useState(false);
+  const [user, setUser] = useState<User | null>(initialUser);
+  const [profile, setProfile] = useState<UserProfile | null>(initialProfile);
+  // Firebase persistence is already awaited by main.tsx before Root mounts. A
+  // returning user with a local profile therefore does not need a second blank
+  // auth frame while onAuthStateChanged repeats the same state.
+  const [ready, setReady] = useState(() => !initialUser || Boolean(initialProfile));
 
   useEffect(() => onAuthStateChanged(auth, (nextUser) => {
-    setReady(false);
     setUser(nextUser);
     if (!nextUser) {
       setProfile(null);
@@ -30,6 +35,7 @@ export default function Root() {
       return;
     }
 
+    setReady(false);
     void loadCloudProfile(nextUser.uid)
       .then((cloud) => {
         if (cloud) {
@@ -50,8 +56,6 @@ export default function Root() {
   if (user && signupPending && !profile) return <AuthFlow />;
   if (!user) return <App />;
 
-  // 기존 가입자는 Firestore에 저장된 프로필을 복원하므로 다시 프로필 설정을 하지 않습니다.
-  // 실제로 프로필이 한 번도 생성되지 않은 신규 가입자만 이 화면을 거칩니다.
   if (!profile) {
     return <ProfileSetup user={user} onComplete={(nextProfile) => setProfile(nextProfile)} />;
   }
