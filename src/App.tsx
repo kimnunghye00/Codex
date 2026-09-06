@@ -65,6 +65,12 @@ function parseDate(value?: string) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function messageTimestamp(value?: string) {
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function currentMonthSpecialDays(today = atMidnight()): Anniversary[] {
   const month = today.getMonth() + 1;
   return COUPLE_SPECIAL_DAYS
@@ -245,7 +251,10 @@ function App() {
     const before = previousMessages.current;
     const beforeById = new Map(before.map((message) => [message.id, message]));
     const afterById = new Map(messages.map((message) => [message.id, message]));
-    messages.filter((message) => !beforeById.has(message.id)).forEach((message) => addActivity({ actor: message.sender === 'me' ? 'me' : 'partner', kind: 'chat', title: message.sender === 'me' ? '메시지를 보냈어요' : '새 메시지가 왔어요', detail: message.type === 'image' ? '사진을 보냈어요.' : message.text?.slice(0, 70) }));
+    const newestBeforeTime = before.reduce((latest, message) => Math.max(latest, messageTimestamp(message.timestamp)), 0);
+    messages
+      .filter((message) => !beforeById.has(message.id) && (before.length === 0 || messageTimestamp(message.timestamp) >= newestBeforeTime))
+      .forEach((message) => addActivity({ actor: message.sender === 'me' ? 'me' : 'partner', kind: 'chat', title: message.sender === 'me' ? '메시지를 보냈어요' : '새 메시지가 왔어요', detail: message.type === 'image' ? '사진을 보냈어요.' : message.text?.slice(0, 70) }));
     before.filter((message) => !afterById.has(message.id)).forEach((message) => addActivity({ actor: 'me', kind: 'chat', title: '메시지를 삭제했어요', detail: message.text?.slice(0, 60) }));
     previousMessages.current = messages;
   }, [messages]);
