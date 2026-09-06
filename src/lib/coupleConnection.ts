@@ -102,15 +102,15 @@ export function subscribeRealCoupleConnection(
 ) {
   let activePair = '';
   let generation = 0;
-  let unsubscribeCouple = () => undefined;
-  let unsubscribePartner = () => undefined;
+  let unsubscribeCouple: () => void = () => {};
+  let unsubscribePartner: () => void = () => {};
 
   const clearNested = () => {
     generation += 1;
     unsubscribeCouple();
     unsubscribePartner();
-    unsubscribeCouple = () => undefined;
-    unsubscribePartner = () => undefined;
+    unsubscribeCouple = () => {};
+    unsubscribePartner = () => {};
     activePair = '';
   };
 
@@ -185,7 +185,7 @@ export function subscribeCoupleInviteState(
   const code = normalizeCode(rawCode);
   if (!/^ROUTE-[A-Z2-9]{6}$/.test(code)) {
     queueMicrotask(() => onChange(null));
-    return () => undefined;
+    return () => {};
   }
 
   return onSnapshot(doc(db, 'coupleInvites', code), (snapshot) => {
