@@ -5,6 +5,10 @@ export function createChatMediaReference(previewUrl: string, originalUrl: string
   return `${previewUrl}${ORIGINAL_MARKER}${encodeURIComponent(originalUrl)}`;
 }
 
+export function hasOptimizedChatPreview(reference: string) {
+  return reference.includes(ORIGINAL_MARKER);
+}
+
 export function chatMediaPreviewUrl(reference: string) {
   const markerIndex = reference.indexOf(ORIGINAL_MARKER);
   return markerIndex >= 0 ? reference.slice(0, markerIndex) : reference;
