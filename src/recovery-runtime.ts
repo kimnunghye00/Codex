@@ -16,9 +16,6 @@ const ACCOUNT_SHARED_CACHE_KEYS = [
   'route.albumSync.pending',
 ] as const;
 
-// Capture native Storage methods before bootstrap installs ROUTE's persistence
-// observer. Account-isolation cleanup must not look like a user edit and trigger
-// a backup of another account's cleared cache during an auth transition.
 const rawStorageSetItem = typeof Storage !== 'undefined' ? Storage.prototype.setItem : undefined;
 const rawStorageRemoveItem = typeof Storage !== 'undefined' ? Storage.prototype.removeItem : undefined;
 let onlineHideTimer: number | undefined;
@@ -84,9 +81,7 @@ function recoverRestoredBackup() {
   try {
     if (sessionStorage.getItem(key) === '1') return;
     sessionStorage.setItem(key, '1');
-  } catch {
-    // A reload is still safer than leaving React mounted with stale pre-restore state.
-  }
+  } catch {}
 
   window.setTimeout(() => window.location.reload(), 80);
 }
@@ -97,9 +92,7 @@ function clearRecoveryReloadMarkers() {
       const key = sessionStorage.key(index);
       if (key?.startsWith(RECOVERY_RELOAD_PREFIX)) sessionStorage.removeItem(key);
     }
-  } catch {
-    // Session storage is only a loop guard, never user data.
-  }
+  } catch {}
 }
 
 function localDataOwner() {
@@ -146,9 +139,7 @@ async function clearFirestoreAndReload(marker: string) {
   try { sessionStorage.setItem(ACCOUNT_SWITCH_RELOAD_KEY, marker); } catch {}
   try {
     await clearNativeFirestorePersistence();
-  } catch {
-    // Reload still reinitializes Firestore. The warning was logged by firebase.ts.
-  }
+  } catch {}
   window.location.reload();
 }
 
@@ -186,12 +177,17 @@ async function applyAccountIsolation(uid: string | null, markInitialReady: () =>
     return;
   }
 
-  // Builds before ownership tracking used global private message/memory keys.
-  // Clear those orphaned caches before React is allowed to mount, even when the
-  // first screen is signed out, so a later login can never briefly inherit them.
-  removeSharedLocalCache(!uid);
-  if (uid) setLocalDataOwner(uid);
-  await clearFirestoreAndReload(`orphaned-cache:${uid ?? 'signed-out'}`);
+  if (action === 'reset-orphan') {
+    // Builds before ownership tracking used global private message/memory keys.
+    // Clear those orphaned caches before React is allowed to mount, even when
+    // the first screen is signed out, so a later login can never inherit them.
+    removeSharedLocalCache(!uid);
+    if (uid) setLocalDataOwner(uid);
+    await clearFirestoreAndReload(`orphaned-cache:${uid ?? 'signed-out'}`);
+    return;
+  }
+
+  markInitialReady();
 }
 
 function installRuntimeListeners() {
