@@ -38,6 +38,9 @@ jobs:
       - name: Verify native Android wiring
         run: npm run stability:native
 
+      - name: Cross-validate repository and native invariants
+        run: npm run stability:cross
+
       - name: Verify critical release guardrails
         shell: bash
         run: |
