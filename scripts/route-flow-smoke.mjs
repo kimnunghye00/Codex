@@ -20,6 +20,8 @@ const requiredFiles = [
   'src/App.tsx',
   'src/Root.tsx',
   'src/main.tsx',
+  'src/recovery-runtime.ts',
+  'src/route-runtime-stability-v19.css',
   'src/components/navigation/AppHeader.tsx',
   'src/components/navigation/BottomNav.tsx',
   'src/components/more/MoreServices.tsx',
@@ -35,8 +37,18 @@ for (const file of requiredFiles) {
   check(`required file: ${file}`, existsSync(file));
 }
 
-check('legacy memories bridge removed', !existsSync('src/components/memories/StableMemoriesPage.tsx'));
-check('legacy location bridge removed', !existsSync('src/components/location/StableLocationPage.tsx'));
+const obsoleteFiles = [
+  'src/components/memories/StableMemoriesPage.tsx',
+  'src/components/location/StableLocationPage.tsx',
+  'src/ai-test.css',
+  'src/appearance-stability.ts',
+  'src/route-appearance-stability-v17.css',
+  'src/route-theme-preview-stability-v18.css',
+];
+
+for (const file of obsoleteFiles) {
+  check(`obsolete file removed: ${file}`, !existsSync(file));
+}
 
 if (failures.length) {
   console.error('\nROUTE flow smoke gate failed before source checks:\n');
@@ -47,6 +59,7 @@ if (failures.length) {
 const app = read('src/App.tsx');
 const root = read('src/Root.tsx');
 const main = read('src/main.tsx');
+const recovery = read('src/recovery-runtime.ts');
 const header = read('src/components/navigation/AppHeader.tsx');
 const bottomNav = read('src/components/navigation/BottomNav.tsx');
 const more = read('src/components/more/MoreServices.tsx');
@@ -104,6 +117,12 @@ check('account settings keeps couple connection flow', account.includes('<Couple
 check('partner profile is directly integrated', account.includes('<PartnerProfileCard'));
 
 check('single React application root', (main.match(/createRoot\(/g) || []).length === 1);
+check('recovery runtime is loaded directly', main.includes("import './recovery-runtime';"));
+check('runtime recovery styles are loaded directly', main.includes("import './route-runtime-stability-v19.css';"));
+check('obsolete appearance wrapper is not imported', !main.includes('appearance-stability'));
+check('unused ai test stylesheet is not imported', !main.includes('ai-test.css'));
+check('runtime recovery still handles connectivity', recovery.includes("window.addEventListener('offline'") && recovery.includes("window.addEventListener('online'"));
+check('runtime recovery keeps account cache isolation', recovery.includes('prepareAccountLocalCache') && recovery.includes('clearNativeFirestorePersistence'));
 check('legacy enhancement layer is gone', !main.includes('RouteEnhancementLayer'));
 check('legacy more enhancer is gone', !main.includes('more-enhance'));
 check('legacy profile enhancer is gone', !main.includes('profile-enhance'));
