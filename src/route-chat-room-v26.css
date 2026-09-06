@@ -111,6 +111,7 @@
 }
 
 .chat-room-layer .chat-page {
+  position: relative;
   width: 100%;
   height: 100dvh !important;
   min-height: 100dvh !important;
@@ -118,17 +119,20 @@
   background: var(--background);
 }
 
+/* The React room header supplies the real back action. Visually it is folded
+ * into ChatPage's existing profile/action row so the room has one native-style
+ * top bar instead of a ROUTE bar plus a second profile card. */
 .chat-room-header {
-  flex: 0 0 auto;
-  min-height: calc(62px + env(safe-area-inset-top));
+  position: absolute;
+  z-index: 8;
+  top: 0;
+  left: 0;
+  width: 54px;
+  height: calc(62px + env(safe-area-inset-top));
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) 48px;
-  align-items: end;
-  gap: 4px;
-  padding: env(safe-area-inset-top) 8px 8px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
-  background: color-mix(in srgb, var(--surface) 96%, transparent);
-  backdrop-filter: blur(16px);
+  place-items: end center;
+  padding: env(safe-area-inset-top) 4px 7px;
+  pointer-events: none;
 }
 
 .chat-room-back {
@@ -142,19 +146,37 @@
   border-radius: 50%;
   color: var(--text-primary);
   background: transparent;
+  pointer-events: auto;
 }
 
 .chat-room-back:active { background: var(--primary-soft); transform: scale(.94); }
+.chat-room-header-copy,
+.chat-room-header-spacer { display: none !important; }
 
-.chat-room-header-copy {
-  min-width: 0;
-  align-self: center;
-  display: grid;
-  justify-items: center;
-  gap: 1px;
+/* Existing profile + call/menu controls become the single room header. */
+.chat-room-layer .chat-page .chat-profile {
+  flex: 0 0 auto;
+  min-height: calc(62px + env(safe-area-inset-top));
+  margin: 0 !important;
+  padding: env(safe-area-inset-top) 10px 7px 56px !important;
+  border: 0 !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 90%, transparent) !important;
+  border-radius: 0 !important;
+  background: color-mix(in srgb, var(--surface) 97%, transparent) !important;
+  box-shadow: none !important;
+  backdrop-filter: blur(16px);
 }
 
-.chat-room-header-copy b {
+.chat-room-layer .chat-page .chat-profile .avatar.large {
+  display: none !important;
+}
+
+.chat-room-layer .chat-page .chat-profile > div:nth-child(2) {
+  min-width: 0;
+  margin-left: 0 !important;
+}
+
+.chat-room-layer .chat-page .chat-profile > div:nth-child(2) b {
   max-width: 100%;
   overflow: hidden;
   font-size: 14px;
@@ -162,36 +184,23 @@
   white-space: nowrap;
 }
 
-.chat-room-header-copy span {
-  color: var(--text-secondary);
+.chat-room-layer .chat-page .chat-profile > div:nth-child(2) span {
+  margin-top: 1px;
   font-size: 8px;
 }
 
-.chat-room-header-spacer { width: 44px; height: 44px; }
-
-/* Inside the room, remove the old card-within-a-card feeling. */
-.chat-room-layer .chat-page .chat-profile {
-  min-height: 58px;
-  margin: 0 !important;
-  padding: 7px 12px !important;
-  border: 0 !important;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 88%, transparent) !important;
-  border-radius: 0 !important;
-  background: var(--surface) !important;
-  box-shadow: none !important;
-}
-
-.chat-room-layer .chat-page .chat-profile .avatar.large {
-  width: 38px;
-  height: 38px;
-  border-width: 2px;
+.chat-room-layer .chat-page .chat-call-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0;
 }
 
 .chat-room-layer .chat-page .chat-call-actions button {
-  width: 38px;
-  height: 38px;
-  min-width: 38px;
-  min-height: 38px;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
   border: 0;
   background: transparent;
 }
@@ -264,6 +273,13 @@
 }
 
 @media (max-width: 390px) {
-  .chat-room-header { padding-left: 4px; padding-right: 4px; }
+  .chat-room-layer .chat-page .chat-profile {
+    padding-left: 52px !important;
+    padding-right: 5px !important;
+  }
+  .chat-room-layer .chat-page .chat-call-actions button {
+    width: 38px;
+    min-width: 38px;
+  }
   .chat-room-layer .chat-page .messages { padding-left: 9px !important; padding-right: 9px !important; }
 }
