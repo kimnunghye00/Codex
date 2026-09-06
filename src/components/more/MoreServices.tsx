@@ -1,7 +1,7 @@
 import { Bell, CalendarDays, Clock3, Heart, Image, MapPinned, MessageCircle, Palette, Settings, Smartphone, Smile, Sparkles, Trophy, UserRound, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import type { HubTabId } from '../memories/StableMemoriesPage';
-import type { LocationTabId } from '../location/StableLocationPage';
+import type { HubTabId } from '../memories/MemoriesPage';
+import type { LocationTabId } from '../location/LocationPage';
 
 type MoreServiceId = 'profile' | 'notifications' | 'theme' | 'app-icon' | 'emoticon' | 'album' | 'anniversary' | 'record' | 'tier' | 'schedule' | 'date' | 'chat' | 'map' | 'footprint';
 type AppIconId = 'route' | 'heart' | 'night' | 'cream';
