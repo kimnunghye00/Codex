@@ -10,7 +10,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
 import { connectAiTestPartner, loadLocalAiPartner, syncUserProfile } from '../../lib/coupleData';
-import { getRealCoupleConnection, type RealCoupleConnection } from '../../lib/coupleConnection';
+import { subscribeRealCoupleConnection, type RealCoupleConnection } from '../../lib/coupleConnection';
 import { savePartnerNickname } from '../../lib/coupleShared';
 import { CoupleConnect } from '../couple/CoupleConnect';
 import { CoupleDisconnectControl } from './CoupleDisconnectControl';
@@ -77,17 +77,10 @@ export function AccountSettings({ user, profile, onProfileChange, onClose }: {
   const hasEmail = user.providerData.some((provider) => provider.providerId === 'password');
   const loginEmail = user.email?.endsWith('@login.meluni.app') ? null : user.email;
 
-  useEffect(() => {
-    let cancelled = false;
-    const check = () => void getRealCoupleConnection(user.uid).then((next) => {
-      if (cancelled) return;
-      setRealConnection(next);
-      if (next?.partnerProfile?.nickname) setPartnerNicknameValue(next.partnerProfile.nickname);
-    }).catch(() => { if (!cancelled) setRealConnection(null); });
-    check();
-    const timer = window.setInterval(check, 3000);
-    return () => { cancelled = true; window.clearInterval(timer); };
-  }, [user.uid]);
+  useEffect(() => subscribeRealCoupleConnection(user.uid, (next) => {
+    setRealConnection(next);
+    if (next?.partnerProfile?.nickname) setPartnerNicknameValue(next.partnerProfile.nickname);
+  }, () => setRealConnection(null)), [user.uid]);
 
   const syncProfile = (next: UserProfile) => {
     saveProfile(user.uid, next);
