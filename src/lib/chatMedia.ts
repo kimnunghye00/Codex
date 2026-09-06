@@ -30,13 +30,7 @@ function extensionForMime(mime: string) {
 }
 
 function yieldToBrowser() {
-  return new Promise<void>((resolve) => {
-    if ('requestIdleCallback' in window) {
-      window.requestIdleCallback(() => resolve(), { timeout: 80 });
-      return;
-    }
-    window.setTimeout(resolve, 0);
-  });
+  return new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 }
 
 async function sourceToBlob(source: string | Blob) {
@@ -61,9 +55,7 @@ async function decodeImage(blob: Blob): Promise<{
         height: bitmap.height,
         release: () => bitmap.close(),
       };
-    } catch {
-      // Fall through for WebViews/codecs that do not support createImageBitmap.
-    }
+    } catch {}
   }
 
   const objectUrl = URL.createObjectURL(blob);
@@ -101,8 +93,6 @@ async function createCompactPreview(source: string | Blob) {
     if (!context) throw new Error('preview-canvas-unavailable');
     context.drawImage(decoded.source, 0, 0, canvas.width, canvas.height);
 
-    // toBlob performs encoding asynchronously. Avoid toDataURL here because the
-    // synchronous base64 path can freeze Android WebView for large photo batches.
     const webp = await canvasToBlob(canvas, 'image/webp', PREVIEW_WEBP_QUALITY);
     if (webp?.type === 'image/webp') return webp;
     const jpeg = await canvasToBlob(canvas, 'image/jpeg', PREVIEW_JPEG_FALLBACK_QUALITY);
