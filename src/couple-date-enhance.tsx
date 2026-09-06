@@ -13,15 +13,32 @@ function SharedPlans() {
   useEffect(() => {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
+
+    let disposed = false;
     let unsubscribe: (() => void) | undefined;
-    void getRealCoupleConnection(uid).then((connection) => {
-      if (!connection?.coupleId) return;
-      const q = query(collection(db, 'couples', connection.coupleId, 'schedules'), orderBy('date', 'asc'));
-      unsubscribe = onSnapshot(q, (snapshot) => {
-        setItems(snapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Omit<Schedule, 'id'>) })).filter((item) => item.type === 'couple'));
+
+    void getRealCoupleConnection(uid)
+      .then((connection) => {
+        if (disposed || !connection?.coupleId) return;
+        const q = query(collection(db, 'couples', connection.coupleId, 'schedules'), orderBy('date', 'asc'));
+        const stop = onSnapshot(q, (snapshot) => {
+          if (disposed) return;
+          setItems(snapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Omit<Schedule, 'id'>) })).filter((item) => item.type === 'couple'));
+        });
+        if (disposed) {
+          stop();
+          return;
+        }
+        unsubscribe = stop;
+      })
+      .catch((cause) => {
+        if (!disposed) console.warn('[ROUTE shared plans subscribe]', cause);
       });
-    });
-    return () => unsubscribe?.();
+
+    return () => {
+      disposed = true;
+      unsubscribe?.();
+    };
   }, []);
 
   if (!items.length) return <div className="memory-empty route-shared-plan-empty">아직 함께 잡은 약속이 없어요.</div>;
