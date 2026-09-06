@@ -1,13 +1,18 @@
-/* ROUTE UI stability v23
- * First app-wide stabilization pass.
- * This file intentionally loads last. It does not redesign features; it
- * normalizes shared geometry so fixes on one tab do not break another.
+/* ROUTE UI stability v23 — phase 5 consolidated
+ * Shared geometry for the five primary tabs and 320–480 px phones.
+ * This replaces the older v22 header/profile patch so one final layer owns
+ * gutters, header divider, couple geometry, containment and bottom navigation.
  */
 
 :root {
   --route-page-gutter: clamp(16px, 4.6vw, 22px);
   --route-header-line: 2px;
+  --route-header-accent-stop: 24%;
   --route-bottom-nav-height: 82px;
+  --route-touch-target: 44px;
+  --route-couple-avatar: 40px;
+  --route-couple-heart: 44px;
+  --route-couple-axis: 28px;
 }
 
 /* Shared viewport geometry ------------------------------------------------ */
@@ -54,12 +59,18 @@ span {
   min-width: 0;
 }
 
-/* One header system on every primary tab --------------------------------- */
+/* One header system on Home / Memories / Chat / Location / More ---------- */
+.topbar {
+  position: relative !important;
+  border-bottom: 0 !important;
+}
+
 .home-page > .topbar,
 .memories-page > .topbar,
 .chat-page > .topbar,
 .location-page > .topbar,
 .more-page > .topbar {
+  flex: 0 0 auto !important;
   width: 100%;
   margin: 0 !important;
   border: 0 !important;
@@ -70,6 +81,9 @@ span {
 .chat-page > .topbar::after,
 .location-page > .topbar::after,
 .more-page > .topbar::after {
+  content: '' !important;
+  position: absolute !important;
+  z-index: 2 !important;
   left: calc(-1 * var(--route-page-gutter)) !important;
   right: calc(-1 * var(--route-page-gutter)) !important;
   bottom: 0 !important;
@@ -78,8 +92,9 @@ span {
   border: 0 !important;
   border-radius: 0 !important;
   opacity: 1 !important;
-  background: linear-gradient(90deg, var(--primary) 0 24%, var(--emotion) 24% 100%) !important;
+  background: linear-gradient(90deg, var(--primary) 0 var(--route-header-accent-stop), var(--emotion) var(--route-header-accent-stop) 100%) !important;
   box-shadow: none !important;
+  pointer-events: none !important;
 }
 
 .topbar .brand,
@@ -107,31 +122,59 @@ span {
   flex: 0 0 auto;
 }
 
-/* Couple connector: keep all three circles on one visual axis ------------ */
+.topbar .header-actions button {
+  min-width: var(--route-touch-target);
+  min-height: var(--route-touch-target);
+}
+
+/* Couple connector: avatar centre -> heart centre -> avatar centre -------- */
 .home-dashboard .home-couple-profile-card {
-  --route-couple-avatar: 40px;
-  --route-couple-heart: 44px;
-  --route-couple-axis: 28px;
+  position: relative !important;
+  isolation: isolate !important;
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) var(--route-couple-heart) minmax(0, 1fr) !important;
   align-items: start !important;
   column-gap: 0 !important;
+  padding: 8px 10px 7px !important;
   overflow: hidden !important;
 }
 
 .home-dashboard .home-couple-profile-card::before {
+  content: '' !important;
+  position: absolute !important;
+  z-index: 0 !important;
   left: 25% !important;
   right: 25% !important;
   top: var(--route-couple-axis) !important;
   height: 2px !important;
   transform: translateY(-50%) !important;
+  border-radius: 999px !important;
+  opacity: .72 !important;
+  background: linear-gradient(90deg, var(--primary), var(--emotion)) !important;
+  pointer-events: none !important;
+}
+
+.home-dashboard .home-couple-profile-card::after,
+.home-dashboard .home-profile-heart::before,
+.home-dashboard .home-profile-heart::after {
+  content: none !important;
+  display: none !important;
+}
+
+.home-dashboard .home-person,
+.home-dashboard .home-profile-heart {
+  position: relative !important;
+  z-index: 1 !important;
 }
 
 .home-dashboard .home-person,
 .home-dashboard .home-couple-profile-card > .home-person:last-child {
   width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
   align-items: center !important;
   justify-content: flex-start !important;
+  gap: 4px !important;
   text-align: center !important;
 }
 
@@ -140,15 +183,25 @@ span {
   width: var(--route-couple-avatar) !important;
   height: var(--route-couple-avatar) !important;
   flex: 0 0 var(--route-couple-avatar) !important;
+  display: grid !important;
+  place-items: center !important;
   overflow: hidden !important;
+  border: 3px solid var(--surface) !important;
+  border-radius: 50% !important;
+  background-clip: padding-box !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--border) 80%, var(--primary) 20%) !important;
 }
 
 .home-dashboard .home-profile-avatar img,
 .home-dashboard .home-profile-avatar.partner img {
+  display: block !important;
   width: 100% !important;
   height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
   object-fit: cover !important;
   object-position: center !important;
+  border-radius: inherit !important;
 }
 
 .home-dashboard .home-profile-heart {
@@ -156,16 +209,37 @@ span {
   height: var(--route-couple-heart) !important;
   align-self: start !important;
   justify-self: center !important;
+  display: grid !important;
+  place-items: center !important;
+  margin-top: -2px !important;
+  border: 2px solid color-mix(in srgb, var(--emotion) 28%, var(--border)) !important;
+  border-radius: 50% !important;
+  color: var(--emotion) !important;
+  background: color-mix(in srgb, var(--surface) 90%, var(--emotion) 10%) !important;
+  box-shadow: 0 4px 12px rgba(31, 42, 68, .08) !important;
+}
+
+.home-dashboard .home-profile-heart svg {
+  width: 20px !important;
+  height: 20px !important;
+  fill: currentColor !important;
 }
 
 .home-dashboard .home-profile-copy,
 .home-dashboard .home-couple-profile-card > .home-person:last-child .home-profile-copy {
   width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
   align-items: center !important;
 }
 
 .home-dashboard .home-profile-copy b {
+  width: 100% !important;
   max-width: min(100%, 92px) !important;
+  overflow: hidden !important;
+  text-align: center !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 
 /* Shared card containment ------------------------------------------------- */
@@ -180,11 +254,22 @@ span {
 .chat-page .messages,
 .location-page .location-map-card,
 .location-page .location-share-card,
-.more-page .more-hero,
+.more-page .more-service-intro,
+.more-page .more-couple-strip,
 .more-page .theme-card,
 .more-page .more-list {
   max-width: 100%;
   overflow: hidden;
+}
+
+/* Keep dense rows and controls usable without changing their visual style. */
+.route-hub button,
+.location-page button,
+.more-page button,
+.chat-page .chat-call-actions button,
+.more-sheet button,
+.account-settings button {
+  touch-action: manipulation;
 }
 
 /* Bottom navigation: identical footprint on every tab -------------------- */
@@ -202,6 +287,7 @@ span {
 
 .bottom-nav button {
   min-width: 0 !important;
+  min-height: var(--route-touch-target);
   padding-left: 2px !important;
   padding-right: 2px !important;
 }
@@ -219,29 +305,93 @@ span {
 .chat-tools-sheet,
 .chat-extra-modal,
 .chat-call-modal,
-.hub-modal {
+.hub-modal,
+.account-settings {
   max-width: calc(100vw - (var(--route-page-gutter) * 2));
   max-height: calc(100dvh - 28px);
 }
 
-/* Small phones ------------------------------------------------------------ */
+/* 320–480 px responsive matrix ------------------------------------------- */
+@media (max-width: 480px) {
+  .home-dashboard-grid,
+  .route-hub,
+  .chat-page,
+  .location-page,
+  .more-page {
+    min-width: 0;
+  }
+
+  .more-service-grid,
+  .route-hub .record-grid {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 430px) {
+  :root {
+    --route-page-gutter: 18px;
+  }
+
+  .topbar .page-title {
+    max-width: 32vw !important;
+  }
+}
+
 @media (max-width: 390px) {
   :root {
     --route-page-gutter: 16px;
-  }
-
-  .home-dashboard .home-couple-profile-card {
+    --route-bottom-nav-height: 76px;
     --route-couple-avatar: 38px;
     --route-couple-heart: 42px;
     --route-couple-axis: 26px;
   }
 
+  .home-dashboard .home-couple-profile-card {
+    padding-top: 7px !important;
+  }
+
   .topbar .page-title {
     max-width: 27vw !important;
   }
+}
 
-  .bottom-nav {
-    --route-bottom-nav-height: 76px;
+@media (max-width: 360px) {
+  :root {
+    --route-page-gutter: 14px;
+    --route-header-accent-stop: 25%;
+  }
+
+  .topbar .header-actions {
+    gap: 2px !important;
+  }
+
+  .topbar .page-title {
+    max-width: 24vw !important;
+  }
+
+  .home-dashboard .home-profile-copy b {
+    max-width: 72px !important;
+  }
+
+  .more-service-grid {
+    gap: 8px !important;
+  }
+}
+
+@media (max-width: 320px) {
+  :root {
+    --route-page-gutter: 12px;
+    --route-couple-avatar: 36px;
+    --route-couple-heart: 40px;
+    --route-couple-axis: 25px;
+  }
+
+  .topbar .page-title {
+    display: none !important;
+  }
+
+  .bottom-nav button > span:last-child {
+    font-size: 10px !important;
   }
 }
 
