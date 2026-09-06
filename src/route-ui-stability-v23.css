@@ -6,12 +6,12 @@
 
 :root {
   --route-page-gutter: clamp(16px, 4.6vw, 22px);
-  --route-header-line: 2px;
+  --route-header-line: 1px;
   --route-header-accent-stop: 24%;
   --route-bottom-nav-height: 82px;
   --route-touch-target: 44px;
   --route-couple-avatar: 40px;
-  --route-couple-heart: 44px;
+  --route-couple-heart: 32px;
   --route-couple-axis: 28px;
 }
 
@@ -92,7 +92,7 @@ span {
   border: 0 !important;
   border-radius: 0 !important;
   opacity: 1 !important;
-  background: linear-gradient(90deg, var(--primary) 0 var(--route-header-accent-stop), var(--emotion) var(--route-header-accent-stop) 100%) !important;
+  background: var(--primary) !important;
   box-shadow: none !important;
   pointer-events: none !important;
 }
@@ -127,14 +127,14 @@ span {
   min-height: var(--route-touch-target);
 }
 
-/* Couple connector: avatar centre -> heart centre -> avatar centre -------- */
+/* Couple connector: avatar centre -> small heart node -> avatar centre ---- */
 .home-dashboard .home-couple-profile-card {
   position: relative !important;
   isolation: isolate !important;
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) var(--route-couple-heart) minmax(0, 1fr) !important;
   align-items: start !important;
-  column-gap: 0 !important;
+  column-gap: 4px !important;
   padding: 8px 10px 7px !important;
   overflow: hidden !important;
 }
@@ -146,11 +146,11 @@ span {
   left: 25% !important;
   right: 25% !important;
   top: var(--route-couple-axis) !important;
-  height: 2px !important;
+  height: 1px !important;
   transform: translateY(-50%) !important;
   border-radius: 999px !important;
-  opacity: .72 !important;
-  background: linear-gradient(90deg, var(--primary), var(--emotion)) !important;
+  opacity: .68 !important;
+  background: color-mix(in srgb, var(--primary) 58%, var(--border)) !important;
   pointer-events: none !important;
 }
 
@@ -211,17 +211,17 @@ span {
   justify-self: center !important;
   display: grid !important;
   place-items: center !important;
-  margin-top: -2px !important;
-  border: 2px solid color-mix(in srgb, var(--emotion) 28%, var(--border)) !important;
+  margin-top: 4px !important;
+  border: 1px solid color-mix(in srgb, var(--emotion) 20%, var(--border)) !important;
   border-radius: 50% !important;
   color: var(--emotion) !important;
-  background: color-mix(in srgb, var(--surface) 90%, var(--emotion) 10%) !important;
-  box-shadow: 0 4px 12px rgba(31, 42, 68, .08) !important;
+  background: var(--surface) !important;
+  box-shadow: 0 3px 9px rgba(31, 42, 68, .055) !important;
 }
 
 .home-dashboard .home-profile-heart svg {
-  width: 20px !important;
-  height: 20px !important;
+  width: 15px !important;
+  height: 15px !important;
   fill: currentColor !important;
 }
 
@@ -240,6 +240,12 @@ span {
   text-align: center !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
+}
+
+/* The schedule card no longer carries a competing decorative color bar. */
+.home-dashboard .home-schedule-card::before {
+  content: none !important;
+  display: none !important;
 }
 
 /* Shared card containment ------------------------------------------------- */
@@ -342,7 +348,7 @@ span {
     --route-page-gutter: 16px;
     --route-bottom-nav-height: 76px;
     --route-couple-avatar: 38px;
-    --route-couple-heart: 42px;
+    --route-couple-heart: 30px;
     --route-couple-axis: 26px;
   }
 
@@ -382,7 +388,7 @@ span {
   :root {
     --route-page-gutter: 12px;
     --route-couple-avatar: 36px;
-    --route-couple-heart: 40px;
+    --route-couple-heart: 28px;
     --route-couple-axis: 25px;
   }
 
