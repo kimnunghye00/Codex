@@ -32,11 +32,14 @@ type LocalStateBackup = Record<string, string>;
 let activeUid = '';
 let backupTimer: number | undefined;
 let immediateBackupTimer: number | undefined;
+let startupBackupTimer: number | undefined;
 let lastMessageSnapshot = '';
 let lastMemorySnapshot = '';
 let lastLocalStateSnapshot = '';
 let backupRunning = false;
-let backupAgain = false;
+let backupAgainUid = '';
+let persistentBackupInitialized = false;
+let authGeneration = 0;
 
 function backupRef(uid: string, key: string) {
   return doc(db, 'users', uid, 'backups', key);
@@ -204,6 +207,10 @@ async function restoreIntoLocalStorage(uid: string) {
     getDoc(doc(db, 'users', uid)),
   ]);
 
+  // A different account can become active while the restore request is in flight.
+  // Never let the old account write its cloud snapshot into the new session cache.
+  if (auth.currentUser?.uid !== uid) return false;
+
   const localMessages = readJson<Message[]>(MESSAGE_KEY, []);
   const rawLocalMemories = readJson<Memory[]>(MEMORY_KEY, []);
   const localDeleted = loadDeletedMemories();
@@ -258,9 +265,9 @@ async function restoreIntoLocalStorage(uid: string) {
 }
 
 async function backupCurrentLocalState(uid: string) {
-  if (!uid) return;
+  if (!uid || uid !== activeUid) return;
   if (backupRunning) {
-    backupAgain = true;
+    backupAgainUid = uid;
     return;
   }
 
@@ -288,26 +295,33 @@ async function backupCurrentLocalState(uid: string) {
       await saveBackupValue(uid, 'local-state-latest', localState);
       lastLocalStateSnapshot = localStateSnapshot;
     }
-    localStorage.setItem('route.backup.lastSuccess', new Date().toISOString());
-    localStorage.removeItem('route.backup.lastError');
+    if (uid === activeUid) {
+      localStorage.setItem('route.backup.lastSuccess', new Date().toISOString());
+      localStorage.removeItem('route.backup.lastError');
+    }
   } catch (error) {
     console.error('[ROUTE backup]', error);
-    localStorage.setItem('route.backup.lastError', error instanceof Error ? error.message : String(error));
+    if (uid === activeUid) {
+      localStorage.setItem('route.backup.lastError', error instanceof Error ? error.message : String(error));
+    }
   } finally {
     backupRunning = false;
-    if (backupAgain) {
-      backupAgain = false;
-      window.setTimeout(() => void backupCurrentLocalState(activeUid), IMMEDIATE_BACKUP_DELAY_MS);
+    const rerunUid = backupAgainUid;
+    backupAgainUid = '';
+    if (rerunUid && rerunUid === activeUid) {
+      window.setTimeout(() => void backupCurrentLocalState(rerunUid), IMMEDIATE_BACKUP_DELAY_MS);
     }
   }
 }
 
 function scheduleImmediateBackup() {
-  if (!activeUid) return;
+  const uid = activeUid;
+  if (!uid) return;
   if (immediateBackupTimer !== undefined) window.clearTimeout(immediateBackupTimer);
   immediateBackupTimer = window.setTimeout(() => {
     immediateBackupTimer = undefined;
-    void backupCurrentLocalState(activeUid);
+    if (uid !== activeUid) return;
+    void backupCurrentLocalState(uid);
   }, IMMEDIATE_BACKUP_DELAY_MS);
 }
 
@@ -316,56 +330,76 @@ export async function preparePersistentBackup() {
   if (!user) return;
   try {
     await restoreIntoLocalStorage(user.uid);
-    sessionStorage.setItem(RESTORED_SESSION_KEY, user.uid);
+    if (auth.currentUser?.uid === user.uid) sessionStorage.setItem(RESTORED_SESSION_KEY, user.uid);
   } catch (error) {
     console.warn('[ROUTE backup restore]', error);
   }
 }
 
 export function startPersistentBackup() {
-  const schedule = (uid: string) => {
-    activeUid = uid;
+  if (persistentBackupInitialized) return;
+  persistentBackupInitialized = true;
+
+  const clearTimers = () => {
     if (backupTimer !== undefined) window.clearInterval(backupTimer);
-    backupTimer = window.setInterval(() => void backupCurrentLocalState(activeUid), BACKUP_INTERVAL_MS);
-    window.setTimeout(() => void backupCurrentLocalState(activeUid), 1500);
+    if (immediateBackupTimer !== undefined) window.clearTimeout(immediateBackupTimer);
+    if (startupBackupTimer !== undefined) window.clearTimeout(startupBackupTimer);
+    backupTimer = undefined;
+    immediateBackupTimer = undefined;
+    startupBackupTimer = undefined;
+  };
+
+  const schedule = (uid: string, generation: number) => {
+    if (!uid || generation !== authGeneration || auth.currentUser?.uid !== uid) return;
+    activeUid = uid;
+    clearTimers();
+    backupTimer = window.setInterval(() => {
+      if (generation === authGeneration && activeUid === uid) void backupCurrentLocalState(uid);
+    }, BACKUP_INTERVAL_MS);
+    startupBackupTimer = window.setTimeout(() => {
+      startupBackupTimer = undefined;
+      if (generation === authGeneration && activeUid === uid) void backupCurrentLocalState(uid);
+    }, 1500);
   };
 
   onAuthStateChanged(auth, (user) => {
-    if (!user) {
-      activeUid = '';
-      backupAgain = false;
-      if (backupTimer !== undefined) window.clearInterval(backupTimer);
-      if (immediateBackupTimer !== undefined) window.clearTimeout(immediateBackupTimer);
-      backupTimer = undefined;
-      immediateBackupTimer = undefined;
-      return;
-    }
+    const generation = ++authGeneration;
+    clearTimers();
+    backupAgainUid = '';
+    activeUid = '';
 
-    const alreadyRestored = sessionStorage.getItem(RESTORED_SESSION_KEY) === user.uid;
+    if (!user) return;
+
+    const uid = user.uid;
+    const alreadyRestored = sessionStorage.getItem(RESTORED_SESSION_KEY) === uid;
     if (alreadyRestored) {
-      schedule(user.uid);
+      schedule(uid, generation);
       return;
     }
 
-    void restoreIntoLocalStorage(user.uid)
+    void restoreIntoLocalStorage(uid)
       .then((changed) => {
-        sessionStorage.setItem(RESTORED_SESSION_KEY, user.uid);
-        schedule(user.uid);
+        if (generation !== authGeneration || auth.currentUser?.uid !== uid) return;
+        sessionStorage.setItem(RESTORED_SESSION_KEY, uid);
+        schedule(uid, generation);
         if (changed) {
           window.dispatchEvent(new CustomEvent('route-backup-restored'));
         }
       })
       .catch((error) => {
+        if (generation !== authGeneration || auth.currentUser?.uid !== uid) return;
         console.warn('[ROUTE backup login restore]', error);
-        schedule(user.uid);
+        schedule(uid, generation);
       });
   });
 
   window.addEventListener(PERSISTENT_STATE_CHANGE_EVENT, scheduleImmediateBackup);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden' && activeUid) void backupCurrentLocalState(activeUid);
+    const uid = activeUid;
+    if (document.visibilityState === 'hidden' && uid) void backupCurrentLocalState(uid);
   });
   window.addEventListener('pagehide', () => {
-    if (activeUid) void backupCurrentLocalState(activeUid);
+    const uid = activeUid;
+    if (uid) void backupCurrentLocalState(uid);
   });
 }
