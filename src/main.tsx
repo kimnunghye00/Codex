@@ -69,6 +69,8 @@ import './mobile-polish-v3';
 import './more-enhance';
 // Real-device post-deploy polish must win over the phase-4/5 runtime CSS loaded above.
 import './route-post-deploy-polish-v20.css';
+// Real-device geometry fix: centered couple connector + identical tab divider.
+import './route-home-header-alignment-v22.css';
 
 const DESKTOP_PREVIEW_PARAM = 'routeMobilePreview';
 
