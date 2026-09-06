@@ -1,0 +1,123 @@
+name: Build Android Release QA APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/android-release-qa-apk.yml'
+
+concurrency:
+  group: android-release-qa-apk-main
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Prepare fixed ROUTE test signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p android/signing
+          base64 --decode android/route-test-debug.keystore.b64 > android/signing/route-test-debug.keystore
+          EXPECTED="40F608CE3D3DD13773271E6D61B2EB1C513904636AECD662D78B882C7A006A5A"
+          ACTUAL="$(keytool -list -v -keystore android/signing/route-test-debug.keystore -storepass android -alias androiddebugkey | awk '/SHA256:/{print $2; exit}' | tr -d ':')"
+          echo "ROUTE test signing certificate SHA-256: ${ACTUAL}"
+          test "${ACTUAL}" = "${EXPECTED}"
+
+      - name: Restore Firebase Android config
+        shell: bash
+        env:
+          ROUTE_GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.ROUTE_GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ROUTE_GOOGLE_SERVICES_JSON_BASE64:-}" ]; then
+            echo "::warning::ROUTE_GOOGLE_SERVICES_JSON_BASE64 is not configured. Native Firebase features such as FCM push notifications will be unavailable in this QA APK."
+            exit 0
+          fi
+
+          printf '%s' "${ROUTE_GOOGLE_SERVICES_JSON_BASE64}" | base64 --decode > android/app/google-services.json
+          test -s android/app/google-services.json
+
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const path = 'android/app/google-services.json';
+          const json = JSON.parse(fs.readFileSync(path, 'utf8'));
+          const projectId = json?.project_info?.project_id;
+          const clients = Array.isArray(json?.client) ? json.client : [];
+          const routeClient = clients.find((client) => client?.client_info?.android_client_info?.package_name === 'com.route.couple');
+          if (projectId !== 'meluni-f4e00') throw new Error(`Unexpected Firebase project_id: ${projectId ?? 'missing'}`);
+          if (!routeClient) throw new Error('google-services.json does not contain Android package com.route.couple');
+          console.log('Firebase Android config verified for meluni-f4e00 / com.route.couple.');
+          NODE
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run full ROUTE stability suite
+        run: npm run stability
+
+      - name: Configure native permissions
+        run: npm run native:configure
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Make Gradle executable
+        run: chmod +x android/gradlew
+
+      - name: Build debug QA APK
+        working-directory: android
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Verify APK signing identity and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          APKSIGNER="$(find "${ANDROID_HOME}/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          EXPECTED="40f608ce3d3dd13773271e6d61b2eb1c513904636aecd662d78b882c7a006a5a"
+          CERT_OUTPUT="$(${APKSIGNER} verify --print-certs "${APK}")"
+          ACTUAL="$(printf '%s\n' "${CERT_OUTPUT}" | sed -n 's/^.*certificate SHA-256 digest:[[:space:]]*//p' | head -n 1 | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+          test -n "${ACTUAL}"
+          test "${ACTUAL}" = "${EXPECTED}"
+          AAPT="$(find "${ANDROID_HOME}/build-tools" -type f -name aapt | sort -V | tail -n 1)"
+          BADGING="$(${AAPT} dump badging "${APK}" | head -n 1)"
+          echo "${BADGING}"
+          printf '%s' "${BADGING}" | grep -q "name='com.route.couple'"
+
+      - name: Write QA build summary
+        shell: bash
+        run: |
+          echo '### ROUTE Android Release QA APK' >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Source: current main branch' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Stability suite: passed before native build' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Package: com.route.couple' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Artifact: ROUTE-release-qa-apk' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload QA APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ROUTE-release-qa-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
