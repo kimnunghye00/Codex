@@ -7,6 +7,7 @@ import { AuthFlow, Wordmark } from './components/auth/AuthFlow';
 import { ProfileSetup } from './components/auth/ProfileSetup';
 import { NotificationPanel } from './components/notifications/NotificationPanel';
 import { CoupleHomeTools } from './components/home/CoupleHomeTools';
+import { MoreServices } from './components/more/MoreServices';
 import { auth } from './lib/firebase';
 import { getRealCoupleConnection, type RealCoupleConnection } from './lib/coupleConnection';
 import { saveRelationshipStartDate, subscribeCoupleShared } from './lib/coupleShared';
@@ -28,7 +29,6 @@ import {
 
 type Tab = 'home' | 'chat' | 'memories' | 'location' | 'anniversary' | 'more';
 type Anniversary = { id: string; icon: string; title: string; date: Date; recurring?: boolean };
-type MeluniTheme = 'default' | 'lavender' | 'dark';
 
 const DAY = 86_400_000;
 const initialMemories: Memory[] = [];
@@ -323,14 +323,10 @@ function AnniversaryPage({ connected, relationshipStartDate, coupleDay, annivers
 }
 
 function MorePage({ onSettings, onNotifications, unreadCount }: { onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
-  const [theme, setTheme] = useState<MeluniTheme>(() => { const saved = localStorage.getItem('meluni-theme'); return saved === 'lavender' || saved === 'dark' ? saved : 'default'; });
-  useEffect(() => { document.documentElement.dataset.meluniTheme = theme; localStorage.setItem('meluni-theme', theme); }, [theme]);
-  return <div className="page more-page"><Header title="더보기" onSettings={onSettings} onNotifications={onNotifications} unreadCount={unreadCount} /><div className="more-scroll">
-    <section className="more-hero"><div className="more-hero-copy"><small>ROUTE SETTINGS</small><h1>우리에게 맞게 꾸며요</h1><p>프로필부터 테마, 알림과 앱 설정까지 한곳에서 관리할 수 있어요.</p></div><div className="more-hero-icon"><Settings size={25} /></div></section>
-    <section className="more-section"><div className="more-section-head"><h2>빠른 메뉴</h2><span>자주 쓰는 설정</span></div><div className="more-grid"><button className="more-grid-button" type="button" onClick={onSettings}><span className="more-icon"><Settings size={18} /></span><b>프로필</b></button><button className="more-grid-button" type="button" onClick={onNotifications}><span className="more-icon"><Bell size={18} />{unreadCount > 0 && <em className="more-badge">{unreadCount > 9 ? '9+' : unreadCount}</em>}</span><b>알림</b></button><button className="more-grid-button" type="button" onClick={() => document.getElementById('theme-settings')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}><span className="more-icon"><Heart size={18} /></span><b>테마</b></button><button className="more-grid-button" type="button"><span className="more-icon"><MapPinned size={18} /></span><b>앱 설정</b></button></div></section>
-    <section className="more-section" id="theme-settings"><div className="more-section-head"><h2>테마</h2><span>즉시 적용돼요</span></div><div className="theme-card"><div className="theme-options"><button className={`theme-option ${theme === 'default' ? 'active' : ''}`} type="button" onClick={() => setTheme('default')}><i className="theme-swatch default" /><span><b>기본</b><small>네이비 + 코랄</small></span></button><button className={`theme-option ${theme === 'lavender' ? 'active' : ''}`} type="button" onClick={() => setTheme('lavender')}><i className="theme-swatch lavender" /><span><b>라벤더</b><small>부드러운 보라</small></span></button><button className={`theme-option ${theme === 'dark' ? 'active' : ''}`} type="button" onClick={() => setTheme('dark')}><i className="theme-swatch dark" /><span><b>다크</b><small>어두운 화면</small></span></button></div></div></section>
-    <section className="more-section"><div className="more-section-head"><h2>앱 및 계정</h2><span>ROUTE 관리</span></div><div className="more-list"><button className="more-list-button" type="button" onClick={onSettings}><span className="more-list-icon"><Settings size={17} /></span><span className="more-list-copy"><b>계정 및 프로필 설정</b><small>이름, 생년월일, 이메일과 프로필 사진</small></span><ChevronRight size={17} /></button><button className="more-list-button" type="button" onClick={onNotifications}><span className="more-list-icon"><Bell size={17} /></span><span className="more-list-copy"><b>알림 설정</b><small>최근 알림 확인 및 알림 관리</small></span><ChevronRight size={17} /></button><button className="more-list-button" type="button"><span className="more-list-icon"><MessageCircle size={17} /></span><span className="more-list-copy"><b>채팅 및 데이터</b><small>채팅 저장, 사진과 데이터 관리</small></span><ChevronRight size={17} /></button><button className="more-list-button" type="button"><span className="more-list-icon"><Home size={17} /></span><span className="more-list-copy"><b>앱 정보 및 도움말</b><small>ROUTE 버전, 이용 안내와 문의</small></span><ChevronRight size={17} /></button></div></section>
-  </div></div>;
+  return <div className="page more-page">
+    <Header title="더보기" onSettings={onSettings} onNotifications={onNotifications} unreadCount={unreadCount} />
+    <div className="more-scroll"><MoreServices /></div>
+  </div>;
 }
 
 function BottomNav({ tab, setTab }: { tab: Tab; setTab: (tab: Tab) => void }) {
