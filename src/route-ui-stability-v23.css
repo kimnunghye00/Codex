@@ -1,0 +1,255 @@
+/* ROUTE UI stability v23
+ * First app-wide stabilization pass.
+ * This file intentionally loads last. It does not redesign features; it
+ * normalizes shared geometry so fixes on one tab do not break another.
+ */
+
+:root {
+  --route-page-gutter: clamp(16px, 4.6vw, 22px);
+  --route-header-line: 2px;
+  --route-bottom-nav-height: 82px;
+}
+
+/* Shared viewport geometry ------------------------------------------------ */
+.app-shell,
+.app-shell main,
+.page,
+.full-page,
+.home-page,
+.memories-page,
+.chat-page,
+.location-page,
+.more-page {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.page,
+.home-page,
+.memories-page,
+.chat-page,
+.location-page,
+.more-page {
+  padding-left: var(--route-page-gutter) !important;
+  padding-right: var(--route-page-gutter) !important;
+  overflow-x: clip;
+}
+
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+}
+
+button,
+input,
+textarea,
+select,
+label,
+section,
+article,
+div,
+span {
+  min-width: 0;
+}
+
+/* One header system on every primary tab --------------------------------- */
+.home-page > .topbar,
+.memories-page > .topbar,
+.chat-page > .topbar,
+.location-page > .topbar,
+.more-page > .topbar {
+  width: 100%;
+  margin: 0 !important;
+  border: 0 !important;
+}
+
+.home-page > .topbar::after,
+.memories-page > .topbar::after,
+.chat-page > .topbar::after,
+.location-page > .topbar::after,
+.more-page > .topbar::after {
+  left: calc(-1 * var(--route-page-gutter)) !important;
+  right: calc(-1 * var(--route-page-gutter)) !important;
+  bottom: 0 !important;
+  width: auto !important;
+  height: var(--route-header-line) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  opacity: 1 !important;
+  background: linear-gradient(90deg, var(--primary) 0 24%, var(--emotion) 24% 100%) !important;
+  box-shadow: none !important;
+}
+
+.topbar .brand,
+.topbar .header-actions {
+  min-width: 0;
+}
+
+.topbar .brand {
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.topbar .wordmark {
+  flex: 0 0 auto;
+}
+
+.topbar .page-title {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.topbar .header-actions {
+  flex: 0 0 auto;
+}
+
+/* Couple connector: keep all three circles on one visual axis ------------ */
+.home-dashboard .home-couple-profile-card {
+  --route-couple-avatar: 40px;
+  --route-couple-heart: 44px;
+  --route-couple-axis: 28px;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) var(--route-couple-heart) minmax(0, 1fr) !important;
+  align-items: start !important;
+  column-gap: 0 !important;
+  overflow: hidden !important;
+}
+
+.home-dashboard .home-couple-profile-card::before {
+  left: 25% !important;
+  right: 25% !important;
+  top: var(--route-couple-axis) !important;
+  height: 2px !important;
+  transform: translateY(-50%) !important;
+}
+
+.home-dashboard .home-person,
+.home-dashboard .home-couple-profile-card > .home-person:last-child {
+  width: 100% !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  text-align: center !important;
+}
+
+.home-dashboard .home-profile-avatar,
+.home-dashboard .home-profile-avatar.partner {
+  width: var(--route-couple-avatar) !important;
+  height: var(--route-couple-avatar) !important;
+  flex: 0 0 var(--route-couple-avatar) !important;
+  overflow: hidden !important;
+}
+
+.home-dashboard .home-profile-avatar img,
+.home-dashboard .home-profile-avatar.partner img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: center !important;
+}
+
+.home-dashboard .home-profile-heart {
+  width: var(--route-couple-heart) !important;
+  height: var(--route-couple-heart) !important;
+  align-self: start !important;
+  justify-self: center !important;
+}
+
+.home-dashboard .home-profile-copy,
+.home-dashboard .home-couple-profile-card > .home-person:last-child .home-profile-copy {
+  width: 100% !important;
+  align-items: center !important;
+}
+
+.home-dashboard .home-profile-copy b {
+  max-width: min(100%, 92px) !important;
+}
+
+/* Shared card containment ------------------------------------------------- */
+.home-dashboard .home-map-card,
+.home-dashboard .home-time-card,
+.home-dashboard .home-schedule-card,
+.home-dashboard .home-photo-card,
+.home-dashboard .home-chat-card,
+.route-hub .hub-hero,
+.route-hub .memory-card,
+.chat-page .chat-profile,
+.chat-page .messages,
+.location-page .location-map-card,
+.location-page .location-share-card,
+.more-page .more-hero,
+.more-page .theme-card,
+.more-page .more-list {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* Bottom navigation: identical footprint on every tab -------------------- */
+.bottom-nav {
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  width: min(100%, 480px) !important;
+  max-width: 480px !important;
+  height: var(--route-bottom-nav-height) !important;
+  margin: 0 !important;
+  border-top: 1px solid var(--border) !important;
+  box-shadow: 0 -8px 28px rgba(31, 42, 68, .045);
+}
+
+.bottom-nav button {
+  min-width: 0 !important;
+  padding-left: 2px !important;
+  padding-right: 2px !important;
+}
+
+.bottom-nav button > span:last-child {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Modal/sheet containment ------------------------------------------------- */
+.route-modal,
+.more-sheet,
+.chat-tools-sheet,
+.chat-extra-modal,
+.chat-call-modal,
+.hub-modal {
+  max-width: calc(100vw - (var(--route-page-gutter) * 2));
+  max-height: calc(100dvh - 28px);
+}
+
+/* Small phones ------------------------------------------------------------ */
+@media (max-width: 390px) {
+  :root {
+    --route-page-gutter: 16px;
+  }
+
+  .home-dashboard .home-couple-profile-card {
+    --route-couple-avatar: 38px;
+    --route-couple-heart: 42px;
+    --route-couple-axis: 26px;
+  }
+
+  .topbar .page-title {
+    max-width: 27vw !important;
+  }
+
+  .bottom-nav {
+    --route-bottom-nav-height: 76px;
+  }
+}
+
+/* Native safe-area remains authoritative; only prevent accidental overlap. */
+html.route-native .bottom-nav {
+  padding-bottom: max(8px, env(safe-area-inset-bottom)) !important;
+}
+
+html.route-native.route-keyboard-open .bottom-nav {
+  transform: translate(-50%, calc(100% + env(safe-area-inset-bottom))) !important;
+}
