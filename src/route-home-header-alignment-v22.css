@@ -1,0 +1,188 @@
+/* ROUTE home/header alignment v22
+ * Real-device fix: make the couple connector geometrically centered and
+ * render one identical header divider on every primary tab.
+ */
+
+/* -----------------------------------------------------------------------
+   1. One header divider for Home / Memories / Chat / Location / More
+   ----------------------------------------------------------------------- */
+.topbar {
+  position: relative !important;
+  border-bottom: 0 !important;
+}
+
+/* Remove the legacy short underline + border combination and draw one line.
+   The page itself has 22px horizontal padding, so extend the divider through
+   that padding to keep the line identical on every main tab. */
+.topbar::after {
+  content: '' !important;
+  position: absolute !important;
+  z-index: 2 !important;
+  left: -22px !important;
+  right: -22px !important;
+  bottom: 0 !important;
+  width: auto !important;
+  height: 3px !important;
+  border-radius: 0 !important;
+  opacity: 1 !important;
+  background: linear-gradient(90deg, var(--primary) 0 22%, var(--emotion) 22% 100%) !important;
+  pointer-events: none !important;
+}
+
+/* Some full-page feature shells can override the header measurements.
+   Keep the visual baseline identical without changing safe-area padding. */
+.home-page > .topbar,
+.memories-page > .topbar,
+.chat-page > .topbar,
+.location-page > .topbar,
+.more-page > .topbar {
+  flex: 0 0 auto !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* -----------------------------------------------------------------------
+   2. Couple connector: avatar center -> heart center -> avatar center
+   ----------------------------------------------------------------------- */
+.home-dashboard .home-couple-profile-card {
+  position: relative !important;
+  isolation: isolate !important;
+  grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr) !important;
+  column-gap: 0 !important;
+  padding: 8px 10px 7px !important;
+  overflow: hidden !important;
+}
+
+/* The old connector was positioned relative to the whole card, which made
+   it miss the avatar centers once the names moved below the circles. */
+.home-dashboard .home-couple-profile-card::before {
+  content: '' !important;
+  position: absolute !important;
+  z-index: 0 !important;
+  left: 24% !important;
+  right: 24% !important;
+  top: 28px !important;
+  height: 2px !important;
+  transform: translateY(-50%) !important;
+  border-radius: 999px !important;
+  opacity: .72 !important;
+  background: linear-gradient(90deg, var(--primary), var(--emotion)) !important;
+  pointer-events: none !important;
+}
+
+/* Legacy CSS also paints a second decorative center disc. The real heart
+   element below is now the only center circle, preventing the hollow/offset
+   ring visible on the APK. */
+.home-dashboard .home-couple-profile-card::after {
+  content: none !important;
+  display: none !important;
+}
+
+.home-dashboard .home-person,
+.home-dashboard .home-profile-heart {
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+.home-dashboard .home-person,
+.home-dashboard .home-couple-profile-card > .home-person:last-child {
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 4px !important;
+  text-align: center !important;
+}
+
+.home-dashboard .home-profile-avatar,
+.home-dashboard .home-profile-avatar.partner {
+  width: 40px !important;
+  height: 40px !important;
+  flex: 0 0 40px !important;
+  display: grid !important;
+  place-items: center !important;
+  overflow: hidden !important;
+  border: 3px solid var(--surface) !important;
+  border-radius: 50% !important;
+  background-clip: padding-box !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--border) 80%, var(--primary) 20%) !important;
+}
+
+.home-dashboard .home-profile-avatar img,
+.home-dashboard .home-profile-avatar.partner img {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  object-fit: cover !important;
+  border-radius: inherit !important;
+}
+
+.home-dashboard .home-profile-heart {
+  align-self: start !important;
+  width: 44px !important;
+  height: 44px !important;
+  display: grid !important;
+  place-items: center !important;
+  margin-top: -2px !important;
+  border: 2px solid color-mix(in srgb, var(--emotion) 28%, var(--border)) !important;
+  border-radius: 50% !important;
+  color: var(--emotion) !important;
+  background: color-mix(in srgb, var(--surface) 90%, var(--emotion) 10%) !important;
+  box-shadow: 0 4px 12px rgba(31, 42, 68, .08) !important;
+}
+
+.home-dashboard .home-profile-heart::before,
+.home-dashboard .home-profile-heart::after {
+  content: none !important;
+  display: none !important;
+}
+
+.home-dashboard .home-profile-heart svg {
+  width: 20px !important;
+  height: 20px !important;
+  fill: currentColor !important;
+}
+
+.home-dashboard .home-profile-copy,
+.home-dashboard .home-couple-profile-card > .home-person:last-child .home-profile-copy {
+  width: 100% !important;
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+}
+
+.home-dashboard .home-profile-copy b {
+  width: 100% !important;
+  max-width: 78px !important;
+  overflow: hidden !important;
+  text-align: center !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+@media (max-width: 390px) {
+  .home-dashboard .home-couple-profile-card {
+    grid-template-columns: minmax(0, 1fr) 42px minmax(0, 1fr) !important;
+    padding-top: 7px !important;
+  }
+
+  .home-dashboard .home-couple-profile-card::before {
+    top: 26px !important;
+  }
+
+  .home-dashboard .home-profile-avatar,
+  .home-dashboard .home-profile-avatar.partner {
+    width: 38px !important;
+    height: 38px !important;
+    flex-basis: 38px !important;
+  }
+
+  .home-dashboard .home-profile-heart {
+    width: 42px !important;
+    height: 42px !important;
+  }
+}
