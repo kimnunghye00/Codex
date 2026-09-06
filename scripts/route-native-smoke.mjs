@@ -35,7 +35,7 @@ const stabilityCss = read('src/route-stability-v15.css');
 const manifest = read('android/app/src/main/AndroidManifest.xml');
 
 check('native bootstrap is wired', main.includes('initializeNativeApp') && main.includes('void initializeNativeApp()'));
-check('runtime recovery is wired', main.includes("import './recovery-runtime'"));
+check('runtime recovery is explicitly wired', main.includes("import { initializeRuntimeRecovery } from './recovery-runtime';") && main.includes('await initializeRuntimeRecovery()'));
 check('app icon native bridge is wired', main.includes("import './app-icon-native'"));
 check('IME stability runtime is wired', main.includes("import './input-ime-stability'"));
 
