@@ -8,6 +8,7 @@ import { AI_TEST_PARTNER_NAME, loadLocalAiPartner } from '../../lib/coupleData';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
 import { sendCoupleMessage, subscribeCoupleMessages, toggleCoupleMessageReaction } from '../../lib/chatRealtime';
 import { deleteUploadedChatMedia, uploadChatMedia } from '../../lib/chatMedia';
+import { migrateLoadedLegacyChatMedia } from '../../lib/chatMediaMigration';
 import type { Message } from '../../types';
 import { messageDateLabel } from '../../utils/dates';
 import { isChatMediaMessage, loadChatMemoryMessageIds, toggleChatMessageMemory } from '../../utils/featureFlow';
@@ -26,6 +27,7 @@ const MAX_ORIGINAL_IMAGE_BYTES = 9 * 1024 * 1024;
 const MAX_GIF_BYTES = 9 * 1024 * 1024;
 const MAX_CHAT_PHOTOS = 100;
 const CHAT_MEDIA_BATCH_SIZE = 4;
+const MAX_SCHEDULE_SLEEP_MS = 60 * 60 * 1000;
 
 function aiReplyFor(text: string) {
   const value = text.trim();
@@ -44,6 +46,10 @@ function TypingIndicator({ ai, initial, heart = false }: { ai: boolean; initial:
 
 async function readFile(file: File) {
   return await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = reject; reader.readAsDataURL(file); });
+}
+
+function yieldToUi() {
+  return new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 }
 
 async function prepareImage(file: File, quality: ChatPreferences['mediaQuality']) {
@@ -138,6 +144,10 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     return subscribeCoupleMessages(connection.coupleId, currentUid, setMessages, (cause) => { console.error('[ROUTE realtime chat]', cause); setSyncError('실시간 대화를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.'); });
   }, [connection?.coupleId, currentUid, setMessages]);
   useEffect(() => {
+    if (!connection?.coupleId || !currentUid) return;
+    migrateLoadedLegacyChatMedia(connection.coupleId, currentUid, messages);
+  }, [connection?.coupleId, currentUid, messages]);
+  useEffect(() => {
     if (!connection?.coupleId) { setSchedules([]); return; }
     const q = query(collection(db, 'couples', connection.coupleId, 'schedules'), orderBy('date', 'asc'));
     return onSnapshot(q, (snapshot) => setSchedules(snapshot.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<ChatSchedule, 'id'>) }))));
@@ -166,7 +176,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
       return;
     }
 
-    if (!typingActiveRef.current || now - typingLastWriteRef.current >= 3500) publishTyping(true);
+    if (!typingActiveRef.current || now - typingLastWriteRef.current >= 6500) publishTyping(true);
     typingTimerRef.current = window.setTimeout(() => publishTyping(false), 4500);
   }, [draft, connection?.coupleId, currentUid]);
   useEffect(() => () => {
@@ -218,14 +228,33 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   };
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      const due = scheduledDrafts.filter((item) => new Date(item.sendAt).getTime() <= Date.now());
-      if (!due.length) return;
-      due.forEach((item) => sendText(item.text, item.sendAt));
-      setScheduledDrafts((items) => items.filter((item) => !due.some((dueItem) => dueItem.id === item.id)));
-    }, 3000);
-    return () => window.clearInterval(timer);
-  });
+    if (!scheduledDrafts.length) return;
+    let timer: number | undefined;
+    let cancelled = false;
+
+    const arm = () => {
+      if (cancelled) return;
+      const nextAt = Math.min(...scheduledDrafts.map((item) => new Date(item.sendAt).getTime()).filter(Number.isFinite));
+      if (!Number.isFinite(nextAt)) return;
+      const delay = Math.min(MAX_SCHEDULE_SLEEP_MS, Math.max(250, nextAt - Date.now()));
+      timer = window.setTimeout(() => {
+        timer = undefined;
+        const due = scheduledDrafts.filter((item) => new Date(item.sendAt).getTime() <= Date.now());
+        if (due.length) {
+          due.forEach((item) => sendText(item.text, item.sendAt));
+          setScheduledDrafts((items) => items.filter((item) => !due.some((dueItem) => dueItem.id === item.id)));
+          return;
+        }
+        arm();
+      }, delay);
+    };
+
+    arm();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [scheduledDrafts]);
 
   const send = () => { const text = draft; setDraft(''); sendText(text); };
   const sendImages = async (files: File[]) => {
@@ -248,7 +277,15 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
 
       for (let offset = 0; offset < selected.length; offset += CHAT_MEDIA_BATCH_SIZE) {
         const batch = selected.slice(offset, offset + CHAT_MEDIA_BATCH_SIZE);
-        const preparedUrls = await Promise.all(batch.map((file) => prepareImage(file, preferences.mediaQuality)));
+        const preparedUrls: string[] = [];
+        for (const file of batch) {
+          // Connected chat already creates a 640px async preview in chatMedia.
+          // Avoid a second 1080/1800px canvas resize before that work.
+          preparedUrls.push(connection && file.type !== 'image/gif'
+            ? await readFile(file)
+            : await prepareImage(file, preferences.mediaQuality));
+          await yieldToUi();
+        }
 
         if (connection) {
           const uploaded = await uploadChatMedia(connection.coupleId, currentUid, messageId, preparedUrls, {
