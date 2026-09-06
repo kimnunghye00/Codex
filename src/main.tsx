@@ -70,8 +70,10 @@ import './mobile-polish-v3';
 import './recovery-runtime';
 // Real-device post-deploy polish must win over the phase-4/5 runtime CSS loaded above.
 import './route-post-deploy-polish-v20.css';
-// App-wide stability layer now owns shared gutters, header/nav geometry and overflow guards.
+// App-wide stability layer owns shared gutters, header/nav geometry and overflow guards.
 import './route-ui-stability-v23.css';
+// Release guard hides unfinished controls that could mislead real users.
+import './route-release-stability-v24.css';
 
 const DESKTOP_PREVIEW_PARAM = 'routeMobilePreview';
 
