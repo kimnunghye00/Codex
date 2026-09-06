@@ -18,7 +18,7 @@ function replyLabel(message: Message) {
 
 function GalleryViewer({ urls, initialIndex, onClose }: { urls: string[]; initialIndex: number; onClose: () => void }) {
   const [index, setIndex] = useState(() => Math.min(Math.max(0, initialIndex), Math.max(0, urls.length - 1)));
-  const touchStartX = useRef<number>();
+  const touchStartX = useRef<number | undefined>(undefined);
 
   const move = (delta: number) => {
     if (urls.length <= 1) return;
