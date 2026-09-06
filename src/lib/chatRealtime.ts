@@ -3,6 +3,7 @@ import { db } from './firebase';
 import type { Message, Reaction } from '../types';
 
 type CloudReaction = { emoji: string; uid: string };
+type MessageStateSink = (value: Message[] | ((current: Message[]) => Message[])) => void;
 
 type CloudMessage = {
   id: number;
@@ -23,6 +24,7 @@ type CloudMessage = {
 const INITIAL_CHAT_PAGE = 40;
 const CHAT_PAGE_STEP = 40;
 const HISTORY_TRIGGER_PX = 110;
+const chatWindowSizeByRoom = new Map<string, number>();
 
 function messageRef(coupleId: string, id: number) {
   return doc(db, 'couples', coupleId, 'messages', String(id));
@@ -51,15 +53,38 @@ function toMessage(snapshotDoc: { id: string; data: () => unknown }, currentUid:
   } satisfies Message;
 }
 
+function messageTimeValue(message: Message) {
+  const parsed = Date.parse(message.timestamp);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function mergePagedSnapshot(current: Message[], incoming: Message[]) {
+  if (!incoming.length) return [];
+  const incomingIds = new Set(incoming.map((message) => message.id));
+  const earliestIncoming = messageTimeValue(incoming[0]);
+
+  // The live query owns its visible time range. Preserve only a small page of
+  // messages older than that range so cached/previously paged history does not
+  // disappear merely because the latest-window boundary moved forward.
+  const preservedOlder = current
+    .filter((message) => !incomingIds.has(message.id) && messageTimeValue(message) < earliestIncoming)
+    .slice(-CHAT_PAGE_STEP);
+
+  const deduped = new Map<number, Message>();
+  [...preservedOlder, ...incoming].forEach((message) => deduped.set(message.id, message));
+  return [...deduped.values()].sort((a, b) => messageTimeValue(a) - messageTimeValue(b));
+}
+
 export function subscribeCoupleMessages(
   coupleId: string,
   currentUid: string,
-  onMessages: (messages: Message[]) => void,
+  onMessages: MessageStateSink,
   onError?: (error: unknown) => void,
   pageSize = INITIAL_CHAT_PAGE,
 ) {
   let disposed = false;
-  let requestedCount = Math.max(1, pageSize);
+  const roomKey = `${coupleId}:${currentUid}`;
+  let requestedCount = Math.max(1, pageSize, chatWindowSizeByRoom.get(roomKey) ?? 0);
   let lastSnapshotCount = 0;
   let snapshotUnsubscribe: (() => void) | undefined;
   let messageScroller: HTMLElement | null = null;
@@ -68,6 +93,8 @@ export function subscribeCoupleMessages(
   let previousTop = 0;
   let attachTimer: number | undefined;
 
+  chatWindowSizeByRoom.set(roomKey, requestedCount);
+
   const restoreScrollPosition = () => {
     if (!messageScroller || !loadingOlder) return;
     const restore = () => {
@@ -75,13 +102,19 @@ export function subscribeCoupleMessages(
       const addedHeight = Math.max(0, messageScroller.scrollHeight - previousHeight);
       messageScroller.scrollTop = previousTop + addedHeight;
     };
+
+    // ChatPage also scrolls to the newest message when its list grows. Re-apply
+    // the preserved position after that animation window so loading history does
+    // not throw the user back to the bottom.
     requestAnimationFrame(() => requestAnimationFrame(restore));
     window.setTimeout(restore, 90);
+    window.setTimeout(restore, 240);
+    window.setTimeout(restore, 450);
     window.setTimeout(() => {
       restore();
       loadingOlder = false;
       messageScroller?.removeAttribute('data-history-loading');
-    }, 240);
+    }, 700);
   };
 
   const listen = () => {
@@ -93,7 +126,8 @@ export function subscribeCoupleMessages(
     );
     snapshotUnsubscribe = onSnapshot(q, (snapshot) => {
       lastSnapshotCount = snapshot.size;
-      onMessages(snapshot.docs.map((snapshotDoc) => toMessage(snapshotDoc, currentUid)));
+      const incoming = snapshot.docs.map((snapshotDoc) => toMessage(snapshotDoc, currentUid));
+      onMessages((current) => mergePagedSnapshot(current, incoming));
       if (loadingOlder) restoreScrollPosition();
     }, (error) => {
       loadingOlder = false;
@@ -110,6 +144,7 @@ export function subscribeCoupleMessages(
     loadingOlder = true;
     messageScroller.setAttribute('data-history-loading', 'true');
     requestedCount += CHAT_PAGE_STEP;
+    chatWindowSizeByRoom.set(roomKey, requestedCount);
     listen();
   };
 
@@ -120,7 +155,7 @@ export function subscribeCoupleMessages(
 
   const attachScroller = (attempt = 0) => {
     if (disposed) return;
-    const next = document.querySelector<HTMLElement>('.route-chat-room-layer .chat-page .messages, .chat-page .messages');
+    const next = document.querySelector<HTMLElement>('.chat-room-layer .chat-page .messages, .chat-page .messages');
     if (!next) {
       if (attempt < 30) attachTimer = window.setTimeout(() => attachScroller(attempt + 1), 100);
       return;
