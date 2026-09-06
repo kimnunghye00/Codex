@@ -72,8 +72,6 @@ import './mobile-polish-v3';
 import './route-post-deploy-polish-v20.css';
 // App-wide stability layer owns shared gutters, header/nav geometry and overflow guards.
 import './route-ui-stability-v23.css';
-// Phase-12 compatibility guard remains until the release flag migration is removed.
-import './route-release-stability-v24.css';
 
 const DESKTOP_PREVIEW_PARAM = 'routeMobilePreview';
 
