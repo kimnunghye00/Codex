@@ -71,6 +71,8 @@ import './more-enhance';
 import './route-post-deploy-polish-v20.css';
 // Real-device geometry fix: centered couple connector + identical tab divider.
 import './route-home-header-alignment-v22.css';
+// First app-wide stability layer: shared gutters, header/nav geometry, overflow guards.
+import './route-ui-stability-v23.css';
 
 const DESKTOP_PREVIEW_PARAM = 'routeMobilePreview';
 
