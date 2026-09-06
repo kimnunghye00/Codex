@@ -8,6 +8,7 @@ import { initializeNativeApp } from './lib/native';
 import { preparePersistentBackup, startPersistentBackup } from './lib/persistentBackup';
 import { initializeCrossDeviceAlbumSync } from './lib/crossDeviceAlbumSync';
 import { initializeRoutePwa } from './pwa';
+import { initializeRuntimeRecovery } from './recovery-runtime';
 import { installPersistentStorageObserver } from './utils/persistenceSignal';
 import './styles.css';
 import './auth-onboarding.css';
@@ -67,12 +68,11 @@ import './app-icon-native';
 import './couple-date-enhance';
 import './settings-hub';
 import './mobile-polish-v3';
-import './recovery-runtime';
 // Real-device post-deploy polish must win over the phase-4/5 runtime CSS loaded above.
 import './route-post-deploy-polish-v20.css';
 // App-wide stability layer owns shared gutters, header/nav geometry and overflow guards.
 import './route-ui-stability-v23.css';
-// Release guard hides unfinished controls that could mislead real users.
+// Phase-12 compatibility guard remains until the release flag migration is removed.
 import './route-release-stability-v24.css';
 
 const DESKTOP_PREVIEW_PARAM = 'routeMobilePreview';
@@ -124,6 +124,11 @@ async function bootstrap() {
 
   void initializeNativeApp();
   await authPersistenceReady;
+
+  // Account isolation is now a hard bootstrap barrier. React cannot read global
+  // message/memory caches until ownership has been verified or stale caches have
+  // been cleared and the app has reloaded with a clean Firestore instance.
+  await initializeRuntimeRecovery();
   initializeRoutePwa();
 
   // Restore durable Firebase records before React reads local caches.
