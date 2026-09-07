@@ -24,56 +24,48 @@ function DeferredMediaImage({ src, alt, className, onClick }: {
   className?: string;
   onClick?: (event: React.MouseEvent<HTMLElement>) => void;
 }) {
-  const ref = useRef<HTMLImageElement>(null);
   const optimizedPreview = hasOptimizedChatPreview(src);
-  const [nearby, setNearby] = useState(false);
-  const [legacyRequested, setLegacyRequested] = useState(false);
+  const [failed, setFailed] = useState(false);
 
-  useEffect(() => {
-    if (!optimizedPreview) return;
-    const node = ref.current;
-    if (!node) return;
-    if (typeof IntersectionObserver === 'undefined') {
-      setNearby(true);
-      return;
-    }
-    const observer = new IntersectionObserver((entries) => {
-      if (!entries.some((entry) => entry.isIntersecting)) return;
-      setNearby(true);
-      observer.disconnect();
-    }, { rootMargin: '120px 0px', threshold: 0.01 });
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [optimizedPreview]);
+  useEffect(() => setFailed(false), [src]);
 
-  // Photos sent before the compact-preview rollout only have an original URL.
-  // Never attach that URL to <img> automatically; the user explicitly opts in.
-  if (!optimizedPreview && !legacyRequested) {
+  // Photos sent before the compact-preview rollout intentionally never attach
+  // their large original URL to an <img>. The incremental migration replaces
+  // this status tile with a tiny preview reference as soon as it is ready.
+  if (!optimizedPreview) {
     return <span
       className={`chat-legacy-media-gate ${className ?? ''}`}
-      role="button"
-      tabIndex={0}
-      aria-label="이전 사진 불러오기"
-      onClick={(event) => {
-        event.stopPropagation();
-        setLegacyRequested(true);
-      }}
-      onKeyDown={(event) => {
-        if (event.key !== 'Enter' && event.key !== ' ') return;
-        event.preventDefault();
-        event.stopPropagation();
-        setLegacyRequested(true);
-      }}
-    ><ImageIcon size={20} /><small>사진 보기</small></span>;
+      role="status"
+      aria-label="사진 미리보기 최적화 중"
+    ><ImageIcon size={20} /><small>미리보기 준비 중</small></span>;
   }
 
+  if (failed) {
+    return <span
+      className={`chat-legacy-media-gate chat-preview-fallback ${className ?? ''}`}
+      role={onClick ? 'button' : 'status'}
+      tabIndex={onClick ? 0 : undefined}
+      aria-label="사진 미리보기를 불러오지 못했어요"
+      onClick={onClick}
+      onKeyDown={onClick ? (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        onClick(event as unknown as React.MouseEvent<HTMLElement>);
+      } : undefined}
+    ><ImageIcon size={20} /><small>미리보기 다시 열기</small></span>;
+  }
+
+  // The previews are already ultra-small. Give WebView the real preview URL
+  // immediately and let native loading="lazy" decide when off-screen images are
+  // fetched. This avoids blank <img> nodes whose src stayed undefined while an
+  // IntersectionObserver was waiting to fire.
   return <img
-    ref={ref}
     className={className}
-    src={legacyRequested || nearby ? chatMediaPreviewUrl(src) : undefined}
+    src={chatMediaPreviewUrl(src)}
     alt={alt}
     loading="lazy"
     decoding="async"
+    onError={() => setFailed(true)}
     onClick={onClick}
   />;
 }
@@ -122,7 +114,7 @@ function GalleryViewer({ urls, initialIndex, onClose }: { urls: string[]; initia
         </header>
         <div className="route-gallery-viewer-media">
           {urls.length > 1 && <button type="button" className="route-gallery-arrow route-gallery-prev" aria-label="이전 사진" onClick={() => move(-1)}><ChevronLeft /></button>}
-          <img src={chatMediaPreviewUrl(urls[index])} alt={`묶음 사진 ${index + 1} / ${urls.length}`} decoding="async" />
+          <DeferredMediaImage src={urls[index]} alt={`묶음 사진 ${index + 1} / ${urls.length}`} />
           {urls.length > 1 && <button type="button" className="route-gallery-arrow route-gallery-next" aria-label="다음 사진" onClick={() => move(1)}><ChevronRight /></button>}
         </div>
         {urls.length > 1 && <div className="route-gallery-thumbs" aria-label="묶음 사진 목록">
