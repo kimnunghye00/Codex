@@ -1,3 +1,5 @@
+import './feature-prewarm';
+
 type LocalTabHistory = { scope: 'hub' | 'location'; label: string };
 const localTabHistory: LocalTabHistory[] = [];
 
