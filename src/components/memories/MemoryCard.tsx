@@ -1,8 +1,7 @@
 import { Heart, MapPin } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import type { Memory } from '../../types';
-
-const isVideo = (src: string) => src.startsWith('data:video/') || /\.(mp4|webm|mov)(\?|$)/i.test(src);
+import { isMemoryVideo, MemoryImage } from './MemoryMedia';
 
 let activePreviewVideo: HTMLVideoElement | null = null;
 let previewVisibilityWired = false;
@@ -57,9 +56,9 @@ export function MemoryCard({ memory, onOpen }: { memory: Memory; onOpen: () => v
 
   return <article className="memory-card" onClick={onOpen}>
     <div className="memory-cover">
-      {isVideo(cover)
+      {isMemoryVideo(cover)
         ? <video ref={videoRef} src={cover} muted loop playsInline preload="metadata" />
-        : <img src={cover} alt={memory.title} loading="lazy" decoding="async" />}
+        : <MemoryImage src={cover} alt={memory.title} />}
       <span className={memory.favorite ? 'memory-favorite-badge active' : 'memory-favorite-badge'}><Heart size={17} fill={memory.favorite ? 'currentColor' : 'none'} /></span>
     </div>
     <div className="memory-card-copy"><span>{date.getMonth() + 1}월 {date.getDate()}일</span><h3>{memory.title}</h3>{memory.location && <p><MapPin size={12} />{memory.location}</p>}</div>
