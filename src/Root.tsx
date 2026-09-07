@@ -1,16 +1,20 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { AuthFlow, SIGNUP_PENDING_KEY, Wordmark } from './components/auth/AuthFlow';
-import { ProfileSetup } from './components/auth/ProfileSetup';
-import { auth } from './lib/firebase';
-import { loadCloudProfile } from './lib/coupleData';
+import { auth } from './lib/firebaseAuth';
 import { loadProfile, saveProfile, type UserProfile } from './utils/profile';
 import './route-performance-v27.css';
 
 const App = lazy(() => import('./App'));
+const AuthFlow = lazy(() => import('./components/auth/AuthFlow').then((module) => ({ default: module.AuthFlow })));
+const ProfileSetup = lazy(() => import('./components/auth/ProfileSetup').then((module) => ({ default: module.ProfileSetup })));
 
+const SIGNUP_PENDING_KEY = 'meluni-signup-pending';
 const initialUser = auth.currentUser;
 const initialProfile = initialUser ? loadProfile(initialUser.uid) : null;
+
+function RouteLoading() {
+  return <div className="app-shell auth-loading" role="status" aria-live="polite"><div className="wordmark"><strong>ROUTE.</strong></div><div className="loading-mark" /><p>ROUTE를 불러오는 중이에요</p></div>;
+}
 
 export default function Root() {
   const [user, setUser] = useState<User | null>(initialUser);
@@ -36,30 +40,39 @@ export default function Root() {
       return;
     }
 
+    const expectedUid = nextUser.uid;
     setReady(false);
-    void loadCloudProfile(nextUser.uid)
+    // Cloud profile recovery needs Firestore, but only accounts without a local
+    // profile need it. Keep coupleData outside the normal returning-user path.
+    void import('./lib/coupleData')
+      .then(({ loadCloudProfile }) => loadCloudProfile(expectedUid))
       .then((cloud) => {
+        if (auth.currentUser?.uid !== expectedUid) return;
         if (cloud) {
-          saveProfile(nextUser.uid, cloud);
+          saveProfile(expectedUid, cloud);
           setProfile(cloud);
           localStorage.removeItem(SIGNUP_PENDING_KEY);
         } else {
           setProfile(null);
         }
       })
-      .catch(() => setProfile(null))
-      .finally(() => setReady(true));
+      .catch(() => {
+        if (auth.currentUser?.uid === expectedUid) setProfile(null);
+      })
+      .finally(() => {
+        if (auth.currentUser?.uid === expectedUid) setReady(true);
+      });
   }), []);
 
   const signupPending = localStorage.getItem(SIGNUP_PENDING_KEY) === '1';
 
-  if (!ready) return null;
-  if (user && signupPending && !profile) return <AuthFlow />;
-  if (!user) return <App />;
+  if (!ready) return <RouteLoading />;
+  if (!user) return <Suspense fallback={<RouteLoading />}><AuthFlow /></Suspense>;
+  if (signupPending && !profile) return <Suspense fallback={<RouteLoading />}><AuthFlow /></Suspense>;
 
   if (!profile) {
-    return <ProfileSetup user={user} onComplete={(nextProfile) => setProfile(nextProfile)} />;
+    return <Suspense fallback={<RouteLoading />}><ProfileSetup user={user} onComplete={(nextProfile) => setProfile(nextProfile)} /></Suspense>;
   }
 
-  return <Suspense fallback={<div className="app-shell auth-loading" role="status" aria-live="polite"><Wordmark /><div className="loading-mark" /><p>ROUTE를 불러오는 중이에요</p></div>}><App /></Suspense>;
+  return <Suspense fallback={<RouteLoading />}><App /></Suspense>;
 }
