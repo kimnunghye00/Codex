@@ -29,6 +29,7 @@ const requiredFiles = [
   'src/lib/firebaseCore.ts',
   'src/lib/firebaseAuth.ts',
   'src/lib/firebase.ts',
+  'src/lib/firestoreCacheReset.ts',
   'src/lib/coupleConnection.ts',
   'src/components/couple/CoupleConnect.tsx',
   'src/components/navigation/AppHeader.tsx',
@@ -75,6 +76,7 @@ const main = read('src/main.tsx');
 const recovery = read('src/recovery-runtime.ts');
 const firebase = read('src/lib/firebase.ts');
 const firebaseAuth = read('src/lib/firebaseAuth.ts');
+const firestoreCacheReset = read('src/lib/firestoreCacheReset.ts');
 const accountPolicy = read('src/utils/accountIsolationPolicy.ts');
 const coupleConnection = read('src/lib/coupleConnection.ts');
 const coupleConnect = read('src/components/couple/CoupleConnect.tsx');
@@ -167,11 +169,11 @@ check('runtime recovery exports an idempotent initializer', recovery.includes('e
 check('runtime recovery has no import-time installer', !recovery.includes('installRuntimeRecovery();'));
 check('account isolation policy is used', recovery.includes('decideAccountIsolation') && accountPolicy.includes("'reset-orphan'") && accountPolicy.includes("'reset-switch'"));
 check('runtime recovery rejects unowned legacy shared cache', recovery.includes('hasSharedLocalCache') && recovery.includes("action === 'reset-orphan'"));
-check('runtime recovery keeps Firestore lazy on normal startup', recovery.includes("from './lib/firebaseAuth';") && recovery.includes("await import('./lib/firebase')"));
+check('runtime recovery keeps Firestore lazy on normal startup', recovery.includes("from './lib/firebaseAuth';") && recovery.includes("await import('./lib/firestoreCacheReset')"));
 check('obsolete appearance wrapper is not imported', !main.includes('appearance-stability'));
 check('unused ai test stylesheet is not imported', !main.includes('ai-test.css'));
 check('runtime recovery still handles connectivity', recovery.includes("window.addEventListener('offline'") && recovery.includes("window.addEventListener('online'"));
-check('runtime recovery keeps Firestore cache isolation', recovery.includes('clearNativeFirestorePersistence'));
+check('runtime recovery keeps Firestore cache isolation', firestoreCacheReset.includes('clearNativeFirestorePersistence'));
 check('legacy enhancement layer is gone', !main.includes('RouteEnhancementLayer'));
 check('legacy more enhancer is gone', !main.includes('more-enhance'));
 check('legacy profile enhancer is gone', !main.includes('profile-enhance'));
