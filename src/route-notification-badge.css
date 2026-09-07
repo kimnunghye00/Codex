@@ -1,0 +1,2 @@
+.header-actions .notification-button { position: relative; }
+.header-actions .notification-count { position: absolute; top: 5px; right: 3px; min-width: 17px; height: 17px; display: grid; place-items: center; padding: 0 4px; border: 2px solid var(--background); border-radius: 99px; color: white; background: var(--emotion); font-size: 7px; font-style: normal; font-weight: 800; }

@@ -10,21 +10,12 @@ import { installPersistentStorageObserver } from './utils/persistenceSignal';
 import './styles.css';
 import './auth-onboarding.css';
 import './nickname.css';
-import './chat-typing.css';
-import './chat-tools.css';
-import './chat-extras.css';
-import './notifications.css';
-import './location.css';
 import './home-simple.css';
 import './home-dashboard.css';
 import './home-couple-tools.css';
 import './home-couple-layout.css';
-import './memories-hub.css';
-import './more.css';
-import './more-services.css';
 import './route-brand.css';
 import './route-themes.css';
-import './couple-connect.css';
 import './home-map-overlay.css';
 import './close-standard.css';
 import './mobile-apk-fixes.css';
@@ -38,12 +29,9 @@ import './route-design-system-v6.css';
 import './route-product-polish-v7.css';
 import './route-final-qa-v8.css';
 import './route-feature-flow-v9.css';
-import './route-place-timeline-v10.css';
-import './web-desktop.css';
-import './route-web-phone-preview-v12.css';
 import './route-stability-v15.css';
-import './route-chat-stability-v16.css';
 import './route-runtime-stability-v19.css';
+import './route-notification-badge.css';
 
 import './input-ime-stability';
 import './route-themes';
@@ -55,6 +43,7 @@ import './settings-hub';
 import './mobile-polish-v3';
 import './route-post-deploy-polish-v20.css';
 import './route-ui-stability-v23.css';
+import './route-list-performance-v27.css';
 
 const DESKTOP_PREVIEW_PARAM = 'routeMobilePreview';
 const NATIVE_SPLASH_FAILSAFE_MS = 2500;
@@ -67,8 +56,13 @@ function shouldUseDesktopPhonePreview() {
     && !params.has(DESKTOP_PREVIEW_PARAM);
 }
 
-function mountDesktopPhonePreview() {
+async function mountDesktopPhonePreview() {
   if (!shouldUseDesktopPhonePreview()) return false;
+
+  await Promise.all([
+    import('./web-desktop.css'),
+    import('./route-web-phone-preview-v12.css'),
+  ]);
 
   const root = document.getElementById('root');
   if (!root) return false;
@@ -179,9 +173,6 @@ function waitForFirstPaint() {
 }
 
 function startDeferredRuntimeServices() {
-  // Keep backup restore, PWA setup and live album sync out of the startup bundle's
-  // hot execution path. Account isolation has already completed before React
-  // mounts, so these durability services can safely start after the first frame.
   window.setTimeout(() => {
     void import('./pwa')
       .then(({ initializeRoutePwa }) => initializeRoutePwa())
@@ -206,7 +197,7 @@ async function bootstrap() {
   installPersistentStorageObserver();
   applySavedRouteAppIcon();
 
-  if (mountDesktopPhonePreview()) return;
+  if (await mountDesktopPhonePreview()) return;
 
   mountBootstrapShell();
   const splashFailsafe = window.setTimeout(() => {

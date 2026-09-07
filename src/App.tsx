@@ -25,12 +25,30 @@ import {
 import { ChevronLeft, ChevronRight, Heart, Image, MapPin, MapPinned, Plus } from 'lucide-react';
 import './route-chat-room-v26.css';
 
-const ChatPage = lazy(() => import('./components/chat/ChatPage').then((module) => ({ default: module.ChatPage })));
-const MemoriesPage = lazy(() => import('./components/memories/MemoriesPage').then((module) => ({ default: module.MemoriesPage })));
-const LocationPage = lazy(() => import('./components/location/LocationPage').then((module) => ({ default: module.LocationPage })));
-const AccountSettings = lazy(() => import('./components/auth/AccountSettings').then((module) => ({ default: module.AccountSettings })));
-const NotificationPanel = lazy(() => import('./components/notifications/NotificationPanel').then((module) => ({ default: module.NotificationPanel })));
-const MoreServices = lazy(() => import('./components/more/MoreServices').then((module) => ({ default: module.MoreServices })));
+const ChatPage = lazy(() => Promise.all([
+  import('./styles/features/chat'),
+  import('./components/chat/ChatPage'),
+]).then(([, module]) => ({ default: module.ChatPage })));
+const MemoriesPage = lazy(() => Promise.all([
+  import('./styles/features/memories'),
+  import('./components/memories/MemoriesPage'),
+]).then(([, module]) => ({ default: module.MemoriesPage })));
+const LocationPage = lazy(() => Promise.all([
+  import('./styles/features/location'),
+  import('./components/location/LocationPage'),
+]).then(([, module]) => ({ default: module.LocationPage })));
+const AccountSettings = lazy(() => Promise.all([
+  import('./styles/features/settings'),
+  import('./components/auth/AccountSettings'),
+]).then(([, module]) => ({ default: module.AccountSettings })));
+const NotificationPanel = lazy(() => Promise.all([
+  import('./styles/features/notifications'),
+  import('./components/notifications/NotificationPanel'),
+]).then(([, module]) => ({ default: module.NotificationPanel })));
+const MoreServices = lazy(() => Promise.all([
+  import('./styles/features/more'),
+  import('./components/more/MoreServices'),
+]).then(([, module]) => ({ default: module.MoreServices })));
 
 type Tab = AppTab;
 type Anniversary = { id: string; icon: string; title: string; date: Date; recurring?: boolean };
