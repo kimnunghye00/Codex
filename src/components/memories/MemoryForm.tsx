@@ -3,7 +3,8 @@ import { useState } from 'react';
 import type React from 'react';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import type { Memory, MemoryDraft } from '../../types';
-import { auth, storage } from '../../lib/firebase';
+import { auth } from '../../lib/firebase';
+import { storage } from '../../lib/firebaseStorage';
 import { localDateKey } from '../../utils/dates';
 
 const isVideo = (src: string) => src.startsWith('data:video/') || /\.(mp4|webm|mov)(\?|$)/i.test(src);
