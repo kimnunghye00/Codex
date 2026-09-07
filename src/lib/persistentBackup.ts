@@ -9,7 +9,8 @@ import {
   saveDeletedMemories,
   type MemoryDeletionMap,
 } from '../utils/storage';
-import { auth, db, storage } from './firebase';
+import { auth, db } from './firebase';
+import { storage } from './firebaseStorage';
 
 const MAX_BACKUP_MESSAGES = 500;
 const KEEP_POLICY = 'keep-until-user-deletes';
@@ -176,8 +177,6 @@ export async function restoreCoreBackup(uid: string) {
     loadBackupEnvelope<Memory[]>(uid, 'memories-live'),
   ]);
 
-  // memories-live is the album's authoritative cross-device record. Fall back to
-  // memories-latest only for accounts created before live album sync existed.
   const chosen = liveMemories?.value ? liveMemories : latestMemories;
   const deleted = mergeDeleted(latestMemories?.deleted ?? {}, liveMemories?.deleted ?? {});
   const memories = (chosen?.value ?? []).filter((memory) => !deleted[String(memory.id)]);
@@ -207,8 +206,6 @@ async function restoreIntoLocalStorage(uid: string) {
     getDoc(doc(db, 'users', uid)),
   ]);
 
-  // A different account can become active while the restore request is in flight.
-  // Never let the old account write its cloud snapshot into the new session cache.
   if (auth.currentUser?.uid !== uid) return false;
 
   const localMessages = readJson<Message[]>(MESSAGE_KEY, []);
@@ -246,9 +243,6 @@ async function restoreIntoLocalStorage(uid: string) {
     });
   }
 
-  // Existing accounts may predate local-state profile backups. Restore the
-  // server-side profile only when this device has no profile at all, so a newer
-  // local edit is never overwritten by an older cloud copy.
   const profileKey = `meluni-profile:${uid}`;
   if (localStorage.getItem(profileKey) === null && userSnapshot.exists()) {
     const cloudProfile = userSnapshot.data()?.profile;

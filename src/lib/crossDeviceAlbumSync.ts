@@ -8,7 +8,8 @@ import {
   saveDeletedMemories,
   type MemoryDeletionMap,
 } from '../utils/storage';
-import { auth, db, storage } from './firebase';
+import { auth, db } from './firebase';
+import { storage } from './firebaseStorage';
 
 const MEMORY_KEY = 'route.memories.v2';
 const LIVE_BACKUP_KEY = 'memories-live';
@@ -144,8 +145,6 @@ async function pushCurrentMemories(uid: string) {
       retentionPolicy: 'keep-until-user-deletes',
     };
 
-    // Keep both restore sources consistent. A deleted album item must never survive
-    // in memories-latest while memories-live already knows it was deleted.
     await Promise.all([
       setDoc(liveRef(uid), envelope, { merge: true }),
       setDoc(backupRef(uid, LATEST_BACKUP_KEY), envelope, { merge: true }),
@@ -228,8 +227,6 @@ function subscribe(uid: string) {
     const localDeleted = loadDeletedMemories();
     const hasLocalOnlyDeletion = Object.keys(localDeleted).some((id) => !cloudDeleted[id]);
 
-    // A reload used to clear the in-memory dirty flag and let an older cloud
-    // snapshot resurrect a just-deleted photo. Pending state and tombstones now win.
     if (localDirty || hasLocalOnlyDeletion) {
       setDirty(true, uid);
       schedulePush(0);
@@ -270,8 +267,6 @@ export function initializeCrossDeviceAlbumSync() {
     const detail = (event as CustomEvent<{ deleted?: boolean }>).detail;
     if (!activeUid) return;
     setDirty(true, activeUid);
-    // Deletions are flushed immediately; additions/edits keep a tiny debounce so
-    // multiple local writes can coalesce into one cloud update.
     schedulePush(detail?.deleted ? 0 : 120);
   });
 

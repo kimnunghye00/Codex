@@ -2,7 +2,6 @@ import { Capacitor } from '@capacitor/core';
 import { initializeApp } from 'firebase/app';
 import { browserLocalPersistence, getAuth, setPersistence } from 'firebase/auth';
 import { clearIndexedDbPersistence, initializeFirestore, persistentLocalCache, terminate } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyAHuK_VnRYMsGHRO9FrztR5KvCQouNZPGg',
@@ -44,7 +43,6 @@ export async function clearNativeFirestorePersistence() {
   }
 }
 
-export const storage = getStorage(firebaseApp);
 export const authPersistenceReady = setPersistence(auth, browserLocalPersistence).catch((cause) => {
   console.warn('[ROUTE auth persistence]', cause);
 });

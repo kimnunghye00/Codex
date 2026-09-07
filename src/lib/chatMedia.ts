@@ -1,5 +1,5 @@
 import { deleteObject, getDownloadURL, ref, uploadBytes, uploadString } from 'firebase/storage';
-import { storage } from './firebase';
+import { storage } from './firebaseStorage';
 import { getPendingOriginalChatFile } from './chatMediaOriginalRegistry';
 import { createChatMediaReference, hasOptimizedChatPreview } from './chatMediaReference';
 
