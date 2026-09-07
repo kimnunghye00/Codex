@@ -11,6 +11,7 @@ import { ReactionPicker } from './ReactionPicker';
 const MAX_INLINE_GALLERY_ITEMS = 4;
 const SWIPE_THRESHOLD = 42;
 const PREVIEW_STATUS_EVENT = 'route-chat-media-preview-status';
+const PREVIEW_STATUS_REQUEST_EVENT = 'route-chat-media-preview-status-request';
 const PREVIEW_RETRY_EVENT = 'route-chat-media-preview-retry';
 
 type LegacyPreviewState = 'optimizing' | 'retrying' | 'failed';
@@ -68,6 +69,7 @@ function DeferredMediaImage({ src, alt, className, onClick }: {
       }
     };
     window.addEventListener(PREVIEW_STATUS_EVENT, handleStatus);
+    window.dispatchEvent(new CustomEvent(PREVIEW_STATUS_REQUEST_EVENT, { detail: { reference: src } }));
     return () => window.removeEventListener(PREVIEW_STATUS_EVENT, handleStatus);
   }, [optimizedPreview, src]);
 
