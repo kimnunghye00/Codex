@@ -1,0 +1,37 @@
+/* ROUTE list rendering performance v27
+ * Let Chromium/WebView skip layout and paint work for items far outside the viewport.
+ * contain-intrinsic-size keeps scroll geometry stable until an item becomes visible.
+ */
+@supports (content-visibility: auto) {
+  .memory-list .memory-card {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 300px;
+  }
+
+  .notification-list article {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 76px;
+  }
+
+  .location-list .location-visit {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 68px;
+  }
+
+  .place-timeline-grid .place-timeline-card {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 86px;
+  }
+
+  .place-timeline-events .place-timeline-event {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 92px;
+  }
+
+  .route-hub .hub-list-row,
+  .route-hub .anniversary-row,
+  .route-hub .tier-card {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 72px;
+  }
+}
