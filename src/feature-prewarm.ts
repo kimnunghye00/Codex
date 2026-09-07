@@ -1,3 +1,5 @@
+export {};
+
 type IdleCapableWindow = Window & {
   requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
 };
