@@ -38,6 +38,27 @@ export function loadChatMemoryMessageIds() {
   return ids;
 }
 
+export function replaceChatMemoryMediaReference(messageId: number, previousUrl: string, nextUrl: string) {
+  if (!previousUrl || !nextUrl || previousUrl === nextUrl) return false;
+  const tag = chatMemoryTag(messageId);
+  const current = loadMemories([]);
+  let changed = false;
+  const next = current.map((memory) => {
+    if (!memory.tags?.includes(tag)) return memory;
+    const images = memory.images.map((url) => {
+      if (url !== previousUrl) return url;
+      changed = true;
+      return nextUrl;
+    });
+    return changed ? { ...memory, images } : memory;
+  });
+
+  if (!changed) return false;
+  saveMemories(next);
+  window.dispatchEvent(new CustomEvent<Memory[]>(MEMORY_REFRESH_EVENT, { detail: next }));
+  return true;
+}
+
 export function toggleChatMessageMemory(message: Message, partnerName: string) {
   if (!isChatMediaMessage(message)) return { saved: Boolean(message.saved), memories: loadMemories([]) };
 
