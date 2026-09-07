@@ -7,12 +7,26 @@ import { hasOptimizedChatPreview } from './chatMediaReference';
 
 const MIGRATION_GAP_MS = 180;
 const MAX_CONCURRENT_MIGRATIONS = 2;
+const MAX_AUTO_ATTEMPTS = 4;
+const RETRY_BACKOFF_MS = [1_200, 4_000, 12_000] as const;
+const PREVIEW_STATUS_EVENT = 'route-chat-media-preview-status';
+const PREVIEW_RETRY_EVENT = 'route-chat-media-preview-retry';
+
+type JobStatus = 'waiting' | 'inflight' | 'done' | 'failed';
+type PreviewStatus = 'optimizing' | 'retrying' | 'failed' | 'ready';
+
+type JobState = {
+  attempts: number;
+  nextRetryAt: number;
+  status: JobStatus;
+  lastErrorCode?: string;
+};
 
 type RoomState = {
   coupleId: string;
   ownerUid: string;
   messages: Message[];
-  attempted: Set<string>;
+  jobs: Map<string, JobState>;
   active: number;
   timer?: number;
 };
@@ -21,6 +35,18 @@ type Candidate = {
   message: Message;
   url: string;
   index: number;
+};
+
+type PreviewStatusDetail = {
+  reference: string;
+  status: PreviewStatus;
+  attempt?: number;
+  nextRetryAt?: number;
+  code?: string;
+};
+
+type PreviewRetryDetail = {
+  reference?: string;
 };
 
 const rooms = new Map<string, RoomState>();
@@ -37,32 +63,71 @@ function candidateKey(candidate: Candidate) {
   return `${candidate.message.id}:${candidate.index}:${candidate.url}`;
 }
 
-function nextCandidate(state: RoomState): Candidate | undefined {
+function candidates(state: RoomState) {
+  const result: Candidate[] = [];
   // Chat is anchored at the newest messages. Migrate from the bottom of the
-  // loaded page first so the photos the user can actually see become available
-  // before older off-screen media.
+  // loaded page first so visible photos recover before older off-screen media.
   for (let messageIndex = state.messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
     const message = state.messages[messageIndex];
     if (message.type === 'image' && migratable(message.imageUrl)) {
-      const candidate = { message, url: message.imageUrl!, index: 0 };
-      if (!state.attempted.has(candidateKey(candidate))) return candidate;
+      result.push({ message, url: message.imageUrl!, index: 0 });
     }
     if (message.type === 'gallery' && message.imageUrls?.length) {
-      // The first four gallery cells are rendered inline, so optimize them first.
       for (let index = 0; index < message.imageUrls.length; index += 1) {
         const url = message.imageUrls[index];
-        if (!migratable(url)) continue;
-        const candidate = { message, url, index };
-        if (!state.attempted.has(candidateKey(candidate))) return candidate;
+        if (migratable(url)) result.push({ message, url, index });
       }
     }
+  }
+  return result;
+}
+
+function emitPreviewStatus(reference: string, status: PreviewStatus, extra: Omit<PreviewStatusDetail, 'reference' | 'status'> = {}) {
+  window.dispatchEvent(new CustomEvent<PreviewStatusDetail>(PREVIEW_STATUS_EVENT, {
+    detail: { reference, status, ...extra },
+  }));
+}
+
+function migrationErrorCode(error: unknown) {
+  const message = error instanceof Error ? `${error.name}:${error.message}` : String(error);
+  if (/AbortError|legacy-media-timeout/i.test(message)) return 'timeout';
+  if (/Failed to fetch|NetworkError|Load failed|legacy-media-network/i.test(message)) return 'network-or-cors';
+  if (/legacy-media-401|legacy-media-403|storage\/unauthorized/i.test(message)) return 'storage-access';
+  if (/legacy-media-404|object-not-found/i.test(message)) return 'source-missing';
+  if (/decode|ImageBitmap|canvas|preview-encode/i.test(message)) return 'image-decode';
+  return 'unknown';
+}
+
+function nextCandidate(state: RoomState, now = Date.now()): Candidate | undefined {
+  for (const candidate of candidates(state)) {
+    const job = state.jobs.get(candidateKey(candidate));
+    if (!job) return candidate;
+    if (job.status === 'waiting' && job.nextRetryAt <= now) return candidate;
   }
   return undefined;
 }
 
-function schedulePump(state: RoomState, delay = MIGRATION_GAP_MS) {
+function nextWakeDelay(state: RoomState) {
+  const now = Date.now();
+  let earliest = Number.POSITIVE_INFINITY;
+  for (const candidate of candidates(state)) {
+    const job = state.jobs.get(candidateKey(candidate));
+    if (!job) return 0;
+    if (job.status === 'waiting') earliest = Math.min(earliest, job.nextRetryAt);
+  }
+  if (!Number.isFinite(earliest)) return undefined;
+  return Math.max(0, earliest - now);
+}
+
+function schedulePump(state: RoomState, preferredDelay = MIGRATION_GAP_MS) {
   if (state.timer !== undefined || document.visibilityState === 'hidden') return;
-  if (state.active >= MAX_CONCURRENT_MIGRATIONS || !nextCandidate(state)) return;
+  if (state.active >= MAX_CONCURRENT_MIGRATIONS) return;
+
+  const immediate = nextCandidate(state);
+  const waitForRetry = immediate ? 0 : nextWakeDelay(state);
+  if (!immediate && waitForRetry === undefined) return;
+  const delay = immediate ? preferredDelay : Math.max(80, waitForRetry ?? preferredDelay);
+
   state.timer = window.setTimeout(() => {
     state.timer = undefined;
     pump(state);
@@ -75,13 +140,25 @@ function pump(state: RoomState) {
   while (state.active < MAX_CONCURRENT_MIGRATIONS) {
     const candidate = nextCandidate(state);
     if (!candidate) break;
-    state.attempted.add(candidateKey(candidate));
+
+    const key = candidateKey(candidate);
+    const previous = state.jobs.get(key);
+    const attempt = (previous?.attempts ?? 0) + 1;
+    state.jobs.set(key, {
+      attempts: attempt,
+      nextRetryAt: 0,
+      status: 'inflight',
+      lastErrorCode: previous?.lastErrorCode,
+    });
     state.active += 1;
-    void migrateCandidate(state, candidate);
+    emitPreviewStatus(candidate.url, attempt > 1 ? 'retrying' : 'optimizing', { attempt });
+    void migrateCandidate(state, candidate, key);
   }
+
+  schedulePump(state, 80);
 }
 
-async function migrateCandidate(state: RoomState, candidate: Candidate) {
+async function migrateCandidate(state: RoomState, candidate: Candidate, key: string) {
   try {
     const reference = await createLegacyChatMediaReference(
       state.coupleId,
@@ -105,11 +182,35 @@ async function migrateCandidate(state: RoomState, candidate: Candidate) {
         replaceChatMemoryMediaReference(candidate.message.id, candidate.url, reference);
       }
     }
+
+    state.jobs.set(key, { attempts: state.jobs.get(key)?.attempts ?? 1, nextRetryAt: 0, status: 'done' });
+    emitPreviewStatus(candidate.url, 'ready');
   } catch (error) {
-    console.warn('[ROUTE incremental legacy preview]', candidate.message.id, candidate.index, error);
+    const previous = state.jobs.get(key);
+    const attempts = previous?.attempts ?? 1;
+    const code = migrationErrorCode(error);
+
+    if (attempts >= MAX_AUTO_ATTEMPTS) {
+      state.jobs.set(key, { attempts, nextRetryAt: Number.POSITIVE_INFINITY, status: 'failed', lastErrorCode: code });
+      emitPreviewStatus(candidate.url, 'failed', { attempt: attempts, code });
+    } else {
+      const backoff = RETRY_BACKOFF_MS[Math.min(attempts - 1, RETRY_BACKOFF_MS.length - 1)];
+      const nextRetryAt = Date.now() + backoff;
+      state.jobs.set(key, { attempts, nextRetryAt, status: 'waiting', lastErrorCode: code });
+      emitPreviewStatus(candidate.url, 'retrying', { attempt: attempts, nextRetryAt, code });
+    }
+
+    console.warn('[ROUTE legacy preview migration]', {
+      messageId: candidate.message.id,
+      mediaIndex: candidate.index,
+      attempt: attempts,
+      code,
+      retrying: attempts < MAX_AUTO_ATTEMPTS,
+      error,
+    });
   } finally {
     state.active = Math.max(0, state.active - 1);
-    schedulePump(state);
+    schedulePump(state, 80);
   }
 }
 
@@ -121,7 +222,7 @@ export function migrateLoadedLegacyChatMedia(coupleId: string, ownerUid: string,
     coupleId,
     ownerUid,
     messages: [],
-    attempted: new Set<string>(),
+    jobs: new Map<string, JobState>(),
     active: 0,
   };
   state.messages = messages;
@@ -131,12 +232,27 @@ export function migrateLoadedLegacyChatMedia(coupleId: string, ownerUid: string,
 
 /**
  * Backward-compatible no-op for older chatRealtime wiring. The actual migration
- * is driven by migrateLoadedLegacyChatMedia(), which only sees the paged messages
- * already loaded in the room and therefore never performs a full history scan.
+ * is driven by migrateLoadedLegacyChatMedia(), which only sees paged messages.
  */
 export async function startLegacyChatMediaMigration(_coupleId: string, _ownerUid: string) {
   return Promise.resolve();
 }
+
+window.addEventListener(PREVIEW_RETRY_EVENT, (event) => {
+  const reference = (event as CustomEvent<PreviewRetryDetail>).detail?.reference;
+  if (!reference) return;
+
+  rooms.forEach((state) => {
+    let reset = false;
+    for (const candidate of candidates(state)) {
+      if (candidate.url !== reference) continue;
+      state.jobs.set(candidateKey(candidate), { attempts: 0, nextRetryAt: 0, status: 'waiting' });
+      reset = true;
+    }
+    if (reset) schedulePump(state, 0);
+  });
+  emitPreviewStatus(reference, 'retrying', { attempt: 0 });
+});
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
