@@ -10,7 +10,9 @@ const MAX_CONCURRENT_MIGRATIONS = 2;
 const MAX_AUTO_ATTEMPTS = 4;
 const RETRY_BACKOFF_MS = [1_200, 4_000, 12_000] as const;
 const PREVIEW_STATUS_EVENT = 'route-chat-media-preview-status';
+const PREVIEW_STATUS_REQUEST_EVENT = 'route-chat-media-preview-status-request';
 const PREVIEW_RETRY_EVENT = 'route-chat-media-preview-retry';
+const DIAGNOSTIC_KEY = 'route-chat-media-migration-diagnostics';
 
 type JobStatus = 'waiting' | 'inflight' | 'done' | 'failed';
 type PreviewStatus = 'optimizing' | 'retrying' | 'failed' | 'ready';
@@ -45,7 +47,7 @@ type PreviewStatusDetail = {
   code?: string;
 };
 
-type PreviewRetryDetail = {
+type PreviewReferenceDetail = {
   reference?: string;
 };
 
@@ -65,8 +67,6 @@ function candidateKey(candidate: Candidate) {
 
 function candidates(state: RoomState) {
   const result: Candidate[] = [];
-  // Chat is anchored at the newest messages. Migrate from the bottom of the
-  // loaded page first so visible photos recover before older off-screen media.
   for (let messageIndex = state.messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
     const message = state.messages[messageIndex];
     if (message.type === 'image' && migratable(message.imageUrl)) {
@@ -88,6 +88,35 @@ function emitPreviewStatus(reference: string, status: PreviewStatus, extra: Omit
   }));
 }
 
+function emitKnownPreviewStatus(reference: string) {
+  for (const state of rooms.values()) {
+    for (const candidate of candidates(state)) {
+      if (candidate.url !== reference) continue;
+      const job = state.jobs.get(candidateKey(candidate));
+      if (!job) {
+        emitPreviewStatus(reference, 'optimizing', { attempt: 0 });
+        return;
+      }
+      if (job.status === 'failed') {
+        emitPreviewStatus(reference, 'failed', { attempt: job.attempts, code: job.lastErrorCode });
+        return;
+      }
+      if (job.status === 'waiting' || job.status === 'inflight') {
+        emitPreviewStatus(reference, job.attempts > 1 || job.status === 'waiting' ? 'retrying' : 'optimizing', {
+          attempt: job.attempts,
+          nextRetryAt: job.nextRetryAt || undefined,
+          code: job.lastErrorCode,
+        });
+        return;
+      }
+      if (job.status === 'done') {
+        emitPreviewStatus(reference, 'ready', { attempt: job.attempts });
+        return;
+      }
+    }
+  }
+}
+
 function migrationErrorCode(error: unknown) {
   const message = error instanceof Error ? `${error.name}:${error.message}` : String(error);
   if (/AbortError|legacy-media-timeout/i.test(message)) return 'timeout';
@@ -96,6 +125,17 @@ function migrationErrorCode(error: unknown) {
   if (/legacy-media-404|object-not-found/i.test(message)) return 'source-missing';
   if (/decode|ImageBitmap|canvas|preview-encode/i.test(message)) return 'image-decode';
   return 'unknown';
+}
+
+function recordMigrationDiagnostic(candidate: Candidate, attempt: number, code: string) {
+  try {
+    const previous = JSON.parse(sessionStorage.getItem(DIAGNOSTIC_KEY) || '[]') as unknown[];
+    const next = [
+      ...previous.slice(-19),
+      { at: new Date().toISOString(), messageId: candidate.message.id, mediaIndex: candidate.index, attempt, code },
+    ];
+    sessionStorage.setItem(DIAGNOSTIC_KEY, JSON.stringify(next));
+  } catch {}
 }
 
 function nextCandidate(state: RoomState, now = Date.now()): Candidate | undefined {
@@ -189,6 +229,7 @@ async function migrateCandidate(state: RoomState, candidate: Candidate, key: str
     const previous = state.jobs.get(key);
     const attempts = previous?.attempts ?? 1;
     const code = migrationErrorCode(error);
+    recordMigrationDiagnostic(candidate, attempts, code);
 
     if (attempts >= MAX_AUTO_ATTEMPTS) {
       state.jobs.set(key, { attempts, nextRetryAt: Number.POSITIVE_INFINITY, status: 'failed', lastErrorCode: code });
@@ -230,16 +271,17 @@ export function migrateLoadedLegacyChatMedia(coupleId: string, ownerUid: string,
   schedulePump(state, 80);
 }
 
-/**
- * Backward-compatible no-op for older chatRealtime wiring. The actual migration
- * is driven by migrateLoadedLegacyChatMedia(), which only sees paged messages.
- */
 export async function startLegacyChatMediaMigration(_coupleId: string, _ownerUid: string) {
   return Promise.resolve();
 }
 
+window.addEventListener(PREVIEW_STATUS_REQUEST_EVENT, (event) => {
+  const reference = (event as CustomEvent<PreviewReferenceDetail>).detail?.reference;
+  if (reference) emitKnownPreviewStatus(reference);
+});
+
 window.addEventListener(PREVIEW_RETRY_EVENT, (event) => {
-  const reference = (event as CustomEvent<PreviewRetryDetail>).detail?.reference;
+  const reference = (event as CustomEvent<PreviewReferenceDetail>).detail?.reference;
   if (!reference) return;
 
   rooms.forEach((state) => {
