@@ -74,5 +74,5 @@ export default function Root() {
     return <Suspense fallback={<RouteLoading />}><ProfileSetup user={user} onComplete={(nextProfile) => setProfile(nextProfile)} /></Suspense>;
   }
 
-  return <Suspense fallback={<RouteLoading />}><App /></Suspense>;
+  return <Suspense fallback={<RouteLoading />}><App user={user} profile={profile} onProfileChange={setProfile} /></Suspense>;
 }
