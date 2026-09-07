@@ -37,6 +37,7 @@ const localKey = (uid: string) => `route-local-schedules:${uid}`;
 const appointmentKey = (uid: string) => `route-date-plans:${uid}`;
 const todayKey = () => new Date().toISOString().slice(0, 10);
 const CLOUD_ACK_WAIT_MS = 1200;
+const SCHEDULE_SUBSCRIBE_DELAY_MS = 450;
 
 function loadLocal(uid: string): Schedule[] {
   try { return JSON.parse(localStorage.getItem(localKey(uid)) || '[]') as Schedule[]; }
@@ -110,9 +111,38 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
     if (!connection?.coupleId) { setRemoteSchedules([]); return; }
     const schedulesRef = collection(db, 'couples', connection.coupleId, 'schedules');
     const q = query(schedulesRef, orderBy('date', 'asc'));
-    return onSnapshot(q, (snapshot) => {
-      setRemoteSchedules(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as Omit<Schedule, 'id'>) })));
-    }, () => setNotice('공유 일정을 불러오지 못해 기기에 저장된 일정으로 표시하고 있어요.'));
+    let unsubscribe: (() => void) | undefined;
+    let startTimer: number | undefined;
+
+    const stop = () => {
+      if (startTimer !== undefined) window.clearTimeout(startTimer);
+      startTimer = undefined;
+      unsubscribe?.();
+      unsubscribe = undefined;
+    };
+    const start = () => {
+      if (document.visibilityState === 'hidden' || unsubscribe || startTimer !== undefined) return;
+      // Local schedules paint immediately. The cloud listener can wait until the
+      // home screen has settled instead of competing with the first render.
+      startTimer = window.setTimeout(() => {
+        startTimer = undefined;
+        if (document.visibilityState === 'hidden') return;
+        unsubscribe = onSnapshot(q, (snapshot) => {
+          setRemoteSchedules(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as Omit<Schedule, 'id'>) })));
+        }, () => setNotice('공유 일정을 불러오지 못해 기기에 저장된 일정으로 표시하고 있어요.'));
+      }, SCHEDULE_SUBSCRIBE_DELAY_MS);
+    };
+    const syncVisibility = () => {
+      if (document.visibilityState === 'hidden') stop();
+      else start();
+    };
+
+    document.addEventListener('visibilitychange', syncVisibility);
+    start();
+    return () => {
+      document.removeEventListener('visibilitychange', syncVisibility);
+      stop();
+    };
   }, [connection?.coupleId]);
 
   const schedules = useMemo(() => {
@@ -121,18 +151,18 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
     return [...remoteSchedules, ...localOnly].sort((a, b) => `${a.date} ${a.startTime}`.localeCompare(`${b.date} ${b.startTime}`));
   }, [localSchedules, remoteSchedules]);
 
-  const upcoming = schedules.filter((item) => item.date >= todayKey()).slice(0, 3);
+  const upcoming = useMemo(() => schedules.filter((item) => item.date >= todayKey()).slice(0, 3), [schedules]);
   const partner = connection?.partnerProfile ?? null;
   const partnerName = partner ? displayName(partner) : '상대방';
   const partnerRealName = partner?.name?.trim() || '상대방';
   const myRealName = profile.name?.trim() || '나';
 
-  const filtered = schedules.filter((item) => {
+  const filtered = useMemo(() => schedules.filter((item) => {
     if (filter === 'all') return true;
     if (filter === 'couple') return item.type === 'couple';
     if (filter === 'mine') return item.type === 'personal' && item.ownerId === uid;
     return item.type === 'personal' && item.ownerId !== uid;
-  });
+  }), [filter, schedules, uid]);
 
   const persistLocal = (schedule: Omit<Schedule, 'id'>) => {
     const local: Schedule = { ...schedule, id: `local-${Date.now()}`, localOnly: true };
