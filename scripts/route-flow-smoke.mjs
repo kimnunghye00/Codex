@@ -32,6 +32,7 @@ const requiredFiles = [
   'src/lib/firestoreCacheReset.ts',
   'src/lib/coupleConnection.ts',
   'src/components/couple/CoupleConnect.tsx',
+  'src/components/home/CoupleHomeTools.tsx',
   'src/components/navigation/AppHeader.tsx',
   'src/components/navigation/BottomNav.tsx',
   'src/components/more/MoreServices.tsx',
@@ -40,6 +41,7 @@ const requiredFiles = [
   'src/components/location/LocationPage.tsx',
   'src/components/auth/AccountSettings.tsx',
   'src/components/auth/PartnerProfileCard.tsx',
+  'src/styles/features/chat.ts',
   'public/naver-map-host.html',
 ];
 
@@ -80,6 +82,7 @@ const firestoreCacheReset = read('src/lib/firestoreCacheReset.ts');
 const accountPolicy = read('src/utils/accountIsolationPolicy.ts');
 const coupleConnection = read('src/lib/coupleConnection.ts');
 const coupleConnect = read('src/components/couple/CoupleConnect.tsx');
+const homeTools = read('src/components/home/CoupleHomeTools.tsx');
 const coupleSession = read('src/utils/coupleConnectSession.ts');
 const releaseFlags = read('src/config/releaseFlags.ts');
 const messageId = read('src/utils/messageId.ts');
@@ -87,6 +90,7 @@ const header = read('src/components/navigation/AppHeader.tsx');
 const bottomNav = read('src/components/navigation/BottomNav.tsx');
 const more = read('src/components/more/MoreServices.tsx');
 const chat = read('src/components/chat/ChatPage.tsx');
+const chatStyles = read('src/styles/features/chat.ts');
 const memories = read('src/components/memories/MemoriesPage.tsx');
 const location = read('src/components/location/LocationPage.tsx');
 const account = read('src/components/auth/AccountSettings.tsx');
@@ -115,6 +119,11 @@ check('App routes more', app.includes("tab === 'more'"));
 check('App has no Stable page bridge references', !app.includes('StableMemoriesPage') && !app.includes('StableLocationPage'));
 check('native back handler remains connected', app.includes('route-native-back'));
 check('App uses realtime couple subscription', app.includes('subscribeRealCoupleConnection') && !app.includes('window.setInterval(check, 3000)'));
+check('App auth state is owned by Root only', !app.includes('onAuthStateChanged') && app.includes('type AppProps = { user: User; profile: UserProfile;'));
+check('Root passes authoritative auth state once', root.includes('<App user={user} profile={profile} onProfileChange={setProfile} />'));
+check('home schedule listener delays first cloud subscription', homeTools.includes('SCHEDULE_SUBSCRIBE_DELAY_MS') && homeTools.includes('window.setTimeout'));
+check('home schedule listener pauses while app is hidden', homeTools.includes("document.addEventListener('visibilitychange'") && homeTools.includes("document.visibilityState === 'hidden'") && homeTools.includes('unsubscribe?.()'));
+check('chat room CSS is feature-loaded only', chatStyles.includes("route-chat-room-v26.css") && !app.includes("import './route-chat-room-v26.css'"));
 
 check('couple connection exposes realtime user subscription', coupleConnection.includes('export function subscribeRealCoupleConnection') && coupleConnection.includes('onSnapshot(userRef'));
 check('couple invite exposes realtime state subscription', coupleConnection.includes('export function subscribeCoupleInviteState') && coupleConnection.includes("'coupleInvites'"));
