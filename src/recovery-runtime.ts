@@ -1,5 +1,5 @@
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth, clearNativeFirestorePersistence } from './lib/firebase';
+import { auth } from './lib/firebaseAuth';
 import { decideAccountIsolation } from './utils/accountIsolationPolicy';
 import { signalPersistentStateChange } from './utils/persistenceSignal';
 
@@ -141,6 +141,9 @@ async function clearFirestoreAndReload(marker: string) {
   accountResetInProgress = true;
   try { sessionStorage.setItem(ACCOUNT_SWITCH_RELOAD_KEY, marker); } catch {}
   try {
+    // Cache clearing is only needed during an account reset/switch. Importing the
+    // Firestore module lazily keeps the normal startup isolation check auth-only.
+    const { clearNativeFirestorePersistence } = await import('./lib/firebase');
     await clearNativeFirestorePersistence();
   } catch {}
   window.location.reload();
