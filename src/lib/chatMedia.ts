@@ -16,6 +16,7 @@ type UploadChatMediaOptions = {
 const PREVIEW_MAX_EDGE = 640;
 const PREVIEW_WEBP_QUALITY = 0.32;
 const PREVIEW_JPEG_FALLBACK_QUALITY = 0.36;
+const LEGACY_FETCH_TIMEOUT_MS = 12_000;
 
 function dataUrlMime(dataUrl: string) {
   return /^data:([^;,]+)[;,]/.exec(dataUrl)?.[1] || 'image/jpeg';
@@ -38,6 +39,25 @@ async function sourceToBlob(source: string | Blob) {
   const response = await fetch(source);
   if (!response.ok) throw new Error(`preview-source-${response.status}`);
   return response.blob();
+}
+
+async function fetchLegacyOriginal(originalUrl: string) {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), LEGACY_FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(originalUrl, {
+      cache: 'force-cache',
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`legacy-media-${response.status}`);
+    return await response.blob();
+  } catch (cause) {
+    if (cause instanceof DOMException && cause.name === 'AbortError') throw new Error('legacy-media-timeout');
+    if (cause instanceof TypeError) throw new Error(`legacy-media-network:${cause.message || 'fetch-failed'}`);
+    throw cause;
+  } finally {
+    window.clearTimeout(timer);
+  }
 }
 
 async function decodeImage(blob: Blob): Promise<{
@@ -117,9 +137,7 @@ export async function createLegacyChatMediaReference(
   if (hasOptimizedChatPreview(originalUrl)) return originalUrl;
   if (!originalUrl || originalUrl.startsWith('blob:')) throw new Error('legacy-media-unavailable');
 
-  const response = await fetch(originalUrl, { cache: 'force-cache' });
-  if (!response.ok) throw new Error(`legacy-media-${response.status}`);
-  const source = await response.blob();
+  const source = await fetchLegacyOriginal(originalUrl);
   if (!source.type.startsWith('image/') || source.type === 'image/gif') throw new Error('legacy-media-not-static-image');
 
   await yieldToBrowser();
