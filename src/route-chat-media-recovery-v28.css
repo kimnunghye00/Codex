@@ -1,0 +1,35 @@
+/* ROUTE chat media recovery v28
+ * Keep legacy originals off-screen, but distinguish background optimization
+ * from a recoverable failure. Failed tiles are intentionally tappable.
+ */
+.chat-legacy-media-gate small {
+  font-size: 9px !important;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.chat-legacy-media-gate small::after {
+  content: none !important;
+}
+
+.chat-legacy-media-gate.chat-preview-retrying {
+  cursor: wait;
+}
+
+.chat-legacy-media-gate.chat-preview-failed {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  color: var(--primary);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--surface) 88%, var(--primary) 12%), color-mix(in srgb, var(--surface) 96%, var(--primary) 4%));
+  outline: 1px solid color-mix(in srgb, var(--primary) 28%, transparent);
+  outline-offset: -1px;
+}
+
+.chat-legacy-media-gate.chat-preview-failed:active {
+  transform: scale(.985);
+}
+
+.chat-legacy-media-gate.chat-preview-failed svg {
+  animation: none !important;
+}
