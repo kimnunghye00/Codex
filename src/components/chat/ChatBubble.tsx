@@ -1,4 +1,4 @@
-import { Bookmark, ChevronLeft, ChevronRight, CornerUpLeft, Download, Image as ImageIcon, X } from 'lucide-react';
+import { Bookmark, ChevronLeft, ChevronRight, CornerUpLeft, Download, Image as ImageIcon, RefreshCw, X } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import '../../route-chat-gallery-v21.css';
@@ -10,12 +10,26 @@ import { ReactionPicker } from './ReactionPicker';
 
 const MAX_INLINE_GALLERY_ITEMS = 4;
 const SWIPE_THRESHOLD = 42;
+const PREVIEW_STATUS_EVENT = 'route-chat-media-preview-status';
+const PREVIEW_RETRY_EVENT = 'route-chat-media-preview-retry';
+
+type LegacyPreviewState = 'optimizing' | 'retrying' | 'failed';
+type PreviewStatusDetail = {
+  reference?: string;
+  status?: 'optimizing' | 'retrying' | 'failed' | 'ready';
+  code?: string;
+};
 
 function replyLabel(message: Message) {
   if (message.type === 'image') return '사진';
   if (message.type === 'gallery') return `사진 ${message.imageUrls?.length ?? 0}장`;
   if (message.type === 'gif') return '움짤';
   return message.text?.slice(0, 45);
+}
+
+function retryableUrl(url: string, retry: number) {
+  if (!retry) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}route-preview-retry=${retry}`;
 }
 
 function DeferredMediaImage({ src, alt, className, onClick }: {
@@ -25,47 +39,96 @@ function DeferredMediaImage({ src, alt, className, onClick }: {
   onClick?: (event: React.MouseEvent<HTMLElement>) => void;
 }) {
   const optimizedPreview = hasOptimizedChatPreview(src);
-  const [failed, setFailed] = useState(false);
+  const [legacyState, setLegacyState] = useState<LegacyPreviewState>('optimizing');
+  const [failureCode, setFailureCode] = useState('');
+  const [previewFailed, setPreviewFailed] = useState(false);
+  const [previewRetry, setPreviewRetry] = useState(0);
 
-  useEffect(() => setFailed(false), [src]);
+  useEffect(() => {
+    setLegacyState('optimizing');
+    setFailureCode('');
+    setPreviewFailed(false);
+    setPreviewRetry(0);
+  }, [src]);
 
-  // Photos sent before the compact-preview rollout intentionally never attach
-  // their large original URL to an <img>. The incremental migration replaces
-  // this status tile with a tiny preview reference as soon as it is ready.
+  useEffect(() => {
+    if (optimizedPreview) return;
+    const handleStatus = (event: Event) => {
+      const detail = (event as CustomEvent<PreviewStatusDetail>).detail;
+      if (!detail || detail.reference !== src) return;
+      if (detail.status === 'failed') {
+        setLegacyState('failed');
+        setFailureCode(detail.code ?? 'unknown');
+      } else if (detail.status === 'retrying') {
+        setLegacyState('retrying');
+        setFailureCode(detail.code ?? '');
+      } else if (detail.status === 'optimizing') {
+        setLegacyState('optimizing');
+        setFailureCode('');
+      }
+    };
+    window.addEventListener(PREVIEW_STATUS_EVENT, handleStatus);
+    return () => window.removeEventListener(PREVIEW_STATUS_EVENT, handleStatus);
+  }, [optimizedPreview, src]);
+
+  const retryLegacy = (event: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setLegacyState('retrying');
+    setFailureCode('');
+    window.dispatchEvent(new CustomEvent(PREVIEW_RETRY_EVENT, { detail: { reference: src } }));
+  };
+
   if (!optimizedPreview) {
+    const failed = legacyState === 'failed';
+    const label = failed
+      ? '미리보기 재시도'
+      : legacyState === 'retrying'
+        ? '미리보기 다시 시도 중…'
+        : '사진 최적화 중…';
     return <span
-      className={`chat-legacy-media-gate ${className ?? ''}`}
-      role="status"
-      aria-label="사진 미리보기 최적화 중"
-    ><ImageIcon size={20} /><small>미리보기 준비 중</small></span>;
+      className={`chat-legacy-media-gate ${failed ? 'chat-preview-failed' : legacyState === 'retrying' ? 'chat-preview-retrying' : ''} ${className ?? ''}`}
+      role={failed ? 'button' : 'status'}
+      tabIndex={failed ? 0 : undefined}
+      aria-label={failed ? `사진 미리보기 실패. 다시 시도${failureCode ? ` (${failureCode})` : ''}` : label}
+      onClick={failed ? retryLegacy : undefined}
+      onKeyDown={failed ? (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        retryLegacy(event);
+      } : undefined}
+    >{failed ? <RefreshCw size={20} /> : <ImageIcon size={20} />}<small>{label}</small></span>;
   }
 
-  if (failed) {
+  if (previewFailed) {
     return <span
-      className={`chat-legacy-media-gate chat-preview-fallback ${className ?? ''}`}
-      role={onClick ? 'button' : 'status'}
-      tabIndex={onClick ? 0 : undefined}
-      aria-label="사진 미리보기를 불러오지 못했어요"
-      onClick={onClick}
-      onKeyDown={onClick ? (event) => {
+      className={`chat-legacy-media-gate chat-preview-failed ${className ?? ''}`}
+      role="button"
+      tabIndex={0}
+      aria-label="사진 미리보기를 불러오지 못했어요. 다시 시도"
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setPreviewFailed(false);
+        setPreviewRetry((value) => value + 1);
+      }}
+      onKeyDown={(event) => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
-        onClick(event as unknown as React.MouseEvent<HTMLElement>);
-      } : undefined}
-    ><ImageIcon size={20} /><small>미리보기 다시 열기</small></span>;
+        event.stopPropagation();
+        setPreviewFailed(false);
+        setPreviewRetry((value) => value + 1);
+      }}
+    ><RefreshCw size={20} /><small>미리보기 다시 불러오기</small></span>;
   }
 
-  // The previews are already ultra-small. Give WebView the real preview URL
-  // immediately and let native loading="lazy" decide when off-screen images are
-  // fetched. This avoids blank <img> nodes whose src stayed undefined while an
-  // IntersectionObserver was waiting to fire.
+  const displayUrl = retryableUrl(chatMediaPreviewUrl(src), previewRetry);
   return <img
     className={className}
-    src={chatMediaPreviewUrl(src)}
+    src={displayUrl}
     alt={alt}
     loading="lazy"
     decoding="async"
-    onError={() => setFailed(true)}
+    onError={() => setPreviewFailed(true)}
     onClick={onClick}
   />;
 }
