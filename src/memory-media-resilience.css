@@ -18,6 +18,22 @@
   font-size: 10px;
   line-height: 1.2;
   font-weight: 700;
+  text-align: center;
+}
+
+.memory-media-retrying {
+  cursor: wait;
+}
+
+.memory-media-retry {
+  cursor: pointer;
+  color: var(--primary);
+  outline: 1px solid color-mix(in srgb, var(--primary) 25%, transparent);
+  outline-offset: -1px;
+}
+
+.memory-media-retry:active {
+  transform: scale(.985);
 }
 
 .memory-cover > .memory-media-fallback,
