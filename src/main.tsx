@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import Root from './Root';
 import { AppCrashBoundary, installGlobalCrashDiagnostics } from './AppCrashBoundary';
 import { applySavedRouteAppIcon } from './utils/appIcon';
-import { authPersistenceReady } from './lib/firebase';
+import { authPersistenceReady } from './lib/firebaseAuth';
 import { hideNativeSplash, initializeNativeApp } from './lib/native';
 import { initializeRuntimeRecovery } from './recovery-runtime';
 import { installPersistentStorageObserver } from './utils/persistenceSignal';
@@ -46,6 +46,11 @@ import './route-list-performance-v27.css';
 
 const DESKTOP_PREVIEW_PARAM = 'routeMobilePreview';
 const NATIVE_SPLASH_FAILSAFE_MS = 2500;
+const DEFERRED_RUNTIME_FALLBACK_MS = 900;
+
+type IdleCapableWindow = Window & {
+  requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+};
 
 function shouldUseDesktopPhonePreview() {
   const params = new URLSearchParams(window.location.search);
@@ -171,8 +176,31 @@ function waitForFirstPaint() {
   });
 }
 
+function scheduleDeferredRuntimeWork(task: () => void) {
+  const schedule = () => {
+    const idleWindow = window as IdleCapableWindow;
+    if (idleWindow.requestIdleCallback) {
+      idleWindow.requestIdleCallback(task, { timeout: 1800 });
+      return;
+    }
+    window.setTimeout(task, DEFERRED_RUNTIME_FALLBACK_MS);
+  };
+
+  if (document.visibilityState === 'hidden') {
+    const resume = () => {
+      if (document.visibilityState !== 'visible') return;
+      document.removeEventListener('visibilitychange', resume);
+      schedule();
+    };
+    document.addEventListener('visibilitychange', resume);
+    return;
+  }
+
+  schedule();
+}
+
 function startDeferredRuntimeServices() {
-  window.setTimeout(() => {
+  scheduleDeferredRuntimeWork(() => {
     void import('./pwa')
       .then(({ initializeRoutePwa }) => initializeRoutePwa())
       .catch((error) => console.warn('[ROUTE deferred PWA]', error));
@@ -188,7 +216,7 @@ function startDeferredRuntimeServices() {
     }).catch((error) => {
       console.warn('[ROUTE deferred durability]', error);
     });
-  }, 0);
+  });
 }
 
 async function bootstrap() {
