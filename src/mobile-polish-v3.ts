@@ -71,6 +71,40 @@ function polish() {
   closeStaleHubPopupOnTabChange();
 }
 
-const observer = new MutationObserver(polish);
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { polish(); observer.observe(document.body, { childList: true, subtree: true }); }, { once: true });
-else { polish(); observer.observe(document.body, { childList: true, subtree: true }); }
+const FEATURE_ROOT = '.route-hub, .route-more-services';
+let scheduled = false;
+
+function schedulePolish() {
+  if (scheduled) return;
+  scheduled = true;
+  requestAnimationFrame(() => {
+    scheduled = false;
+    polish();
+  });
+}
+
+function mutationTouchesFeature(record: MutationRecord) {
+  const target = record.target;
+  if (target instanceof Element && target.closest(FEATURE_ROOT)) return true;
+  return Array.from(record.addedNodes).some((node) => {
+    if (!(node instanceof Element)) return false;
+    return node.matches(FEATURE_ROOT)
+      || Boolean(node.closest(FEATURE_ROOT))
+      || Boolean(node.querySelector(FEATURE_ROOT));
+  });
+}
+
+const observer = new MutationObserver((records) => {
+  if (records.some(mutationTouchesFeature)) schedulePolish();
+});
+
+function start() {
+  polish();
+  observer.observe(document.body, { childList: true, subtree: true });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', start, { once: true });
+} else {
+  start();
+}
