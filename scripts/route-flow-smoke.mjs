@@ -26,6 +26,9 @@ const requiredFiles = [
   'src/utils/accountIsolationPolicy.ts',
   'src/utils/coupleConnectSession.ts',
   'src/utils/messageId.ts',
+  'src/lib/firebaseCore.ts',
+  'src/lib/firebaseAuth.ts',
+  'src/lib/firebase.ts',
   'src/lib/coupleConnection.ts',
   'src/components/couple/CoupleConnect.tsx',
   'src/components/navigation/AppHeader.tsx',
@@ -70,6 +73,8 @@ const app = read('src/App.tsx');
 const root = read('src/Root.tsx');
 const main = read('src/main.tsx');
 const recovery = read('src/recovery-runtime.ts');
+const firebase = read('src/lib/firebase.ts');
+const firebaseAuth = read('src/lib/firebaseAuth.ts');
 const accountPolicy = read('src/utils/accountIsolationPolicy.ts');
 const coupleConnection = read('src/lib/coupleConnection.ts');
 const coupleConnect = read('src/components/couple/CoupleConnect.tsx');
@@ -144,13 +149,17 @@ check('location footprints tab is present', location.includes("activeTab === 'fo
 check('location can create a memory', location.includes('onCreateMemory'));
 check('Naver map host remains configured', location.includes('meluni-f4e00.web.app'));
 
-check('Root protects unauthenticated flow', root.includes('if (!user) return <App />'));
+check('Root protects unauthenticated flow', root.includes('if (!user) return <Suspense') && root.includes('<AuthFlow />'));
 check('Root protects first profile setup flow', root.includes('<ProfileSetup'));
+check('Root keeps cloud profile Firestore off the normal local-profile path', root.includes("import('./lib/coupleData')") && !root.includes('import { loadCloudProfile }'));
 check('account settings can link an email login', account.includes('linkWithCredential'));
 check('account settings keeps couple connection flow', account.includes('<CoupleConnect'));
 check('partner profile is directly integrated', account.includes('<PartnerProfileCard'));
 
 check('single React application root', (main.match(/createRoot\(/g) || []).length === 1);
+check('startup restores auth without eager Firestore import', main.includes("from './lib/firebaseAuth';") && !main.includes("from './lib/firebase';"));
+check('Firebase auth module does not import Firestore', !firebaseAuth.includes('firebase/firestore'));
+check('Firestore module still owns persistent native cache', firebase.includes('persistentLocalCache') && firebase.includes('initializeFirestore'));
 check('runtime recovery is explicitly initialized', main.includes("import { initializeRuntimeRecovery } from './recovery-runtime';"));
 check('account isolation blocks React mount', main.indexOf('await initializeRuntimeRecovery()') > -1 && main.indexOf('await initializeRuntimeRecovery()') < main.indexOf('createRoot('));
 check('runtime recovery styles are loaded directly', main.includes("import './route-runtime-stability-v19.css';"));
@@ -158,6 +167,7 @@ check('runtime recovery exports an idempotent initializer', recovery.includes('e
 check('runtime recovery has no import-time installer', !recovery.includes('installRuntimeRecovery();'));
 check('account isolation policy is used', recovery.includes('decideAccountIsolation') && accountPolicy.includes("'reset-orphan'") && accountPolicy.includes("'reset-switch'"));
 check('runtime recovery rejects unowned legacy shared cache', recovery.includes('hasSharedLocalCache') && recovery.includes("action === 'reset-orphan'"));
+check('runtime recovery keeps Firestore lazy on normal startup', recovery.includes("from './lib/firebaseAuth';") && recovery.includes("await import('./lib/firebase')"));
 check('obsolete appearance wrapper is not imported', !main.includes('appearance-stability'));
 check('unused ai test stylesheet is not imported', !main.includes('ai-test.css'));
 check('runtime recovery still handles connectivity', recovery.includes("window.addEventListener('offline'") && recovery.includes("window.addEventListener('online'"));
