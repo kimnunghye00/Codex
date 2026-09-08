@@ -225,7 +225,7 @@
 }
 
 @media (max-width: 360px) {
-  .route-quick-settings-grid { gap-left: 2px; gap-right: 2px; }
+  .route-quick-settings-grid { column-gap: 2px; }
   .route-quick-setting-icon { width: 44px; height: 44px; border-radius: 15px; }
   .route-quick-setting span:last-child { font-size: 9px; }
 }
