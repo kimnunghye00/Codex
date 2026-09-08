@@ -1,0 +1,88 @@
+/* ROUTE mobile bugfix v29 */
+
+.chat-room-layer .chat-page,
+.chat-page.full-page {
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.chat-page .messages,
+.chat-room-layer .chat-page .messages {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  touch-action: pan-y !important;
+  overscroll-behavior-y: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+.chat-page .composer .composer-gif-shortcut {
+  width: 40px !important;
+  height: 40px !important;
+  min-width: 40px !important;
+  min-height: 40px !important;
+  flex: 0 0 40px !important;
+  display: grid !important;
+  place-items: center !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  color: var(--primary) !important;
+  background: color-mix(in srgb, var(--primary-soft) 78%, var(--surface) 22%) !important;
+}
+
+.hub-order-panel.route-order-fixed-shell {
+  max-height: min(78dvh, 620px) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.hub-order-panel.route-order-fixed-shell > header {
+  flex: 0 0 auto;
+}
+
+.hub-order-panel.route-order-fixed-shell .hub-order-row {
+  flex: 0 0 auto;
+}
+
+.route-hub-order-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.route-hub-order-footer {
+  position: sticky;
+  z-index: 4;
+  bottom: 0;
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 8px -2px -2px;
+  padding: 10px 2px 2px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.route-hub-order-footer button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.route-hub-order-reset {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--surface) 82%, var(--primary-soft) 18%);
+}
+
+.route-hub-order-done {
+  color: #fff;
+  background: var(--primary);
+}
