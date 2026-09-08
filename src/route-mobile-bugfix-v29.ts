@@ -52,6 +52,9 @@ function wireHubOrderPanel(panel: HTMLElement) {
   panel.dataset.routeFixedFooter = '1';
   panel.classList.add('route-order-fixed-shell');
 
+  const existingFooter = panel.querySelector<HTMLElement>('.hub-order-footer');
+  if (existingFooter) return;
+
   const footer = document.createElement('footer');
   footer.className = 'route-hub-order-footer';
 
