@@ -11,6 +11,7 @@ public class MainActivity extends BridgeActivity {
         // could otherwise leave ROUTE without a usable launcher entry.
         LauncherRepairReceiver.ensureLauncherAvailable(this);
         registerPlugin(AppIconPlugin.class);
+        registerPlugin(MediaSaverPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
