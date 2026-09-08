@@ -1,4 +1,12 @@
+import { Capacitor, registerPlugin } from '@capacitor/core';
+
 const ORIGINAL_MARKER = '#route-original=';
+
+type RouteMediaSaverPlugin = {
+  saveImage(options: { url: string; fileName: string }): Promise<{ saved: boolean; uri?: string }>;
+};
+
+const RouteMediaSaver = registerPlugin<RouteMediaSaverPlugin>('RouteMediaSaver');
 
 export function createChatMediaReference(previewUrl: string, originalUrl: string) {
   if (!originalUrl || originalUrl === previewUrl) return previewUrl;
@@ -6,7 +14,11 @@ export function createChatMediaReference(previewUrl: string, originalUrl: string
 }
 
 export function hasOptimizedChatPreview(reference: string) {
-  return reference.includes(ORIGINAL_MARKER);
+  // Old ROUTE messages already point at durable Firebase/HTTPS image URLs.
+  // Treat those as directly renderable instead of blocking the UI behind a
+  // background preview migration that can fail in Android WebView because of
+  // CORS/cache restrictions. New messages still use the explicit preview marker.
+  return reference.includes(ORIGINAL_MARKER) || /^https?:\/\//i.test(reference);
 }
 
 export function chatMediaPreviewUrl(reference: string) {
@@ -33,27 +45,28 @@ function extensionForMime(mime: string) {
   return 'jpg';
 }
 
+function fileNameFor(index: number, extension = 'jpg') {
+  return `ROUTE-photo-${Date.now()}-${index}.${extension}`;
+}
+
 export async function downloadOriginalChatMedia(reference: string, index = 1) {
   const url = chatMediaOriginalUrl(reference);
-  try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`download-${response.status}`);
-    const blob = await response.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = objectUrl;
-    link.download = `ROUTE-photo-${Date.now()}-${index}.${extensionForMime(blob.type)}`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-  } catch {
-    const link = document.createElement('a');
-    link.href = url;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+
+  if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
+    await RouteMediaSaver.saveImage({ url, fileName: fileNameFor(index) });
+    return;
   }
+
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`download-${response.status}`);
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = fileNameFor(index, extensionForMime(blob.type));
+  link.rel = 'noopener';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 }
