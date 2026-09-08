@@ -30,11 +30,20 @@
         window.parent.postMessage({ source: 'route-map-host', type, ...detail }, '*');
       };
 
+      const markerSize = (current) => current ? 24 : 20;
       const markerHtml = (current, index) => {
         const color = current ? '#E07A5F' : '#3D405B';
-        const size = current ? 24 : 20;
+        const size = markerSize(current);
         const label = Number.isInteger(index) ? `<span style="font-size:9px;color:#fff;font-weight:800">${index + 1}</span>` : '';
-        return `<div style="width:${size}px;height:${size}px;border:3px solid #fff;border-radius:50%;background:${color};box-shadow:0 3px 10px #0003;display:grid;place-items:center">${label}</div>`;
+        return `<div style="width:${size}px;height:${size}px;border:3px solid #fff;border-radius:50%;background:${color};box-sizing:border-box;box-shadow:0 3px 10px #0003;display:grid;place-items:center">${label}</div>`;
+      };
+
+      const markerIcon = (naver, current, index) => {
+        const size = markerSize(current);
+        return {
+          content: markerHtml(current, index),
+          anchor: new naver.maps.Point(size / 2, size / 2),
+        };
       };
 
       const escapeHtml = (value) => String(value ?? '').replace(/[&<>'\"]/g, (character) => ({
@@ -82,7 +91,15 @@
 
         const points = validVisits.map((visit) => new naver.maps.LatLng(Number(visit.latitude), Number(visit.longitude)));
         if (points.length > 1) {
-          overlays.push(new naver.maps.Polyline({ map, path: points, strokeColor: '#E07A5F', strokeWeight: 5, strokeOpacity: 0.76 }));
+          overlays.push(new naver.maps.Polyline({
+            map,
+            path: points,
+            strokeColor: '#E07A5F',
+            strokeWeight: 3,
+            strokeOpacity: 0.86,
+            strokeLineCap: 'round',
+            strokeLineJoin: 'round',
+          }));
         }
 
         validVisits.forEach((visit, index) => {
@@ -90,7 +107,7 @@
           const marker = new naver.maps.Marker({
             map,
             position: points[index],
-            icon: { content: markerHtml(current, mode === 'footprints' ? index : undefined) },
+            icon: markerIcon(naver, current, mode === 'footprints' ? index : undefined),
           });
           const popup = new naver.maps.InfoWindow({
             content: `<div style="padding:10px 12px;font-size:12px;line-height:1.45"><strong>${escapeHtml(visit.placeName || '위치 기록')}</strong><br>${escapeHtml(dayText(visit.arrivedAt))} · ${escapeHtml(timeText(visit.arrivedAt))}${visit.leftAt ? ` ~ ${escapeHtml(timeText(visit.leftAt))}` : ' · 현재'}</div>`,
@@ -123,7 +140,7 @@
         focusOverlay = new naver.maps.Marker({
           map,
           position: point,
-          icon: { content: markerHtml(true) },
+          icon: markerIcon(naver, true),
           zIndex: 2000,
         });
         focusPopup = new naver.maps.InfoWindow({
