@@ -134,7 +134,6 @@ export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onIma
       {quickOpen && <div className="quick-contact-strip">{QUICK.map((item) => <button key={item} type="button" onClick={() => { onQuick(item); setQuickOpen(false); }}>{item}</button>)}</div>}
       {extras && <div className="composer-extra-row">
         <button type="button" onClick={() => fileRef.current?.click()}><ImagePlus size={18} /><span>사진</span></button>
-        <button type="button" onClick={() => gifRef.current?.click()}><Laugh size={18} /><span>움짤</span></button>
         <button type="button" onClick={() => { setQuickOpen((value) => !value); }}><span className="extra-heart">♥</span><span>빠른 연락</span></button>
         <button type="button" onClick={onSchedule}><CalendarClock size={18} /><span>예약</span></button>
         <button type="button" onClick={onGift}><Gift size={18} /><span>선물</span></button>
@@ -161,7 +160,9 @@ export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onIma
           spellCheck
           placeholder="메시지를 입력하세요..."
         />
-        <button type="button" className={`send ${draft.trim() ? 'ready' : ''}`} disabled={!draft.trim()} onClick={onSend} aria-label="전송"><Send size={18} /></button>
+        {draft.trim()
+          ? <button type="button" className="send ready" onClick={onSend} aria-label="메시지 전송"><Send size={18} /></button>
+          : <button type="button" className="composer-gif-shortcut" onClick={() => gifRef.current?.click()} aria-label="움짤 보내기"><Laugh size={19} /></button>}
       </div>
     </div>
     {preview}
