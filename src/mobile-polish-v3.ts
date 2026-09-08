@@ -1,3 +1,6 @@
+import './route-mobile-bugfix-v29.css';
+import { installRouteMobileBugfixV29 } from './route-mobile-bugfix-v29';
+
 function replaceAppointmentLabels(root: ParentNode = document) {
   const selectors = [
     '.route-hub .hub-tabs button',
@@ -100,6 +103,7 @@ const observer = new MutationObserver((records) => {
 
 function start() {
   polish();
+  installRouteMobileBugfixV29();
   observer.observe(document.body, { childList: true, subtree: true });
 }
 
