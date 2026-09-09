@@ -12,9 +12,8 @@
   <div id="map"></div>
   <script>
     (() => {
-      // NAVER's current Maps JavaScript API uses ncpKeyId for newly issued Maps applications.
-      // Keep the map on this fixed Firebase Hosting origin so Codespaces/APK origins never need
-      // to be added repeatedly to the NAVER Cloud Maps application.
+      // This isolated Firebase-hosted map surface intentionally keeps one tiny
+      // inline reset. The ROUTE application UI itself is compiled with Tailwind.
       const CLIENT_ID = 'z3njcg8upv';
       const SDK_URL = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(CLIENT_ID)}&callback=__routeNaverMapReady`;
       let map;
@@ -61,6 +60,12 @@
         catch { return ''; }
       };
 
+      const localDayKey = (value) => {
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return 'unknown';
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      };
+
       const clearOverlays = () => {
         overlays.forEach((overlay) => { try { overlay.setMap(null); } catch {} });
         overlays = [];
@@ -89,18 +94,33 @@
           return;
         }
 
+        // One LatLng object is shared by each marker and its route segment.
+        // This guarantees that every line terminates at the exact marker center.
         const points = validVisits.map((visit) => new naver.maps.LatLng(Number(visit.latitude), Number(visit.longitude)));
-        if (points.length > 1) {
+
+        // Do not connect yesterday's last point to today's first point. ROUTE
+        // records many days of visits in one list, so each local day gets its
+        // own chronological polyline while every visit marker remains visible.
+        const routeByDay = new Map();
+        validVisits.forEach((visit, index) => {
+          const key = localDayKey(visit.arrivedAt);
+          const path = routeByDay.get(key) || [];
+          path.push(points[index]);
+          routeByDay.set(key, path);
+        });
+        routeByDay.forEach((path) => {
+          if (path.length < 2) return;
           overlays.push(new naver.maps.Polyline({
             map,
-            path: points,
+            path,
             strokeColor: '#E07A5F',
             strokeWeight: 3,
-            strokeOpacity: 0.86,
+            strokeOpacity: 0.88,
             strokeLineCap: 'round',
             strokeLineJoin: 'round',
+            zIndex: 100,
           }));
-        }
+        });
 
         validVisits.forEach((visit, index) => {
           const current = !visit.leftAt && index === validVisits.length - 1;
@@ -108,6 +128,7 @@
             map,
             position: points[index],
             icon: markerIcon(naver, current, mode === 'footprints' ? index : undefined),
+            zIndex: 200,
           });
           const popup = new naver.maps.InfoWindow({
             content: `<div style="padding:10px 12px;font-size:12px;line-height:1.45"><strong>${escapeHtml(visit.placeName || '위치 기록')}</strong><br>${escapeHtml(dayText(visit.arrivedAt))} · ${escapeHtml(timeText(visit.arrivedAt))}${visit.leftAt ? ` ~ ${escapeHtml(timeText(visit.leftAt))}` : ' · 현재'}</div>`,
