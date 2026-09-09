@@ -72,8 +72,8 @@
   }
 
   .home-dashboard-grid {
-    width: calc(100vw - 22px);
-    max-width: calc(100vw - 22px);
+    width: 100%;
+    max-width: 100%;
     grid-template-columns: minmax(0, calc(58% - 5px)) minmax(0, calc(42% - 5px));
     gap: 10px;
   }

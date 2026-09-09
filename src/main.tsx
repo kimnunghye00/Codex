@@ -7,6 +7,7 @@ import { authPersistenceReady } from './lib/firebaseAuth';
 import { hideNativeSplash, initializeNativeApp } from './lib/native';
 import { initializeRuntimeRecovery } from './recovery-runtime';
 import { installPersistentStorageObserver } from './utils/persistenceSignal';
+import { installRouteMobileBugfixV29 } from './route-mobile-bugfix-v29';
 import './styles.css';
 import './auth-onboarding.css';
 import './nickname.css';
@@ -51,6 +52,7 @@ import './route-list-performance-v27.css';
 // screens therefore share one responsive layout implementation on Web,
 // Android WebView and iOS WebView without another platform-specific override.
 import './tailwind.css';
+import './route-mobile-bugfix-v29.css';
 
 const NATIVE_SPLASH_FAILSAFE_MS = 2500;
 const DEFERRED_RUNTIME_FALLBACK_MS = 900;
@@ -189,6 +191,7 @@ function startDeferredRuntimeServices() {
 async function bootstrap() {
   installGlobalCrashDiagnostics();
   installPersistentStorageObserver();
+  installRouteMobileBugfixV29();
   applySavedRouteAppIcon();
 
   mountBootstrapShell();

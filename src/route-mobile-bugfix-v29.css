@@ -82,3 +82,28 @@
   color: #fff;
   background: var(--primary);
 }
+
+/* Screenshot regression guard */
+.chat-room-layer {
+  left: 50% !important;
+  right: auto !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  transform: translateX(-50%) !important;
+}
+.chat-room-layer .chat-page {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 0 !important;
+}
+.chat-room-layer .chat-page .messages {
+  flex: 1 1 0 !important;
+  height: auto !important;
+  max-height: none !important;
+}
+@media (max-width: 480px) {
+  .app-shell, .chat-room-layer {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
