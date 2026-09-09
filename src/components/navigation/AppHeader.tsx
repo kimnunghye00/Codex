@@ -7,7 +7,7 @@ export function AppHeader({ title, onSettings, onNotifications, unreadCount }: {
   onNotifications: () => void;
   unreadCount: number;
 }) {
-  return <header className="topbar mx-auto !flex h-[76px] w-full min-w-0 max-w-[1500px] !items-center !justify-between gap-3 lg:h-[72px]">
+  return <header className="topbar mx-auto !flex !h-auto !min-h-[calc(58px+max(10px,env(safe-area-inset-top)))] w-full min-w-0 !items-center !justify-between gap-3 !px-0 !pt-[max(10px,env(safe-area-inset-top))] !pb-2 md:!h-[72px] md:!min-h-[72px] md:!py-0">
     <div className="brand !flex min-w-0 !items-center gap-3 sm:gap-3.5">
       <Wordmark />
       {title && <span className="page-title !flex min-h-[26px] min-w-0 !items-center border-l border-[var(--border)] pl-3 text-[18px] font-bold leading-none sm:pl-3.5">{title}</span>}
