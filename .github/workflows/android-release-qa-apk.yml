@@ -66,10 +66,7 @@ jobs:
           NODE
 
       - name: Install dependencies
-        # Keep the QA build runnable while the Tailwind migration lockfile is
-        # being refreshed. package.json versions are exact-pinned and the full
-        # stability/dependency gates run immediately after installation.
-        run: npm install --no-audit --no-fund
+        run: npm ci
 
       - name: Run full ROUTE stability suite
         run: npm run stability
