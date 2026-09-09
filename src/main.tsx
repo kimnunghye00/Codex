@@ -47,53 +47,17 @@ import './route-post-deploy-polish-v20.css';
 import './route-ui-stability-v23.css';
 import './route-list-performance-v27.css';
 
-const DESKTOP_PREVIEW_PARAM = 'routeMobilePreview';
+// Tailwind utilities are intentionally imported last. Newly migrated React
+// screens therefore share one responsive layout implementation on Web,
+// Android WebView and iOS WebView without another platform-specific override.
+import './tailwind.css';
+
 const NATIVE_SPLASH_FAILSAFE_MS = 2500;
 const DEFERRED_RUNTIME_FALLBACK_MS = 900;
 
 type IdleCapableWindow = Window & {
   requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
 };
-
-function shouldUseDesktopPhonePreview() {
-  const params = new URLSearchParams(window.location.search);
-  return window.self === window.top
-    && /^https?:$/.test(window.location.protocol)
-    && window.matchMedia('(min-width: 900px)').matches
-    && !params.has(DESKTOP_PREVIEW_PARAM);
-}
-
-async function mountDesktopPhonePreview() {
-  if (!shouldUseDesktopPhonePreview()) return false;
-
-  await Promise.all([
-    import('./web-desktop.css'),
-    import('./route-web-phone-preview-v12.css'),
-  ]);
-
-  const root = document.getElementById('root');
-  if (!root) return false;
-
-  document.documentElement.classList.add('route-desktop-phone-mode');
-
-  const preview = document.createElement('div');
-  preview.className = 'route-desktop-phone-preview';
-
-  const frame = document.createElement('div');
-  frame.className = 'route-desktop-phone-frame';
-
-  const iframe = document.createElement('iframe');
-  const url = new URL(window.location.href);
-  url.searchParams.set(DESKTOP_PREVIEW_PARAM, '1');
-  iframe.src = url.toString();
-  iframe.title = 'ROUTE 모바일 화면';
-  iframe.setAttribute('allow', 'geolocation; camera; microphone; clipboard-read; clipboard-write');
-
-  frame.appendChild(iframe);
-  preview.appendChild(frame);
-  root.replaceChildren(preview);
-  return true;
-}
 
 function mountBootstrapShell() {
   const root = document.getElementById('root');
@@ -226,8 +190,6 @@ async function bootstrap() {
   installGlobalCrashDiagnostics();
   installPersistentStorageObserver();
   applySavedRouteAppIcon();
-
-  if (await mountDesktopPhonePreview()) return;
 
   mountBootstrapShell();
   const splashFailsafe = window.setTimeout(() => {
