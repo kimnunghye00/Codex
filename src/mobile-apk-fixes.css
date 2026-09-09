@@ -1,11 +1,6 @@
-/* APK/mobile-specific layout corrections. Kept separate so the desktop layout stays easy to tune. */
-@supports (padding: max(0px)) {
-  .topbar {
-    height: auto;
-    min-height: 84px;
-    padding-top: max(10px, env(safe-area-inset-top));
-  }
-}
+/* Transitional chat-media rules only.
+ * Platform/page layout no longer lives here: shared layout is Tailwind-driven
+ * for Web, Android WebView and iOS WebView. */
 
 /* A single photo should be the bubble itself, without a colored/white letterbox. */
 .media-bubble {
@@ -33,12 +28,7 @@
   object-fit: contain;
 }
 
-/* Keep the composer above gesture/navigation safe areas on phones. */
+/* Safe-area behavior is shared by mobile web and installed WebViews. */
 .composer-area {
   padding-bottom: max(0px, env(safe-area-inset-bottom));
-}
-
-@media (max-width: 480px) {
-  .page { padding-left: 18px; padding-right: 18px; }
-  .topbar { min-height: 82px; }
 }
