@@ -85,7 +85,9 @@
         naver.maps.Event.trigger(map, 'resize');
         clearOverlays();
 
-        const validVisits = lastRender.visits.filter((visit) => Number.isFinite(Number(visit.latitude)) && Number.isFinite(Number(visit.longitude)));
+        const validVisits = lastRender.visits
+          .filter((visit) => Number.isFinite(Number(visit.latitude)) && Number.isFinite(Number(visit.longitude)))
+          .sort((a, b) => new Date(a.arrivedAt || 0).getTime() - new Date(b.arrivedAt || 0).getTime());
         if (!validVisits.length) {
           if (!focusOverlay) {
             map.setCenter(new naver.maps.LatLng(37.5666103, 126.9783882));
@@ -114,7 +116,7 @@
             map,
             path,
             strokeColor: '#E07A5F',
-            strokeWeight: 3,
+            strokeWeight: 2,
             strokeOpacity: 0.88,
             strokeLineCap: 'round',
             strokeLineJoin: 'round',

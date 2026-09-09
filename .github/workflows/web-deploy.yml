@@ -86,16 +86,15 @@ jobs:
           chmod 600 "$ADC_FILE"
           echo "GOOGLE_APPLICATION_CREDENTIALS=$ADC_FILE" >> "$GITHUB_ENV"
 
-      - name: Explain skipped deployment
+      - name: Block stale web deployment
         if: ${{ env.FIREBASE_SERVICE_ACCOUNT_JSON == '' && env.FIREBASE_TOKEN == '' }}
         shell: bash
         run: |
-          echo '::warning::ROUTE build is healthy, but Firebase deployment credentials are not configured.'
-          echo '### Firebase deployment skipped' >> "$GITHUB_STEP_SUMMARY"
+          echo '::error::ROUTE web build passed, but Firebase deployment credentials are missing. Publishing is blocked so an old hosted screen cannot be mistaken for the latest main branch.'
+          echo '### Firebase deployment blocked' >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
-          echo 'Add the **ROUTE_FIREBASE_SERVICE_ACCOUNT** repository secret (recommended), or the legacy **ROUTE_FIREBASE_TOKEN** secret, to enable automatic deployment.' >> "$GITHUB_STEP_SUMMARY"
-          echo '' >> "$GITHUB_STEP_SUMMARY"
-          echo 'The build and release guardrails passed; only the external Firebase credential is missing.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Configure **ROUTE_FIREBASE_SERVICE_ACCOUNT** (recommended) or **ROUTE_FIREBASE_TOKEN**, then rerun this workflow.' >> "$GITHUB_STEP_SUMMARY"
+          exit 1
 
       - name: Deploy Hosting and Firebase rules
         if: ${{ env.FIREBASE_SERVICE_ACCOUNT_JSON != '' || env.FIREBASE_TOKEN != '' }}

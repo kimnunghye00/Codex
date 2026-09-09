@@ -1,4 +1,4 @@
-const CACHE_NAME = 'route-web-v7';
+const CACHE_NAME = 'route-web-v8-screenshot-regression';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.add('./')).catch(() => undefined));

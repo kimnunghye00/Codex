@@ -432,7 +432,7 @@ export function LocationPage({ requestedTab, Header, connection, focusPlace, onC
         ref={mapFrame}
         className="location-real-map route-map-frame"
         title="ROUTE 네이버 지도"
-        src={`${ROUTE_MAP_HOST}?v=4&attempt=${mapAttempt}`}
+        src={`${ROUTE_MAP_HOST}?v=5&attempt=${mapAttempt}`}
         onLoad={() => {
           setMapStatus('네이버 지도 인증을 확인하는 중이에요…');
           setMapFailed(false);

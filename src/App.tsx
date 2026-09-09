@@ -2,6 +2,7 @@ import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState
 import type { HubTabId } from './components/memories/MemoriesPage';
 import type { LocationTabId } from './components/location/LocationPage';
 import { CoupleHomeTools } from './components/home/CoupleHomeTools';
+import { MemoryImage } from './components/memories/MemoryMedia';
 import type { MoreNavigationTarget } from './components/more/MoreServices';
 import { AppHeader as SharedAppHeader } from './components/navigation/AppHeader';
 import { BottomNav, type AppTab } from './components/navigation/BottomNav';
@@ -372,7 +373,7 @@ const HomePage = memo(function HomePage({ uid, profile, connection, relationship
           <div className="home-time-divider" />
           {nearest ? <div className="home-time-block upcoming-time"><small>다가오는 날</small><strong>D-{daysUntil(nearest.date)}</strong><em>{nearest.title}</em></div> : <div className="home-time-block upcoming-time"><small>다가오는 날</small><strong>-</strong><em>생일과 기념일을 준비하고 있어요</em></div>}
         </button>
-        {latestMemory ? <button className="home-photo-card" type="button" onClick={() => onOpenMemory(latestMemory.id)}><img src={latestMemory.images[0]} alt={latestMemory.title} decoding="async" /><span className="home-photo-shade" /><span className="home-photo-copy"><small>최근 추억</small><strong>{latestMemory.title}</strong><em>{latestMemory.date.replaceAll('-', '.')}</em></span><span className="home-photo-heart"><Heart size={16} /></span></button> : <button className="home-photo-card empty" type="button" onClick={() => onNavigate('memories')}><Image size={24} /><span>첫 추억을 남겨보세요</span></button>}
+        {latestMemory ? <button className="home-photo-card" type="button" onClick={() => onOpenMemory(latestMemory.id)}><MemoryImage src={latestMemory.images[0]} alt={latestMemory.title} loading="eager" /><span className="home-photo-shade" /><span className="home-photo-copy"><small>최근 추억</small><strong>{latestMemory.title}</strong><em>{latestMemory.date.replaceAll('-', '.')}</em></span><span className="home-photo-heart"><Heart size={16} /></span></button> : <button className="home-photo-card empty" type="button" onClick={() => onNavigate('memories')}><Image size={24} /><span>첫 추억을 남겨보세요</span></button>}
         <button className="home-chat-card" type="button" onClick={onOpenChat}><span className="home-chat-head"><b>최근 대화</b><ChevronRight size={17} /></span><span className="home-chat-preview"><span className="home-chat-avatar">{partnerInitial}</span><span className="home-chat-copy"><b>{partnerName}</b><small>{chatPreview(latestPartnerMessage)}</small></span></span></button>
       </div>
     </div>
