@@ -1,0 +1,146 @@
+name: Apply Screenshot Regression Fixes
+
+on:
+  push:
+    branches: [codex/screenshot-regression-fix-20260909]
+    paths:
+      - '.github/workflows/screenshot-regression-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fixes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: codex/screenshot-regression-fix-20260909
+
+      - name: Apply exact source fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, found {count}')
+              p.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              'src/main.tsx',
+              "import { installPersistentStorageObserver } from './utils/persistenceSignal';\n",
+              "import { installPersistentStorageObserver } from './utils/persistenceSignal';\nimport { installRouteMobileBugfixV29 } from './route-mobile-bugfix-v29';\n",
+          )
+          replace_once(
+              'src/main.tsx',
+              "import './tailwind.css';\n",
+              "import './tailwind.css';\nimport './route-mobile-bugfix-v29.css';\n",
+          )
+          replace_once(
+              'src/main.tsx',
+              "  installPersistentStorageObserver();\n  applySavedRouteAppIcon();",
+              "  installPersistentStorageObserver();\n  installRouteMobileBugfixV29();\n  applySavedRouteAppIcon();",
+          )
+
+          replace_once(
+              'src/App.tsx',
+              "import { CoupleHomeTools } from './components/home/CoupleHomeTools';\n",
+              "import { CoupleHomeTools } from './components/home/CoupleHomeTools';\nimport { MemoryImage } from './components/memories/MemoryMedia';\n",
+          )
+          replace_once(
+              'src/App.tsx',
+              '<img src={latestMemory.images[0]} alt={latestMemory.title} decoding="async" />',
+              '<MemoryImage src={latestMemory.images[0]} alt={latestMemory.title} loading="eager" />',
+          )
+
+          replace_once(
+              'src/home-dashboard.css',
+              "    width: calc(100vw - 22px);\n    max-width: calc(100vw - 22px);",
+              "    width: 100%;\n    max-width: 100%;",
+          )
+
+          chat_css = Path('src/route-mobile-bugfix-v29.css')
+          chat_css.write_text(chat_css.read_text() + r'''
+
+/* Screenshot regression guard: keep the full-screen chat room centered inside
+   the same app viewport and make the message list the expanding scroll region. */
+.chat-room-layer {
+  left: 50% !important;
+  right: auto !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  transform: translateX(-50%) !important;
+}
+
+.chat-room-layer .chat-page {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 0 !important;
+}
+
+.chat-room-layer .chat-page .messages {
+  flex: 1 1 0 !important;
+  height: auto !important;
+  max-height: none !important;
+}
+
+@media (max-width: 480px) {
+  .app-shell,
+  .chat-room-layer {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+''')
+
+          replace_once(
+              'public/naver-map-host.html',
+              "        const validVisits = lastRender.visits.filter((visit) => Number.isFinite(Number(visit.latitude)) && Number.isFinite(Number(visit.longitude)));",
+              "        const validVisits = lastRender.visits\n          .filter((visit) => Number.isFinite(Number(visit.latitude)) && Number.isFinite(Number(visit.longitude)))\n          .sort((a, b) => new Date(a.arrivedAt || 0).getTime() - new Date(b.arrivedAt || 0).getTime());",
+          )
+          replace_once(
+              'public/naver-map-host.html',
+              "            strokeWeight: 3,",
+              "            strokeWeight: 2,",
+          )
+          replace_once(
+              'src/components/location/LocationPage.tsx',
+              'src={`${ROUTE_MAP_HOST}?v=4&attempt=${mapAttempt}`}',
+              'src={`${ROUTE_MAP_HOST}?v=5&attempt=${mapAttempt}`}',
+          )
+
+          replace_once(
+              'public/sw.js',
+              "const CACHE_NAME = 'route-web-v7';",
+              "const CACHE_NAME = 'route-web-v8-screenshot-regression';",
+          )
+
+          deploy = Path('.github/workflows/web-deploy.yml')
+          deploy_text = deploy.read_text()
+          old = """      - name: Explain skipped deployment\n        if: ${{ env.FIREBASE_SERVICE_ACCOUNT_JSON == '' && env.FIREBASE_TOKEN == '' }}\n        shell: bash\n        run: |\n          echo '::warning::ROUTE build is healthy, but Firebase deployment credentials are not configured.'\n          echo '### Firebase deployment skipped' >> \"$GITHUB_STEP_SUMMARY\"\n          echo '' >> \"$GITHUB_STEP_SUMMARY\"\n          echo 'Add the **ROUTE_FIREBASE_SERVICE_ACCOUNT** repository secret (recommended), or the legacy **ROUTE_FIREBASE_TOKEN** secret, to enable automatic deployment.' >> \"$GITHUB_STEP_SUMMARY\"\n          echo '' >> \"$GITHUB_STEP_SUMMARY\"\n          echo 'The build and release guardrails passed; only the external Firebase credential is missing.' >> \"$GITHUB_STEP_SUMMARY\"\n"""
+          new = """      - name: Block stale web deployment\n        if: ${{ env.FIREBASE_SERVICE_ACCOUNT_JSON == '' && env.FIREBASE_TOKEN == '' }}\n        shell: bash\n        run: |\n          echo '::error::Firebase deployment credentials are missing. The web build is healthy, but publishing was blocked to prevent a stale ROUTE screen from being mistaken for the latest main branch.'\n          echo '### Firebase deployment blocked' >> \"$GITHUB_STEP_SUMMARY\"\n          echo '' >> \"$GITHUB_STEP_SUMMARY\"\n          echo 'Configure **ROUTE_FIREBASE_SERVICE_ACCOUNT** (recommended) or **ROUTE_FIREBASE_TOKEN** before treating this workflow as deployed.' >> \"$GITHUB_STEP_SUMMARY\"\n          exit 1\n"""
+          if deploy_text.count(old) != 1:
+              raise SystemExit('web-deploy.yml: skipped-deploy block did not match exactly once')
+          deploy.write_text(deploy_text.replace(old, new, 1))
+          PY
+
+      - name: Remove one-time workflow
+        run: rm .github/workflows/screenshot-regression-fix.yml
+
+      - name: Commit fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/main.tsx src/App.tsx src/home-dashboard.css src/route-mobile-bugfix-v29.css src/components/location/LocationPage.tsx public/naver-map-host.html public/sw.js .github/workflows/web-deploy.yml .github/workflows/screenshot-regression-fix.yml
+          git commit -m 'Fix screenshot regressions and stale deploy signal'
+          git push origin HEAD:codex/screenshot-regression-fix-20260909
