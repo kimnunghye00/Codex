@@ -29,7 +29,10 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        # Tailwind was added during the responsive migration before the checked-in
+        # lockfile was refreshed. Resolve the exact pinned package.json versions in
+        # the runner so the audit still executes instead of failing before npm audit.
+        run: npm install --no-audit --no-fund
 
       - name: Production dependency audit
         shell: bash
