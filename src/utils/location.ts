@@ -70,14 +70,30 @@ export function distanceMeters(a: Pick<LocationVisit, 'latitude' | 'longitude'>,
   return 2 * radius * Math.asin(Math.sqrt(h));
 }
 
+function cleanPart(value?: string) {
+  return value?.replace(/\s+/g, ' ').trim() || '';
+}
+
+function detailedKoreanPlaceName(data: { name?: string; display_name?: string; address?: Record<string, string> }) {
+  const address = data.address ?? {};
+  const municipality = cleanPart(address.county || address.city || address.municipality || address.state_district);
+  const locality = cleanPart(address.town || address.city_district || address.suburb || address.village || address.neighbourhood || address.quarter);
+  const poi = cleanPart(data.name || address.amenity || address.shop || address.tourism || address.building || address.road);
+
+  const administrative = Array.from(new Set([municipality, locality].filter(Boolean))).join(' ');
+  if (administrative && poi && !administrative.includes(poi)) return `${administrative} · ${poi}`;
+  if (administrative) return administrative;
+  if (poi) return poi;
+  return cleanPart(data.display_name?.split(',').slice(0, 3).join(' '));
+}
+
 export async function reverseGeocode(latitude: number, longitude: number): Promise<string | undefined> {
   try {
     const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}&zoom=18&accept-language=ko`;
     const response = await fetch(url, { headers: { Accept: 'application/json' } });
     if (!response.ok) return undefined;
     const data = await response.json() as { name?: string; display_name?: string; address?: Record<string, string> };
-    const address = data.address ?? {};
-    return data.name || address.amenity || address.shop || address.building || address.road || address.suburb || address.neighbourhood || data.display_name?.split(',').slice(0, 2).join(', ');
+    return detailedKoreanPlaceName(data) || undefined;
   } catch {
     return undefined;
   }
@@ -87,10 +103,10 @@ export async function searchLocation(query: string): Promise<LocationSearchResul
   const value = query.trim();
   if (!value) return null;
   try {
-    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(value)}&limit=1&accept-language=ko&countrycodes=kr`;
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(value)}&limit=1&addressdetails=1&accept-language=ko&countrycodes=kr`;
     const response = await fetch(url, { headers: { Accept: 'application/json' } });
     if (!response.ok) return null;
-    const rows = await response.json() as Array<{ lat?: string; lon?: string; name?: string; display_name?: string }>;
+    const rows = await response.json() as Array<{ lat?: string; lon?: string; name?: string; display_name?: string; address?: Record<string, string> }>;
     const first = rows[0];
     if (!first) return null;
     const latitude = Number(first.lat);
@@ -99,7 +115,7 @@ export async function searchLocation(query: string): Promise<LocationSearchResul
     return {
       latitude,
       longitude,
-      placeName: first.name || first.display_name?.split(',').slice(0, 2).join(', ') || value,
+      placeName: detailedKoreanPlaceName(first) || value,
     };
   } catch {
     return null;
