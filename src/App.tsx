@@ -19,7 +19,7 @@ import {
   saveNotifications,
   type AppNotification,
 } from './utils/notifications';
-import { ChevronLeft, ChevronRight, Heart, Image, MapPin, MapPinned, Plus } from 'lucide-react';
+import { ChevronRight, Heart, Image, MapPin, MapPinned, Plus } from 'lucide-react';
 
 const ChatPage = lazy(() => Promise.all([
   import('./styles/features/chat'),
@@ -161,7 +161,6 @@ function App({ user, profile, onProfileChange }: AppProps) {
   const [relationshipStartDate, setRelationshipStartDate] = useState<string>();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [chatRoomOpen, setChatRoomOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>(() => loadNotifications(user.uid));
   const [tab, setTab] = useState<Tab>('home');
   const [messages, setMessages] = useState<Message[]>(() => loadMessages(initialMessages));
@@ -188,22 +187,16 @@ function App({ user, profile, onProfileChange }: AppProps) {
   }, [messages]);
 
   const openSettings = useCallback(() => setSettingsOpen(true), []);
-  const openChat = useCallback(() => setChatRoomOpen(true), []);
-  const closeChat = useCallback(() => setChatRoomOpen(false), []);
   const navigateTab = useCallback((next: Tab) => {
-    if (next === 'chat') {
-      setChatRoomOpen(true);
-      return;
-    }
-    if (chatRoomOpen) setChatRoomOpen(false);
     if (next === tab) return;
     tabHistory.current.push(next);
     setTab(next);
-  }, [chatRoomOpen, tab]);
+  }, [tab]);
+  const openChat = useCallback(() => navigateTab('chat'), [navigateTab]);
 
   const navigateMoreTarget = useCallback((target: MoreNavigationTarget) => {
     if (target.area === 'chat') {
-      setChatRoomOpen(true);
+      navigateTab('chat');
       return;
     }
     if (target.area === 'memories') {
@@ -241,7 +234,6 @@ function App({ user, profile, onProfileChange }: AppProps) {
       if (event.defaultPrevented) return;
       if (settingsOpen) { event.preventDefault(); setSettingsOpen(false); return; }
       if (notificationsOpen) { event.preventDefault(); setNotificationsOpen(false); return; }
-      if (chatRoomOpen) { event.preventDefault(); setChatRoomOpen(false); return; }
       if (tabHistory.current.length > 1) {
         event.preventDefault();
         tabHistory.current.pop();
@@ -252,16 +244,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
     };
     window.addEventListener('route-native-back', handleBack);
     return () => window.removeEventListener('route-native-back', handleBack);
-  }, [chatRoomOpen, notificationsOpen, settingsOpen, tab]);
-
-  useEffect(() => {
-    if (!chatRoomOpen) return;
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setChatRoomOpen(false);
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [chatRoomOpen]);
+  }, [notificationsOpen, settingsOpen, tab]);
 
   useEffect(() => {
     saveMessages(messages);
@@ -319,28 +302,17 @@ function App({ user, profile, onProfileChange }: AppProps) {
     setRelationshipStartDate(value);
   };
 
-  const partnerName = connection?.partnerProfile ? displayName(connection.partnerProfile) : '상대방';
   const AppHeader = ({ title }: { title?: string }) => <SharedAppHeader title={title} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />;
-  const ChatRoomHeader = () => <header className="chat-room-header">
-    <button className="chat-room-back" type="button" aria-label="대화방 나가기" onClick={closeChat}><ChevronLeft size={26} /></button>
-    <div className="chat-room-header-copy"><b>{partnerName}</b><span>{connection ? '실시간 대화' : 'ROUTE 대화'}</span></div>
-    <span className="chat-room-header-spacer" aria-hidden="true" />
-  </header>;
 
   return <>
     <div className="app-shell"><main><Suspense fallback={<div className="page auth-loading" role="status" aria-live="polite"><div className="loading-mark" /><p>화면을 불러오는 중이에요</p></div>}>
       {tab === 'home' && <HomePage uid={user.uid} profile={profile} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} memories={memories} latestPartnerMessage={latestPartnerMessage} onNavigate={navigateTab} onOpenChat={openChat} onOpenMemory={openMemory} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'memories' && <MemoriesPage requestedTab={requestedHubTab} Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={(place) => { setLocationFocus(place); setRequestedLocationTab('map'); navigateTab('location'); }} />}
+      {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} connection={connection} />}
       {tab === 'location' && <LocationPage requestedTab={requestedLocationTab} Header={AppHeader} connection={connection} focusPlace={locationFocus} onClearFocus={() => setLocationFocus(undefined)} onCreateMemory={(draft) => { setMemoryToOpen(undefined); setMemoryDraft(draft); setRequestedHubTab('album'); navigateTab('memories'); }} onActivity={(title, detail) => addActivity({ actor: 'me', kind: 'location', title, detail })} />}
       {tab === 'anniversary' && <AnniversaryPage connected={Boolean(connection)} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} onSaveStartDate={saveStartDate} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'more' && <MorePage onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} onNavigate={navigateMoreTarget} />}
     </Suspense></main><BottomNav tab={tab} onNavigate={navigateTab} /></div>
-
-    {chatRoomOpen && <div className="chat-room-layer" role="dialog" aria-modal="true" aria-label={`${partnerName} 대화방`}>
-      <Suspense fallback={<div className="page auth-loading" role="status"><div className="loading-mark" /><p>대화방을 여는 중이에요</p></div>}>
-        <ChatPage Header={ChatRoomHeader} messages={messages} setMessages={setMessages} connection={connection} />
-      </Suspense>
-    </div>}
 
     <Suspense fallback={null}>
       {settingsOpen && <AccountSettings user={user} profile={profile} onProfileChange={onProfileChange} onClose={() => setSettingsOpen(false)} />}
