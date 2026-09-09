@@ -28,6 +28,8 @@ const MAX_GIF_BYTES = 9 * 1024 * 1024;
 const MAX_CHAT_PHOTOS = 100;
 const CHAT_MEDIA_BATCH_SIZE = 4;
 const MAX_SCHEDULE_SLEEP_MS = 60 * 60 * 1000;
+const CHAT_BOTTOM_SLOP_PX = 140;
+const FINE_POINTER_WHEEL_MULTIPLIER = 2.35;
 
 function aiReplyFor(text: string) {
   const value = text.trim();
@@ -111,7 +113,11 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   const [giftOpen, setGiftOpen] = useState(false);
   const [callMode, setCallMode] = useState<CallMode>();
   const [mediaStream, setMediaStream] = useState<MediaStream>();
+  const messagesRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const initialScrollRef = useRef(false);
+  const nearBottomRef = useRef(true);
+  const forceBottomRef = useRef(false);
   const aiTimerRef = useRef<number | undefined>(undefined);
   const typingTimerRef = useRef<number | undefined>(undefined);
   const typingActiveRef = useRef(false);
@@ -125,6 +131,19 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   const partnerName = connection?.partnerProfile?.nickname?.trim() || connection?.partnerProfile?.name?.trim() || (usingAiPartner ? aiPartner?.displayName || AI_TEST_PARTNER_NAME : '상대방');
   const partnerInitial = partnerName.trim().charAt(0) || '상';
   const nearestSchedule = schedules.find((item) => `${item.date} ${item.startTime}` >= `${new Date().toISOString().slice(0, 10)} 00:00`);
+
+  const updateNearBottom = () => {
+    const element = messagesRef.current;
+    if (!element) return;
+    nearBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight <= CHAT_BOTTOM_SLOP_PX;
+  };
+
+  const handleMessagesWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    if (!event.deltaY || !window.matchMedia('(pointer: fine)').matches) return;
+    // Keep the browser's native wheel delta and add only the extra distance.
+    // Touch/trackpad momentum is left fully native; this boosts mouse wheels.
+    event.currentTarget.scrollTop += event.deltaY * (FINE_POINTER_WHEEL_MULTIPLIER - 1);
+  };
 
   useEffect(() => { if (currentUid) setPreferences(loadChatPreferences(currentUid)); }, [currentUid]);
   useEffect(() => { if (currentUid) saveChatPreferences(currentUid, preferences); }, [currentUid, preferences]);
@@ -184,7 +203,19 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     void setDoc(doc(db, 'couples', connection.coupleId, 'typing', currentUid), { typing: false, updatedAt: Date.now() }, { merge: true }).catch(() => undefined);
     typingActiveRef.current = false;
   }, [connection?.coupleId, currentUid]);
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages.length, aiTyping, partnerTyping]);
+  useEffect(() => {
+    const element = messagesRef.current;
+    if (!element) return;
+    const shouldStick = !initialScrollRef.current || nearBottomRef.current || forceBottomRef.current;
+    initialScrollRef.current = true;
+    if (!shouldStick) return;
+    const frame = window.requestAnimationFrame(() => {
+      element.scrollTop = element.scrollHeight;
+      forceBottomRef.current = false;
+      nearBottomRef.current = true;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [messages.length, aiTyping, partnerTyping]);
   useEffect(() => () => {
     if (aiTimerRef.current) window.clearTimeout(aiTimerRef.current);
     if (typingTimerRef.current) window.clearTimeout(typingTimerRef.current);
@@ -223,6 +254,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
 
   const sendText = (text: string, scheduledFor?: string) => {
     if (!text.trim() || !currentUid) return;
+    if (!scheduledFor) forceBottomRef.current = true;
     const message: Message = { id: createMessageId(), sender: 'me', type: 'text', text: text.trim(), timestamp: new Date().toISOString(), read: usingAiPartner, replyTo, scheduledFor };
     deliver(message); setReplyTo(undefined);
   };
@@ -279,8 +311,6 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
         const batch = selected.slice(offset, offset + CHAT_MEDIA_BATCH_SIZE);
         const preparedUrls: string[] = [];
         for (const file of batch) {
-          // Connected chat already creates a 640px async preview in chatMedia.
-          // Avoid a second 1080/1800px canvas resize before that work.
           preparedUrls.push(connection && file.type !== 'image/gif'
             ? await readFile(file)
             : await prepareImage(file, preferences.mediaQuality));
@@ -305,6 +335,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
         : { id: messageId, sender: 'me', type: 'gallery', imageUrls: urls, timestamp: new Date().toISOString(), read: usingAiPartner, replyTo };
 
       if (connection) await sendCoupleMessage(connection.coupleId, currentUid, message);
+      forceBottomRef.current = true;
       appendIfMissing(message);
       setReplyTo(undefined);
       showFlowNotice(urls.length === 1 ? '사진을 전송했어요.' : `사진 ${urls.length}장을 전송했어요.`);
@@ -336,6 +367,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
 
       const message: Message = { id: messageId, sender: 'me', type: 'gif', imageUrl, timestamp: new Date().toISOString(), read: usingAiPartner, replyTo };
       if (connection) await sendCoupleMessage(connection.coupleId, currentUid, message);
+      forceBottomRef.current = true;
       appendIfMissing(message);
       setReplyTo(undefined);
       showFlowNotice('움짤을 전송했어요.');
@@ -390,7 +422,13 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     {syncError && <p className="chat-sync-error" role="alert">{syncError}</p>}
     {flowNotice && <p className="chat-flow-notice" role="status">{flowNotice}</p>}
     {mediaProgress && <p className="chat-media-progress" role="status" aria-live="polite">사진 {mediaProgress.completed} / {mediaProgress.total}장 전송 중...</p>}
-    <div className="messages" onClick={() => active && setActive(undefined)}>{messages.map((message, index) => {
+    <div
+      ref={messagesRef}
+      className="messages !min-h-0 !flex-1 !overflow-y-auto overscroll-contain [scroll-behavior:auto] [touch-action:pan-y] [-webkit-overflow-scrolling:touch]"
+      onScroll={updateNearBottom}
+      onWheel={handleMessagesWheel}
+      onClick={() => active && setActive(undefined)}
+    >{messages.map((message, index) => {
       const date = new Date(message.timestamp).toDateString();
       const previousDate = index > 0 ? new Date(messages[index - 1].timestamp).toDateString() : '';
       const displayedMessage = isChatMediaMessage(message) ? { ...message, saved: savedMediaIds.has(message.id) } : message;
