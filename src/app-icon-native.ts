@@ -1,6 +1,7 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
+import type { RouteAppIconId } from './utils/appIcon';
 
-type IconId = 'route' | 'heart' | 'night' | 'cream';
+type IconId = RouteAppIconId;
 type RouteAppIconPlugin = {
   setIcon(options: { icon: IconId }): Promise<{ icon: IconId }>;
   getIcon(): Promise<{ icon: IconId }>;
@@ -10,13 +11,10 @@ const RouteAppIcon = registerPlugin<RouteAppIconPlugin>('RouteAppIcon');
 let changing = false;
 
 function iconIdFromButton(button: HTMLButtonElement): IconId | null {
-  const preview = button.querySelector<HTMLElement>('.more-app-icon-preview');
-  if (!preview) return null;
-  if (preview.classList.contains('heart')) return 'heart';
-  if (preview.classList.contains('night')) return 'night';
-  if (preview.classList.contains('cream')) return 'cream';
-  if (preview.classList.contains('route')) return 'route';
-  return null;
+  const value = button.dataset.iconId;
+  return value === 'route' || value === 'heart' || value === 'pin-duo' || value === 'heart-chat' || value === 'our-route' || value === 'night' || value === 'cream' || value === 'minimal'
+    ? value
+    : null;
 }
 
 function notifyIcon(icon: IconId) {
@@ -43,7 +41,7 @@ async function syncNativeIconState() {
 
 document.addEventListener('click', (event) => {
   const target = event.target as Element | null;
-  const button = target?.closest<HTMLButtonElement>('.app-icon-picker button');
+  const button = target?.closest<HTMLButtonElement>('.app-icon-picker button[data-icon-id]');
   if (!button || !Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return;
 
   event.preventDefault();
