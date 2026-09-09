@@ -12,8 +12,6 @@ on:
       - 'package-lock.json'
       - 'vite.config.ts'
       - 'firebase.json'
-      - 'firestore.rules'
-      - 'storage.rules'
       - '.github/workflows/web-deploy.yml'
 
 concurrency:
@@ -96,17 +94,18 @@ jobs:
           echo 'Configure **ROUTE_FIREBASE_SERVICE_ACCOUNT** (recommended) or **ROUTE_FIREBASE_TOKEN**, then rerun this workflow.' >> "$GITHUB_STEP_SUMMARY"
           exit 1
 
-      - name: Deploy Hosting and Firebase rules
+      - name: Deploy Firebase Hosting
         if: ${{ env.FIREBASE_SERVICE_ACCOUNT_JSON != '' || env.FIREBASE_TOKEN != '' }}
         shell: bash
         run: |
           set -euo pipefail
-          # Firebase recommends ADC for CI. If both credentials exist, prefer ADC
-          # instead of the legacy FIREBASE_TOKEN environment variable.
+          # Web publishing is intentionally independent from Firestore/Storage
+          # rule deployment. A restricted CI service account can publish the UI
+          # without being blocked by Service Usage permissions for Storage.
           if [[ -n "$FIREBASE_SERVICE_ACCOUNT_JSON" ]]; then
             unset FIREBASE_TOKEN
           fi
           npx --yes firebase-tools@15.29.0 deploy \
-            --only hosting,firestore:rules,storage \
+            --only hosting \
             --project meluni-f4e00 \
             --non-interactive
