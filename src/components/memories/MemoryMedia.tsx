@@ -1,9 +1,11 @@
+import { getDownloadURL, ref } from 'firebase/storage';
 import { Image as ImageIcon, RefreshCw, Video } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type React from 'react';
-import { chatMediaPreviewUrl } from '../../lib/chatMediaReference';
+import { storage } from '../../lib/firebaseStorage';
+import { chatMediaOriginalUrl, chatMediaPreviewUrl } from '../../lib/chatMediaReference';
 
-const IMAGE_RETRY_DELAYS_MS = [600, 1_800] as const;
+const IMAGE_RETRY_DELAYS_MS = [500, 1_400] as const;
 
 export function isMemoryVideo(src?: string) {
   if (!src) return false;
@@ -18,6 +20,23 @@ function retryableUrl(url: string, attempt: number) {
   return `${url}${url.includes('?') ? '&' : '?'}route-memory-retry=${attempt}`;
 }
 
+function sourceCandidates(source?: string) {
+  if (!source) return [];
+  const preview = chatMediaPreviewUrl(source);
+  const original = chatMediaOriginalUrl(source);
+  return Array.from(new Set([preview, original, source].filter((value): value is string => Boolean(value) && !value.includes('#route-original='))));
+}
+
+async function resolveStorageReference(value: string) {
+  if (!value.startsWith('gs://')) return value;
+  try {
+    return await getDownloadURL(ref(storage, value));
+  } catch (cause) {
+    console.warn('[ROUTE memory storage recovery]', cause);
+    return value;
+  }
+}
+
 export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 'async', onClick }: {
   src?: string;
   alt: string;
@@ -26,21 +45,39 @@ export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 
   decoding?: 'async' | 'auto' | 'sync';
   onClick?: React.MouseEventHandler<HTMLImageElement>;
 }) {
+  const [candidates, setCandidates] = useState<string[]>(() => sourceCandidates(src));
+  const [candidateIndex, setCandidateIndex] = useState(0);
   const [attempt, setAttempt] = useState(0);
   const [retrying, setRetrying] = useState(false);
   const [failed, setFailed] = useState(false);
   const retryTimer = useRef<number | undefined>(undefined);
-  const displayUrl = src ? chatMediaPreviewUrl(src) : '';
+  const displayUrl = candidates[candidateIndex] ?? '';
 
   useEffect(() => {
     if (retryTimer.current) window.clearTimeout(retryTimer.current);
+    const rawCandidates = sourceCandidates(src);
+    setCandidates(rawCandidates);
+    setCandidateIndex(0);
     setAttempt(0);
     setRetrying(false);
     setFailed(false);
+    let cancelled = false;
+
+    void Promise.all(rawCandidates.map(resolveStorageReference)).then((resolved) => {
+      if (cancelled) return;
+      const durableCandidates = Array.from(new Set(resolved.filter(Boolean)));
+      setCandidates(durableCandidates);
+      setCandidateIndex(0);
+      setAttempt(0);
+      setRetrying(false);
+      setFailed(false);
+    });
+
     return () => {
+      cancelled = true;
       if (retryTimer.current) window.clearTimeout(retryTimer.current);
     };
-  }, [displayUrl]);
+  }, [src]);
 
   const retryNow = (event: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>) => {
     event.preventDefault();
@@ -48,6 +85,7 @@ export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 
     if (retryTimer.current) window.clearTimeout(retryTimer.current);
     setFailed(false);
     setRetrying(false);
+    setCandidateIndex(0);
     setAttempt((value) => value + 1);
   };
 
@@ -61,20 +99,28 @@ export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 
       }, IMAGE_RETRY_DELAYS_MS[attempt]);
       return;
     }
+
+    if (candidateIndex + 1 < candidates.length) {
+      setCandidateIndex((value) => value + 1);
+      setAttempt(0);
+      setRetrying(false);
+      setFailed(false);
+      return;
+    }
     setFailed(true);
   };
 
   if (!displayUrl) {
-    return <span className={`memory-media-fallback ${className ?? ''}`} role="img" aria-label={alt || '사진 미리보기'}><ImageIcon size={20} /><small>사진 미리보기</small></span>;
+    return <span className={`memory-media-fallback ${className ?? ''} !grid place-items-center content-center gap-1`} role="img" aria-label={alt || '사진 미리보기'}><ImageIcon size={20} /><small>사진 미리보기</small></span>;
   }
 
   if (retrying) {
-    return <span className={`memory-media-fallback memory-media-retrying ${className ?? ''}`} role="status" aria-label="사진 다시 불러오는 중"><RefreshCw size={20} /><small>사진 다시 불러오는 중…</small></span>;
+    return <span className={`memory-media-fallback memory-media-retrying ${className ?? ''} !grid place-items-center content-center gap-1`} role="status" aria-label="사진 다시 불러오는 중"><RefreshCw className="animate-spin" size={20} /><small>사진 다시 불러오는 중…</small></span>;
   }
 
   if (failed) {
     return <span
-      className={`memory-media-fallback memory-media-retry ${className ?? ''}`}
+      className={`memory-media-fallback memory-media-retry ${className ?? ''} !grid cursor-pointer place-items-center content-center gap-1`}
       role="button"
       tabIndex={0}
       aria-label="사진을 불러오지 못했어요. 다시 시도"

@@ -13,7 +13,13 @@ const initialUser = auth.currentUser;
 const initialProfile = initialUser ? loadProfile(initialUser.uid) : null;
 
 function RouteLoading() {
-  return <div className="app-shell auth-loading" role="status" aria-live="polite"><div className="wordmark"><strong>ROUTE.</strong></div><div className="loading-mark" /><p>ROUTE를 불러오는 중이에요</p></div>;
+  return <div className="app-shell auth-loading !mx-auto !grid !min-h-dvh !w-full !max-w-none place-items-center" role="status" aria-live="polite"><div className="wordmark"><strong>ROUTE.</strong></div><div className="loading-mark" /><p>ROUTE를 불러오는 중이에요</p></div>;
+}
+
+function ResponsiveAppFrame({ children }: { children: React.ReactNode }) {
+  return <div className="route-responsive-root min-h-dvh w-full min-w-0 overflow-x-hidden bg-[var(--background)] [&_.app-shell]:!m-0 [&_.app-shell]:!min-h-dvh [&_.app-shell]:!w-full [&_.app-shell]:!max-w-none [&_.app-shell]:!overflow-x-hidden [&_.page]:!min-w-0 [&_.page]:!max-w-none lg:[&_.page]:!mx-auto lg:[&_.page]:!w-[min(1480px,calc(100vw-64px))] lg:[&_.page]:!px-0 lg:[&_.chat-page]:!w-[min(1180px,calc(100vw-96px))]">
+    {children}
+  </div>;
 }
 
 export default function Root() {
@@ -74,5 +80,5 @@ export default function Root() {
     return <Suspense fallback={<RouteLoading />}><ProfileSetup user={user} onComplete={(nextProfile) => setProfile(nextProfile)} /></Suspense>;
   }
 
-  return <Suspense fallback={<RouteLoading />}><App user={user} profile={profile} onProfileChange={setProfile} /></Suspense>;
+  return <ResponsiveAppFrame><Suspense fallback={<RouteLoading />}><App user={user} profile={profile} onProfileChange={setProfile} /></Suspense></ResponsiveAppFrame>;
 }

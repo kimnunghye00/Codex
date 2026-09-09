@@ -1,11 +1,12 @@
 import { Bell, CalendarDays, ChevronRight, Clock3, Heart, Image, MapPinned, MessageCircle, Palette, Settings, Smartphone, Smile, Sparkles, Trophy, UserRound, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { normalizeRouteAppIcon, updateRouteFavicon, type RouteAppIconId } from '../../utils/appIcon';
 import type { HubTabId } from '../memories/MemoriesPage';
 import type { LocationTabId } from '../location/LocationPage';
 
 type MoreServiceId = 'album' | 'anniversary' | 'record' | 'tier' | 'schedule' | 'date' | 'chat' | 'map' | 'footprint';
 type QuickSettingId = 'profile' | 'notifications' | 'theme' | 'app-icon' | 'emoticon' | 'all-settings';
-type AppIconId = 'route' | 'heart' | 'night' | 'cream';
+type AppIconId = RouteAppIconId;
 type ThemeId = 'default' | 'lavender' | 'dark';
 
 export type MoreNavigationTarget =
@@ -24,6 +25,12 @@ type QuickSetting = {
   label: string;
   description: string;
   icon: typeof Settings;
+};
+
+type AppIconOption = {
+  id: AppIconId;
+  label: string;
+  className: string;
 };
 
 const SERVICES: Service[] = [
@@ -47,11 +54,15 @@ const QUICK_SETTINGS: QuickSetting[] = [
   { id: 'all-settings', label: '전체 설정', description: '계정, 보안, 데이터 등 모든 설정을 확인해요', icon: Settings },
 ];
 
-const APP_ICONS: { id: AppIconId; label: string; mark: string; className: string }[] = [
-  { id: 'route', label: 'ROUTE 기본', mark: 'R', className: 'route' },
-  { id: 'heart', label: '우리 하트', mark: '♥', className: 'heart' },
-  { id: 'night', label: '밤의 ROUTE', mark: 'R', className: 'night' },
-  { id: 'cream', label: '크림 ROUTE', mark: 'R', className: 'cream' },
+const APP_ICONS: AppIconOption[] = [
+  { id: 'route', label: 'ROUTE 시그니처', className: '!bg-[#28314A] !text-[#FFF9F6]' },
+  { id: 'heart', label: '커플 하트', className: '!bg-[#FF7266] !text-[#FFF9F6]' },
+  { id: 'pin-duo', label: '핀 듀오', className: '!bg-[#F7F1E7] !text-[#3D405B]' },
+  { id: 'heart-chat', label: '하트 톡', className: '!bg-[#454866] !text-[#FFF9F6]' },
+  { id: 'our-route', label: '우리의 경로', className: '!bg-[#E8F1EC] !text-[#3D405B]' },
+  { id: 'night', label: 'ROUTE 나이트', className: '!bg-[#171A2A] !text-[#999CFF]' },
+  { id: 'cream', label: 'ROUTE 크림', className: '!bg-[#F4EBDD] !text-[#29324A]' },
+  { id: 'minimal', label: 'ROUTE 미니멀', className: '!bg-[#FCFCFA] !text-[#30354D]' },
 ];
 
 const EMOTICON_PACKS = [
@@ -61,24 +72,15 @@ const EMOTICON_PACKS = [
   { id: 'date', name: '데이트 가자', preview: ['🍿', '☕', '🚗', '🌙'], price: '2,000원' },
 ];
 
-function updateFavicon(iconId: AppIconId) {
-  const icon = APP_ICONS.find((item) => item.id === iconId) ?? APP_ICONS[0];
-  const palette: Record<AppIconId, [string, string]> = {
-    route: ['#1F2A44', '#FF6F61'],
-    heart: ['#FF6F61', '#FFF7F5'],
-    night: ['#171A2A', '#9699FF'],
-    cream: ['#F4EBDD', '#1F2A44'],
-  };
-  const [bg, fg] = palette[icon.id];
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="${bg}"/><text x="32" y="41" text-anchor="middle" font-family="Arial,sans-serif" font-size="32" font-weight="800" fill="${fg}">${icon.mark === '♥' ? '♥' : 'R'}</text></svg>`;
-  const href = `data:image/svg+xml,${encodeURIComponent(svg)}`;
-  let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
-  if (!link) {
-    link = document.createElement('link');
-    link.rel = 'icon';
-    document.head.appendChild(link);
-  }
-  link.href = href;
+function AppIconGlyph({ id }: { id: AppIconId }) {
+  if (id === 'heart') return <Heart size={25} fill="currentColor" strokeWidth={1.6} />;
+  if (id === 'pin-duo') return <span className="relative block h-8 w-9" aria-hidden="true"><MapPinned className="absolute left-0 top-0" size={23} strokeWidth={2.2} /><MapPinned className="absolute bottom-0 right-0 !text-[#E07A5F]" size={21} strokeWidth={2.2} /></span>;
+  if (id === 'heart-chat') return <span className="relative grid place-items-center" aria-hidden="true"><MessageCircle size={29} strokeWidth={1.8} /><Heart className="absolute !text-[#FF8075]" size={12} fill="currentColor" strokeWidth={1.5} /></span>;
+  if (id === 'our-route') return <span className="relative block h-8 w-9" aria-hidden="true"><span className="absolute left-1 top-5 h-0.5 w-7 -rotate-[24deg] rounded-full bg-current" /><span className="absolute left-0.5 top-5 size-2 rounded-full !bg-[#E07A5F]" /><span className="absolute right-0.5 top-1 size-2 rounded-full bg-current" /><Heart className="absolute bottom-0 right-2 !text-[#E07A5F]" size={11} fill="currentColor" /></span>;
+  if (id === 'night') return <span className="text-[30px] font-medium leading-none" aria-hidden="true">☾</span>;
+  if (id === 'cream') return <span className="grid size-9 place-items-center rounded-full border border-[#D8CBBB] bg-[#FFF9F1] text-[19px] font-black" aria-hidden="true">R</span>;
+  if (id === 'minimal') return <span className="relative text-[24px] font-black leading-none" aria-hidden="true">R<span className="absolute -right-2 -top-1 size-2 rounded-full bg-[#E07A5F]" /></span>;
+  return <span className="relative text-[24px] font-black leading-none" aria-hidden="true">R<span className="absolute -right-2 -top-1 size-2 rounded-full bg-[#FF786B]" /></span>;
 }
 
 function HeaderBar({ title, onClose }: { title: string; onClose: () => void }) {
@@ -95,16 +97,13 @@ export function MoreServices({ onOpenSettings, onOpenNotifications, onNavigate }
     const saved = localStorage.getItem('meluni-theme');
     return saved === 'lavender' || saved === 'dark' ? saved : 'default';
   });
-  const [appIcon, setAppIcon] = useState<AppIconId>(() => {
-    const saved = localStorage.getItem('route-app-icon') as AppIconId | null;
-    return APP_ICONS.some((item) => item.id === saved) ? saved! : 'route';
-  });
+  const [appIcon, setAppIcon] = useState<AppIconId>(() => normalizeRouteAppIcon(localStorage.getItem('route-app-icon')));
   const [owned, setOwned] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('route-owned-emoticons') || '["daily"]') as string[]; } catch { return ['daily']; }
   });
   const [notice, setNotice] = useState('');
 
-  const activeIconLabel = useMemo(() => APP_ICONS.find((item) => item.id === appIcon)?.label ?? 'ROUTE 기본', [appIcon]);
+  const activeIcon = useMemo(() => APP_ICONS.find((item) => item.id === appIcon) ?? APP_ICONS[0], [appIcon]);
 
   const chooseTheme = (next: ThemeId) => {
     setTheme(next);
@@ -115,7 +114,7 @@ export function MoreServices({ onOpenSettings, onOpenNotifications, onNavigate }
   const chooseIcon = (next: AppIconId) => {
     setAppIcon(next);
     localStorage.setItem('route-app-icon', next);
-    updateFavicon(next);
+    updateRouteFavicon(next);
     setNotice('앱 아이콘 미리보기와 브라우저 아이콘에 적용했어요.');
   };
 
@@ -162,7 +161,7 @@ export function MoreServices({ onOpenSettings, onOpenNotifications, onNavigate }
   return <div className="route-more-services">
     <section className="more-service-intro">
       <div><small>ROUTE 서비스</small><h1>더보기</h1><p>자주 쓰는 기능과 설정을 한곳에서 빠르게 열 수 있어요.</p></div>
-      <span className={`more-app-icon-preview ${appIcon}`} aria-label={`현재 앱 아이콘 ${activeIconLabel}`}>{APP_ICONS.find((item) => item.id === appIcon)?.mark}</span>
+      <span className={`more-app-icon-preview ${appIcon} ${activeIcon.className} !grid place-items-center`} aria-label={`현재 앱 아이콘 ${activeIcon.label}`}><AppIconGlyph id={appIcon} /></span>
     </section>
 
     <section className="more-feature-section" aria-labelledby="route-more-features-title">
@@ -193,8 +192,8 @@ export function MoreServices({ onOpenSettings, onOpenNotifications, onNavigate }
           {(['default','lavender','dark'] as ThemeId[]).map((item) => <button type="button" key={item} className={theme === item ? 'active' : ''} onClick={() => chooseTheme(item)}><i className={item} /><span><b>{item === 'default' ? '기본' : item === 'lavender' ? '라벤더' : '다크'}</b><small>{item === 'default' ? '네이비 + 코랄' : item === 'lavender' ? '부드러운 보라' : '어두운 화면'}</small></span></button>)}
         </div></>}
 
-        {sheet === 'app-icon' && <><HeaderBar title="앱 아이콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">원하는 ROUTE 아이콘을 선택해요.</p><div className="app-icon-picker">
-          {APP_ICONS.map((item) => <button type="button" key={item.id} className={appIcon === item.id ? 'active' : ''} onClick={() => chooseIcon(item.id)}><span className={`more-app-icon-preview ${item.className}`}>{item.mark}</span><b>{item.label}</b>{appIcon === item.id && <small>사용 중</small>}</button>)}
+        {sheet === 'app-icon' && <><HeaderBar title="앱 아이콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">새로 디자인한 8가지 ROUTE 아이콘 중 원하는 스타일을 선택해요.</p><div className="app-icon-picker !grid !grid-cols-2 !gap-2.5 sm:!grid-cols-4">
+          {APP_ICONS.map((item) => <button data-icon-id={item.id} type="button" key={item.id} className={`${appIcon === item.id ? 'active' : ''} !min-w-0`} onClick={() => chooseIcon(item.id)}><span className={`more-app-icon-preview ${item.id} ${item.className} !grid place-items-center`}><AppIconGlyph id={item.id} /></span><b className="!w-full !truncate !text-center">{item.label}</b>{appIcon === item.id && <small>사용 중</small>}</button>)}
         </div></>}
 
         {sheet === 'emoticon' && <><HeaderBar title="이모티콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">대화에서 사용할 ROUTE 이모티콘을 모아보세요.</p><div className="emoticon-store">
@@ -207,6 +206,5 @@ export function MoreServices({ onOpenSettings, onOpenNotifications, onNavigate }
 }
 
 export function applySavedRouteAppIcon() {
-  const saved = localStorage.getItem('route-app-icon') as AppIconId | null;
-  updateFavicon(APP_ICONS.some((item) => item.id === saved) ? saved! : 'route');
+  updateRouteFavicon(normalizeRouteAppIcon(localStorage.getItem('route-app-icon')));
 }

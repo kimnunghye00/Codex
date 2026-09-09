@@ -82,7 +82,7 @@ async function observeCloudWrite<T>(write: Promise<T>): Promise<CloudWriteState>
 }
 
 function avatar(profile: UserProfile | null, fallback: string) {
-  if (profile?.photoDataUrl) return <img src={profile.photoDataUrl} alt="프로필" />;
+  if (profile?.photoDataUrl) return <img className="!h-full !w-full object-cover" src={profile.photoDataUrl} alt="프로필" />;
   return <span>{profile?.name?.trim()?.slice(0, 1) || fallback}</span>;
 }
 
@@ -122,8 +122,6 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
     };
     const start = () => {
       if (document.visibilityState === 'hidden' || unsubscribe || startTimer !== undefined) return;
-      // Local schedules paint immediately. The cloud listener can wait until the
-      // home screen has settled instead of competing with the first render.
       startTimer = window.setTimeout(() => {
         startTimer = undefined;
         if (document.visibilityState === 'hidden') return;
@@ -191,7 +189,6 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
       location: form.location.trim() || undefined,
     };
 
-    // Always make a device copy first. A temporary Firestore/network failure must never lose the user's schedule.
     persistLocal(payload);
     if (payload.type === 'couple') saveAppointment(uid, payload);
 
@@ -222,29 +219,29 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
 
   return <>
     <section className="home-couple-tools" aria-label="커플 프로필과 일정">
-      <div className="home-couple-profile-card">
-        <button type="button" className="home-person home-person-me" onClick={onOpenMyProfile}>
-          <span className="home-profile-avatar">{avatar(profile, '나')}</span>
-          <span className="home-profile-copy"><b>{myRealName}</b><small>내 프로필 편집</small></span>
+      <div className="home-couple-profile-card !grid !grid-cols-[minmax(0,1fr)_20px_minmax(0,1fr)] !items-center !gap-1 !overflow-hidden !px-2 !py-1.5">
+        <button type="button" className="home-person home-person-me !grid !min-w-0 !grid-cols-[28px_minmax(0,1fr)] !items-center !gap-1 !overflow-hidden !bg-transparent !p-0 !text-left" onClick={onOpenMyProfile}>
+          <span className="home-profile-avatar !grid !size-7 !shrink-0 place-items-center !overflow-hidden !rounded-full text-[9px] leading-none">{avatar(profile, '나')}</span>
+          <span className="home-profile-copy !block !min-w-0 !overflow-hidden"><b className="!block !w-full !truncate !text-[9px] !leading-none">{myRealName}</b><small className="!hidden">내 프로필 편집</small></span>
         </button>
-        <span className="home-profile-heart" aria-hidden="true"><Heart size={18} fill="currentColor" /></span>
-        <button type="button" className="home-person" onClick={() => connection ? setPartnerOpen(true) : onOpenConnect()}>
-          <span className="home-profile-avatar partner">{avatar(partner, '상')}</span>
-          <span className="home-profile-copy"><b>{partnerRealName}</b><small>{connection ? '프로필 보기' : '상대 연결하기'}</small></span>
+        <span className="home-profile-heart !grid !h-7 !w-5 shrink-0 place-items-center !leading-none" aria-hidden="true"><Heart size={13} fill="currentColor" /></span>
+        <button type="button" className="home-person !grid !min-w-0 !grid-cols-[minmax(0,1fr)_28px] !items-center !gap-1 !overflow-hidden !bg-transparent !p-0 !text-right" onClick={() => connection ? setPartnerOpen(true) : onOpenConnect()}>
+          <span className="home-profile-copy !order-1 !block !min-w-0 !overflow-hidden"><b className="!block !w-full !truncate !text-right !text-[9px] !leading-none">{partnerRealName}</b><small className="!hidden">{connection ? '프로필 보기' : '상대 연결하기'}</small></span>
+          <span className="home-profile-avatar partner !order-2 !grid !size-7 !shrink-0 place-items-center !overflow-hidden !rounded-full text-[9px] leading-none">{avatar(partner, '상')}</span>
         </button>
       </div>
 
-      <div className="home-schedule-card">
-        <div className="home-schedule-head"><span><CalendarDays size={16} /><b>우리 일정</b></span><button type="button" onClick={() => setAllOpen(true)}>전체보기 <ChevronRight size={14} /></button></div>
+      <div className="home-schedule-card !min-w-0 !overflow-hidden">
+        <div className="home-schedule-head !flex !min-w-0 !items-center !justify-between !gap-1"><span className="!flex !min-w-0 !items-center !gap-1"><CalendarDays size={15} className="shrink-0" /><b className="truncate !leading-none">우리 일정</b></span><button className="!flex shrink-0 !items-center !gap-0.5" type="button" onClick={() => setAllOpen(true)}>전체보기 <ChevronRight size={13} /></button></div>
         {notice && <p className="schedule-help route-home-save-notice">{notice}</p>}
-        <div className="home-schedule-list">
+        <div className="home-schedule-list !min-w-0">
           {upcoming.length ? upcoming.map((item) => {
             const mine = item.ownerId === uid;
             const label = item.type === 'couple' ? '약속' : mine ? '나' : partnerName;
-            return <div className="home-schedule-row" key={item.id}><span className={`schedule-dot ${item.type === 'couple' ? 'couple' : mine ? 'mine' : 'partner'}`} /><span className="schedule-when"><b>{prettyDate(item.date)}</b><small>{item.startTime}</small></span><strong>{item.title}</strong><em>{label}</em></div>;
+            return <div className="home-schedule-row !min-w-0" key={item.id}><span className={`schedule-dot ${item.type === 'couple' ? 'couple' : mine ? 'mine' : 'partner'}`} /><span className="schedule-when !min-w-0"><b>{prettyDate(item.date)}</b><small>{item.startTime}</small></span><strong className="!min-w-0 !truncate">{item.title}</strong><em>{label}</em></div>;
           }) : <div className="home-schedule-empty"><span>아직 예정된 일정이 없어요</span><small>새 일정이나 둘만의 약속을 만들어보세요 ❤️</small></div>}
         </div>
-        <button className="home-schedule-add" type="button" onClick={() => { setError(''); setNotice(''); setScheduleOpen(true); }}><Plus size={14} /> 일정 추가</button>
+        <button className="home-schedule-add !flex !w-full !items-center !justify-center" type="button" onClick={() => { setError(''); setNotice(''); setScheduleOpen(true); }}><Plus size={14} /> 일정 추가</button>
       </div>
     </section>
 

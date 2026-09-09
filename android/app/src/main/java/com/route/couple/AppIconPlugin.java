@@ -22,8 +22,12 @@ public class AppIconPlugin extends Plugin {
     static {
         ICON_ALIASES.put("route", "RouteDefaultIcon");
         ICON_ALIASES.put("heart", "RouteHeartIcon");
+        ICON_ALIASES.put("pin-duo", "RoutePinDuoIcon");
+        ICON_ALIASES.put("heart-chat", "RouteHeartChatIcon");
+        ICON_ALIASES.put("our-route", "RouteOurRouteIcon");
         ICON_ALIASES.put("night", "RouteNightIcon");
         ICON_ALIASES.put("cream", "RouteCreamIcon");
+        ICON_ALIASES.put("minimal", "RouteMinimalIcon");
     }
 
     private ComponentName componentFor(String alias) {
@@ -66,8 +70,6 @@ public class AppIconPlugin extends Plugin {
 
         try {
             PackageManager packageManager = getContext().getPackageManager();
-
-            // Enable the replacement first so the launcher never loses every entry.
             packageManager.setComponentEnabledSetting(
                     componentFor(selectedAlias),
                     PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
