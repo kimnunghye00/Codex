@@ -15,8 +15,12 @@ public class LauncherRepairReceiver extends BroadcastReceiver {
     private static final String[] ICON_ALIASES = {
             DEFAULT_ALIAS,
             "RouteHeartIcon",
+            "RoutePinDuoIcon",
+            "RouteHeartChatIcon",
+            "RouteOurRouteIcon",
             "RouteNightIcon",
-            "RouteCreamIcon"
+            "RouteCreamIcon",
+            "RouteMinimalIcon"
     };
 
     @Override
