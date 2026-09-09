@@ -69,7 +69,7 @@ jobs:
           NODE
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci
 
       - name: Build web app
         run: npm run build
