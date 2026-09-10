@@ -3,9 +3,13 @@ import { Image as ImageIcon, RefreshCw, Video } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type React from 'react';
 import { storage } from '../../lib/firebaseStorage';
+import { auth } from '../../lib/firebaseAuth';
 import { chatMediaOriginalUrl, chatMediaPreviewUrl } from '../../lib/chatMediaReference';
 
 const IMAGE_RETRY_DELAYS_MS = [500, 1_400] as const;
+const MEMORY_KEY = 'route.memories.v2';
+
+type MemorySlot = { memoryId: number; index: number };
 
 export function isMemoryVideo(src?: string) {
   if (!src) return false;
@@ -37,6 +41,55 @@ async function resolveStorageReference(value: string) {
   }
 }
 
+function safeSegment(value: string | number) {
+  return String(value).replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
+}
+
+function inferMemorySlot(source?: string): MemorySlot | null {
+  if (!source) return null;
+  try {
+    const memories = JSON.parse(localStorage.getItem(MEMORY_KEY) || '[]') as Array<{ id: number; images?: string[] }>;
+    for (const memory of memories) {
+      const index = Array.isArray(memory.images) ? memory.images.indexOf(source) : -1;
+      if (index >= 0) return { memoryId: memory.id, index };
+    }
+  } catch { /* an invalid local backup should not break image rendering */ }
+  return null;
+}
+
+async function resolveLegacyBackup(source?: string) {
+  const uid = auth.currentUser?.uid;
+  const slot = inferMemorySlot(source);
+  if (!uid || !slot) return { url: '', slot: null as MemorySlot | null };
+  try {
+    const target = ref(storage, `users/${uid}/backupMedia/memories-live/${safeSegment(slot.memoryId)}-${slot.index}`);
+    return { url: await getDownloadURL(target), slot };
+  } catch {
+    return { url: '', slot };
+  }
+}
+
+function persistRecoveredUrl(source: string | undefined, recoveredUrl: string, slot: MemorySlot | null) {
+  if (!source || !recoveredUrl || !slot || source === recoveredUrl) return;
+  try {
+    const memories = JSON.parse(localStorage.getItem(MEMORY_KEY) || '[]') as Array<{ id: number; images?: string[] }>;
+    let changed = false;
+    const next = memories.map((memory) => {
+      if (memory.id !== slot.memoryId || !Array.isArray(memory.images) || memory.images[slot.index] !== source) return memory;
+      const images = [...memory.images];
+      images[slot.index] = recoveredUrl;
+      changed = true;
+      return { ...memory, images };
+    });
+    if (!changed) return;
+    localStorage.setItem(MEMORY_KEY, JSON.stringify(next));
+    window.dispatchEvent(new CustomEvent('route-memories-local-change', { detail: { recovered: true } }));
+    window.dispatchEvent(new CustomEvent('route-memories-remote-change', { detail: next }));
+  } catch (cause) {
+    console.warn('[ROUTE memory recovery persist]', cause);
+  }
+}
+
 export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 'async', onClick }: {
   src?: string;
   alt: string;
@@ -50,6 +103,7 @@ export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 
   const [attempt, setAttempt] = useState(0);
   const [retrying, setRetrying] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [legacyRecovery, setLegacyRecovery] = useState<{ url: string; slot: MemorySlot | null }>({ url: '', slot: null });
   const retryTimer = useRef<number | undefined>(undefined);
   const displayUrl = candidates[candidateIndex] ?? '';
 
@@ -61,11 +115,17 @@ export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 
     setAttempt(0);
     setRetrying(false);
     setFailed(false);
+    setLegacyRecovery({ url: '', slot: null });
     let cancelled = false;
 
-    void Promise.all(rawCandidates.map(resolveStorageReference)).then((resolved) => {
+    void Promise.all([Promise.all(rawCandidates.map(resolveStorageReference)), resolveLegacyBackup(src)]).then(([resolved, legacy]) => {
       if (cancelled) return;
-      const durableCandidates = Array.from(new Set(resolved.filter(Boolean)));
+      const durableCandidates = Array.from(new Set([
+        ...(src?.startsWith('blob:') && legacy.url ? [legacy.url] : []),
+        ...resolved.filter(Boolean),
+        ...(!src?.startsWith('blob:') && legacy.url ? [legacy.url] : []),
+      ]));
+      setLegacyRecovery(legacy);
       setCandidates(durableCandidates);
       setCandidateIndex(0);
       setAttempt(0);
@@ -90,6 +150,16 @@ export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 
   };
 
   const handleError = () => {
+    if (displayUrl.startsWith('blob:')) {
+      if (candidateIndex + 1 < candidates.length) {
+        setCandidateIndex((value) => value + 1);
+        setAttempt(0);
+        return;
+      }
+      setFailed(true);
+      return;
+    }
+
     if (attempt < IMAGE_RETRY_DELAYS_MS.length) {
       setRetrying(true);
       retryTimer.current = window.setTimeout(() => {
@@ -138,6 +208,9 @@ export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 
     className={className}
     loading={loading}
     decoding={decoding}
+    onLoad={() => {
+      if (legacyRecovery.url && displayUrl === legacyRecovery.url) persistRecoveredUrl(src, legacyRecovery.url, legacyRecovery.slot);
+    }}
     onError={handleError}
     onClick={onClick}
   />;
