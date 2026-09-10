@@ -1,15 +1,4 @@
 import { Capacitor } from '@capacitor/core';
-import { App } from '@capacitor/app';
-import { Camera } from '@capacitor/camera';
-import { Geolocation } from '@capacitor/geolocation';
-import { Haptics, ImpactStyle } from '@capacitor/haptics';
-import { Keyboard } from '@capacitor/keyboard';
-import { LocalNotifications } from '@capacitor/local-notifications';
-import { PushNotifications } from '@capacitor/push-notifications';
-import { SplashScreen } from '@capacitor/splash-screen';
-import { StatusBar, Style } from '@capacitor/status-bar';
-import { disableNetwork, enableNetwork } from 'firebase/firestore';
-import { db } from './firebase';
 
 export const isNativePlatform = () => Capacitor.isNativePlatform();
 export const nativePlatform = () => Capacitor.getPlatform();
@@ -39,11 +28,33 @@ export type RouteLocationWatch = {
   stop: () => Promise<void>;
 };
 
+async function setNativeFirestoreNetwork(enabled: boolean) {
+  try {
+    const [{ enableNetwork, disableNetwork }, { db }] = await Promise.all([
+      import('firebase/firestore'),
+      import('./firebase'),
+    ]);
+    if (enabled) await enableNetwork(db);
+    else await disableNetwork(db);
+  } catch {
+    // Lifecycle network hints are best-effort and must never block the UI.
+  }
+}
+
 export async function initializeNativeApp() {
   if (!isNativePlatform()) return;
 
   const root = document.documentElement;
   root.classList.add('route-native', `route-native-${nativePlatform()}`);
+
+  // Native-only plugins are intentionally loaded here instead of at module
+  // evaluation time. Web users therefore do not download/parse Capacitor
+  // keyboard, status bar, app lifecycle or Firestore code during bootstrap.
+  const [{ App }, { Keyboard }, { StatusBar, Style }] = await Promise.all([
+    import('@capacitor/app'),
+    import('@capacitor/keyboard'),
+    import('@capacitor/status-bar'),
+  ]);
 
   if (root.dataset.routeKeyboardWired !== '1') {
     root.dataset.routeKeyboardWired = '1';
@@ -63,14 +74,10 @@ export async function initializeNativeApp() {
     Keyboard.addListener('keyboardDidHide', hideKeyboard).catch(() => undefined);
   }
 
-  try {
-    await StatusBar.setOverlaysWebView({ overlay: false });
-    await StatusBar.setStyle({ style: Style.Light });
-  } catch {}
-
-  try {
-    await Keyboard.setAccessoryBarVisible({ isVisible: true });
-  } catch {}
+  // These cosmetic native calls should not extend time-to-first-render.
+  void StatusBar.setOverlaysWebView({ overlay: false }).catch(() => undefined);
+  void StatusBar.setStyle({ style: Style.Light }).catch(() => undefined);
+  void Keyboard.setAccessoryBarVisible({ isVisible: true }).catch(() => undefined);
 
   if (root.dataset.routeNativeLifecycleWired !== '1') {
     root.dataset.routeNativeLifecycleWired = '1';
@@ -85,16 +92,16 @@ export async function initializeNativeApp() {
       }
 
       if (isActive) {
-        void enableNetwork(db).catch(() => undefined);
+        void setNativeFirestoreNetwork(true);
         return;
       }
 
       // Give foreground writes/backups a brief chance to finish, then stop
-      // Firestore network traffic while ROUTE is backgrounded. Listeners catch
-      // up automatically after enableNetwork() on resume.
+      // Firestore traffic. Firestore itself is loaded only if lifecycle work is
+      // actually needed, keeping it out of the native bootstrap path as well.
       networkPauseTimer = window.setTimeout(() => {
         networkPauseTimer = undefined;
-        void disableNetwork(db).catch(() => undefined);
+        void setNativeFirestoreNetwork(false);
       }, FIRESTORE_BACKGROUND_GRACE_MS);
     }).catch(() => undefined);
 
@@ -109,7 +116,7 @@ export async function initializeNativeApp() {
       if (routeBack.defaultPrevented) return;
 
       if (canGoBack) window.history.back();
-      else App.minimizeApp();
+      else void App.minimizeApp();
     }).catch(() => undefined);
   }
 }
@@ -117,6 +124,7 @@ export async function initializeNativeApp() {
 export async function hideNativeSplash() {
   if (!isNativePlatform()) return;
   try {
+    const { SplashScreen } = await import('@capacitor/splash-screen');
     await SplashScreen.hide();
   } catch {}
 }
@@ -124,6 +132,7 @@ export async function hideNativeSplash() {
 export async function ensureCameraPermission() {
   if (!isNativePlatform()) return true;
   try {
+    const { Camera } = await import('@capacitor/camera');
     let permissions = await Camera.checkPermissions();
     if (permissions.camera !== 'granted') {
       permissions = await Camera.requestPermissions({ permissions: ['camera'] });
@@ -137,6 +146,7 @@ export async function ensureCameraPermission() {
 export async function ensureLocationPermission() {
   if (!isNativePlatform()) return true;
   try {
+    const { Geolocation } = await import('@capacitor/geolocation');
     let permissions = await Geolocation.checkPermissions();
     if (permissions.location !== 'granted' && permissions.coarseLocation !== 'granted') {
       permissions = await Geolocation.requestPermissions({ permissions: ['location', 'coarseLocation'] });
@@ -155,6 +165,7 @@ export async function startRouteLocationWatch(
     const allowed = await ensureLocationPermission();
     if (!allowed) throw new Error('route-location-permission-denied');
 
+    const { Geolocation } = await import('@capacitor/geolocation');
     let activeId: string | undefined;
     let stopped = false;
     let suspended = false;
@@ -272,6 +283,10 @@ export async function startRouteLocationWatch(
 export async function ensureNotificationPermission() {
   if (!isNativePlatform()) return true;
   try {
+    const [{ LocalNotifications }, { PushNotifications }] = await Promise.all([
+      import('@capacitor/local-notifications'),
+      import('@capacitor/push-notifications'),
+    ]);
     let local = await LocalNotifications.checkPermissions();
     if (local.display !== 'granted') local = await LocalNotifications.requestPermissions();
 
@@ -287,5 +302,8 @@ export async function ensureNotificationPermission() {
 
 export async function nativeImpact() {
   if (!isNativePlatform()) return;
-  try { await Haptics.impact({ style: ImpactStyle.Light }); } catch {}
+  try {
+    const { Haptics, ImpactStyle } = await import('@capacitor/haptics');
+    await Haptics.impact({ style: ImpactStyle.Light });
+  } catch {}
 }
