@@ -6,27 +6,57 @@
   <title>ROUTE Map Host</title>
   <style>
     html,body,#map{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:#eef0f5}
+    #map-status{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;padding:24px;box-sizing:border-box;background:#eef0f5;color:#3d405b;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-align:center}
+    #map-status[hidden]{display:none}
+    #map-status .card{max-width:420px;padding:18px 20px;border:1px solid #d9dce5;border-radius:18px;background:#fff;box-shadow:0 10px 30px rgba(61,64,91,.08)}
+    #map-status strong{display:block;margin-bottom:7px;font-size:15px}
+    #map-status span{display:block;font-size:12px;line-height:1.55;color:#737684;word-break:keep-all}
+    #map-status code{display:block;margin-top:9px;font-size:10px;color:#a04939;word-break:break-all}
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <div id="map-status" role="status" aria-live="polite">
+    <div class="card"><strong>네이버 지도를 불러오는 중이에요</strong><span>지도 SDK와 인증 상태를 확인하고 있어요.</span><code id="map-status-code">SDK_LOADING</code></div>
+  </div>
   <script>
     (() => {
-      // This isolated Firebase-hosted map surface intentionally keeps one tiny
-      // inline reset. The ROUTE application UI itself is compiled with Tailwind.
       const CLIENT_ID = 'z3njcg8upv';
       const SDK_URL = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(CLIENT_ID)}&callback=__routeNaverMapReady`;
+      const statusRoot = document.getElementById('map-status');
+      const statusTitle = statusRoot.querySelector('strong');
+      const statusText = statusRoot.querySelector('span');
+      const statusCode = document.getElementById('map-status-code');
       let map;
       let overlays = [];
       let focusOverlay = null;
       let focusPopup = null;
       let initialized = false;
       let authFailed = false;
+      let loadFailed = false;
+      let initTimer;
       let lastRender = { visits: [], mode: 'map' };
 
       const send = (type, detail = {}) => {
         if (window.parent === window) return;
         window.parent.postMessage({ source: 'route-map-host', type, ...detail }, '*');
+      };
+
+      const showStatus = (title, text, code) => {
+        statusTitle.textContent = title;
+        statusText.textContent = text;
+        statusCode.textContent = code;
+        statusRoot.hidden = false;
+      };
+
+      const hideStatus = () => { statusRoot.hidden = true; };
+
+      const fail = (type, title, text, code) => {
+        if (initialized || loadFailed) return;
+        loadFailed = true;
+        window.clearTimeout(initTimer);
+        showStatus(title, text, code);
+        send(type, { origin: location.origin, code });
       };
 
       const markerSize = (current) => current ? 24 : 20;
@@ -39,10 +69,7 @@
 
       const markerIcon = (naver, current, index) => {
         const size = markerSize(current);
-        return {
-          content: markerHtml(current, index),
-          anchor: new naver.maps.Point(size / 2, size / 2),
-        };
+        return { content: markerHtml(current, index), anchor: new naver.maps.Point(size / 2, size / 2) };
       };
 
       const escapeHtml = (value) => String(value ?? '').replace(/[&<>'\"]/g, (character) => ({
@@ -88,6 +115,7 @@
         const validVisits = lastRender.visits
           .filter((visit) => Number.isFinite(Number(visit.latitude)) && Number.isFinite(Number(visit.longitude)))
           .sort((a, b) => new Date(a.arrivedAt || 0).getTime() - new Date(b.arrivedAt || 0).getTime());
+
         if (!validVisits.length) {
           if (!focusOverlay) {
             map.setCenter(new naver.maps.LatLng(37.5666103, 126.9783882));
@@ -96,13 +124,7 @@
           return;
         }
 
-        // One LatLng object is shared by each marker and its route segment.
-        // This guarantees that every line terminates at the exact marker center.
         const points = validVisits.map((visit) => new naver.maps.LatLng(Number(visit.latitude), Number(visit.longitude)));
-
-        // Do not connect yesterday's last point to today's first point. ROUTE
-        // records many days of visits in one list, so each local day gets its
-        // own chronological polyline while every visit marker remains visible.
         const routeByDay = new Map();
         validVisits.forEach((visit, index) => {
           const key = localDayKey(visit.arrivedAt);
@@ -110,6 +132,7 @@
           path.push(points[index]);
           routeByDay.set(key, path);
         });
+
         routeByDay.forEach((path) => {
           if (path.length < 2) return;
           overlays.push(new naver.maps.Polyline({
@@ -188,16 +211,19 @@
       });
 
       window.navermap_authFailure = () => {
-        if (authFailed || initialized) return;
         authFailed = true;
-        console.warn('[ROUTE NAVER map auth failed]', { origin: location.origin });
-        send('auth-error', { origin: location.origin, code: 'NAVER_AUTH_FAILED' });
+        fail(
+          'auth-error',
+          '네이버 지도 인증이 거부됐어요',
+          'NAVER Cloud Maps의 Dynamic Map과 Web 서비스 URL을 다시 확인해 주세요.',
+          `NAVER_AUTH_FAILED · ${location.origin}`,
+        );
       };
 
-      window.__routeNaverMapReady = () => {
-        if (authFailed || initialized) return;
+      const initializeMap = () => {
+        if (authFailed || initialized || loadFailed) return;
         try {
-          if (!window.naver?.maps) throw new Error('NAVER_MAP_INIT_FAILED');
+          if (!window.naver?.maps) throw new Error('NAVER_MAP_SDK_MISSING');
           map = new window.naver.maps.Map(document.getElementById('map'), {
             center: new window.naver.maps.LatLng(37.5666103, 126.9783882),
             zoom: 15,
@@ -205,27 +231,63 @@
             zoomControlOptions: { position: window.naver.maps.Position.TOP_RIGHT },
           });
           initialized = true;
+          window.clearTimeout(initTimer);
+          hideStatus();
           requestAnimationFrame(() => requestAnimationFrame(() => window.naver.maps.Event.trigger(map, 'resize')));
           send('ready', { origin: location.origin, authMode: 'ncpKeyId' });
           render(lastRender);
         } catch (error) {
           console.error('[ROUTE map host init]', error);
-          send('init-error', { origin: location.origin, code: 'NAVER_MAP_INIT_FAILED' });
+          fail(
+            'init-error',
+            '네이버 지도 초기화에 실패했어요',
+            'SDK는 응답했지만 지도 객체를 만들지 못했어요.',
+            error instanceof Error ? error.message : 'NAVER_MAP_INIT_FAILED',
+          );
         }
       };
 
+      window.__routeNaverMapReady = initializeMap;
+
       send('host-ready', { origin: location.origin });
       send('sdk-loading', { origin: location.origin, authMode: 'ncpKeyId' });
+      showStatus('네이버 지도를 불러오는 중이에요', '지도 SDK와 인증 상태를 확인하고 있어요.', `SDK_LOADING · ${location.origin}`);
 
       const script = document.createElement('script');
       script.async = true;
       script.defer = true;
       script.src = SDK_URL;
+      script.onload = () => {
+        // The documented callback is primary. Some embedded browsers can finish
+        // the script load before invoking it, so initialize from the loaded SDK
+        // as a safe fallback instead of leaving a blank surface.
+        window.setTimeout(() => {
+          if (!initialized && !authFailed && window.naver?.maps) initializeMap();
+        }, 250);
+      };
       script.onerror = () => {
-        if (authFailed || initialized) return;
-        send('script-error', { origin: location.origin, code: 'NAVER_SDK_LOAD_FAILED' });
+        fail(
+          'script-error',
+          '네이버 지도 SDK에 연결하지 못했어요',
+          '브라우저의 네트워크, 광고 차단·보안 DNS 또는 NAVER 지도 SDK 연결 상태를 확인해 주세요.',
+          'NAVER_SDK_LOAD_FAILED',
+        );
       };
       document.head.appendChild(script);
+
+      initTimer = window.setTimeout(() => {
+        if (initialized || authFailed || loadFailed) return;
+        if (window.naver?.maps) {
+          initializeMap();
+          return;
+        }
+        fail(
+          'script-error',
+          '네이버 지도 응답이 없어요',
+          '10초 동안 지도 SDK가 준비되지 않았어요. 인증 또는 네트워크 문제일 수 있어요.',
+          'NAVER_SDK_TIMEOUT',
+        );
+      }, 10_000);
     })();
   </script>
 </body>
