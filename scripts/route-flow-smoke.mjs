@@ -40,6 +40,8 @@ const requiredFiles = [
   'src/components/memories/MemoriesPage.tsx',
   'src/components/memories/MemoryMedia.tsx',
   'src/components/location/LocationPage.tsx',
+  'src/components/auth/AuthFlow.tsx',
+  'src/components/auth/ProfileSetup.tsx',
   'src/components/auth/AccountSettings.tsx',
   'src/components/auth/PartnerProfileCard.tsx',
   'src/styles/features/chat.ts',
@@ -75,6 +77,8 @@ const chatStyles = read('src/styles/features/chat.ts');
 const memories = read('src/components/memories/MemoriesPage.tsx');
 const memoryMedia = read('src/components/memories/MemoryMedia.tsx');
 const location = read('src/components/location/LocationPage.tsx');
+const authFlow = read('src/components/auth/AuthFlow.tsx');
+const profileSetup = read('src/components/auth/ProfileSetup.tsx');
 const account = read('src/components/auth/AccountSettings.tsx');
 const mapHost = read('public/naver-map-host.html');
 const responsiveFrame = read('src/components/layout/ResponsiveAppFrame.tsx');
@@ -135,7 +139,23 @@ check('map route follows active theme', mapHost.includes("--route-accent") && ma
 
 check('Root protects unauthenticated flow', root.includes('if (!user) return <Suspense') && root.includes('<AuthFlow />'));
 check('Root protects first profile setup flow', root.includes('<ProfileSetup'));
-check('account settings can link an email login', account.includes('linkWithCredential'));
+check(
+  'authentication is phone-only with password recovery',
+  authFlow.includes('<label>휴대폰 번호<input')
+    && authFlow.includes('비밀번호 찾기')
+    && !authFlow.includes('아이디 찾기')
+    && !authFlow.includes('휴대폰 번호 또는 이메일'),
+);
+check(
+  'profile setup does not request email',
+  !profileSetup.includes('이메일') && includesAll(profileSetup, ["'이름'", "'생년월일'", "'성별'", "'프로필 사진'"]),
+);
+check(
+  'account settings does not expose email login',
+  !account.includes('이메일 로그인')
+    && !account.includes('sendEmailVerification')
+    && !account.includes('linkWithCredential'),
+);
 check('account settings keeps couple connection flow', account.includes('<CoupleConnect'));
 check('partner profile is directly integrated', account.includes('<PartnerProfileCard'));
 
