@@ -1,3 +1,5 @@
+import { signOut } from 'firebase/auth';
+import { auth } from './lib/firebase';
 import './settings-quick.css';
 
 type QuickSetting = {
@@ -34,6 +36,22 @@ const FREQUENT_ROWS: QuickSetting[] = [
 function closeQuickSettings() {
   document.querySelector('.route-quick-settings-backdrop')?.remove();
   document.body.classList.remove('route-quick-settings-open');
+}
+
+async function logoutFromQuickSettings() {
+  if (!auth.currentUser) {
+    closeQuickSettings();
+    return;
+  }
+  if (!window.confirm('ROUTE에서 로그아웃할까요?')) return;
+
+  try {
+    await signOut(auth);
+    closeQuickSettings();
+  } catch (cause) {
+    console.error('[ROUTE logout]', cause);
+    window.alert('로그아웃하지 못했어요. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.');
+  }
 }
 
 function settingsButton() {
@@ -113,7 +131,14 @@ function openQuickSettings() {
   all.innerHTML = '<span aria-hidden="true">⚙️</span><span><b>전체 설정</b><small>계정, 알림, 채팅, 화면, 보안, 앱 정보를 모두 확인해요.</small></span><span class="route-quick-settings-chevron" aria-hidden="true">›</span>';
   all.addEventListener('click', () => openFullSettings());
 
-  body.append(grid, frequentTitle, list, all);
+  const logout = document.createElement('button');
+  logout.type = 'button';
+  logout.className = 'route-quick-settings-all !mt-3 !border-[#f0d9db] !text-[#c34c56]';
+  logout.setAttribute('aria-label', 'ROUTE 로그아웃');
+  logout.innerHTML = '<span class="!bg-[#fff0f1] !text-[#c34c56]" aria-hidden="true">↪</span><span><b>로그아웃</b><small>이 기기에서 현재 ROUTE 계정의 로그인 상태를 종료해요.</small></span><span class="route-quick-settings-chevron" aria-hidden="true">›</span>';
+  logout.addEventListener('click', () => void logoutFromQuickSettings());
+
+  body.append(grid, frequentTitle, list, all, logout);
   panel.append(header, body);
   backdrop.append(panel);
   backdrop.addEventListener('pointerdown', (event) => {
