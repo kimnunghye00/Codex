@@ -29,6 +29,7 @@ type RoomState = {
   ownerUid: string;
   messages: Message[];
   jobs: Map<string, JobState>;
+  requested: Set<string>;
   active: number;
   timer?: number;
 };
@@ -52,6 +53,7 @@ type PreviewReferenceDetail = {
 };
 
 const rooms = new Map<string, RoomState>();
+const pendingPreviewRequests = new Set<string>();
 
 function roomKey(coupleId: string, ownerUid: string) {
   return `${coupleId}:${ownerUid}`;
@@ -117,6 +119,24 @@ function emitKnownPreviewStatus(reference: string) {
   }
 }
 
+function requestPreviewMigration(reference: string) {
+  let matched = false;
+  rooms.forEach((state) => {
+    const hasReference = candidates(state).some((candidate) => candidate.url === reference);
+    if (!hasReference) return;
+    matched = true;
+    state.requested.add(reference);
+    schedulePump(state, 0);
+  });
+
+  if (matched) {
+    pendingPreviewRequests.delete(reference);
+    emitKnownPreviewStatus(reference);
+  } else {
+    pendingPreviewRequests.add(reference);
+  }
+}
+
 function migrationErrorCode(error: unknown) {
   const message = error instanceof Error ? `${error.name}:${error.message}` : String(error);
   if (/AbortError|legacy-media-timeout/i.test(message)) return 'timeout';
@@ -140,6 +160,7 @@ function recordMigrationDiagnostic(candidate: Candidate, attempt: number, code: 
 
 function nextCandidate(state: RoomState, now = Date.now()): Candidate | undefined {
   for (const candidate of candidates(state)) {
+    if (!state.requested.has(candidate.url)) continue;
     const job = state.jobs.get(candidateKey(candidate));
     if (!job) return candidate;
     if (job.status === 'waiting' && job.nextRetryAt <= now) return candidate;
@@ -151,6 +172,7 @@ function nextWakeDelay(state: RoomState) {
   const now = Date.now();
   let earliest = Number.POSITIVE_INFINITY;
   for (const candidate of candidates(state)) {
+    if (!state.requested.has(candidate.url)) continue;
     const job = state.jobs.get(candidateKey(candidate));
     if (!job) return 0;
     if (job.status === 'waiting') earliest = Math.min(earliest, job.nextRetryAt);
@@ -161,7 +183,7 @@ function nextWakeDelay(state: RoomState) {
 
 function schedulePump(state: RoomState, preferredDelay = MIGRATION_GAP_MS) {
   if (state.timer !== undefined || document.visibilityState === 'hidden') return;
-  if (state.active >= MAX_CONCURRENT_MIGRATIONS) return;
+  if (state.active >= MAX_CONCURRENT_MIGRATIONS || state.requested.size === 0) return;
 
   const immediate = nextCandidate(state);
   const waitForRetry = immediate ? 0 : nextWakeDelay(state);
@@ -224,6 +246,7 @@ async function migrateCandidate(state: RoomState, candidate: Candidate, key: str
     }
 
     state.jobs.set(key, { attempts: state.jobs.get(key)?.attempts ?? 1, nextRetryAt: 0, status: 'done' });
+    state.requested.delete(candidate.url);
     emitPreviewStatus(candidate.url, 'ready');
   } catch (error) {
     const previous = state.jobs.get(key);
@@ -264,11 +287,23 @@ export function migrateLoadedLegacyChatMedia(coupleId: string, ownerUid: string,
     ownerUid,
     messages: [],
     jobs: new Map<string, JobState>(),
+    requested: new Set<string>(),
     active: 0,
   };
   state.messages = messages;
+
+  const availableReferences = new Set(candidates(state).map((candidate) => candidate.url));
+  for (const reference of state.requested) {
+    if (!availableReferences.has(reference)) state.requested.delete(reference);
+  }
+  for (const reference of pendingPreviewRequests) {
+    if (!availableReferences.has(reference)) continue;
+    state.requested.add(reference);
+    pendingPreviewRequests.delete(reference);
+  }
+
   rooms.set(key, state);
-  schedulePump(state, 80);
+  if (state.requested.size > 0) schedulePump(state, 0);
 }
 
 export async function startLegacyChatMediaMigration(_coupleId: string, _ownerUid: string) {
@@ -277,26 +312,30 @@ export async function startLegacyChatMediaMigration(_coupleId: string, _ownerUid
 
 window.addEventListener(PREVIEW_STATUS_REQUEST_EVENT, (event) => {
   const reference = (event as CustomEvent<PreviewReferenceDetail>).detail?.reference;
-  if (reference) emitKnownPreviewStatus(reference);
+  if (reference) requestPreviewMigration(reference);
 });
 
 window.addEventListener(PREVIEW_RETRY_EVENT, (event) => {
   const reference = (event as CustomEvent<PreviewReferenceDetail>).detail?.reference;
   if (!reference) return;
 
+  let reset = false;
   rooms.forEach((state) => {
-    let reset = false;
     for (const candidate of candidates(state)) {
       if (candidate.url !== reference) continue;
       state.jobs.set(candidateKey(candidate), { attempts: 0, nextRetryAt: 0, status: 'waiting' });
+      state.requested.add(reference);
       reset = true;
     }
     if (reset) schedulePump(state, 0);
   });
+  if (!reset) pendingPreviewRequests.add(reference);
   emitPreviewStatus(reference, 'retrying', { attempt: 0 });
 });
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
-  rooms.forEach((state) => schedulePump(state, 120));
+  rooms.forEach((state) => {
+    if (state.requested.size > 0) schedulePump(state, 120);
+  });
 });
