@@ -1,12 +1,18 @@
-const HUB_DEFAULT_ORDER = ['앨범', '기념일', '기록', '티어', '일정', '데이트'];
+const HUB_DEFAULT_ORDER = ['앨범', '기념일', '기록', '티어', '일정', '약속'];
 const originalScrollIntoView = Element.prototype.scrollIntoView;
+const CHAT_WHEEL_LINE_PX = 56;
+const CHAT_WHEEL_PAGE_RATIO = 0.82;
+
+function findChatScroller(event: Event) {
+  return event.target instanceof Element ? event.target.closest('.chat-page .messages') as HTMLElement | null : null;
+}
 
 function installChatScrollGuard() {
   if (document.documentElement.dataset.routeChatScrollGuard === '1') return;
   document.documentElement.dataset.routeChatScrollGuard = '1';
 
   const markIntent = (event: Event) => {
-    const target = event.target instanceof Element ? event.target.closest('.chat-page .messages') as HTMLElement | null : null;
+    const target = findChatScroller(event);
     if (!target) return;
     const distance = target.scrollHeight - target.scrollTop - target.clientHeight;
     target.dataset.routeUserAwayFromBottom = distance > 96 ? '1' : '0';
@@ -21,6 +27,32 @@ function installChatScrollGuard() {
     if (parent?.dataset.routeUserAwayFromBottom === '1') return;
     return originalScrollIntoView.call(this, arg as ScrollIntoViewOptions);
   };
+}
+
+function installChatWheelNormalization() {
+  if (document.documentElement.dataset.routeChatWheelNormalization === '1') return;
+  document.documentElement.dataset.routeChatWheelNormalization = '1';
+
+  document.addEventListener('wheel', (event) => {
+    const scroller = findChatScroller(event);
+    if (!scroller || !event.deltaY || !window.matchMedia('(pointer: fine)').matches) return;
+
+    // Browsers do not guarantee that WheelEvent.deltaY is expressed in pixels.
+    // Windows mouse wheels commonly report DOM_DELTA_LINE. The chat component's
+    // old multiplier treated that small line count as pixels, so one wheel notch
+    // moved only a tiny distance. Normalize line/page deltas here and leave
+    // pixel-mode trackpads to the browser/React scroll path.
+    if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) {
+      event.preventDefault();
+      scroller.scrollTop += event.deltaY * CHAT_WHEEL_LINE_PX;
+      return;
+    }
+
+    if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+      event.preventDefault();
+      scroller.scrollTop += event.deltaY * scroller.clientHeight * CHAT_WHEEL_PAGE_RATIO;
+    }
+  }, { passive: false, capture: true });
 }
 
 function labels(panel: HTMLElement) {
@@ -83,5 +115,6 @@ function installHubOrderFix() {
 
 export function installRouteMobileBugfixV29() {
   installChatScrollGuard();
+  installChatWheelNormalization();
   installHubOrderFix();
 }

@@ -16,9 +16,17 @@ export function ResponsiveAppFrame({ children }: { children: ReactNode }) {
         lg:[&_.app-shell]:!max-w-[1320px] lg:[&_.app-shell]:!border-x lg:[&_.app-shell]:!border-[var(--border)]
         [&_.app-shell>main]:!min-w-0 lg:[&_.app-shell>main]:!pb-0
         [&_.page]:!mx-auto [&_.page]:!w-full [&_.page]:!min-w-0 [&_.page]:!max-w-none [&_.page]:!px-4
-        sm:[&_.page]:!px-5 md:[&_.page]:!px-6 lg:[&_.page]:!min-h-dvh lg:[&_.page]:!px-8 lg:[&_.page]:!pl-28
+        sm:[&_.page]:!px-5 md:[&_.page]:!px-6 lg:[&_.page]:!px-8 lg:[&_.page]:!pl-28
         [&_.full-page]:!w-full [&_.full-page]:!min-w-0 lg:[&_.full-page]:!h-dvh
-        [&_.home-page]:!max-w-none lg:[&_.home-page]:!max-w-[1240px]
+        [&_.home-page]:!max-w-none lg:[&_.home-page]:!h-dvh lg:[&_.home-page]:!max-h-dvh lg:[&_.home-page]:!min-h-0 lg:[&_.home-page]:!max-w-[1240px] lg:[&_.home-page]:!overflow-hidden
+        lg:[&_.home-dashboard]:!grid-rows-[72px_clamp(54px,6.5dvh,62px)_clamp(108px,13dvh,122px)_clamp(116px,14dvh,130px)_minmax(96px,1fr)_clamp(78px,9dvh,88px)]
+        lg:[&_.home-map-card]:!min-h-0 lg:[&_.home-map-card]:!h-full
+        lg:[&_.home-couple-profile-card]:!min-h-0 lg:[&_.home-couple-profile-card]:!h-full lg:[&_.home-couple-profile-card]:!grid-cols-[minmax(0,1fr)_28px_minmax(0,1fr)] lg:[&_.home-couple-profile-card]:!px-4
+        lg:[&_.home-profile-avatar]:!size-8 lg:[&_.home-profile-copy_b]:!text-[10px]
+        lg:[&_.home-time-card]:!min-h-0 lg:[&_.home-time-card]:!h-full lg:[&_.home-time-card]:!overflow-hidden
+        lg:[&_.home-schedule-card]:!min-h-0 lg:[&_.home-schedule-card]:!h-full lg:[&_.home-schedule-card]:!overflow-hidden
+        lg:[&_.home-photo-card]:!min-h-0 lg:[&_.home-photo-card]:!h-full
+        lg:[&_.home-chat-card]:!min-h-0 lg:[&_.home-chat-card]:!h-full
         lg:[&_.memories-page]:!max-w-[1160px]
         lg:[&_.location-page]:!max-w-[1240px]
         lg:[&_.more-page]:!max-w-[1160px]

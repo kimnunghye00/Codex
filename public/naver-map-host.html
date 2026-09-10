@@ -70,17 +70,32 @@
 
       const hasMapSdk = () => Boolean(window.naver?.maps?.Map && window.naver?.maps?.LatLng);
 
+      const activePalette = () => {
+        let view = window;
+        let root = document.documentElement;
+        try {
+          if (window.parent !== window && window.parent.location.origin === location.origin) {
+            view = window.parent;
+            root = window.parent.document.documentElement;
+          }
+        } catch { /* standalone map host keeps the default palette */ }
+        const styles = view.getComputedStyle(root);
+        const primary = styles.getPropertyValue('--primary').trim() || '#3D405B';
+        const accent = styles.getPropertyValue('--route-accent').trim() || styles.getPropertyValue('--primary-light').trim() || '#E07A5F';
+        return { primary, accent };
+      };
+
       const markerSize = (current) => current ? 24 : 20;
-      const markerHtml = (current, index) => {
-        const color = current ? '#E07A5F' : '#3D405B';
+      const markerHtml = (current, index, palette) => {
+        const color = current ? palette.accent : palette.primary;
         const size = markerSize(current);
         const label = Number.isInteger(index) ? `<span style="font-size:9px;color:#fff;font-weight:800">${index + 1}</span>` : '';
         return `<div style="width:${size}px;height:${size}px;border:3px solid #fff;border-radius:50%;background:${color};box-sizing:border-box;box-shadow:0 3px 10px #0003;display:grid;place-items:center">${label}</div>`;
       };
 
-      const markerIcon = (naver, current, index) => {
+      const markerIcon = (naver, current, index, palette = activePalette()) => {
         const size = markerSize(current);
-        return { content: markerHtml(current, index), anchor: new naver.maps.Point(size / 2, size / 2) };
+        return { content: markerHtml(current, index, palette), anchor: new naver.maps.Point(size / 2, size / 2) };
       };
 
       const escapeHtml = (value) => String(value ?? '').replace(/[&<>'\"]/g, (character) => ({
@@ -96,12 +111,6 @@
       const dayText = (value) => {
         try { return new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }).format(new Date(value)); }
         catch { return ''; }
-      };
-
-      const localDayKey = (value) => {
-        const date = new Date(value);
-        if (Number.isNaN(date.getTime())) return 'unknown';
-        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
       };
 
       const clearOverlays = () => {
@@ -120,6 +129,7 @@
         lastRender = { visits: Array.isArray(visits) ? visits : [], mode };
         if (!map || !hasMapSdk()) return;
         const naver = window.naver;
+        const palette = activePalette();
         naver.maps.Event.trigger(map, 'resize');
         clearOverlays();
 
@@ -135,35 +145,33 @@
           return;
         }
 
+        // Markers and the route reuse the exact same LatLng objects. The path
+        // therefore ends at each marker's geographic center rather than a
+        // separately calculated pixel offset.
         const points = validVisits.map((visit) => new naver.maps.LatLng(Number(visit.latitude), Number(visit.longitude)));
-        const routeByDay = new Map();
-        validVisits.forEach((visit, index) => {
-          const key = localDayKey(visit.arrivedAt);
-          const path = routeByDay.get(key) || [];
-          path.push(points[index]);
-          routeByDay.set(key, path);
-        });
 
-        routeByDay.forEach((path) => {
-          if (path.length < 2) return;
+        // The recent-places screen can contain visits from more than one day.
+        // Connect every displayed visit chronologically so the route never
+        // disappears simply because two visible points belong to different days.
+        if (points.length >= 2) {
           overlays.push(new naver.maps.Polyline({
             map,
-            path,
-            strokeColor: '#E07A5F',
+            path: points,
+            strokeColor: palette.accent,
             strokeWeight: 2,
-            strokeOpacity: 0.88,
+            strokeOpacity: 0.9,
             strokeLineCap: 'round',
             strokeLineJoin: 'round',
             zIndex: 100,
           }));
-        });
+        }
 
         validVisits.forEach((visit, index) => {
           const current = !visit.leftAt && index === validVisits.length - 1;
           const marker = new naver.maps.Marker({
             map,
             position: points[index],
-            icon: markerIcon(naver, current, mode === 'footprints' ? index : undefined),
+            icon: markerIcon(naver, current, mode === 'footprints' ? index : undefined, palette),
             zIndex: 200,
           });
           const popup = new naver.maps.InfoWindow({
@@ -197,7 +205,7 @@
         focusOverlay = new naver.maps.Marker({
           map,
           position: point,
-          icon: markerIcon(naver, true),
+          icon: markerIcon(naver, true, undefined, activePalette()),
           zIndex: 2000,
         });
         focusPopup = new naver.maps.InfoWindow({
@@ -220,6 +228,18 @@
         if (data.type === 'clear-focus') { clearFocus(); render(lastRender); }
         if (data.type === 'resize' && map && hasMapSdk()) window.naver.maps.Event.trigger(map, 'resize');
       });
+
+      try {
+        if (window.parent !== window && window.parent.location.origin === location.origin) {
+          const themeObserver = new MutationObserver(() => {
+            if (initialized) render(lastRender);
+          });
+          themeObserver.observe(window.parent.document.documentElement, {
+            attributes: true,
+            attributeFilter: ['data-route-theme', 'data-meluni-theme', 'class', 'style'],
+          });
+        }
+      } catch { /* theme sync is optional in standalone mode */ }
 
       window.navermap_authFailure = () => {
         authFailed = true;
@@ -294,8 +314,6 @@
       script.defer = true;
       script.src = SDK_URL;
       script.onload = () => {
-        // onload and the documented callback can occur very close together.
-        // Wait for the NAVER namespace instead of treating that short gap as a fatal error.
         window.setTimeout(() => waitForMapSdk('script-onload'), 50);
       };
       script.onerror = () => {

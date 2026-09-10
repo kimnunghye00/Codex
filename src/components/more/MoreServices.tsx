@@ -1,13 +1,13 @@
-import { Bell, CalendarDays, ChevronRight, Clock3, Heart, Image, MapPinned, MessageCircle, Palette, Settings, Smartphone, Smile, Sparkles, Trophy, UserRound, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Heart, Image, MapPinned, MessageCircle, Settings, Smartphone, Sparkles, Trophy, Clock3, CalendarDays, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { normalizeRouteAppIcon, updateRouteFavicon, type RouteAppIconId } from '../../utils/appIcon';
 import type { HubTabId } from '../memories/MemoriesPage';
 import type { LocationTabId } from '../location/LocationPage';
 
-type MoreServiceId = 'album' | 'anniversary' | 'record' | 'tier' | 'schedule' | 'date' | 'chat' | 'map' | 'footprint';
-type QuickSettingId = 'profile' | 'notifications' | 'theme' | 'app-icon' | 'emoticon' | 'all-settings';
+type MoreServiceId = 'album' | 'anniversary' | 'record' | 'tier' | 'schedule' | 'date' | 'chat' | 'map' | 'footprint' | 'settings';
 type AppIconId = RouteAppIconId;
 type ThemeId = 'default' | 'lavender' | 'dark';
+type MoreSheet = 'theme' | 'app-icon' | 'emoticon';
 
 export type MoreNavigationTarget =
   | { area: 'chat' }
@@ -17,13 +17,6 @@ export type MoreNavigationTarget =
 type Service = {
   id: MoreServiceId;
   label: string;
-  icon: typeof Settings;
-};
-
-type QuickSetting = {
-  id: QuickSettingId;
-  label: string;
-  description: string;
   icon: typeof Settings;
 };
 
@@ -39,19 +32,11 @@ const SERVICES: Service[] = [
   { id: 'record', label: '기록', icon: Clock3 },
   { id: 'tier', label: '티어', icon: Trophy },
   { id: 'schedule', label: '일정', icon: CalendarDays },
-  { id: 'date', label: '데이트', icon: Sparkles },
+  { id: 'date', label: '약속', icon: Sparkles },
   { id: 'chat', label: '대화', icon: MessageCircle },
   { id: 'map', label: '지도', icon: MapPinned },
   { id: 'footprint', label: '발자취', icon: MapPinned },
-];
-
-const QUICK_SETTINGS: QuickSetting[] = [
-  { id: 'profile', label: '프로필', description: '내 정보와 상대방 연결을 관리해요', icon: UserRound },
-  { id: 'notifications', label: '알림', description: '새 메시지와 최근 활동을 확인해요', icon: Bell },
-  { id: 'theme', label: '테마', description: 'ROUTE 화면 색상과 분위기를 바꿔요', icon: Palette },
-  { id: 'app-icon', label: '앱 아이콘', description: '홈 화면에 보이는 ROUTE 아이콘을 바꿔요', icon: Smartphone },
-  { id: 'emoticon', label: '이모티콘', description: '대화에서 사용할 이모티콘을 관리해요', icon: Smile },
-  { id: 'all-settings', label: '전체 설정', description: '계정, 보안, 데이터 등 모든 설정을 확인해요', icon: Settings },
+  { id: 'settings', label: '설정', icon: Settings },
 ];
 
 const APP_ICONS: AppIconOption[] = [
@@ -87,12 +72,12 @@ function HeaderBar({ title, onClose }: { title: string; onClose: () => void }) {
   return <div className="more-sheet-head"><strong>{title}</strong><button type="button" onClick={onClose} aria-label="닫기"><X size={19} /></button></div>;
 }
 
-export function MoreServices({ onOpenSettings, onOpenNotifications, onNavigate }: {
+export function MoreServices({ onOpenSettings, onOpenNotifications: _onOpenNotifications, onNavigate }: {
   onOpenSettings: () => void;
   onOpenNotifications: () => void;
   onNavigate: (target: MoreNavigationTarget) => void;
 }) {
-  const [sheet, setSheet] = useState<'theme' | 'app-icon' | 'emoticon' | null>(null);
+  const [sheet, setSheet] = useState<MoreSheet | null>(null);
   const [theme, setTheme] = useState<ThemeId>(() => {
     const saved = localStorage.getItem('meluni-theme');
     return saved === 'lavender' || saved === 'dark' ? saved : 'default';
@@ -104,6 +89,18 @@ export function MoreServices({ onOpenSettings, onOpenNotifications, onNavigate }
   const [notice, setNotice] = useState('');
 
   const activeIcon = useMemo(() => APP_ICONS.find((item) => item.id === appIcon) ?? APP_ICONS[0], [appIcon]);
+
+  useEffect(() => {
+    const openSheet = (event: Event) => {
+      const requested = (event as CustomEvent<MoreSheet>).detail;
+      if (requested === 'theme' || requested === 'app-icon' || requested === 'emoticon') {
+        setNotice('');
+        setSheet(requested);
+      }
+    };
+    window.addEventListener('route-open-more-sheet', openSheet);
+    return () => window.removeEventListener('route-open-more-sheet', openSheet);
+  }, []);
 
   const chooseTheme = (next: ThemeId) => {
     setTheme(next);
@@ -126,25 +123,6 @@ export function MoreServices({ onOpenSettings, onOpenNotifications, onNavigate }
     setNotice(price === '무료' ? '이모티콘을 보관함에 추가했어요.' : '현재 테스트 버전이라 실제 결제 없이 보관함에 추가했어요.');
   };
 
-  const openAllSettings = () => {
-    const settingsButton = document.querySelector<HTMLButtonElement>('.header-actions button[aria-label="설정"]');
-    if (settingsButton) {
-      settingsButton.click();
-      return;
-    }
-    onOpenSettings();
-  };
-
-  const openQuickSetting = (id: QuickSettingId) => {
-    setNotice('');
-    if (id === 'profile') return onOpenSettings();
-    if (id === 'notifications') return onOpenNotifications();
-    if (id === 'theme') return setSheet('theme');
-    if (id === 'app-icon') return setSheet('app-icon');
-    if (id === 'emoticon') return setSheet('emoticon');
-    openAllSettings();
-  };
-
   const openService = (id: MoreServiceId) => {
     setNotice('');
     if (id === 'album') return onNavigate({ area: 'memories', tab: 'album' });
@@ -156,11 +134,12 @@ export function MoreServices({ onOpenSettings, onOpenNotifications, onNavigate }
     if (id === 'chat') return onNavigate({ area: 'chat' });
     if (id === 'map') return onNavigate({ area: 'location', tab: 'map' });
     if (id === 'footprint') return onNavigate({ area: 'location', tab: 'footprints' });
+    onOpenSettings();
   };
 
   return <div className="route-more-services">
     <section className="more-service-intro">
-      <div><small>ROUTE 서비스</small><h1>더보기</h1><p>자주 쓰는 기능과 설정을 한곳에서 빠르게 열 수 있어요.</p></div>
+      <div><small>ROUTE 서비스</small><h1>더보기</h1><p>ROUTE의 주요 기능과 설정을 한곳에서 열 수 있어요.</p></div>
       <span className={`more-app-icon-preview ${appIcon} ${activeIcon.className} !grid place-items-center`} aria-label={`현재 앱 아이콘 ${activeIcon.label}`}><AppIconGlyph id={appIcon} /></span>
     </section>
 
@@ -169,17 +148,6 @@ export function MoreServices({ onOpenSettings, onOpenNotifications, onNavigate }
       <div className="more-service-grid" aria-label="ROUTE 주요 기능">
         {SERVICES.map(({ id, label, icon: Icon }) => <button type="button" key={id} onClick={() => openService(id)}>
           <span className="more-service-icon"><Icon size={25} strokeWidth={1.65} /></span><b>{label}</b>
-        </button>)}
-      </div>
-    </section>
-
-    <section className="more-quick-settings" aria-labelledby="route-quick-settings-title">
-      <div className="more-section-title"><small>SETTINGS</small><h2 id="route-quick-settings-title">자주 쓰는 설정</h2><p>많이 찾는 설정은 여기서 바로 열 수 있어요.</p></div>
-      <div className="more-quick-settings-list">
-        {QUICK_SETTINGS.map(({ id, label, description, icon: Icon }) => <button type="button" key={id} className={id === 'all-settings' ? 'all-settings' : ''} onClick={() => openQuickSetting(id)}>
-          <span className="more-quick-setting-icon"><Icon size={19} strokeWidth={1.75} /></span>
-          <span className="more-quick-setting-copy"><b>{label}</b><small>{description}</small></span>
-          <ChevronRight size={17} strokeWidth={1.7} />
         </button>)}
       </div>
     </section>
