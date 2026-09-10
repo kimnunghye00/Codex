@@ -10,6 +10,7 @@ import { ReactionPicker } from './ReactionPicker';
 
 const MAX_INLINE_GALLERY_ITEMS = 4;
 const SWIPE_THRESHOLD = 42;
+const LEGACY_MEDIA_PREFETCH_MARGIN = '700px 0px';
 const PREVIEW_STATUS_EVENT = 'route-chat-media-preview-status';
 const PREVIEW_STATUS_REQUEST_EVENT = 'route-chat-media-preview-status-request';
 const PREVIEW_RETRY_EVENT = 'route-chat-media-preview-retry';
@@ -33,27 +34,48 @@ function retryableUrl(url: string, retry: number) {
   return `${url}${url.includes('?') ? '&' : '?'}route-preview-retry=${retry}`;
 }
 
-function DeferredMediaImage({ src, alt, className, onClick }: {
+function DeferredMediaImage({ src, alt, className, onClick, eager = false }: {
   src: string;
   alt: string;
   className?: string;
   onClick?: (event: React.MouseEvent<HTMLElement>) => void;
+  eager?: boolean;
 }) {
   const optimizedPreview = hasOptimizedChatPreview(src);
   const [legacyState, setLegacyState] = useState<LegacyPreviewState>('optimizing');
   const [failureCode, setFailureCode] = useState('');
   const [previewFailed, setPreviewFailed] = useState(false);
   const [previewRetry, setPreviewRetry] = useState(0);
+  const [legacyRequested, setLegacyRequested] = useState(eager);
+  const legacyAnchorRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     setLegacyState('optimizing');
     setFailureCode('');
     setPreviewFailed(false);
     setPreviewRetry(0);
-  }, [src]);
+    setLegacyRequested(eager);
+  }, [src, eager]);
 
   useEffect(() => {
-    if (optimizedPreview) return;
+    if (optimizedPreview || legacyRequested) return;
+    const target = legacyAnchorRef.current;
+    if (!target || typeof IntersectionObserver === 'undefined') {
+      setLegacyRequested(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      observer.disconnect();
+      setLegacyRequested(true);
+    }, { rootMargin: LEGACY_MEDIA_PREFETCH_MARGIN, threshold: 0.01 });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [legacyRequested, optimizedPreview, src]);
+
+  useEffect(() => {
+    if (optimizedPreview || !legacyRequested) return;
     const handleStatus = (event: Event) => {
       const detail = (event as CustomEvent<PreviewStatusDetail>).detail;
       if (!detail || detail.reference !== src) return;
@@ -71,15 +93,25 @@ function DeferredMediaImage({ src, alt, className, onClick }: {
     window.addEventListener(PREVIEW_STATUS_EVENT, handleStatus);
     window.dispatchEvent(new CustomEvent(PREVIEW_STATUS_REQUEST_EVENT, { detail: { reference: src } }));
     return () => window.removeEventListener(PREVIEW_STATUS_EVENT, handleStatus);
-  }, [optimizedPreview, src]);
+  }, [legacyRequested, optimizedPreview, src]);
 
   const retryLegacy = (event: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>) => {
     event.preventDefault();
     event.stopPropagation();
     setLegacyState('retrying');
     setFailureCode('');
+    setLegacyRequested(true);
     window.dispatchEvent(new CustomEvent(PREVIEW_RETRY_EVENT, { detail: { reference: src } }));
   };
+
+  if (!optimizedPreview && !legacyRequested) {
+    return <span
+      ref={legacyAnchorRef}
+      className={`chat-legacy-media-gate ${className ?? ''}`}
+      role="img"
+      aria-label="사진 미리보기"
+    ><ImageIcon size={20} /><small>사진 미리보기</small></span>;
+  }
 
   if (!optimizedPreview) {
     const failed = legacyState === 'failed';
@@ -128,7 +160,7 @@ function DeferredMediaImage({ src, alt, className, onClick }: {
     className={className}
     src={displayUrl}
     alt={alt}
-    loading="lazy"
+    loading={eager ? 'eager' : 'lazy'}
     decoding="async"
     onError={() => setPreviewFailed(true)}
     onClick={onClick}
@@ -179,7 +211,7 @@ function GalleryViewer({ urls, initialIndex, onClose }: { urls: string[]; initia
         </header>
         <div className="route-gallery-viewer-media">
           {urls.length > 1 && <button type="button" className="route-gallery-arrow route-gallery-prev" aria-label="이전 사진" onClick={() => move(-1)}><ChevronLeft /></button>}
-          <DeferredMediaImage src={urls[index]} alt={`묶음 사진 ${index + 1} / ${urls.length}`} />
+          <DeferredMediaImage src={urls[index]} alt={`묶음 사진 ${index + 1} / ${urls.length}`} eager />
           {urls.length > 1 && <button type="button" className="route-gallery-arrow route-gallery-next" aria-label="다음 사진" onClick={() => move(1)}><ChevronRight /></button>}
         </div>
         {urls.length > 1 && <div className="route-gallery-thumbs" aria-label="묶음 사진 목록">
