@@ -8,8 +8,12 @@ import { chatMediaOriginalUrl, chatMediaPreviewUrl } from '../../lib/chatMediaRe
 
 const IMAGE_RETRY_DELAYS_MS = [500, 1_400] as const;
 const MEMORY_KEY = 'route.memories.v2';
+const MEMORY_MEDIA_PREFETCH_MARGIN = '650px 0px';
 
 type MemorySlot = { memoryId: number; index: number };
+type LegacyRecovery = { url: string; slot: MemorySlot | null };
+
+const storageUrlCache = new Map<string, Promise<string>>();
 
 export function isMemoryVideo(src?: string) {
   if (!src) return false;
@@ -31,14 +35,26 @@ function sourceCandidates(source?: string) {
   return Array.from(new Set([preview, original, source].filter((value): value is string => Boolean(value) && !value.includes('#route-original='))));
 }
 
+function immediateCandidates(source?: string) {
+  return sourceCandidates(source).filter((value) => !value.startsWith('gs://'));
+}
+
+function storageCandidates(source?: string) {
+  return sourceCandidates(source).filter((value) => value.startsWith('gs://'));
+}
+
 async function resolveStorageReference(value: string) {
   if (!value.startsWith('gs://')) return value;
-  try {
-    return await getDownloadURL(ref(storage, value));
-  } catch (cause) {
+  const cached = storageUrlCache.get(value);
+  if (cached) return cached;
+
+  const pending = getDownloadURL(ref(storage, value)).catch((cause) => {
+    storageUrlCache.delete(value);
     console.warn('[ROUTE memory storage recovery]', cause);
     return value;
-  }
+  });
+  storageUrlCache.set(value, pending);
+  return pending;
 }
 
 function safeSegment(value: string | number) {
@@ -57,10 +73,10 @@ function inferMemorySlot(source?: string): MemorySlot | null {
   return null;
 }
 
-async function resolveLegacyBackup(source?: string) {
+async function resolveLegacyBackup(source?: string): Promise<LegacyRecovery> {
   const uid = auth.currentUser?.uid;
   const slot = inferMemorySlot(source);
-  if (!uid || !slot) return { url: '', slot: null as MemorySlot | null };
+  if (!uid || !slot) return { url: '', slot: null };
   try {
     const target = ref(storage, `users/${uid}/backupMedia/memories-live/${safeSegment(slot.memoryId)}-${slot.index}`);
     return { url: await getDownloadURL(target), slot };
@@ -98,54 +114,112 @@ export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 
   decoding?: 'async' | 'auto' | 'sync';
   onClick?: React.MouseEventHandler<HTMLImageElement>;
 }) {
-  const [candidates, setCandidates] = useState<string[]>(() => sourceCandidates(src));
+  const [candidates, setCandidates] = useState<string[]>(() => immediateCandidates(src));
   const [candidateIndex, setCandidateIndex] = useState(0);
   const [attempt, setAttempt] = useState(0);
   const [retrying, setRetrying] = useState(false);
   const [failed, setFailed] = useState(false);
-  const [legacyRecovery, setLegacyRecovery] = useState<{ url: string; slot: MemorySlot | null }>({ url: '', slot: null });
+  const [legacyRecovery, setLegacyRecovery] = useState<LegacyRecovery>({ url: '', slot: null });
   const retryTimer = useRef<number | undefined>(undefined);
+  const deferredAnchor = useRef<HTMLSpanElement>(null);
+  const sourceRef = useRef(src);
+  const storageResolutionStarted = useRef(false);
+  const legacyRecoveryAttempted = useRef(false);
   const displayUrl = candidates[candidateIndex] ?? '';
 
+  const resolveDurableCandidates = () => {
+    const source = src;
+    if (!source || storageResolutionStarted.current || storageCandidates(source).length === 0) return false;
+    storageResolutionStarted.current = true;
+    setRetrying(true);
+
+    const rawCandidates = sourceCandidates(source);
+    void Promise.all(rawCandidates.map(resolveStorageReference)).then((resolved) => {
+      if (sourceRef.current !== source) return;
+      const durableCandidates = Array.from(new Set(resolved.filter(Boolean)));
+      setCandidates(durableCandidates);
+      setCandidateIndex(0);
+      setAttempt(0);
+      setFailed(false);
+      setRetrying(false);
+    });
+    return true;
+  };
+
+  const startLegacyRecovery = () => {
+    const source = src;
+    if (!source || legacyRecoveryAttempted.current) return false;
+    legacyRecoveryAttempted.current = true;
+    setRetrying(true);
+
+    void resolveLegacyBackup(source).then((legacy) => {
+      if (sourceRef.current !== source) return;
+      setRetrying(false);
+      if (!legacy.url) {
+        setFailed(true);
+        return;
+      }
+      setLegacyRecovery(legacy);
+      setCandidates([legacy.url]);
+      setCandidateIndex(0);
+      setAttempt(0);
+      setFailed(false);
+    });
+    return true;
+  };
+
   useEffect(() => {
+    sourceRef.current = src;
     if (retryTimer.current) window.clearTimeout(retryTimer.current);
-    const rawCandidates = sourceCandidates(src);
-    setCandidates(rawCandidates);
+    const initial = immediateCandidates(src);
+    setCandidates(initial);
     setCandidateIndex(0);
     setAttempt(0);
     setRetrying(false);
     setFailed(false);
     setLegacyRecovery({ url: '', slot: null });
-    let cancelled = false;
+    storageResolutionStarted.current = false;
+    legacyRecoveryAttempted.current = false;
 
-    void Promise.all([Promise.all(rawCandidates.map(resolveStorageReference)), resolveLegacyBackup(src)]).then(([resolved, legacy]) => {
-      if (cancelled) return;
-      const durableCandidates = Array.from(new Set([
-        ...(src?.startsWith('blob:') && legacy.url ? [legacy.url] : []),
-        ...resolved.filter(Boolean),
-        ...(!src?.startsWith('blob:') && legacy.url ? [legacy.url] : []),
-      ]));
-      setLegacyRecovery(legacy);
-      setCandidates(durableCandidates);
-      setCandidateIndex(0);
-      setAttempt(0);
-      setRetrying(false);
-      setFailed(false);
-    });
+    if (!src || storageCandidates(src).length === 0) return;
+    if (loading === 'eager') {
+      resolveDurableCandidates();
+      return;
+    }
+
+    const target = deferredAnchor.current;
+    if (!target || typeof IntersectionObserver === 'undefined') {
+      resolveDurableCandidates();
+      return;
+    }
+
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      observer.disconnect();
+      resolveDurableCandidates();
+    }, { rootMargin: MEMORY_MEDIA_PREFETCH_MARGIN, threshold: 0.01 });
+    observer.observe(target);
 
     return () => {
-      cancelled = true;
+      observer.disconnect();
       if (retryTimer.current) window.clearTimeout(retryTimer.current);
     };
-  }, [src]);
+  }, [src, loading]);
 
   const retryNow = (event: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>) => {
     event.preventDefault();
     event.stopPropagation();
     if (retryTimer.current) window.clearTimeout(retryTimer.current);
+    storageResolutionStarted.current = false;
+    legacyRecoveryAttempted.current = false;
+    setLegacyRecovery({ url: '', slot: null });
     setFailed(false);
     setRetrying(false);
     setCandidateIndex(0);
+
+    const initial = immediateCandidates(src);
+    setCandidates(initial);
+    if (!initial.length && resolveDurableCandidates()) return;
     setAttempt((value) => value + 1);
   };
 
@@ -156,6 +230,8 @@ export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 
         setAttempt(0);
         return;
       }
+      if (resolveDurableCandidates()) return;
+      if (startLegacyRecovery()) return;
       setFailed(true);
       return;
     }
@@ -177,11 +253,13 @@ export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 
       setFailed(false);
       return;
     }
+    if (resolveDurableCandidates()) return;
+    if (startLegacyRecovery()) return;
     setFailed(true);
   };
 
   if (!displayUrl) {
-    return <span className={`memory-media-fallback ${className ?? ''} !grid place-items-center content-center gap-1`} role="img" aria-label={alt || '사진 미리보기'}><ImageIcon size={20} /><small>사진 미리보기</small></span>;
+    return <span ref={deferredAnchor} className={`memory-media-fallback ${className ?? ''} !grid place-items-center content-center gap-1`} role="img" aria-label={alt || '사진 미리보기'}><ImageIcon size={20} /><small>사진 미리보기</small></span>;
   }
 
   if (retrying) {
