@@ -1,3 +1,5 @@
+export {};
+
 let settingsHubReady = false;
 let settingsHubLoad: Promise<void> | undefined;
 
