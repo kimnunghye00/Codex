@@ -1,0 +1,4 @@
+/* Chat-only scroll/composer stability; loaded with ChatPage. */
+.chat-page.full-page{display:flex!important;flex-direction:column!important;overflow:hidden!important}
+.chat-page .messages{flex:1 1 0!important;min-height:0!important;overflow-x:hidden!important;overflow-y:auto!important;touch-action:pan-y!important;overscroll-behavior-y:contain!important;-webkit-overflow-scrolling:touch!important}
+.chat-page .composer .composer-gif-shortcut{width:40px!important;height:40px!important;min-width:40px!important;min-height:40px!important;flex:0 0 40px!important;display:grid!important;place-items:center!important;border:0!important;border-radius:50%!important;color:var(--primary)!important;background:color-mix(in srgb,var(--primary-soft) 78%,var(--surface) 22%)!important}
