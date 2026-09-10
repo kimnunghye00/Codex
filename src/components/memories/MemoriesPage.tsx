@@ -21,7 +21,7 @@ type DatePlan = { id: number; title: string; date: string; time: string; locatio
 type AnniversaryItem = { title: string; date: string; icon: string; special?: boolean };
 
 const DEFAULT_TABS: HubTabId[] = ['album', 'anniversary', 'record', 'tier', 'schedule', 'date'];
-const TAB_LABEL: Record<HubTabId, string> = { album: '앨범', anniversary: '기념일', record: '기록', tier: '티어', schedule: '일정', date: '데이트' };
+const TAB_LABEL: Record<HubTabId, string> = { album: '앨범', anniversary: '기념일', record: '기록', tier: '티어', schedule: '일정', date: '약속' };
 const DAY = 86400000;
 const todayKey = () => new Date().toISOString().slice(0, 10);
 const dayDiff = (date: string) => Math.ceil((new Date(`${date}T00:00:00`).getTime() - new Date(`${todayKey()}T00:00:00`).getTime()) / DAY);
@@ -68,6 +68,10 @@ function anniversaryPlanKey(item: AnniversaryItem) {
   return `${item.title}:${item.date}`;
 }
 
+function scheduleSignature(item: Pick<Schedule, 'title' | 'date' | 'startTime'>) {
+  return `${item.title}|${item.date}|${item.startTime}`;
+}
+
 export function MemoriesPage({ requestedTab, Header, memories, setMemories, initialMemoryId, initialDraft, onClearInitial, onClearInitialDraft, onOpenLocation }: {
   requestedTab?: HubTabId;
   Header: ({ title }: { title?: string }) => React.ReactNode;
@@ -95,7 +99,7 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
   const [localSchedules, setLocalSchedules] = useState<Schedule[]>(() => { try { return JSON.parse(localStorage.getItem(`route-local-schedules:${uid}`) || '[]') as Schedule[]; } catch { return []; } });
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleFeedback, setScheduleFeedback] = useState('');
-  const [scheduleForm, setScheduleForm] = useState({ title: '', date: todayKey(), startTime: '19:00', type: 'couple' as ScheduleType, location: '' });
+  const [scheduleForm, setScheduleForm] = useState({ title: '', date: todayKey(), startTime: '19:00', location: '' });
   const [datePlans, setDatePlans] = useState<DatePlan[]>(() => { try { return JSON.parse(localStorage.getItem(`route-date-plans:${uid}`) || '[]'); } catch { return []; } });
   const [dateOpen, setDateOpen] = useState(false);
   const [dateFeedback, setDateFeedback] = useState('');
@@ -107,8 +111,8 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
   useEffect(() => { if (!connection?.coupleId) { setRelationshipStartDate(undefined); return; } return subscribeCoupleShared(connection.coupleId, (shared) => setRelationshipStartDate(shared.relationshipStartDate)); }, [connection?.coupleId]);
   useEffect(() => { if (!connection?.coupleId) { setSchedules([]); return; } const q = query(collection(db, 'couples', connection.coupleId, 'schedules'), orderBy('date', 'asc')); return onSnapshot(q, (snap) => setSchedules(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Schedule, 'id'>) }))), () => setScheduleFeedback('공유 일정을 불러오지 못해 이 기기에 저장된 일정만 표시해요.')); }, [connection?.coupleId]);
   useEffect(() => { try { localStorage.setItem(`route-hub-tabs:${uid}`, JSON.stringify(tabOrder)); } catch {} }, [tabOrder, uid]);
-  useEffect(() => { try { localStorage.setItem(`route-date-plans:${uid}`, JSON.stringify(datePlans)); } catch { setDateFeedback('기기 저장 공간을 확인해 주세요.'); } }, [datePlans, uid]);
-  useEffect(() => { try { localStorage.setItem(`route-local-schedules:${uid}`, JSON.stringify(localSchedules)); } catch { setScheduleFeedback('기기 저장 공간을 확인해 주세요.'); } }, [localSchedules, uid]);
+  useEffect(() => { try { localStorage.setItem(`route-date-plans:${uid}`, JSON.stringify(datePlans)); window.dispatchEvent(new Event('route-schedules-local-change')); } catch { setDateFeedback('기기 저장 공간을 확인해 주세요.'); } }, [datePlans, uid]);
+  useEffect(() => { try { localStorage.setItem(`route-local-schedules:${uid}`, JSON.stringify(localSchedules)); window.dispatchEvent(new Event('route-schedules-local-change')); } catch { setScheduleFeedback('기기 저장 공간을 확인해 주세요.'); } }, [localSchedules, uid]);
   useEffect(() => {
     if (!initialDraft) return;
     setSelected(undefined);
@@ -140,6 +144,12 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
   const favorite = (id: number) => setMemories((items) => items.map((item) => item.id === id ? { ...item, favorite: !item.favorite } : item));
   const partner = connection?.partnerProfile ?? null;
   const visibleSchedules = useMemo(() => [...schedules, ...localSchedules.filter((local) => !schedules.some((remote) => remote.id === local.id))].sort((a, b) => `${a.date} ${a.startTime}`.localeCompare(`${b.date} ${b.startTime}`)), [localSchedules, schedules]);
+  const scheduleItems = useMemo(() => visibleSchedules.filter((item) => item.type !== 'couple' && item.source !== 'date-plan'), [visibleSchedules]);
+  const promiseScheduleExtras = useMemo(() => {
+    const linkedIds = new Set(datePlans.map((plan) => plan.scheduleId).filter(Boolean));
+    const planSignatures = new Set(datePlans.map((plan) => `${plan.title}|${plan.date}|${plan.time}`));
+    return visibleSchedules.filter((item) => item.type === 'couple' && !linkedIds.has(item.id) && !planSignatures.has(scheduleSignature(item)));
+  }, [datePlans, visibleSchedules]);
 
   const sameDayMemories = useMemo(() => {
     const now = new Date();
@@ -171,17 +181,17 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
   const topPlace = Object.entries(placeCounts).sort((a, b) => b[1] - a[1])[0];
 
   const moveTab = (tab: HubTabId, direction: -1 | 1) => setTabOrder((items) => { const index = items.indexOf(tab); const nextIndex = index + direction; if (nextIndex < 0 || nextIndex >= items.length) return items; const next = [...items]; [next[index], next[nextIndex]] = [next[nextIndex], next[index]]; return next; });
-  const resetScheduleForm = () => setScheduleForm({ title: '', date: todayKey(), startTime: '19:00', type: 'couple' as ScheduleType, location: '' });
+  const resetScheduleForm = () => setScheduleForm({ title: '', date: todayKey(), startTime: '19:00', location: '' });
   const resetDateForm = () => { setDateForm({ title: '', date: todayKey(), time: '18:00', location: '', memo: '' }); setDateSourceKey(undefined); };
   const saveSchedule = async () => {
     const title = scheduleForm.title.trim();
     if (!title) { setScheduleFeedback('일정 제목을 입력해 주세요.'); return; }
-    const payload = { ...scheduleForm, title, ownerId: uid };
+    const payload = { ...scheduleForm, title, type: 'personal' as const, ownerId: uid };
     setScheduleFeedback('');
     if (connection?.coupleId) {
       try {
         await addDoc(collection(db, 'couples', connection.coupleId, 'schedules'), { ...payload, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-        setScheduleFeedback('일정을 저장했어요. 상대방 화면에도 함께 반영돼요.');
+        setScheduleFeedback('일정을 저장했어요.');
         setScheduleOpen(false); resetScheduleForm(); return;
       } catch (cause) {
         console.error('[ROUTE schedule save]', cause);
@@ -189,7 +199,7 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
     }
     const local: Schedule = { id: `local-${Date.now()}`, ...payload, localOnly: true };
     setLocalSchedules((items) => [...items, local]);
-    setScheduleFeedback(connection ? '공유 저장에 실패해 우선 이 기기에 안전하게 저장했어요.' : '상대방 연결 전이라 이 기기에 일정을 저장했어요.');
+    setScheduleFeedback(connection ? '공유 저장에 실패해 우선 이 기기에 안전하게 저장했어요.' : '이 기기에 일정을 저장했어요.');
     setScheduleOpen(false); resetScheduleForm();
   };
 
@@ -204,20 +214,20 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
     const existing = datePlans.find((plan) => plan.anniversaryKey === key);
     if (existing) {
       setActiveTab('date');
-      setDateFeedback(`${item.title} 데이트 계획이 이미 있어요.`);
+      setDateFeedback(`${item.title} 약속이 이미 있어요.`);
       return;
     }
     setDateSourceKey(key);
-    setDateForm({ title: `${item.title} 데이트`, date: item.date, time: '18:00', location: '', memo: `${item.title}을 함께 보내기 위한 데이트 계획` });
+    setDateForm({ title: `${item.title} 약속`, date: item.date, time: '18:00', location: '', memo: `${item.title}을 함께 보내기 위한 약속` });
     setDateOpen(true);
   };
 
   const saveDatePlan = async () => {
     const title = dateForm.title.trim();
-    if (!title) { setDateFeedback('데이트 이름을 입력해 주세요.'); return; }
+    if (!title) { setDateFeedback('약속 이름을 입력해 주세요.'); return; }
 
     const id = Date.now();
-    const localScheduleId = `date-${id}`;
+    const localScheduleId = `promise-${id}`;
     const schedulePayload = {
       title,
       date: dateForm.date,
@@ -239,43 +249,43 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
     setActiveTab('date');
 
     if (!connection?.coupleId) {
-      setDateFeedback('데이트를 저장했고 우리 일정에도 연결했어요. 상대방 연결 후에는 공유 일정으로 저장할 수 있어요.');
+      setDateFeedback('약속을 이 기기에 저장했어요. 상대방 연결 후에는 함께 동기화할 수 있어요.');
       return;
     }
 
-    setDateFeedback('데이트를 저장했어요. 우리 일정에 공유하는 중이에요…');
+    setDateFeedback('약속을 상대방과 공유하는 중이에요…');
     try {
       const ref = await addDoc(collection(db, 'couples', connection.coupleId, 'schedules'), { ...schedulePayload, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
       setLocalSchedules((items) => items.filter((item) => item.id !== localScheduleId));
       setDatePlans((items) => items.map((item) => item.id === id ? { ...item, scheduleId: ref.id } : item));
-      setDateFeedback('데이트와 우리 일정에 함께 저장했어요. 상대방에게도 일정이 보여요.');
+      setDateFeedback('약속을 저장했어요. 상대방에게도 함께 보여요.');
     } catch (cause) {
-      console.error('[ROUTE date schedule link]', cause);
-      setDateFeedback('데이트는 저장됐어요. 공유 일정 연결에 실패해 이 기기의 우리 일정에 안전하게 남겨뒀어요.');
+      console.error('[ROUTE promise schedule link]', cause);
+      setDateFeedback('약속은 저장됐어요. 공유에 실패해 이 기기에 안전하게 남겨뒀어요.');
     }
   };
 
   const deleteDatePlan = async (plan: DatePlan) => {
     setDatePlans((items) => items.filter((item) => item.id !== plan.id));
-    if (!plan.scheduleId) { setDateFeedback('데이트 계획을 삭제했어요.'); return; }
+    if (!plan.scheduleId) { setDateFeedback('약속을 삭제했어요.'); return; }
 
-    if (plan.scheduleId.startsWith('date-') || plan.scheduleId.startsWith('local-')) {
+    if (plan.scheduleId.startsWith('date-') || plan.scheduleId.startsWith('promise-') || plan.scheduleId.startsWith('local-')) {
       setLocalSchedules((items) => items.filter((item) => item.id !== plan.scheduleId));
-      setDateFeedback('데이트와 연결된 우리 일정을 함께 삭제했어요.');
+      setDateFeedback('약속을 삭제했어요.');
       return;
     }
 
     if (!connection?.coupleId) {
-      setDateFeedback('데이트는 삭제했어요. 연결된 공유 일정은 상대방 연결 후 일정 탭에서 확인해 주세요.');
+      setDateFeedback('이 기기의 약속을 삭제했어요. 공유된 항목은 연결 후 다시 확인해 주세요.');
       return;
     }
 
     try {
       await deleteDoc(doc(db, 'couples', connection.coupleId, 'schedules', plan.scheduleId));
-      setDateFeedback('데이트와 연결된 우리 일정을 함께 삭제했어요.');
+      setDateFeedback('약속을 삭제했어요.');
     } catch (cause) {
-      console.error('[ROUTE linked schedule delete]', cause);
-      setDateFeedback('데이트는 삭제했지만 공유 일정 삭제에 실패했어요. 일정 탭에서 한 번 확인해 주세요.');
+      console.error('[ROUTE linked promise delete]', cause);
+      setDateFeedback('약속 기록은 삭제했지만 공유 항목 삭제에 실패했어요. 잠시 후 다시 확인해 주세요.');
     }
   };
 
@@ -293,20 +303,20 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
       {editing !== undefined && <MemoryForm memory={editing ?? undefined} draft={editing === null ? initialDraft : undefined} onClose={() => { setEditing(undefined); if (initialDraft) onClearInitialDraft(); }} onSave={(memory) => { update(memory); setEditing(undefined); onClearInitialDraft(); setSelected(memory.id); }} />}
     </>}
 
-    {activeTab === 'anniversary' && <div className="hub-stack"><section className="hub-hero anniversary-hero"><Heart fill="currentColor" /><div><small>OUR DAYS</small><h2>함께 기다리는 날</h2><p>기념일에서 바로 데이트를 만들면 우리 일정에도 자동으로 이어져요.</p></div></section>{anniversaries.map((item) => { const left = dayDiff(item.date); const alert = [200,100,30,7,1].includes(left); const planned = datePlans.some((plan) => plan.anniversaryKey === anniversaryPlanKey(item)); return <article className="anniversary-row" key={`${item.title}-${item.date}`}><span>{item.icon}</span><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')}</small>{alert && !item.special && <em>D-{left} 알림 시점이에요</em>}</div><div className="anniversary-flow-actions"><strong>{dayBadge(item.date)}</strong><button type="button" className={planned ? 'planned' : ''} onClick={() => openDatePlan(item)}><Plus size={12} />{planned ? '계획 보기' : '데이트'}</button></div></article>; })}</div>}
+    {activeTab === 'anniversary' && <div className="hub-stack"><section className="hub-hero anniversary-hero"><Heart fill="currentColor" /><div><small>OUR DAYS</small><h2>함께 기다리는 날</h2><p>기념일에서 바로 약속을 만들 수 있어요.</p></div></section>{anniversaries.map((item) => { const left = dayDiff(item.date); const alert = [200,100,30,7,1].includes(left); const planned = datePlans.some((plan) => plan.anniversaryKey === anniversaryPlanKey(item)); return <article className="anniversary-row" key={`${item.title}-${item.date}`}><span>{item.icon}</span><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')}</small>{alert && !item.special && <em>D-{left} 알림 시점이에요</em>}</div><div className="anniversary-flow-actions"><strong>{dayBadge(item.date)}</strong><button type="button" className={planned ? 'planned' : ''} onClick={() => openDatePlan(item)}><Plus size={12} />{planned ? '약속 보기' : '약속'}</button></div></article>; })}</div>}
 
     {activeTab === 'record' && <div className="hub-stack"><section className="hub-hero record-hero"><Crown /><div><small>우리의 기록</small><h2>우리의 기록</h2><p>ROUTE 안에서 쌓인 둘의 기록을 모아봤어요.</p></div></section><div className="record-grid"><article><Phone /><small>앱 통화</small><b>준비 중</b><span>ROUTE 통화 기능 연결 예정</span></article><article><Video /><small>영상통화</small><b>준비 중</b><span>앱 영상통화 기록</span></article><article><MapPin /><small>방문 장소</small><b>{visits.length}회</b><span>{topPlace ? `${topPlace[0]} · ${topPlace[1]}회` : '위치 기록을 시작해보세요'}</span></article><article><Heart /><small>추억</small><b>{memories.length}개</b><span>함께 남긴 사진과 영상</span></article></div><PlaceTimeline memories={memories} visits={visits} schedules={visibleSchedules} datePlans={datePlans} initialPlace={placeTimelineFocus} onConsumeInitialPlace={() => setPlaceTimelineFocus(undefined)} onOpenMemory={(id) => setSelected(id)} onOpenLocation={onOpenLocation} /></div>}
 
     {activeTab === 'tier' && <div className="hub-stack"><section className="hub-hero tier-hero"><Trophy /><div><small>COUPLE TIER</small><h2>이번 달 커플 랭킹</h2><p>공개 참여를 선택한 커플끼리 재미로 경쟁해요.</p></div></section><div className="tier-card"><span>🥇</span><div><b>달달커플</b><small>이번 달 데이트 기록</small></div><strong>24회</strong></div><div className="tier-card"><span>🥈</span><div><b>콩떡커플</b><small>이번 달 데이트 기록</small></div><strong>21회</strong></div><div className="tier-card"><span>🥉</span><div><b>{realName(profile,'나')} ❤️ {realName(partner,'상대방')}</b><small>내 커플 · 샘플 순위</small></div><strong>{Math.max(0, Math.min(20, datePlans.length))}회</strong></div><p className="hub-note">실제 전체 사용자 순위는 서버 집계와 공개 동의 기능을 연결한 뒤 활성화돼요.</p></div>}
 
-    {activeTab === 'schedule' && <div className="hub-stack"><div className="hub-section-head"><div><small>SHARED CALENDAR</small><h2>우리 일정</h2></div><button type="button" onClick={() => { setScheduleFeedback(''); setScheduleOpen(true); }}><Plus size={15} />일정 추가</button></div>{scheduleFeedback && <p className="hub-note">{scheduleFeedback}</p>}{visibleSchedules.map((item) => <article key={item.id} className="hub-list-row"><CalendarDays size={17} /><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')} · {item.startTime}{item.location ? ` · ${item.location}` : ''}{item.localOnly ? ' · 기기 저장' : ''}</small></div><div className="schedule-flow-actions"><span>{item.source === 'date-plan' ? '데이트' : item.type === 'couple' ? '우리' : item.ownerId === uid ? '나' : realName(partner, '상대')}</span>{item.location && <button type="button" onClick={() => onOpenLocation?.(item.location!)}><MapPin size={12} />지도</button>}</div></article>)}{!visibleSchedules.length && <div className="memory-empty">등록된 일정이 없어요.</div>}</div>}
+    {activeTab === 'schedule' && <div className="hub-stack"><div className="hub-section-head"><div><small>CALENDAR</small><h2>일정</h2></div><button type="button" onClick={() => { setScheduleFeedback(''); setScheduleOpen(true); }}><Plus size={15} />일정 추가</button></div>{scheduleFeedback && <p className="hub-note">{scheduleFeedback}</p>}{scheduleItems.map((item) => <article key={item.id} className="hub-list-row"><CalendarDays size={17} /><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')} · {item.startTime}{item.location ? ` · ${item.location}` : ''}{item.localOnly ? ' · 기기 저장' : ''}</small></div><div className="schedule-flow-actions"><span>{item.ownerId === uid ? '나' : realName(partner, '상대')}</span>{item.location && <button type="button" onClick={() => onOpenLocation?.(item.location!)}><MapPin size={12} />지도</button>}</div></article>)}{!scheduleItems.length && <div className="memory-empty">등록된 일정이 없어요.</div>}</div>}
 
-    {activeTab === 'date' && <div className="hub-stack"><div className="hub-section-head"><div><small>DATE PLAN</small><h2>데이트</h2></div><button type="button" onClick={() => openDatePlan()}><Plus size={15} />데이트 추가</button></div>{dateFeedback && <p className="hub-note date-flow-feedback">{dateFeedback}</p>}{[...datePlans].sort((a,b) => a.date.localeCompare(b.date)).map((item) => <article key={item.id} className="hub-list-row date-row"><Heart size={17} /><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')} · {item.time}{item.location ? ` · ${item.location}` : ''}</small>{item.memo && <em>{item.memo}</em>}</div><div className="date-flow-actions">{item.scheduleId && <span><CalendarDays size={11} />일정 연결</span>}{item.location && <button type="button" className="map-link" onClick={() => onOpenLocation?.(item.location)}><MapPin size={11} />지도</button>}<button type="button" onClick={() => void deleteDatePlan(item)}>삭제</button></div></article>)}{!datePlans.length && <div className="memory-empty">다음 데이트를 계획해보세요 ❤️</div>}</div>}
+    {activeTab === 'date' && <div className="hub-stack"><div className="hub-section-head"><div><small>OUR PROMISE</small><h2>약속</h2></div><button type="button" onClick={() => openDatePlan()}><Plus size={15} />약속 추가</button></div>{dateFeedback && <p className="hub-note date-flow-feedback">{dateFeedback}</p>}{[...datePlans].sort((a,b) => a.date.localeCompare(b.date)).map((item) => <article key={item.id} className="hub-list-row date-row"><Heart size={17} /><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')} · {item.time}{item.location ? ` · ${item.location}` : ''}</small>{item.memo && <em>{item.memo}</em>}</div><div className="date-flow-actions">{item.location && <button type="button" className="map-link" onClick={() => onOpenLocation?.(item.location)}><MapPin size={11} />지도</button>}<button type="button" onClick={() => void deleteDatePlan(item)}>삭제</button></div></article>)}{promiseScheduleExtras.map((item) => <article key={`legacy-${item.id}`} className="hub-list-row date-row"><Heart size={17} /><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')} · {item.startTime}{item.location ? ` · ${item.location}` : ''}</small>{item.memo && <em>{item.memo}</em>}</div><div className="date-flow-actions"><span>기존 약속</span>{item.location && <button type="button" className="map-link" onClick={() => onOpenLocation?.(item.location!)}><MapPin size={11} />지도</button>}</div></article>)}{!datePlans.length && !promiseScheduleExtras.length && <div className="memory-empty">아직 등록된 약속이 없어요 ❤️</div>}</div>}
 
     {orderOpen && <div className="hub-order-backdrop"><section className="hub-order-panel"><header><div><small>추억 구성</small><h2>탭 순서 편집</h2></div><button onClick={() => setOrderOpen(false)}><X size={18} /></button></header>{tabOrder.map((tab, index) => <div className="hub-order-row" key={tab}><GripVertical size={16} /><b>{TAB_LABEL[tab]}</b><span><button disabled={index === 0} onClick={() => moveTab(tab,-1)}>↑</button><button disabled={index === tabOrder.length-1} onClick={() => moveTab(tab,1)}>↓</button></span></div>)}</section></div>}
 
-    {scheduleOpen && <div className="hub-order-backdrop"><section className="hub-order-panel compact"><header><div><small>NEW SCHEDULE</small><h2>일정 추가</h2></div><button onClick={() => setScheduleOpen(false)}><X size={18} /></button></header><label>제목<input value={scheduleForm.title} onChange={(e) => setScheduleForm({...scheduleForm,title:e.target.value})} /></label><label>날짜<input type="date" value={scheduleForm.date} onChange={(e) => setScheduleForm({...scheduleForm,date:e.target.value})} /></label><label>시간<input type="time" value={scheduleForm.startTime} onChange={(e) => setScheduleForm({...scheduleForm,startTime:e.target.value})} /></label><label>종류<select value={scheduleForm.type} onChange={(e) => setScheduleForm({...scheduleForm,type:e.target.value as ScheduleType})}><option value="personal">내 일정</option><option value="couple">우리 일정</option></select></label><label>장소<input value={scheduleForm.location} onChange={(e) => setScheduleForm({...scheduleForm,location:e.target.value})} /></label><button className="primary" disabled={!scheduleForm.title.trim()} onClick={() => void saveSchedule()}>저장</button></section></div>}
+    {scheduleOpen && <div className="hub-order-backdrop"><section className="hub-order-panel compact"><header><div><small>NEW SCHEDULE</small><h2>일정 추가</h2></div><button onClick={() => setScheduleOpen(false)}><X size={18} /></button></header><label>제목<input value={scheduleForm.title} onChange={(e) => setScheduleForm({...scheduleForm,title:e.target.value})} /></label><label>날짜<input type="date" value={scheduleForm.date} onChange={(e) => setScheduleForm({...scheduleForm,date:e.target.value})} /></label><label>시간<input type="time" value={scheduleForm.startTime} onChange={(e) => setScheduleForm({...scheduleForm,startTime:e.target.value})} /></label><label>장소<input value={scheduleForm.location} onChange={(e) => setScheduleForm({...scheduleForm,location:e.target.value})} /></label><p className="hub-note">둘이 함께 정한 항목은 약속 탭에서 따로 추가할 수 있어요.</p><button className="primary" disabled={!scheduleForm.title.trim()} onClick={() => void saveSchedule()}>일정 저장</button></section></div>}
 
-    {dateOpen && <div className="hub-order-backdrop"><section className="hub-order-panel compact"><header><div><small>{dateSourceKey ? 'FROM ANNIVERSARY' : 'NEW DATE'}</small><h2>{dateSourceKey ? '기념일 데이트 만들기' : '데이트 추가'}</h2></div><button onClick={() => { setDateOpen(false); resetDateForm(); }}><X size={18} /></button></header><p className="date-flow-hint"><CalendarDays size={14} />저장하면 데이트 탭과 우리 일정에 한 번에 추가돼요.</p><label>데이트 이름<input value={dateForm.title} onChange={(e) => setDateForm({...dateForm,title:e.target.value})} /></label><label>날짜<input type="date" value={dateForm.date} onChange={(e) => setDateForm({...dateForm,date:e.target.value})} /></label><label>시간<input type="time" value={dateForm.time} onChange={(e) => setDateForm({...dateForm,time:e.target.value})} /></label><label>장소<input value={dateForm.location} onChange={(e) => setDateForm({...dateForm,location:e.target.value})} /></label><label>메모<textarea value={dateForm.memo} onChange={(e) => setDateForm({...dateForm,memo:e.target.value})} /></label><button className="primary" disabled={!dateForm.title.trim()} onClick={() => void saveDatePlan()}>데이트 + 우리 일정 저장</button></section></div>}
+    {dateOpen && <div className="hub-order-backdrop"><section className="hub-order-panel compact"><header><div><small>{dateSourceKey ? 'FROM ANNIVERSARY' : 'NEW PROMISE'}</small><h2>{dateSourceKey ? '기념일 약속 만들기' : '약속 추가'}</h2></div><button onClick={() => { setDateOpen(false); resetDateForm(); }}><X size={18} /></button></header><p className="date-flow-hint"><Heart size={14} />둘이 함께 정한 약속으로 저장되고 상대방과 동기화돼요.</p><label>약속 이름<input value={dateForm.title} onChange={(e) => setDateForm({...dateForm,title:e.target.value})} /></label><label>날짜<input type="date" value={dateForm.date} onChange={(e) => setDateForm({...dateForm,date:e.target.value})} /></label><label>시간<input type="time" value={dateForm.time} onChange={(e) => setDateForm({...dateForm,time:e.target.value})} /></label><label>장소<input value={dateForm.location} onChange={(e) => setDateForm({...dateForm,location:e.target.value})} /></label><label>메모<textarea value={dateForm.memo} onChange={(e) => setDateForm({...dateForm,memo:e.target.value})} /></label><button className="primary" disabled={!dateForm.title.trim()} onClick={() => void saveDatePlan()}>약속 저장</button></section></div>}
   </div>;
 }
