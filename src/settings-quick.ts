@@ -1,5 +1,5 @@
 import { signOut } from 'firebase/auth';
-import { auth } from './lib/firebase';
+import { auth } from './lib/firebaseAuth';
 import './settings-quick.css';
 
 type QuickSetting = {
