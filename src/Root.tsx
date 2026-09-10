@@ -6,7 +6,10 @@ import { ResponsiveAppFrame } from './components/layout/ResponsiveAppFrame';
 import './route-performance-v27.css';
 
 const App = lazy(() => import('./App'));
-const AuthFlow = lazy(() => import('./components/auth/AuthFlow').then((module) => ({ default: module.AuthFlow })));
+const AuthFlow = lazy(() => Promise.all([
+  import('./styles/features/auth'),
+  import('./components/auth/AuthFlow'),
+]).then(([, module]) => ({ default: module.AuthFlow })));
 const ProfileSetup = lazy(() => import('./components/auth/ProfileSetup').then((module) => ({ default: module.ProfileSetup })));
 
 const SIGNUP_PENDING_KEY = 'meluni-signup-pending';
