@@ -35,6 +35,8 @@
       let authFailed = false;
       let loadFailed = false;
       let initTimer;
+      let sdkWaitTimer;
+      let sdkWaitStartedAt = 0;
       let lastRender = { visits: [], mode: 'map' };
 
       const send = (type, detail = {}) => {
@@ -51,13 +53,22 @@
 
       const hideStatus = () => { statusRoot.hidden = true; };
 
+      const clearSdkWait = () => {
+        if (sdkWaitTimer) window.clearTimeout(sdkWaitTimer);
+        sdkWaitTimer = undefined;
+        sdkWaitStartedAt = 0;
+      };
+
       const fail = (type, title, text, code) => {
         if (initialized || loadFailed) return;
         loadFailed = true;
         window.clearTimeout(initTimer);
+        clearSdkWait();
         showStatus(title, text, code);
         send(type, { origin: location.origin, code });
       };
+
+      const hasMapSdk = () => Boolean(window.naver?.maps?.Map && window.naver?.maps?.LatLng);
 
       const markerSize = (current) => current ? 24 : 20;
       const markerHtml = (current, index) => {
@@ -107,7 +118,7 @@
 
       const render = ({ visits = [], mode = 'map' } = {}) => {
         lastRender = { visits: Array.isArray(visits) ? visits : [], mode };
-        if (!map || !window.naver?.maps) return;
+        if (!map || !hasMapSdk()) return;
         const naver = window.naver;
         naver.maps.Event.trigger(map, 'resize');
         clearOverlays();
@@ -176,7 +187,7 @@
       };
 
       const focus = (visit, showPopup = true) => {
-        if (!map || !window.naver?.maps || !visit) return;
+        if (!map || !hasMapSdk() || !visit) return;
         const latitude = Number(visit.latitude);
         const longitude = Number(visit.longitude);
         if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
@@ -207,7 +218,7 @@
         if (data.type === 'render') render(data);
         if (data.type === 'focus') focus(data.visit, data.showPopup);
         if (data.type === 'clear-focus') { clearFocus(); render(lastRender); }
-        if (data.type === 'resize' && map && window.naver?.maps) window.naver.maps.Event.trigger(map, 'resize');
+        if (data.type === 'resize' && map && hasMapSdk()) window.naver.maps.Event.trigger(map, 'resize');
       });
 
       window.navermap_authFailure = () => {
@@ -221,9 +232,8 @@
       };
 
       const initializeMap = () => {
-        if (authFailed || initialized || loadFailed) return;
+        if (authFailed || initialized || loadFailed || !hasMapSdk()) return;
         try {
-          if (!window.naver?.maps) throw new Error('NAVER_MAP_SDK_MISSING');
           map = new window.naver.maps.Map(document.getElementById('map'), {
             center: new window.naver.maps.LatLng(37.5666103, 126.9783882),
             zoom: 15,
@@ -232,6 +242,7 @@
           });
           initialized = true;
           window.clearTimeout(initTimer);
+          clearSdkWait();
           hideStatus();
           requestAnimationFrame(() => requestAnimationFrame(() => window.naver.maps.Event.trigger(map, 'resize')));
           send('ready', { origin: location.origin, authMode: 'ncpKeyId' });
@@ -241,13 +252,38 @@
           fail(
             'init-error',
             '네이버 지도 초기화에 실패했어요',
-            'SDK는 응답했지만 지도 객체를 만들지 못했어요.',
+            '지도 SDK는 준비됐지만 Map 객체 생성 중 오류가 발생했어요.',
             error instanceof Error ? error.message : 'NAVER_MAP_INIT_FAILED',
           );
         }
       };
 
-      window.__routeNaverMapReady = initializeMap;
+      const waitForMapSdk = (source) => {
+        if (authFailed || initialized || loadFailed) return;
+        if (!sdkWaitStartedAt) sdkWaitStartedAt = Date.now();
+        if (hasMapSdk()) {
+          initializeMap();
+          return;
+        }
+        const elapsed = Date.now() - sdkWaitStartedAt;
+        showStatus(
+          '네이버 지도 SDK를 준비하고 있어요',
+          '응답은 받았고 지도 객체가 준비될 때까지 잠시 기다리고 있어요.',
+          `SDK_WAITING · ${source} · ${Math.round(elapsed / 100) / 10}s`,
+        );
+        if (elapsed >= 7000) {
+          fail(
+            'script-error',
+            '네이버 지도 SDK 준비가 완료되지 않았어요',
+            '응답은 받았지만 naver.maps 객체가 생성되지 않았어요. 인증 또는 SDK 응답 내용을 추가로 확인해야 해요.',
+            `NAVER_MAP_SDK_MISSING · ${source}`,
+          );
+          return;
+        }
+        sdkWaitTimer = window.setTimeout(() => waitForMapSdk(source), 100);
+      };
+
+      window.__routeNaverMapReady = () => waitForMapSdk('callback');
 
       send('host-ready', { origin: location.origin });
       send('sdk-loading', { origin: location.origin, authMode: 'ncpKeyId' });
@@ -258,12 +294,9 @@
       script.defer = true;
       script.src = SDK_URL;
       script.onload = () => {
-        // The documented callback is primary. Some embedded browsers can finish
-        // the script load before invoking it, so initialize from the loaded SDK
-        // as a safe fallback instead of leaving a blank surface.
-        window.setTimeout(() => {
-          if (!initialized && !authFailed && window.naver?.maps) initializeMap();
-        }, 250);
+        // onload and the documented callback can occur very close together.
+        // Wait for the NAVER namespace instead of treating that short gap as a fatal error.
+        window.setTimeout(() => waitForMapSdk('script-onload'), 50);
       };
       script.onerror = () => {
         fail(
@@ -277,17 +310,12 @@
 
       initTimer = window.setTimeout(() => {
         if (initialized || authFailed || loadFailed) return;
-        if (window.naver?.maps) {
+        if (hasMapSdk()) {
           initializeMap();
           return;
         }
-        fail(
-          'script-error',
-          '네이버 지도 응답이 없어요',
-          '10초 동안 지도 SDK가 준비되지 않았어요. 인증 또는 네트워크 문제일 수 있어요.',
-          'NAVER_SDK_TIMEOUT',
-        );
-      }, 10_000);
+        waitForMapSdk('timeout-fallback');
+      }, 2500);
     })();
   </script>
 </body>
