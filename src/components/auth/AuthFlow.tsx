@@ -1,4 +1,4 @@
-import { ArrowLeft, KeyRound, LockKeyhole, LogIn, Phone, Search, ShieldCheck, UserPlus } from 'lucide-react';
+import { ArrowLeft, KeyRound, LockKeyhole, LogIn, Phone, ShieldCheck, UserPlus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
   deleteUser,
@@ -19,16 +19,11 @@ type Mode =
   | 'signup-phone'
   | 'signup-code'
   | 'signup-password'
-  | 'find-id-phone'
-  | 'find-id-code'
-  | 'find-id-result'
   | 'reset-phone'
   | 'reset-code';
 type FirebaseLikeError = { code?: string; message?: string };
-type RecoveredAccount = { phone: string; email?: string };
 
 export const SIGNUP_PENDING_KEY = 'meluni-signup-pending';
-const ID_RECOVERY_RESULT_KEY = 'route-id-recovery-result';
 const RECOVERY_NOTICE_KEY = 'route-auth-recovery-notice';
 
 const normalizeKoreanPhone = (value: string) => {
@@ -38,28 +33,13 @@ const normalizeKoreanPhone = (value: string) => {
   return `+82${digits}`;
 };
 
+// Firebase Auth does not provide a phone-number + password credential.
+// ROUTE keeps this generated address strictly as an internal credential key so
+// users can sign in with their verified phone number and password. It is never
+// accepted from the UI, displayed to users, or used as a contact email.
 const phoneLoginEmail = (phone: string) => {
   const normalized = normalizeKoreanPhone(phone).replace(/\D/g, '');
   return `phone-${normalized}@login.meluni.app`;
-};
-
-const formatKoreanPhone = (value: string) => {
-  const digits = value.replace(/\D/g, '');
-  const local = digits.startsWith('82') ? `0${digits.slice(2)}` : digits;
-  if (local.length === 11) return `${local.slice(0, 3)}-${local.slice(3, 7)}-${local.slice(7)}`;
-  if (local.length === 10) return `${local.slice(0, 3)}-${local.slice(3, 6)}-${local.slice(6)}`;
-  return value;
-};
-
-const readRecoveredAccount = (): RecoveredAccount | null => {
-  try {
-    const raw = sessionStorage.getItem(ID_RECOVERY_RESULT_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as RecoveredAccount;
-    return parsed?.phone ? parsed : null;
-  } catch {
-    return null;
-  }
 };
 
 const takeRecoveryNotice = () => {
@@ -93,11 +73,11 @@ const messageFor = (error: unknown) => {
     'auth/weak-password': '비밀번호는 6자 이상으로 설정해 주세요.',
     'auth/email-already-in-use': '이미 가입된 휴대폰 번호예요.',
     'auth/credential-already-in-use': '이미 가입된 휴대폰 번호예요.',
-    'auth/invalid-credential': '아이디 또는 비밀번호가 올바르지 않아요.',
+    'auth/invalid-credential': '휴대폰 번호 또는 비밀번호가 올바르지 않아요.',
     'auth/user-not-found': '가입된 계정을 찾을 수 없어요.',
     'auth/user-disabled': '사용이 중지된 계정이에요.',
     'auth/wrong-password': '비밀번호가 올바르지 않아요.',
-    'auth/invalid-email': '이메일 주소를 확인해 주세요.',
+    'auth/invalid-email': '휴대폰 번호를 다시 확인해 주세요.',
     'auth/requires-recent-login': '보안을 위해 휴대폰 인증을 다시 진행해 주세요.',
   };
   if (messages[code]) return `${messages[code]}${import.meta.env.DEV && code ? ` (${code})` : ''}`;
@@ -113,9 +93,8 @@ export function Wordmark() {
 export function AuthFlow() {
   const signupPending = localStorage.getItem(SIGNUP_PENDING_KEY) === '1';
   const pendingPhoneUser = signupPending && auth.currentUser?.phoneNumber ? auth.currentUser : undefined;
-  const storedRecoveredAccount = readRecoveredAccount();
-  const [mode, setMode] = useState<Mode>(storedRecoveredAccount ? 'find-id-result' : pendingPhoneUser ? 'signup-password' : 'login');
-  const [identifier, setIdentifier] = useState('');
+  const [mode, setMode] = useState<Mode>(pendingPhoneUser ? 'signup-password' : 'login');
+  const [loginPhone, setLoginPhone] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [phone, setPhone] = useState(pendingPhoneUser?.phoneNumber ?? '');
   const [code, setCode] = useState('');
@@ -127,7 +106,6 @@ export function AuthFlow() {
   const [recoveryPassword, setRecoveryPassword] = useState('');
   const [recoveryPasswordConfirm, setRecoveryPasswordConfirm] = useState('');
   const [recoveryConsented, setRecoveryConsented] = useState(false);
-  const [recoveredAccount, setRecoveredAccount] = useState<RecoveredAccount | null>(storedRecoveredAccount);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState(() => takeRecoveryNotice());
@@ -140,8 +118,6 @@ export function AuthFlow() {
     clearMessages();
     if (next === 'login') {
       localStorage.removeItem(SIGNUP_PENDING_KEY);
-      sessionStorage.removeItem(ID_RECOVERY_RESULT_KEY);
-      setRecoveredAccount(null);
       setRecoveryCode('');
     }
     setMode(next);
@@ -168,11 +144,13 @@ export function AuthFlow() {
 
   const login = async () => {
     clearMessages();
+    if (loginPhone.replace(/\D/g, '').length < 10) {
+      setError('휴대폰 번호를 다시 확인해 주세요.');
+      return;
+    }
     setBusy(true);
     try {
-      const trimmed = identifier.trim();
-      const email = trimmed.includes('@') ? trimmed : phoneLoginEmail(trimmed);
-      await signInWithEmailAndPassword(auth, email, loginPassword);
+      await signInWithEmailAndPassword(auth, phoneLoginEmail(loginPhone), loginPassword);
     } catch (cause) {
       setError(messageFor(cause));
     } finally {
@@ -242,21 +220,19 @@ export function AuthFlow() {
     }
   };
 
-  const sendRecoveryCode = async (purpose: 'id' | 'password') => {
+  const sendRecoveryCode = async () => {
     clearMessages();
-    if (purpose === 'password') {
-      if (recoveryPassword.length < 6) return setError('새 비밀번호는 6자 이상으로 설정해 주세요.');
-      if (recoveryPassword !== recoveryPasswordConfirm) return setError('새 비밀번호가 서로 달라요.');
-    }
+    if (recoveryPassword.length < 6) return setError('새 비밀번호는 6자 이상으로 설정해 주세요.');
+    if (recoveryPassword !== recoveryPasswordConfirm) return setError('새 비밀번호가 서로 달라요.');
     setBusy(true);
     try {
       const nextVerifier = await createVerifier();
       confirmation.current = await signInWithPhoneNumber(auth, normalizeKoreanPhone(recoveryPhone), nextVerifier);
       setRecoveryCode('');
-      changeMode(purpose === 'id' ? 'find-id-code' : 'reset-code');
+      changeMode('reset-code');
       setNotice('인증번호 6자리를 문자로 보냈어요.');
     } catch (cause) {
-      console.error('[ROUTE account recovery SMS]', cause);
+      console.error('[ROUTE password recovery SMS]', cause);
       destroyVerifier();
       setError(messageFor(cause));
     } finally {
@@ -273,7 +249,7 @@ export function AuthFlow() {
   };
 
   const verifyRecoveryCode = async () => {
-    if (!confirmation.current) return changeMode(mode === 'find-id-code' ? 'find-id-phone' : 'reset-phone');
+    if (!confirmation.current) return changeMode('reset-phone');
     clearMessages();
     setBusy(true);
     try {
@@ -281,21 +257,8 @@ export function AuthFlow() {
       const hasPasswordLogin = result.user.providerData.some((provider) => provider.providerId === 'password');
       if (!hasPasswordLogin) {
         await removeIncompleteRecoveryUser(result.user);
-        setMode(mode === 'find-id-code' ? 'find-id-phone' : 'reset-phone');
+        setMode('reset-phone');
         setError('가입이 완료된 계정을 찾을 수 없어요. 휴대폰 번호를 다시 확인해 주세요.');
-        return;
-      }
-
-      if (mode === 'find-id-code') {
-        const account: RecoveredAccount = {
-          phone: result.user.phoneNumber ?? normalizeKoreanPhone(recoveryPhone),
-          email: result.user.email && !result.user.email.endsWith('@login.meluni.app') ? result.user.email : undefined,
-        };
-        sessionStorage.setItem(ID_RECOVERY_RESULT_KEY, JSON.stringify(account));
-        setRecoveredAccount(account);
-        await signOut(auth);
-        setMode('find-id-result');
-        setNotice('본인 인증이 완료됐어요.');
         return;
       }
 
@@ -303,8 +266,6 @@ export function AuthFlow() {
       const successMessage = '비밀번호를 새로 설정했어요. 새 비밀번호로 로그인해 주세요.';
       sessionStorage.setItem(RECOVERY_NOTICE_KEY, successMessage);
       await signOut(auth);
-      sessionStorage.removeItem(ID_RECOVERY_RESULT_KEY);
-      setRecoveredAccount(null);
       setMode('login');
       setRecoveryCode('');
       setLoginPassword('');
@@ -322,8 +283,6 @@ export function AuthFlow() {
   const goBack = () => {
     if (mode === 'signup-phone') return changeMode('login');
     if (mode === 'signup-code') return changeMode('signup-phone');
-    if (mode === 'find-id-phone') return changeMode('login');
-    if (mode === 'find-id-code') return changeMode('find-id-phone');
     if (mode === 'reset-phone') return changeMode('login');
     if (mode === 'reset-code') return changeMode('reset-phone');
     changeMode('login');
@@ -335,30 +294,25 @@ export function AuthFlow() {
     if (mode === 'signup-phone') void sendSignupCode();
     if (mode === 'signup-code') void verifySignupCode();
     if (mode === 'signup-password') void finishSignup();
-    if (mode === 'find-id-phone') void sendRecoveryCode('id');
-    if (mode === 'reset-phone') void sendRecoveryCode('password');
-    if (mode === 'find-id-code' || mode === 'reset-code') void verifyRecoveryCode();
+    if (mode === 'reset-phone') void sendRecoveryCode();
+    if (mode === 'reset-code') void verifyRecoveryCode();
   };
 
-  const loginReady = identifier.trim().length >= 5 && loginPassword.length >= 6;
+  const loginReady = loginPhone.replace(/\D/g, '').length >= 10 && loginPassword.length >= 6;
   const signupPhoneReady = phone.replace(/\D/g, '').length >= 10 && consented;
   const recoveryPhoneReady = recoveryPhone.replace(/\D/g, '').length >= 10 && recoveryConsented;
   const resetReady = recoveryPhoneReady && recoveryPassword.length >= 6 && recoveryPasswordConfirm.length >= 6;
-  const recoveryMode = mode.startsWith('find-id') || mode.startsWith('reset');
+  const recoveryMode = mode.startsWith('reset');
   const heroTitle = mode === 'login'
     ? '다시 만나서 반가워요'
-    : mode.startsWith('find-id')
-      ? '로그인 아이디를 찾아요'
-      : mode.startsWith('reset')
-        ? '비밀번호를 다시 설정해요'
-        : '우리의 공간을 시작해요';
+    : mode.startsWith('reset')
+      ? '비밀번호를 다시 설정해요'
+      : '우리의 공간을 시작해요';
   const heroDescription = mode === 'login'
-    ? '휴대폰 번호 또는 이메일로 로그인하세요.'
-    : mode.startsWith('find-id')
-      ? '가입한 휴대폰 번호로 본인 인증하면 로그인 정보를 확인할 수 있어요.'
-      : mode.startsWith('reset')
-        ? '가입한 휴대폰 번호를 인증하고 새 비밀번호를 설정하세요.'
-        : '휴대폰 본인 인증 후 계정을 만들 수 있어요.';
+    ? '휴대폰 번호로 로그인하세요.'
+    : mode.startsWith('reset')
+      ? '가입한 휴대폰 번호를 인증하고 새 비밀번호를 설정하세요.'
+      : '휴대폰 본인 인증 후 계정을 만들 수 있어요.';
 
   return <div className="app-shell auth-shell auth-v2">
     <div className="auth-hero">
@@ -369,51 +323,19 @@ export function AuthFlow() {
     </div>
 
     <form className="auth-card" onSubmit={submit}>
-      {mode !== 'login' && mode !== 'signup-password' && mode !== 'find-id-result' && <button className="auth-back" type="button" onClick={goBack}><ArrowLeft size={16} /> 이전</button>}
+      {mode !== 'login' && mode !== 'signup-password' && <button className="auth-back" type="button" onClick={goBack}><ArrowLeft size={16} /> 이전</button>}
 
       {mode === 'login' && <>
         <p className="overline">WELCOME BACK</p>
         <h2>로그인</h2>
-        <label>휴대폰 번호 또는 이메일<input required autoComplete="username" value={identifier} onChange={(e) => setIdentifier(e.target.value)} placeholder="01012345678 또는 hello@example.com" /></label>
+        <label>휴대폰 번호<input required type="tel" inputMode="tel" autoComplete="tel" value={loginPhone} onChange={(e) => setLoginPhone(e.target.value)} placeholder="01012345678" /></label>
         <label>비밀번호<input required type="password" autoComplete="current-password" minLength={6} value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} placeholder="비밀번호를 입력하세요" /></label>
-        <div className="auth-help-links" aria-label="로그인 정보 찾기">
-          <button type="button" onClick={() => { setRecoveryPhone(identifier.includes('@') ? '' : identifier); setRecoveryConsented(false); changeMode('find-id-phone'); }}><Search size={14} />아이디 찾기</button>
-          <span />
-          <button type="button" onClick={() => { setRecoveryPhone(identifier.includes('@') ? '' : identifier); setRecoveryPassword(''); setRecoveryPasswordConfirm(''); setRecoveryConsented(false); changeMode('reset-phone'); }}><KeyRound size={14} />비밀번호 찾기</button>
+        <div className="auth-help-links" aria-label="비밀번호 찾기">
+          <button type="button" onClick={() => { setRecoveryPhone(loginPhone); setRecoveryPassword(''); setRecoveryPasswordConfirm(''); setRecoveryConsented(false); changeMode('reset-phone'); }}><KeyRound size={14} />비밀번호 찾기</button>
         </div>
         <button className="primary" type="submit" disabled={!loginReady || busy}><LogIn size={17} />{busy ? '로그인 중...' : '로그인'}</button>
         <div className="auth-divider"><span>아직 계정이 없나요?</span></div>
         <button className="signup-button" type="button" onClick={() => changeMode('signup-phone')}><UserPlus size={17} />회원가입</button>
-      </>}
-
-      {mode === 'find-id-phone' && <>
-        <p className="overline">ACCOUNT RECOVERY</p>
-        <h2>아이디 찾기</h2>
-        <p className="auth-guide">가입할 때 인증한 휴대폰 번호를 입력해 주세요. 문자 인증 후 로그인 아이디를 알려드려요.</p>
-        <label>가입한 휴대폰 번호<input required type="tel" inputMode="tel" autoComplete="tel" value={recoveryPhone} onChange={(e) => setRecoveryPhone(e.target.value)} placeholder="01012345678" /></label>
-        <label className="auth-consent"><input type="checkbox" checked={recoveryConsented} onChange={(e) => setRecoveryConsented(e.target.checked)} /><span>본인 확인을 위해 전화번호가 Google Firebase로 전송되는 것에 동의해요.</span></label>
-        <button className="primary" type="submit" disabled={!recoveryPhoneReady || busy}><Phone size={17} />{busy ? '인증 준비 중...' : '인증번호 받기'}</button>
-      </>}
-
-      {mode === 'find-id-code' && <>
-        <p className="overline">ACCOUNT RECOVERY</p>
-        <h2>본인 인증</h2>
-        <p className="auth-guide"><b>{recoveryPhone}</b> 번호로 받은 6자리 인증번호를 입력하세요.</p>
-        <label>인증번호<input autoFocus required type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={recoveryCode} onChange={(e) => setRecoveryCode(e.target.value.replace(/\D/g, ''))} placeholder="6자리 인증번호" /></label>
-        <button className="primary" type="submit" disabled={recoveryCode.length !== 6 || busy}>{busy ? '확인 중...' : '아이디 확인'}</button>
-      </>}
-
-      {mode === 'find-id-result' && recoveredAccount && <>
-        <p className="overline">ACCOUNT RECOVERY</p>
-        <h2>아이디를 찾았어요</h2>
-        <p className="auth-guide">본인 인증한 계정에서 사용할 수 있는 로그인 정보를 확인했어요.</p>
-        <div className="auth-result-card">
-          <span>기본 로그인 아이디</span>
-          <strong>{formatKoreanPhone(recoveredAccount.phone)}</strong>
-          {recoveredAccount.email && <><span>이메일 로그인</span><strong>{recoveredAccount.email}</strong></>}
-          <small>ROUTE는 가입한 휴대폰 번호를 기본 로그인 아이디로 사용해요.</small>
-        </div>
-        <button className="primary" type="button" onClick={() => changeMode('login')}><LogIn size={17} />로그인으로 돌아가기</button>
       </>}
 
       {mode === 'reset-phone' && <>
