@@ -12,7 +12,7 @@ import {
   type ConfirmationResult,
   type User,
 } from 'firebase/auth';
-import { auth } from '../../lib/firebase';
+import { auth } from '../../lib/firebaseAuth';
 
 type Mode =
   | 'login'
