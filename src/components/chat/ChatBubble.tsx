@@ -10,7 +10,7 @@ import { ReactionPicker } from './ReactionPicker';
 
 const MAX_INLINE_GALLERY_ITEMS = 4;
 const SWIPE_THRESHOLD = 42;
-const CHAT_MEDIA_PREFETCH_MARGIN = '900px 0px';
+const CHAT_MEDIA_PREFETCH_MARGIN = '400px 0px';
 const PREVIEW_STATUS_EVENT = 'route-chat-media-preview-status';
 const PREVIEW_STATUS_REQUEST_EVENT = 'route-chat-media-preview-status-request';
 const PREVIEW_RETRY_EVENT = 'route-chat-media-preview-retry';
@@ -275,8 +275,10 @@ function ChatBubbleView({ message, reply, partnerName, partnerInitial, active, h
     ? message.saved ? '추억에서 제거' : '추억에 저장'
     : message.saved ? '저장 취소' : '메시지 저장';
 
+  const mediaRow = message.type === 'image' || message.type === 'gif' || message.type === 'gallery';
+
   return <>
-    <div id={`message-${message.id}`} className={`bubble-row ${mine ? 'mine' : ''} ${highlighted ? 'highlighted' : ''}`}>
+    <div id={`message-${message.id}`} className={`bubble-row ${mine ? 'mine' : ''} ${highlighted ? 'highlighted' : ''} ${mediaRow ? 'bubble-row-media' : ''}`}>
       {!mine && <div className="avatar tiny">{partnerInitial}</div>}
       <div className="message-wrap">
         {active && <><ReactionPicker onSelect={onReact} /><div className="message-actions"><button onClick={onReply}><CornerUpLeft size={14} />답장</button><button onClick={onSave}>{message.saved ? <Bookmark size={14} fill="currentColor" /> : <Bookmark size={14} />} {saveLabel}</button></div></>}

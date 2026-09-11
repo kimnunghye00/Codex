@@ -33,7 +33,6 @@ import './route-feature-flow-v9.css';
 import './route-stability-v15.css';
 import './route-runtime-stability-v19.css';
 import './route-notification-badge.css';
-import './chat-settings-quick.css';
 
 import './input-ime-stability';
 import './route-themes';
