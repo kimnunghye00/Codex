@@ -27,16 +27,6 @@
   max-height: 100%;
 }
 
-.home-dashboard .home-schedule-card {
-  grid-column: 2;
-  grid-row: 4;
-  width: 100%;
-  min-width: 0;
-  min-height: 130px;
-  margin: 0;
-  padding: 9px 10px;
-}
-
 .home-dashboard .home-photo-card {
   grid-column: 2;
   grid-row: 5;
@@ -62,25 +52,18 @@
 }
 
 .home-dashboard .home-card-title span,
-.home-dashboard .home-schedule-head b,
 .home-dashboard .home-chat-head b {
   font-size: 11px;
   line-height: 1.25;
   font-weight: 800;
 }
 
-.home-dashboard .home-schedule-empty span,
-.home-dashboard .home-schedule-row > strong,
 .home-dashboard .home-chat-copy b,
 .home-dashboard .home-photo-card.empty span {
   font-size: 9px;
   line-height: 1.3;
 }
 
-.home-dashboard .home-schedule-head button,
-.home-dashboard .home-schedule-empty small,
-.home-dashboard .schedule-when b,
-.home-dashboard .schedule-when small,
 .home-dashboard .home-chat-copy small,
 .home-dashboard .home-photo-copy em {
   font-size: 8px;
@@ -112,21 +95,6 @@
   margin-top: 6px;
 }
 
-.home-dashboard .home-schedule-list {
-  display: grid;
-  gap: 3px;
-}
-
-.home-dashboard .home-schedule-row:nth-child(n+2) {
-  display: none;
-}
-
-.home-dashboard .home-schedule-add {
-  margin-top: 4px;
-  padding-top: 4px;
-  padding-bottom: 4px;
-}
-
 @media (max-width: 480px) {
   .home-dashboard.page {
     padding-left: 12px;
@@ -143,10 +111,6 @@
   }
 
 
-  .home-dashboard .home-schedule-card {
-    min-height: 130px;
-    padding: 8px 9px;
-  }
 
   .home-dashboard .home-photo-card {
     height: auto;
@@ -171,9 +135,6 @@
   }
 
 
-  .home-dashboard .home-schedule-card {
-    min-height: 124px;
-  }
 
   .home-dashboard .home-photo-card {
     height: auto;
@@ -414,10 +375,9 @@
 .home-dashboard .home-schedule-card {
   grid-column: 2;
   grid-row: 3;
-  min-height: 142px;
+  min-height: 164px;
   margin: 0;
-  padding: 10px 12px;
-  border-radius: 20px;
+  padding: 11px 12px 12px;
 }
 
 .home-dashboard .home-photo-card {
@@ -481,7 +441,7 @@
   .home-couple-time-center em { margin-top: 5px; font-size: 7px; }
   .home-couple-time-center > span { margin-top: 1px; font-size: 6px; }
   .home-couple-deco-heart { display: none; }
-  .home-dashboard .home-schedule-card { min-height: 128px; padding: 8px 9px; }
+  .home-dashboard .home-schedule-card { min-height: 146px; padding: 9px; }
 }
 
 @media (max-width: 390px) {
