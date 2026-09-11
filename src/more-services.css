@@ -1,7 +1,11 @@
 .more-page .more-scroll { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
 .more-page .more-scroll::-webkit-scrollbar { display: none; }
 .route-more-root { min-height: 100%; }
-.route-more-services { padding: 4px 0 18px; }
+.route-more-services {
+  width: min(760px, calc(100% - 28px));
+  margin-inline: auto;
+  padding: 4px 0 18px;
+}
 .more-service-intro { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 4px 16px; border-bottom: 1px solid var(--border); }
 .more-service-intro > div { min-width: 0; }
 .more-service-intro small { color: var(--primary); font-size: 8px; font-weight: 800; letter-spacing: 1.2px; }
@@ -250,4 +254,38 @@
   .more-customize-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
   .more-customize-grid > button { min-height: 88px; padding-inline: 3px; }
   .more-chat-backgrounds { grid-template-columns: repeat(5, minmax(54px, 1fr)); overflow-x: auto; }
+}
+
+
+/* Center the whole More customization experience inside the available page. */
+.more-page .more-scroll {
+  display: block;
+}
+
+.more-page .more-scroll > .route-more-services {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.more-customize-section,
+.more-couple-strip,
+.more-service-intro {
+  width: 100%;
+}
+
+.more-customize-grid {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (max-width: 700px) {
+  .route-more-services {
+    width: calc(100% - 20px);
+  }
+}
+
+@media (max-width: 420px) {
+  .route-more-services {
+    width: calc(100% - 14px);
+  }
 }
