@@ -1,0 +1,23 @@
+:root[data-route-profile-style='soft'] .avatar,
+:root[data-route-profile-style='soft'] .settings-profile-avatar,
+:root[data-route-profile-style='soft'] .home-map-avatar,
+:root[data-route-profile-style='soft'] .home-couple-avatar,
+:root[data-route-profile-style='soft'] .profile-avatar {
+  border: 3px solid #f0dcd6 !important;
+  box-shadow: 0 5px 14px rgba(112, 79, 66, .16) !important;
+}
+
+:root[data-route-profile-style='heart'] .avatar,
+:root[data-route-profile-style='heart'] .settings-profile-avatar,
+:root[data-route-profile-style='heart'] .home-map-avatar,
+:root[data-route-profile-style='heart'] .home-couple-avatar,
+:root[data-route-profile-style='heart'] .profile-avatar {
+  border: 3px solid #ff8d82 !important;
+  box-shadow: 0 0 0 3px #fff0ed, 0 5px 14px rgba(255, 114, 102, .16) !important;
+}
+
+:root[data-route-profile-style='clean'] .settings-profile-avatar,
+:root[data-route-profile-style='clean'] .home-couple-avatar,
+:root[data-route-profile-style='clean'] .profile-avatar {
+  box-shadow: none;
+}
