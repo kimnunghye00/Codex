@@ -473,3 +473,114 @@
     flex-basis: 36px;
   }
 }
+
+
+/* Message action controls live in their own rail to the left of the bubble/media. */
+.chat-page .chat-message-side-tools {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: min(260px, 42vw);
+  margin: 0 6px 20px 0;
+}
+
+.chat-page .bubble-row:not(.mine) .chat-message-side-tools {
+  align-items: flex-start;
+  margin-right: 6px;
+  margin-left: 0;
+}
+
+.chat-page .chat-message-side-tools .reaction-picker,
+.chat-page .chat-message-side-tools .message-actions,
+.chat-page .mine .chat-message-side-tools .reaction-picker,
+.chat-page .mine .chat-message-side-tools .message-actions {
+  position: static !important;
+  inset: auto !important;
+  right: auto !important;
+  left: auto !important;
+  top: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+}
+
+.chat-page .chat-message-side-tools .reaction-picker {
+  max-width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.chat-page .bubble-row:not(.mine) .chat-message-side-tools .reaction-picker {
+  justify-content: flex-start;
+}
+
+.chat-page .chat-message-side-tools .message-actions {
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.chat-page .bubble-row:not(.mine) .chat-message-side-tools .message-actions {
+  justify-content: flex-start;
+}
+
+.chat-page .chat-actions-open .message-wrap {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+@media (max-width: 600px) {
+  .chat-page .chat-message-side-tools {
+    width: 112px;
+    max-width: 112px;
+    gap: 5px;
+    margin-right: 4px;
+    margin-bottom: 18px;
+  }
+
+  .chat-page .chat-message-side-tools .reaction-picker {
+    width: 112px;
+    padding: 4px;
+  }
+
+  .chat-page .chat-message-side-tools .reaction-picker button {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+  }
+
+  .chat-page .chat-message-side-tools .message-actions {
+    width: 112px;
+    padding: 3px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .chat-page .chat-message-side-tools .message-actions button {
+    width: 100%;
+    min-height: 32px;
+    justify-content: flex-start;
+    padding: 0 7px;
+  }
+
+  .chat-page .bubble-row.chat-actions-open .message-wrap {
+    max-width: min(58vw, 220px) !important;
+  }
+
+  .chat-page .bubble-row.chat-actions-open .bubble.gallery-bubble {
+    max-width: min(218px, 56vw) !important;
+  }
+
+  .chat-page .bubble-row.chat-actions-open .chat-gallery-bundle {
+    width: min(210px, 54vw) !important;
+  }
+
+  .chat-page .bubble-row.chat-actions-open .chat-image {
+    width: min(210px, 54vw) !important;
+  }
+}
