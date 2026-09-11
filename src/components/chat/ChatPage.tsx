@@ -37,6 +37,23 @@ const CHAT_BOTTOM_SLOP_PX = 140;
 const FINE_POINTER_WHEEL_MULTIPLIER = 2.35;
 const DELETE_FOR_EVERYONE_WINDOW_MS = 10 * 60 * 1000;
 
+function formatScheduleDateInput(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 4) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6)}`;
+}
+
+function scheduleDateIsValid(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+}
+
 function aiReplyFor(text: string) {
   const value = text.trim();
   const lower = value.toLowerCase();
@@ -157,7 +174,8 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   const [schedules, setSchedules] = useState<ChatSchedule[]>([]);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduledDrafts, setScheduledDrafts] = useState<ScheduledDraft[]>(() => { try { return JSON.parse(localStorage.getItem(`route-scheduled-chat:${currentUid}`) || '[]'); } catch { return []; } });
-  const [scheduleForm, setScheduleForm] = useState({ text: '', sendAt: '' });
+  const [scheduleForm, setScheduleForm] = useState({ text: '', date: '', time: '' });
+  const [scheduleError, setScheduleError] = useState('');
   const [giftOpen, setGiftOpen] = useState(false);
   const [callMode, setCallMode] = useState<CallMode>();
   const [mediaStream, setMediaStream] = useState<MediaStream>();
@@ -473,9 +491,19 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   };
 
   const reserveMessage = () => {
-    if (!scheduleForm.text.trim() || !scheduleForm.sendAt || new Date(scheduleForm.sendAt).getTime() <= Date.now()) return;
-    setScheduledDrafts((items) => [...items, { id: createMessageId(), text: scheduleForm.text.trim(), sendAt: scheduleForm.sendAt }]);
-    setScheduleForm({ text: '', sendAt: '' }); setScheduleOpen(false);
+    setScheduleError('');
+    if (!scheduleForm.text.trim()) return setScheduleError('예약할 메시지를 입력해 주세요.');
+    if (!scheduleDateIsValid(scheduleForm.date)) return setScheduleError('날짜를 YYYY-MM-DD 형식으로 정확하게 입력해 주세요.');
+    if (!/^\d{2}:\d{2}$/.test(scheduleForm.time)) return setScheduleError('보낼 시간을 입력해 주세요.');
+
+    const sendAt = `${scheduleForm.date}T${scheduleForm.time}`;
+    const sendAtMs = new Date(sendAt).getTime();
+    if (!Number.isFinite(sendAtMs) || sendAtMs <= Date.now()) return setScheduleError('현재보다 이후 날짜와 시간을 입력해 주세요.');
+
+    setScheduledDrafts((items) => [...items, { id: createMessageId(), text: scheduleForm.text.trim(), sendAt }]);
+    setScheduleForm({ text: '', date: '', time: '' });
+    setScheduleError('');
+    setScheduleOpen(false);
   };
   const startMedia = async (mode: CallMode) => {
     try {
@@ -666,7 +694,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
       </section>
     </div>}
 
-    {scheduleOpen && <div className="chat-extra-backdrop" onMouseDown={() => setScheduleOpen(false)}><section className="chat-extra-modal" onMouseDown={(event) => event.stopPropagation()}><button className="chat-extra-close" onClick={() => setScheduleOpen(false)}><X /></button><CalendarClock className="modal-accent-icon" /><h2>예약 메시지</h2><p>현재 버전에서는 ROUTE가 실행 중일 때 예약 시간이 되면 자동으로 보내요.</p><label>메시지<textarea value={scheduleForm.text} onChange={(event) => setScheduleForm({ ...scheduleForm, text: event.target.value })} placeholder="나중에 전할 말을 적어주세요" /></label><label>보낼 시간<input type="datetime-local" value={scheduleForm.sendAt} onChange={(event) => setScheduleForm({ ...scheduleForm, sendAt: event.target.value })} /></label><button className="primary" disabled={!scheduleForm.text.trim() || !scheduleForm.sendAt} onClick={reserveMessage}>예약하기</button></section></div>}
+    {scheduleOpen && <div className="chat-extra-backdrop" onMouseDown={() => { setScheduleOpen(false); setScheduleError(''); }}><section className="chat-extra-modal" onMouseDown={(event) => event.stopPropagation()}><button className="chat-extra-close" onClick={() => { setScheduleOpen(false); setScheduleError(''); }}><X /></button><CalendarClock className="modal-accent-icon" /><h2>예약 메시지</h2><p>현재 버전에서는 ROUTE가 실행 중일 때 예약 시간이 되면 자동으로 보내요.</p><label>메시지<textarea value={scheduleForm.text} onChange={(event) => { setScheduleForm({ ...scheduleForm, text: event.target.value }); setScheduleError(''); }} placeholder="나중에 전할 말을 적어주세요" /></label><div className="chat-schedule-datetime"><label>보낼 날짜<input type="text" inputMode="numeric" autoComplete="off" maxLength={10} value={scheduleForm.date} onChange={(event) => { setScheduleForm({ ...scheduleForm, date: formatScheduleDateInput(event.target.value) }); setScheduleError(''); }} placeholder="YYYY-MM-DD" aria-label="예약 메시지 보낼 날짜" /></label><label>보낼 시간<input type="time" value={scheduleForm.time} onChange={(event) => { setScheduleForm({ ...scheduleForm, time: event.target.value }); setScheduleError(''); }} aria-label="예약 메시지 보낼 시간" /></label></div>{scheduleError && <p className="chat-schedule-error" role="alert">{scheduleError}</p>}<button className="primary" disabled={!scheduleForm.text.trim() || scheduleForm.date.length !== 10 || !scheduleForm.time} onClick={reserveMessage}>예약하기</button></section></div>}
 
     {giftOpen && <div className="chat-extra-backdrop" onMouseDown={() => setGiftOpen(false)}><section className="chat-extra-modal gift-modal" onMouseDown={(event) => event.stopPropagation()}><button className="chat-extra-close" onClick={() => setGiftOpen(false)}><X /></button><Gift className="modal-accent-icon" /><h2>선물하기</h2><p>생일이나 기념일에 바로 선물 메시지를 보낼 수 있어요. 결제 연결은 다음 단계에서 추가할 수 있어요.</p><div className="gift-options">{['🎂 생일 선물', '💐 기념일 선물', '☕ 커피 선물', '🍰 달콤한 선물'].map((gift) => <button key={gift} onClick={() => { sendText(`🎁 ${gift}을(를) 보내고 싶어요 ❤️`); setGiftOpen(false); }}>{gift}</button>)}</div><button className="gift-ai" disabled>AI 선물 추천 · 준비 중</button></section></div>}
 
