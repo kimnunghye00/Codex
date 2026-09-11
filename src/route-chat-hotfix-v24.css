@@ -584,3 +584,40 @@
     width: min(210px, 54vw) !important;
   }
 }
+
+
+/* Dedicated GIF shortcut icon: visually distinct from emoji/sticker controls. */
+.chat-page .composer-gif-shortcut .composer-gif-icon {
+  position: relative;
+  width: 30px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.7px solid currentColor;
+  border-radius: 7px;
+  line-height: 1;
+}
+
+.chat-page .composer-gif-shortcut .composer-gif-icon b {
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .2px;
+}
+
+.chat-page .composer-gif-shortcut .composer-gif-icon i {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 0;
+  height: 0;
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+  border-left: 5px solid currentColor;
+  opacity: .8;
+}
+
+.chat-page .composer-gif-shortcut:hover .composer-gif-icon,
+.chat-page .composer-gif-shortcut:focus-visible .composer-gif-icon {
+  color: var(--primary);
+}
