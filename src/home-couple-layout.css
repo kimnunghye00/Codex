@@ -177,18 +177,6 @@
   font-size: 7px;
 }
 
-.home-couple-deco-heart {
-  position: absolute;
-  z-index: 0;
-  color: rgba(244,126,119,.38);
-  font-size: 16px;
-  line-height: 1;
-  pointer-events: none;
-}
-.home-couple-deco-heart.deco-a { top: 16px; left: 6%; transform: rotate(-13deg); }
-.home-couple-deco-heart.deco-b { top: 22px; right: 7%; transform: rotate(15deg) scale(.8); }
-.home-couple-deco-heart.deco-c { top: 54px; left: 43%; transform: rotate(-8deg) scale(.58); }
-
 .home-dashboard-side .home-schedule-card {
   width: 100%;
   min-width: 0;
@@ -242,7 +230,6 @@
   .home-couple-time-center strong { font-size: 22px; }
   .home-couple-time-center em { margin-top: 3px; font-size: 6px; }
   .home-couple-time-center > span { font-size: 6px; }
-  .home-couple-deco-heart { display: none; }
 
   .home-dashboard-side .home-schedule-card { padding: 7px 8px; }
   .home-dashboard-side .home-schedule-head { padding-bottom: 5px; }
@@ -283,7 +270,6 @@
   .home-couple-time-center strong { margin-top: 1px; font-size: clamp(17px, 5vw, 22px); letter-spacing: -.8px; }
   .home-couple-time-center em { margin-top: 3px; font-size: 6px; }
   .home-couple-time-center > span { font-size: 5px; }
-  .home-couple-deco-heart { display: none; }
 
   .home-dashboard-side .home-schedule-card { padding: 7px; border-radius: 18px; }
   .home-dashboard-side .home-schedule-head { grid-template-columns: 27px minmax(0,1fr) auto; gap: 5px; padding-bottom: 5px; }
