@@ -54,6 +54,15 @@ function scheduleDateIsValid(value: string) {
   return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
 }
 
+function currentScheduleDefaults() {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return {
+    date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+    time: `${pad(now.getHours())}:${pad(now.getMinutes())}`,
+  };
+}
+
 function aiReplyFor(text: string) {
   const value = text.trim();
   const lower = value.toLowerCase();
@@ -490,6 +499,17 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     }
   };
 
+  const openScheduleMessage = () => {
+    const defaults = currentScheduleDefaults();
+    setScheduleForm((current) => ({
+      text: current.text,
+      date: defaults.date,
+      time: defaults.time,
+    }));
+    setScheduleError('');
+    setScheduleOpen(true);
+  };
+
   const reserveMessage = () => {
     setScheduleError('');
     if (!scheduleForm.text.trim()) return setScheduleError('예약할 메시지를 입력해 주세요.');
@@ -679,7 +699,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
       })() : row.kind === 'typing-ai' ? <TypingIndicator ai initial={partnerInitial} /> : <TypingIndicator ai={false} initial={partnerInitial} heart />}</div>;
     })}</div><div ref={bottomRef} /></div>
     {scheduledDrafts.length > 0 && !deleteSelection && <div className="scheduled-strip"><CalendarClock size={14} /><span>예약 메시지 {scheduledDrafts.length}개</span><small>앱 실행 중 자동 전송</small></div>}
-    {!deleteSelection && <ChatComposer draft={draft} reply={replyTo ? byId.get(replyTo) : undefined} partnerName={partnerName} onDraft={setDraft} onSend={send} onImages={sendImages} onGif={sendGif} onQuick={sendText} onSchedule={() => setScheduleOpen(true)} onGift={() => setGiftOpen(true)} onCancelReply={() => setReplyTo(undefined)} />}
+    {!deleteSelection && <ChatComposer draft={draft} reply={replyTo ? byId.get(replyTo) : undefined} partnerName={partnerName} onDraft={setDraft} onSend={send} onImages={sendImages} onGif={sendGif} onQuick={sendText} onSchedule={openScheduleMessage} onGift={() => setGiftOpen(true)} onCancelReply={() => setReplyTo(undefined)} />}
     {toolsOpen && <ChatToolsPanel messages={messages} partnerName={partnerName} preferences={preferences} onPreferences={setPreferences} onJump={jump} onImage={setLightbox} onImport={(imported) => setMessages(imported)} onSticker={sendText} onClose={() => setToolsOpen(false)} />}
     {lightbox && <div className="lightbox" role="dialog" onClick={() => setLightbox(undefined)}><button aria-label="닫기"><X /></button><img src={lightbox} alt="확대된 채팅 사진" /></div>}
 
