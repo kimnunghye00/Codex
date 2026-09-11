@@ -1,43 +1,32 @@
-import { Heart, Image, MapPinned, MessageCircle, Settings, Smartphone, Sparkles, Trophy, Clock3, CalendarDays, X } from 'lucide-react';
+import { Heart, MapPinned, MessageCircle, Palette, ShoppingBag, Smartphone, Sparkles, Sticker, UserRound, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { auth } from '../../lib/firebaseAuth';
 import { normalizeRouteAppIcon, updateRouteFavicon, type RouteAppIconId } from '../../utils/appIcon';
+import { applyRouteProfileStyle, normalizeRouteProfileStyle, type RouteProfileStyle } from '../../utils/profileStyle';
+import {
+  loadChatPreferences,
+  saveChatPreferences,
+  type ChatBackground,
+  type ChatFontSize,
+  type ChatPreferences,
+} from '../chat/ChatToolsPanel';
 import type { HubTabId } from '../memories/MemoriesPage';
 import type { LocationTabId } from '../location/LocationPage';
 
-type MoreServiceId = 'album' | 'anniversary' | 'record' | 'tier' | 'schedule' | 'date' | 'chat' | 'map' | 'footprint' | 'settings';
 type AppIconId = RouteAppIconId;
 type ThemeId = 'default' | 'lavender' | 'dark';
-type MoreSheet = 'theme' | 'app-icon' | 'emoticon';
+type MoreSheet = 'theme' | 'app-icon' | 'emoticon' | 'chat-style' | 'profile-style' | 'store';
 
 export type MoreNavigationTarget =
   | { area: 'chat' }
   | { area: 'memories'; tab: HubTabId }
   | { area: 'location'; tab: LocationTabId };
 
-type Service = {
-  id: MoreServiceId;
-  label: string;
-  icon: typeof Settings;
-};
-
 type AppIconOption = {
   id: AppIconId;
   label: string;
   className: string;
 };
-
-const SERVICES: Service[] = [
-  { id: 'album', label: '추억', icon: Image },
-  { id: 'anniversary', label: '기념일', icon: Heart },
-  { id: 'record', label: '기록', icon: Clock3 },
-  { id: 'tier', label: '티어', icon: Trophy },
-  { id: 'schedule', label: '일정', icon: CalendarDays },
-  { id: 'date', label: '약속', icon: Sparkles },
-  { id: 'chat', label: '대화', icon: MessageCircle },
-  { id: 'map', label: '지도', icon: MapPinned },
-  { id: 'footprint', label: '발자취', icon: MapPinned },
-  { id: 'settings', label: '설정', icon: Settings },
-];
 
 const APP_ICONS: AppIconOption[] = [
   { id: 'route', label: 'ROUTE 시그니처', className: '!bg-[#28314A] !text-[#FFF9F6]' },
@@ -57,6 +46,27 @@ const EMOTICON_PACKS = [
   { id: 'date', name: '데이트 가자', preview: ['🍿', '☕', '🚗', '🌙'], price: '2,000원' },
 ];
 
+const CHAT_BACKGROUNDS: Array<{ id: ChatBackground; label: string }> = [
+  { id: 'route', label: 'ROUTE' },
+  { id: 'cream', label: '크림' },
+  { id: 'rose', label: '로즈' },
+  { id: 'sage', label: '세이지' },
+  { id: 'midnight', label: '미드나잇' },
+];
+
+const CHAT_FONT_SIZES: Array<{ id: ChatFontSize; label: string }> = [
+  { id: 'small', label: '작게' },
+  { id: 'medium', label: '보통' },
+  { id: 'large', label: '크게' },
+  { id: 'xlarge', label: '아주 크게' },
+];
+
+const PROFILE_STYLES: Array<{ id: RouteProfileStyle; label: string; description: string }> = [
+  { id: 'clean', label: '클린', description: '깔끔하고 기본적인 프로필' },
+  { id: 'soft', label: '소프트', description: '부드러운 링과 은은한 그림자' },
+  { id: 'heart', label: '하트', description: '커플 느낌을 강조한 프로필' },
+];
+
 function AppIconGlyph({ id }: { id: AppIconId }) {
   if (id === 'heart') return <Heart size={25} fill="currentColor" strokeWidth={1.6} />;
   if (id === 'pin-duo') return <span className="relative block h-8 w-9" aria-hidden="true"><MapPinned className="absolute left-0 top-0" size={23} strokeWidth={2.2} /><MapPinned className="absolute bottom-0 right-0 !text-[#E07A5F]" size={21} strokeWidth={2.2} /></span>;
@@ -72,7 +82,11 @@ function HeaderBar({ title, onClose }: { title: string; onClose: () => void }) {
   return <div className="more-sheet-head"><strong>{title}</strong><button type="button" onClick={onClose} aria-label="닫기"><X size={19} /></button></div>;
 }
 
-export function MoreServices({ onOpenSettings, onOpenNotifications: _onOpenNotifications, onNavigate }: {
+export function MoreServices({
+  onOpenSettings: _onOpenSettings,
+  onOpenNotifications: _onOpenNotifications,
+  onNavigate: _onNavigate,
+}: {
   onOpenSettings: () => void;
   onOpenNotifications: () => void;
   onNavigate: (target: MoreNavigationTarget) => void;
@@ -86,26 +100,27 @@ export function MoreServices({ onOpenSettings, onOpenNotifications: _onOpenNotif
   const [owned, setOwned] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('route-owned-emoticons') || '["daily"]') as string[]; } catch { return ['daily']; }
   });
+  const [profileStyle, setProfileStyle] = useState<RouteProfileStyle>(() => normalizeRouteProfileStyle(localStorage.getItem('route-profile-style')));
+  const chatUid = auth.currentUser?.uid ?? 'guest';
+  const [chatPreferences, setChatPreferences] = useState<ChatPreferences>(() => loadChatPreferences(chatUid));
   const [notice, setNotice] = useState('');
 
   const activeIcon = useMemo(() => APP_ICONS.find((item) => item.id === appIcon) ?? APP_ICONS[0], [appIcon]);
 
   useEffect(() => {
-    const openSheet = (event: Event) => {
-      const requested = (event as CustomEvent<MoreSheet>).detail;
-      if (requested === 'theme' || requested === 'app-icon' || requested === 'emoticon') {
-        setNotice('');
-        setSheet(requested);
-      }
-    };
-    window.addEventListener('route-open-more-sheet', openSheet);
-    return () => window.removeEventListener('route-open-more-sheet', openSheet);
+    setChatPreferences(loadChatPreferences(auth.currentUser?.uid ?? 'guest'));
   }, []);
+
+  const openSheet = (next: MoreSheet) => {
+    setNotice('');
+    setSheet(next);
+  };
 
   const chooseTheme = (next: ThemeId) => {
     setTheme(next);
     localStorage.setItem('meluni-theme', next);
     document.documentElement.dataset.meluniTheme = next;
+    setNotice('테마를 바로 적용했어요.');
   };
 
   const chooseIcon = (next: AppIconId) => {
@@ -123,50 +138,71 @@ export function MoreServices({ onOpenSettings, onOpenNotifications: _onOpenNotif
     setNotice(price === '무료' ? '이모티콘을 보관함에 추가했어요.' : '현재 테스트 버전이라 실제 결제 없이 보관함에 추가했어요.');
   };
 
-  const openService = (id: MoreServiceId) => {
-    setNotice('');
-    if (id === 'album') return onNavigate({ area: 'memories', tab: 'album' });
-    if (id === 'anniversary') return onNavigate({ area: 'memories', tab: 'anniversary' });
-    if (id === 'record') return onNavigate({ area: 'memories', tab: 'record' });
-    if (id === 'tier') return onNavigate({ area: 'memories', tab: 'tier' });
-    if (id === 'schedule') return onNavigate({ area: 'memories', tab: 'schedule' });
-    if (id === 'date') return onNavigate({ area: 'memories', tab: 'date' });
-    if (id === 'chat') return onNavigate({ area: 'chat' });
-    if (id === 'map') return onNavigate({ area: 'location', tab: 'map' });
-    if (id === 'footprint') return onNavigate({ area: 'location', tab: 'footprints' });
-    onOpenSettings();
+  const updateChatStyle = (patch: Partial<ChatPreferences>) => {
+    const next = { ...chatPreferences, ...patch };
+    const uid = auth.currentUser?.uid ?? 'guest';
+    setChatPreferences(next);
+    saveChatPreferences(uid, next);
+    window.dispatchEvent(new CustomEvent<ChatPreferences>('route-chat-preferences-change', { detail: next }));
+    setNotice('채팅 꾸미기를 저장했어요.');
+  };
+
+  const chooseProfileStyle = (next: RouteProfileStyle) => {
+    setProfileStyle(next);
+    localStorage.setItem('route-profile-style', next);
+    applyRouteProfileStyle(next);
+    setNotice('프로필 스타일을 적용했어요.');
   };
 
   return <div className="route-more-services">
     <section className="more-service-intro">
-      <div><small>ROUTE 서비스</small><h1>더보기</h1><p>ROUTE의 주요 기능과 설정을 한곳에서 열 수 있어요.</p></div>
+      <div><small>ROUTE CUSTOM</small><h1>더보기</h1><p>ROUTE를 우리 취향에 맞게 꾸미고 확장해요.</p></div>
       <span className={`more-app-icon-preview ${appIcon} ${activeIcon.className} !grid place-items-center`} aria-label={`현재 앱 아이콘 ${activeIcon.label}`}><AppIconGlyph id={appIcon} /></span>
     </section>
 
-    <section className="more-feature-section" aria-labelledby="route-more-features-title">
-      <div className="more-section-title"><small>ROUTE 기능</small><h2 id="route-more-features-title">자주 쓰는 기능</h2></div>
-      <div className="more-service-grid" aria-label="ROUTE 주요 기능">
-        {SERVICES.map(({ id, label, icon: Icon }) => <button type="button" key={id} onClick={() => openService(id)}>
-          <span className="more-service-icon"><Icon size={25} strokeWidth={1.65} /></span><b>{label}</b>
-        </button>)}
+    <section className="more-feature-section more-customize-section" aria-labelledby="route-more-customize-title">
+      <div className="more-section-title"><small>CUSTOMIZE</small><h2 id="route-more-customize-title">ROUTE 꾸미기</h2><p>다른 탭과 겹치지 않는 꾸미기 기능만 모았어요.</p></div>
+      <div className="more-customize-grid" aria-label="ROUTE 꾸미기">
+        <button type="button" onClick={() => openSheet('theme')}><span className="more-customize-icon theme"><Palette /></span><b>테마</b><small>앱 전체 색상</small></button>
+        <button type="button" onClick={() => openSheet('app-icon')}><span className="more-customize-icon icon"><Smartphone /></span><b>앱 아이콘</b><small>8가지 아이콘</small></button>
+        <button type="button" onClick={() => openSheet('emoticon')}><span className="more-customize-icon emoticon"><Sticker /></span><b>이모티콘</b><small>보관함 · 팩</small></button>
+        <button type="button" onClick={() => openSheet('chat-style')}><span className="more-customize-icon chat"><MessageCircle /></span><b>채팅 꾸미기</b><small>배경 · 글자 크기</small></button>
+        <button type="button" onClick={() => openSheet('profile-style')}><span className="more-customize-icon profile"><UserRound /></span><b>프로필 꾸미기</b><small>아바타 스타일</small></button>
+        <button type="button" onClick={() => openSheet('store')}><span className="more-customize-icon store"><ShoppingBag /></span><b>ROUTE 스토어</b><small>꾸미기 모아보기</small></button>
       </div>
     </section>
 
-    <section className="more-couple-strip"><span>♥</span><div><b>우리 둘의 ROUTE</b><small>추억, 기록, 일정과 발자취를 이어가요.</small></div></section>
+    <section className="more-couple-strip"><span>♥</span><div><b>우리 둘의 ROUTE</b><small>둘만의 취향으로 ROUTE를 완성해보세요.</small></div></section>
 
     {sheet && <div className="more-sheet-backdrop" role="dialog" aria-modal="true" onMouseDown={(event) => { if (event.target === event.currentTarget) setSheet(null); }}>
       <section className="more-sheet">
-        {sheet === 'theme' && <><HeaderBar title="테마" onClose={() => setSheet(null)} /><div className="more-theme-picker">
+        {sheet === 'theme' && <><HeaderBar title="테마" onClose={() => setSheet(null)} /><p className="more-sheet-description">앱 전체 분위기를 바로 바꿔요.</p><div className="more-theme-picker">
           {(['default','lavender','dark'] as ThemeId[]).map((item) => <button type="button" key={item} className={theme === item ? 'active' : ''} onClick={() => chooseTheme(item)}><i className={item} /><span><b>{item === 'default' ? '기본' : item === 'lavender' ? '라벤더' : '다크'}</b><small>{item === 'default' ? '네이비 + 코랄' : item === 'lavender' ? '부드러운 보라' : '어두운 화면'}</small></span></button>)}
         </div></>}
 
-        {sheet === 'app-icon' && <><HeaderBar title="앱 아이콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">새로 디자인한 8가지 ROUTE 아이콘 중 원하는 스타일을 선택해요.</p><div className="app-icon-picker !grid !grid-cols-2 !gap-2.5 sm:!grid-cols-4">
+        {sheet === 'app-icon' && <><HeaderBar title="앱 아이콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">8가지 ROUTE 아이콘 중 원하는 스타일을 선택해요.</p><div className="app-icon-picker !grid !grid-cols-2 !gap-2.5 sm:!grid-cols-4">
           {APP_ICONS.map((item) => <button data-icon-id={item.id} type="button" key={item.id} className={`${appIcon === item.id ? 'active' : ''} !min-w-0`} onClick={() => chooseIcon(item.id)}><span className={`more-app-icon-preview ${item.id} ${item.className} !grid place-items-center`}><AppIconGlyph id={item.id} /></span><b className="!w-full !truncate !text-center">{item.label}</b>{appIcon === item.id && <small>사용 중</small>}</button>)}
         </div></>}
 
         {sheet === 'emoticon' && <><HeaderBar title="이모티콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">대화에서 사용할 ROUTE 이모티콘을 모아보세요.</p><div className="emoticon-store">
           {EMOTICON_PACKS.map((pack) => <article key={pack.id}><div className="emoticon-preview">{pack.preview.map((emoji) => <span key={emoji}>{emoji}</span>)}</div><div className="emoticon-copy"><b>{pack.name}</b><small>{pack.price}</small></div><button type="button" disabled={owned.includes(pack.id)} onClick={() => addPack(pack.id, pack.price)}>{owned.includes(pack.id) ? '보유 중' : pack.price === '무료' ? '받기' : '구매하기'}</button></article>)}
         </div></>}
+
+        {sheet === 'chat-style' && <><HeaderBar title="채팅 꾸미기" onClose={() => setSheet(null)} /><p className="more-sheet-description">대화방의 배경과 메시지 글자 크기를 여기서 바로 바꿔요.</p>
+          <div className="more-chat-style-block"><strong>대화방 배경</strong><div className="more-chat-backgrounds">{CHAT_BACKGROUNDS.map((item) => <button type="button" key={item.id} className={`${item.id} ${chatPreferences.background === item.id ? 'active' : ''}`} onClick={() => updateChatStyle({ background: item.id })}><i /><span>{item.label}</span></button>)}</div></div>
+          <div className="more-chat-style-block"><strong>메시지 글자 크기</strong><div className="more-chat-fonts">{CHAT_FONT_SIZES.map((item) => <button type="button" key={item.id} className={chatPreferences.fontSize === item.id ? 'active' : ''} onClick={() => updateChatStyle({ fontSize: item.id })}>{item.label}</button>)}</div></div>
+        </>}
+
+        {sheet === 'profile-style' && <><HeaderBar title="프로필 꾸미기" onClose={() => setSheet(null)} /><p className="more-sheet-description">프로필 사진과 아바타의 테두리 분위기를 선택해요.</p><div className="more-profile-style-picker">
+          {PROFILE_STYLES.map((item) => <button type="button" key={item.id} className={profileStyle === item.id ? 'active' : ''} onClick={() => chooseProfileStyle(item.id)}><span className={`more-profile-style-preview ${item.id}`}><UserRound /></span><span><b>{item.label}</b><small>{item.description}</small></span></button>)}
+        </div></>}
+
+        {sheet === 'store' && <><HeaderBar title="ROUTE 스토어" onClose={() => setSheet(null)} /><p className="more-sheet-description">ROUTE의 꾸미기 콘텐츠를 한곳에서 둘러봐요.</p><div className="more-store-hub">
+          <button type="button" onClick={() => openSheet('emoticon')}><Sticker /><span><b>이모티콘 팩</b><small>대화에서 쓰는 감정 표현</small></span><em>보기</em></button>
+          <button type="button" onClick={() => openSheet('app-icon')}><Smartphone /><span><b>앱 아이콘</b><small>홈 화면을 우리 스타일로</small></span><em>보기</em></button>
+          <button type="button" onClick={() => openSheet('theme')}><Sparkles /><span><b>테마 컬렉션</b><small>앱 전체 분위기 바꾸기</small></span><em>보기</em></button>
+        </div><p className="more-store-coming">추가 유료 테마와 캐릭터 꾸미기는 모바일 스토어 연동 단계에서 확장할 수 있어요.</p></>}
+
         {notice && <p className="more-sheet-notice">{notice}</p>}
       </section>
     </div>}
