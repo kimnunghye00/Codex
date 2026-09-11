@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Check, Download, Image as ImageIcon, PackageOpen, Palette, RotateCcw, Search, Settings2, ShoppingBag, SlidersHorizontal, Type, Upload, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, Download, Image as ImageIcon, PackageOpen, Palette, RotateCcw, Search, Settings2, ShoppingBag, SlidersHorizontal, Trash2, Type, Upload, X } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import type { Message } from '../../types';
 
@@ -81,6 +81,7 @@ export function ChatToolsPanel({
   onImage,
   onImport,
   onSticker,
+  onClearAll,
   onClose,
 }: {
   messages: Message[];
@@ -91,11 +92,13 @@ export function ChatToolsPanel({
   onImage: (url: string) => void;
   onImport: (messages: Message[]) => void;
   onSticker: (sticker: string) => void;
+  onClearAll: () => Promise<void> | void;
   onClose: () => void;
 }) {
-  const [section, setSection] = useState<'menu' | 'search' | 'media' | 'store' | 'settings' | 'stickers'>('menu');
+  const [section, setSection] = useState<'menu' | 'search' | 'media' | 'store' | 'settings' | 'stickers' | 'clear'>('menu');
   const [query, setQuery] = useState('');
   const [feedback, setFeedback] = useState('');
+  const [clearing, setClearing] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -145,7 +148,7 @@ export function ChatToolsPanel({
   return <div className="chat-tools-backdrop" role="dialog" aria-modal="true" aria-label="채팅 메뉴" onClick={onClose}>
     <section className="chat-tools-sheet" onClick={(event) => event.stopPropagation()}>
       <header className="chat-tools-header">
-        <div><small>CHAT OPTIONS</small><h2>{section === 'menu' ? '채팅 메뉴' : section === 'search' ? '대화 검색' : section === 'media' ? '사진 모아보기' : section === 'store' ? '이모티콘 스토어' : section === 'stickers' ? '이모티콘 설정' : '채팅 설정'}</h2></div>
+        <div><small>CHAT OPTIONS</small><h2>{section === 'menu' ? '채팅 메뉴' : section === 'search' ? '대화 검색' : section === 'media' ? '사진 모아보기' : section === 'store' ? '이모티콘 스토어' : section === 'stickers' ? '이모티콘 설정' : section === 'clear' ? '채팅 모두 삭제' : '채팅 설정'}</h2></div>
         <button className="chat-tools-close" type="button" onClick={onClose} aria-label="닫기"><X /></button>
       </header>
 
@@ -177,9 +180,33 @@ export function ChatToolsPanel({
         <div className="chat-setting-card"><div className="chat-setting-title"><SlidersHorizontal /><span><b>사진 및 영상 전송 퀄리티</b><small>사진 전송 용량과 화질을 선택해요.</small></span></div><div className="chat-quality-list">{([['data','데이터 절약','사진을 작게 압축'],['high','고화질','화질과 용량의 균형'],['original','원본','가능하면 원본 유지']] as const).map(([value,label,description]) => <button type="button" key={value} className={preferences.mediaQuality === value ? 'active' : ''} onClick={() => update({ mediaQuality: value })}><span><b>{label}</b><small>{description}</small></span>{preferences.mediaQuality === value && <Check size={16} />}</button>)}</div></div>
         <div className="chat-setting-card"><div className="chat-setting-title"><PackageOpen /><span><b>대화내용 백업</b><small>대화를 파일로 보관하거나 다시 불러와요.</small></span></div><div className="chat-backup-actions"><button type="button" onClick={() => exportMessages(messages, partnerName)}><Download size={16} />대화내용 내보내기</button><button type="button" onClick={() => importRef.current?.click()}><Upload size={16} />대화내용 불러오기</button><input ref={importRef} hidden type="file" accept="application/json,.json" onChange={(event) => { importBackup(event.target.files?.[0]); event.target.value = ''; }} /></div></div>
         <button className="chat-setting-link" type="button" onClick={() => setSection('stickers')}><span><ShoppingBag size={18} /><b>이모티콘 설정</b></span><span>순서 변경 · 구매 복원 ›</span></button>
+        <button className="chat-setting-link chat-setting-danger" type="button" onClick={() => { setFeedback(''); setSection('clear'); }}><span><Trash2 size={18} /><b>채팅 모두 삭제</b></span><span>내 대화 기록 지우기 ›</span></button>
       </div>}
 
       {section === 'stickers' && <div className="chat-tool-section"><div className="sticker-manage-list">{orderedPacks.map((pack, index) => <article key={pack.id}><div><b>{pack.name}</b><small>{preferences.ownedStickerPacks.includes(pack.id) ? '사용 가능' : '스토어에서 받기 필요'}</small></div><div><button type="button" disabled={index === 0} onClick={() => movePack(pack.id, -1)} aria-label="위로"><ArrowUp /></button><button type="button" disabled={index === orderedPacks.length - 1} onClick={() => movePack(pack.id, 1)} aria-label="아래로"><ArrowDown /></button></div></article>)}</div><button className="restore-stickers" type="button" onClick={restorePacks}><RotateCcw size={16} />이모티콘 구매 복원</button><div className="owned-sticker-preview">{orderedPacks.filter((pack) => preferences.ownedStickerPacks.includes(pack.id)).flatMap((pack) => pack.stickers).map((sticker, index) => <button type="button" key={`${sticker}-${index}`} onClick={() => { onSticker(sticker); onClose(); }}>{sticker}</button>)}</div></div>}
+
+      {section === 'clear' && <div className="chat-tool-section chat-clear-all-section">
+        <div className="chat-clear-all-icon"><Trash2 /></div>
+        <h3>이 대화의 채팅을 모두 삭제할까요?</h3>
+        <p>현재 내 계정에서 보이는 과거 채팅 기록이 모두 사라져요. 상대방의 대화 기록은 삭제되지 않고, 삭제 이후 새로 주고받는 메시지는 다시 정상적으로 표시됩니다.</p>
+        <div className="chat-clear-all-warning"><b>삭제한 채팅은 내 화면에서 복구할 수 없어요.</b><span>추억 앨범에 따로 저장한 사진과 기록은 유지됩니다.</span></div>
+        <button
+          className="chat-clear-all-confirm"
+          type="button"
+          disabled={clearing || messages.length === 0}
+          onClick={() => {
+            if (clearing) return;
+            setClearing(true);
+            setFeedback('');
+            void Promise.resolve(onClearAll()).then(() => {
+              onClose();
+            }).catch(() => {
+              setFeedback('채팅을 모두 삭제하지 못했어요. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.');
+            }).finally(() => setClearing(false));
+          }}
+        >{clearing ? '삭제 중...' : messages.length ? '채팅 모두 삭제' : '삭제할 채팅이 없어요'}</button>
+        <button className="chat-clear-all-cancel" type="button" disabled={clearing} onClick={() => setSection('settings')}>취소</button>
+      </div>}
 
       {feedback && <p className="chat-tools-feedback">{feedback}</p>}
     </section>
