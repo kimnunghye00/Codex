@@ -311,7 +311,6 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
           </div>}
         </div>
 
-        <button className="home-schedule-add" type="button" onClick={() => { setError(''); setNotice(''); setScheduleOpen(true); }}><Plus size={15} /> 일정 추가</button>
       </section>
     </section>
 
