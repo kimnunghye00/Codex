@@ -8,7 +8,7 @@ import { chatMediaOriginalUrl, chatMediaPreviewUrl } from '../../lib/chatMediaRe
 
 const IMAGE_RETRY_DELAYS_MS = [500, 1_400] as const;
 const MEMORY_KEY = 'route.memories.v2';
-const MEMORY_MEDIA_PREFETCH_MARGIN = '650px 0px';
+const MEMORY_MEDIA_PREFETCH_MARGIN = '900px 0px';
 
 type MemorySlot = { memoryId: number; index: number };
 type LegacyRecovery = { url: string; slot: MemorySlot | null };
@@ -119,6 +119,7 @@ export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 
   const [attempt, setAttempt] = useState(0);
   const [retrying, setRetrying] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [mediaReady, setMediaReady] = useState(loading === 'eager');
   const [legacyRecovery, setLegacyRecovery] = useState<LegacyRecovery>({ url: '', slot: null });
   const retryTimer = useRef<number | undefined>(undefined);
   const deferredAnchor = useRef<HTMLSpanElement>(null);
@@ -177,26 +178,31 @@ export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 
     setAttempt(0);
     setRetrying(false);
     setFailed(false);
+    setMediaReady(loading === 'eager');
     setLegacyRecovery({ url: '', slot: null });
     storageResolutionStarted.current = false;
     legacyRecoveryAttempted.current = false;
 
-    if (!src || storageCandidates(src).length === 0) return;
+    if (!src) return;
+    const activateMedia = () => {
+      setMediaReady(true);
+      if (storageCandidates(src).length > 0) resolveDurableCandidates();
+    };
     if (loading === 'eager') {
-      resolveDurableCandidates();
+      activateMedia();
       return;
     }
 
     const target = deferredAnchor.current;
     if (!target || typeof IntersectionObserver === 'undefined') {
-      resolveDurableCandidates();
+      activateMedia();
       return;
     }
 
     const observer = new IntersectionObserver(([entry]) => {
       if (!entry.isIntersecting) return;
       observer.disconnect();
-      resolveDurableCandidates();
+      activateMedia();
     }, { rootMargin: MEMORY_MEDIA_PREFETCH_MARGIN, threshold: 0.01 });
     observer.observe(target);
 
@@ -215,6 +221,7 @@ export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 
     setLegacyRecovery({ url: '', slot: null });
     setFailed(false);
     setRetrying(false);
+    setMediaReady(true);
     setCandidateIndex(0);
 
     const initial = immediateCandidates(src);
@@ -257,6 +264,10 @@ export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 
     if (startLegacyRecovery()) return;
     setFailed(true);
   };
+
+  if (!mediaReady || sourceRef.current !== src) {
+    return <span ref={deferredAnchor} className={`memory-media-fallback ${className ?? ''} !grid place-items-center content-center gap-1`} role="img" aria-label={alt || '사진 미리보기'}><ImageIcon size={20} /><small>사진 미리보기</small></span>;
+  }
 
   if (!displayUrl) {
     return <span ref={deferredAnchor} className={`memory-media-fallback ${className ?? ''} !grid place-items-center content-center gap-1`} role="img" aria-label={alt || '사진 미리보기'}><ImageIcon size={20} /><small>사진 미리보기</small></span>;
