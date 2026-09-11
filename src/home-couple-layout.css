@@ -471,3 +471,146 @@
   .home-couple-time-center strong { font-size: 18px; }
   .home-couple-time-center em { font-size: 6px; }
 }
+
+
+/* Home right-column rebalance:
+ * relationship hero -> schedule -> album preview -> compact recent chat.
+ * Explicit tracks prevent any card from swallowing the remaining height. */
+.home-dashboard {
+  grid-template-rows:
+    auto
+    196px
+    158px
+    minmax(210px, 1fr)
+    92px;
+  align-content: stretch;
+}
+
+.home-dashboard .home-map-card {
+  grid-row: 2 / 6;
+  min-height: 0;
+  height: 100%;
+}
+
+.home-dashboard .home-couple-time-card {
+  grid-column: 2;
+  grid-row: 2;
+  min-height: 0;
+  height: 100%;
+  align-self: stretch;
+}
+
+.home-dashboard .home-schedule-card {
+  grid-column: 2;
+  grid-row: 3;
+  min-height: 0;
+  height: 100%;
+  align-self: stretch;
+  overflow: hidden;
+}
+
+.home-dashboard .home-photo-card {
+  grid-column: 2;
+  grid-row: 4;
+  min-height: 0;
+  height: 100%;
+  align-self: stretch;
+  overflow: hidden;
+}
+
+.home-dashboard .home-chat-card {
+  grid-column: 2;
+  grid-row: 5;
+  min-height: 0;
+  height: 100%;
+  align-self: stretch;
+  padding: 10px 12px;
+  overflow: hidden;
+}
+
+.home-dashboard .home-chat-preview {
+  margin-top: 7px;
+}
+
+.home-dashboard .home-chat-avatar {
+  width: 34px;
+  height: 34px;
+}
+
+.home-dashboard .home-photo-copy {
+  bottom: 13px;
+}
+
+.home-dashboard .home-photo-copy strong {
+  font-size: 13px;
+}
+
+.home-dashboard .home-photo-copy small {
+  font-size: 8px;
+}
+
+@media (max-width: 700px) {
+  .home-dashboard {
+    grid-template-rows:
+      auto
+      156px
+      138px
+      minmax(165px, 1fr)
+      82px;
+  }
+
+  .home-dashboard .home-chat-card {
+    padding: 8px 9px;
+  }
+
+  .home-dashboard .home-chat-preview {
+    margin-top: 5px;
+  }
+
+  .home-dashboard .home-chat-avatar {
+    width: 30px;
+    height: 30px;
+  }
+
+  .home-dashboard .home-photo-copy {
+    left: 9px;
+    right: 34px;
+    bottom: 9px;
+  }
+
+  .home-dashboard .home-photo-copy strong {
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 390px) {
+  .home-dashboard {
+    grid-template-rows:
+      auto
+      144px
+      130px
+      minmax(145px, 1fr)
+      76px;
+  }
+
+  .home-dashboard .home-chat-card {
+    padding: 7px 8px;
+  }
+
+  .home-dashboard .home-chat-head b {
+    font-size: 9px;
+  }
+
+  .home-dashboard .home-chat-copy b {
+    font-size: 8px;
+  }
+
+  .home-dashboard .home-chat-copy small {
+    font-size: 7px;
+  }
+
+  .home-dashboard .home-chat-avatar {
+    width: 28px;
+    height: 28px;
+  }
+}
