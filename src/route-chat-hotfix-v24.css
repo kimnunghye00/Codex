@@ -34,6 +34,14 @@
   margin: 9px 0 !important;
 }
 
+/* Photo/GIF/gallery rows render much taller than a text bubble. Giving them
+ * their own placeholder height keeps it close to the real rendered size, so
+ * the browser doesn't have to re-layout (and visibly nudge scroll position)
+ * every time one of these rows crosses the content-visibility boundary. */
+.chat-page .bubble-row.bubble-row-media {
+  contain-intrinsic-size: auto 300px;
+}
+
 .chat-page .message-wrap {
   position: relative;
   max-width: min(84vw, 350px) !important;
