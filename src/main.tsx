@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import Root from './Root';
 import { AppCrashBoundary, installGlobalCrashDiagnostics } from './AppCrashBoundary';
 import { applySavedRouteAppIcon } from './utils/appIcon';
+import { applySavedRouteProfileStyle } from './utils/profileStyle';
 import { authPersistenceReady } from './lib/firebaseAuth';
 import { hideNativeSplash, initializeNativeApp } from './lib/native';
 import { initializeRuntimeRecovery } from './recovery-runtime';
@@ -33,6 +34,7 @@ import './route-feature-flow-v9.css';
 import './route-stability-v15.css';
 import './route-runtime-stability-v19.css';
 import './route-notification-badge.css';
+import './profile-style.css';
 
 import './input-ime-stability';
 import './route-themes';
@@ -192,6 +194,7 @@ async function bootstrap() {
   installPersistentStorageObserver();
   installRouteMobileBugfixV29();
   applySavedRouteAppIcon();
+  applySavedRouteProfileStyle();
 
   mountBootstrapShell();
   const splashFailsafe = window.setTimeout(() => {
