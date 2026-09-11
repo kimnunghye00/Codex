@@ -139,7 +139,7 @@ export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onIma
         {draft.trim()
           ? <button type="button" className="send ready" onClick={onSend} aria-label="메시지 전송"><Send size={18} /></button>
           : <button type="button" className="composer-gif-shortcut" onClick={() => gifRef.current?.click()} aria-label="움짤 보내기">
-            <span className="composer-gif-icon" aria-hidden="true"><b>GIF</b><i /></span>
+            <span className="composer-gif-lens" aria-hidden="true" />
           </button>}
       </div>
     </div>
