@@ -2,6 +2,7 @@ import { Bot, CalendarClock, Gift, Heart, MonitorUp, MoreHorizontal, Phone, Vide
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { collection, doc, onSnapshot, orderBy, query, setDoc } from 'firebase/firestore';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { CALLING_ENABLED } from '../../config/releaseFlags';
 import { auth, db } from '../../lib/firebase';
 import { AI_TEST_PARTNER_NAME, loadLocalAiPartner } from '../../lib/coupleData';
@@ -21,6 +22,10 @@ type ChatSchedule = { id: string; title: string; date: string; startTime: string
 type ScheduledDraft = { id: number; text: string; sendAt: string };
 type CallMode = 'voice' | 'video' | 'screen';
 type MediaProgress = { completed: number; total: number };
+type ChatRow =
+  | { kind: 'message'; key: string; message: Message; showDate: boolean }
+  | { kind: 'typing-ai'; key: 'typing-ai' }
+  | { kind: 'typing-partner'; key: 'typing-partner' };
 
 const MAX_SOURCE_IMAGE_BYTES = 25 * 1024 * 1024;
 const MAX_ORIGINAL_IMAGE_BYTES = 9 * 1024 * 1024;
@@ -52,6 +57,16 @@ async function readFile(file: File) {
 
 function yieldToUi() {
   return new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+}
+
+// Only used as an initial guess before a row is actually measured in the DOM;
+// the virtualizer corrects itself once the real element is rendered.
+function estimateChatRowHeight(row: ChatRow) {
+  if (row.kind !== 'message') return 52;
+  const base = row.showDate ? 36 : 0;
+  if (row.message.type === 'image' || row.message.type === 'gif') return base + 260;
+  if (row.message.type === 'gallery') return base + 300;
+  return base + 68;
 }
 
 async function prepareImage(file: File, quality: ChatPreferences['mediaQuality']) {
@@ -126,6 +141,24 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   const noticeTimerRef = useRef<number | undefined>(undefined);
   const videoRef = useRef<HTMLVideoElement>(null);
   const byId = useMemo(() => new Map(messages.map((message) => [message.id, message])), [messages]);
+  const rows = useMemo<ChatRow[]>(() => {
+    const result: ChatRow[] = [];
+    messages.forEach((message, index) => {
+      const date = new Date(message.timestamp).toDateString();
+      const previousDate = index > 0 ? new Date(messages[index - 1].timestamp).toDateString() : '';
+      result.push({ kind: 'message', key: String(message.id), message, showDate: date !== previousDate });
+    });
+    if (aiTyping) result.push({ kind: 'typing-ai', key: 'typing-ai' });
+    else if (partnerTyping) result.push({ kind: 'typing-partner', key: 'typing-partner' });
+    return result;
+  }, [messages, aiTyping, partnerTyping]);
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => messagesRef.current,
+    estimateSize: (index) => estimateChatRowHeight(rows[index]),
+    overscan: 6,
+    getItemKey: (index) => rows[index].key,
+  });
   const aiPartner = currentUid ? loadLocalAiPartner(currentUid) : null;
   const usingAiPartner = Boolean(aiPartner?.connected && !connection);
   const partnerName = connection?.partnerProfile?.nickname?.trim() || connection?.partnerProfile?.name?.trim() || (usingAiPartner ? aiPartner?.displayName || AI_TEST_PARTNER_NAME : '상대방');
@@ -138,8 +171,17 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     nearBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight <= CHAT_BOTTOM_SLOP_PX;
   };
 
+  const finePointerRef = useRef(false);
+  useEffect(() => {
+    const media = window.matchMedia('(pointer: fine)');
+    finePointerRef.current = media.matches;
+    const onChange = () => { finePointerRef.current = media.matches; };
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+  }, []);
+
   const handleMessagesWheel = (event: React.WheelEvent<HTMLDivElement>) => {
-    if (!event.deltaY || !window.matchMedia('(pointer: fine)').matches) return;
+    if (!event.deltaY || !finePointerRef.current) return;
     // Keep the browser's native wheel delta and add only the extra distance.
     // Touch/trackpad momentum is left fully native; this boosts mouse wheels.
     event.currentTarget.scrollTop += event.deltaY * (FINE_POINTER_WHEEL_MULTIPLIER - 1);
@@ -401,7 +443,15 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
       setSyncError('메시지 반응을 동기화하지 못했어요.');
     });
   };
-  const jump = (id: number) => { document.getElementById(`message-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); setHighlighted(id); window.setTimeout(() => setHighlighted(undefined), 1400); };
+  const jump = (id: number) => {
+    // The target row may not be mounted right now (virtualization only keeps
+    // near-viewport rows in the DOM), so scroll by index instead of relying
+    // on document.getElementById + scrollIntoView.
+    const index = rows.findIndex((row) => row.kind === 'message' && row.message.id === id);
+    if (index >= 0) rowVirtualizer.scrollToIndex(index, { align: 'center', behavior: 'smooth' });
+    setHighlighted(id);
+    window.setTimeout(() => setHighlighted(undefined), 1400);
+  };
   const saveMessage = (message: Message) => {
     if (isChatMediaMessage(message)) {
       const result = toggleChatMessageMemory(message, partnerName);
@@ -428,12 +478,19 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
       onScroll={updateNearBottom}
       onWheel={handleMessagesWheel}
       onClick={() => active && setActive(undefined)}
-    >{messages.map((message, index) => {
-      const date = new Date(message.timestamp).toDateString();
-      const previousDate = index > 0 ? new Date(messages[index - 1].timestamp).toDateString() : '';
-      const displayedMessage = isChatMediaMessage(message) ? { ...message, saved: savedMediaIds.has(message.id) } : message;
-      return <div key={message.id}>{date !== previousDate && <div className="date-chip">{messageDateLabel(message.timestamp)}</div>}<ChatBubble message={displayedMessage} reply={message.replyTo ? byId.get(message.replyTo) : undefined} partnerName={partnerName} partnerInitial={partnerInitial} active={active === message.id} highlighted={highlighted === message.id} onAction={() => setActive(active === message.id ? undefined : message.id)} onReact={(emoji) => react(message.id, emoji)} onReply={() => { setReplyTo(message.id); setActive(undefined); }} onSave={() => saveMessage(displayedMessage)} onImage={setLightbox} onJump={jump} /></div>;
-    })}{aiTyping && <TypingIndicator ai initial={partnerInitial} />}{partnerTyping && !aiTyping && <TypingIndicator ai={false} initial={partnerInitial} heart />}<div ref={bottomRef} /></div>
+    ><div style={{ position: 'relative', width: '100%', height: rowVirtualizer.getTotalSize() }}>{rowVirtualizer.getVirtualItems().map((virtualRow) => {
+      const row = rows[virtualRow.index];
+      return <div
+        key={row.key}
+        data-index={virtualRow.index}
+        ref={rowVirtualizer.measureElement}
+        style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${virtualRow.start}px)` }}
+      >{row.kind === 'message' ? (() => {
+        const message = row.message;
+        const displayedMessage = isChatMediaMessage(message) ? { ...message, saved: savedMediaIds.has(message.id) } : message;
+        return <>{row.showDate && <div className="date-chip">{messageDateLabel(message.timestamp)}</div>}<ChatBubble message={displayedMessage} reply={message.replyTo ? byId.get(message.replyTo) : undefined} partnerName={partnerName} partnerInitial={partnerInitial} active={active === message.id} highlighted={highlighted === message.id} onAction={() => setActive(active === message.id ? undefined : message.id)} onReact={(emoji) => react(message.id, emoji)} onReply={() => { setReplyTo(message.id); setActive(undefined); }} onSave={() => saveMessage(displayedMessage)} onImage={setLightbox} onJump={jump} /></>;
+      })() : row.kind === 'typing-ai' ? <TypingIndicator ai initial={partnerInitial} /> : <TypingIndicator ai={false} initial={partnerInitial} heart />}</div>;
+    })}</div><div ref={bottomRef} /></div>
     {scheduledDrafts.length > 0 && <div className="scheduled-strip"><CalendarClock size={14} /><span>예약 메시지 {scheduledDrafts.length}개</span><small>앱 실행 중 자동 전송</small></div>}
     <ChatComposer draft={draft} reply={replyTo ? byId.get(replyTo) : undefined} partnerName={partnerName} onDraft={setDraft} onSend={send} onImages={sendImages} onGif={sendGif} onQuick={sendText} onSchedule={() => setScheduleOpen(true)} onGift={() => setGiftOpen(true)} onCancelReply={() => setReplyTo(undefined)} />
     {toolsOpen && <ChatToolsPanel messages={messages} partnerName={partnerName} preferences={preferences} onPreferences={setPreferences} onJump={jump} onImage={setLightbox} onImport={(imported) => setMessages(imported)} onSticker={sendText} onClose={() => setToolsOpen(false)} />}
