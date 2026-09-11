@@ -322,3 +322,306 @@
     min-height: 82px;
   }
 }
+
+
+/* Final home hero: profiles + relationship time in one responsive card.
+ * The connector is made from real grid tracks instead of fixed screen
+ * coordinates, so it expands/contracts with the card on web and mobile. */
+.home-couple-time-card {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  grid-template-columns:
+    minmax(48px, .78fr)
+    minmax(12px, 1fr)
+    clamp(26px, 4.5vw, 34px)
+    minmax(12px, 1fr)
+    minmax(48px, .78fr);
+  grid-template-rows: 58px auto;
+  align-items: start;
+  overflow: hidden;
+  padding: 13px 14px 14px;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 50% 115%, rgba(246, 153, 143, .13) 0 31%, transparent 32%),
+    linear-gradient(145deg, #fffaf8 0%, #fff 52%, #fff7f5 100%);
+  box-shadow: 0 8px 24px #30305a0b;
+}
+
+.home-couple-time-card::after {
+  content: "";
+  position: absolute;
+  width: 190px;
+  height: 86px;
+  left: 50%;
+  bottom: -58px;
+  border-radius: 50%;
+  background: rgba(255, 141, 130, .06);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.home-couple-person {
+  position: relative;
+  z-index: 2;
+  min-width: 0;
+  grid-row: 1 / 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  color: var(--text-primary);
+  background: transparent;
+  text-align: center;
+}
+
+.home-couple-person-me { grid-column: 1; }
+.home-couple-person-partner { grid-column: 5; }
+
+.home-couple-avatar {
+  width: clamp(38px, 5.2vw, 52px);
+  height: clamp(38px, 5.2vw, 52px);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  flex: 0 0 auto;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  color: #fff;
+  background: linear-gradient(145deg, var(--primary-light), var(--primary));
+  box-shadow: 0 5px 14px #32345520;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.home-couple-avatar.partner {
+  background: linear-gradient(145deg, #e08a7d, #a94a39);
+}
+
+.home-couple-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.home-couple-person b {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  font-size: 9px;
+  line-height: 1.15;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.home-couple-bridge {
+  z-index: 1;
+  align-self: start;
+  margin-top: clamp(18px, 2.6vw, 25px);
+  border-top: 1.5px solid color-mix(in srgb, #e8877d 62%, var(--border) 38%);
+}
+
+.home-couple-bridge-left { grid-column: 2; }
+.home-couple-bridge-right { grid-column: 4; }
+
+.home-couple-heart-node {
+  z-index: 2;
+  grid-column: 3;
+  grid-row: 1;
+  width: clamp(25px, 4vw, 32px);
+  height: clamp(25px, 4vw, 32px);
+  display: grid;
+  place-items: center;
+  justify-self: center;
+  margin-top: clamp(6px, 1vw, 10px);
+  border: 1px solid #f0c9c3;
+  border-radius: 50%;
+  color: #cf685c;
+  background: #fff;
+  box-shadow: 0 3px 10px #bf65591a;
+}
+
+.home-couple-time-center {
+  position: relative;
+  z-index: 2;
+  min-width: 0;
+  grid-column: 2 / 5;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-self: stretch;
+  margin: -2px 0 0;
+  padding: 0 2px;
+  border: 0;
+  color: var(--text-primary);
+  background: transparent;
+  text-align: center;
+}
+
+.home-couple-time-center small {
+  color: #b85a4b;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.home-couple-time-center strong {
+  max-width: 100%;
+  margin-top: 1px;
+  overflow: hidden;
+  color: #a74938;
+  font-size: clamp(21px, 3.2vw, 31px);
+  line-height: 1.05;
+  letter-spacing: -1.2px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.home-couple-time-center em,
+.home-couple-time-center span {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.home-couple-time-center em {
+  margin-top: 5px;
+  color: #77727a;
+  font-size: 8px;
+  font-style: normal;
+}
+
+.home-couple-time-center span {
+  margin-top: 2px;
+  color: #9a7b76;
+  font-size: 7px;
+}
+
+/* The combined hero removes one right-column row. */
+.home-dashboard {
+  grid-template-rows: auto auto auto auto auto;
+}
+
+.home-dashboard .home-map-card {
+  grid-row: 2 / 6;
+}
+
+.home-dashboard .home-couple-time-card {
+  grid-column: 2;
+  grid-row: 2;
+  width: 100%;
+  min-width: 0;
+  min-height: 168px;
+  margin: 0;
+}
+
+.home-dashboard .home-schedule-card {
+  grid-row: 3;
+}
+
+.home-dashboard .home-photo-card {
+  grid-row: 4;
+}
+
+.home-dashboard .home-chat-card {
+  grid-row: 5;
+}
+
+@media (max-width: 600px) {
+  .home-dashboard .home-couple-time-card {
+    min-height: 148px;
+    padding: 10px 7px 11px;
+    grid-template-columns:
+      minmax(36px, .72fr)
+      minmax(5px, 1fr)
+      25px
+      minmax(5px, 1fr)
+      minmax(36px, .72fr);
+    grid-template-rows: 48px auto;
+    border-radius: 18px;
+  }
+
+  .home-couple-avatar {
+    width: 36px;
+    height: 36px;
+    border-width: 2px;
+    font-size: 9px;
+  }
+
+  .home-couple-person {
+    gap: 4px;
+  }
+
+  .home-couple-person b {
+    font-size: 7px;
+  }
+
+  .home-couple-bridge {
+    margin-top: 18px;
+  }
+
+  .home-couple-heart-node {
+    width: 24px;
+    height: 24px;
+    margin-top: 6px;
+  }
+
+  .home-couple-heart-node svg {
+    width: 11px;
+    height: 11px;
+  }
+
+  .home-couple-time-center small {
+    font-size: 7px;
+  }
+
+  .home-couple-time-center strong {
+    font-size: clamp(17px, 5vw, 23px);
+    letter-spacing: -.7px;
+  }
+
+  .home-couple-time-center em {
+    margin-top: 3px;
+    font-size: 7px;
+  }
+
+  .home-couple-time-center span {
+    font-size: 6px;
+  }
+}
+
+@media (max-width: 390px) {
+  .home-dashboard .home-couple-time-card {
+    min-height: 140px;
+    padding-inline: 6px;
+    grid-template-columns:
+      minmax(32px, .68fr)
+      minmax(3px, 1fr)
+      23px
+      minmax(3px, 1fr)
+      minmax(32px, .68fr);
+  }
+
+  .home-couple-avatar {
+    width: 32px;
+    height: 32px;
+  }
+
+  .home-couple-bridge {
+    margin-top: 16px;
+  }
+
+  .home-couple-heart-node {
+    width: 22px;
+    height: 22px;
+    margin-top: 5px;
+  }
+
+  .home-couple-time-center strong {
+    font-size: 17px;
+  }
+}
