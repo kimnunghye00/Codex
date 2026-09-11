@@ -335,25 +335,47 @@ function App({ user, profile, onProfileChange }: AppProps) {
 }
 
 const HomePage = memo(function HomePage({ uid, profile, connection, relationshipStartDate, coupleDay, memories, latestPartnerMessage, onNavigate, onOpenChat, onOpenMemory, onSettings, onNotifications, unreadCount }: { uid: string; profile: UserProfile; connection: RealCoupleConnection | null; relationshipStartDate?: string; coupleDay: number; memories: Memory[]; latestPartnerMessage?: Message; onNavigate: (tab: Tab) => void; onOpenChat: () => void; onOpenMemory: (id: number) => void; onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
-  const latestMemory = memories[0];
+  const previewMemories = memories.slice(0, 4);
   const partnerProfile = connection?.partnerProfile ?? null;
   const partnerName = partnerProfile ? displayName(partnerProfile) : '상대방';
   const partnerInitial = partnerName.slice(0, 1) || '상';
 
   return <div className="page home-page home-dashboard">
     <SharedAppHeader onSettings={onSettings} onNotifications={onNotifications} unreadCount={unreadCount} />
-    <CoupleHomeTools uid={uid} profile={profile} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} onOpenMyProfile={onSettings} onOpenConnect={onSettings} onOpenAnniversary={() => onNavigate('anniversary')} />
+
     <div className="home-dashboard-grid">
       <button className="home-map-card" type="button" aria-label="우리의 지도 열기" onClick={() => onNavigate('location')}>
         <div className="home-map-grid-lines" /><span className="home-map-road road-a" /><span className="home-map-road road-b" /><span className="home-map-river" />
         <span className="home-map-place place-office">ROUTE</span><span className="home-map-place place-cafe">카페</span><span className="home-map-place place-park">공원</span>
         <div className="home-location-status"><MapPin size={16} /><span><b>{connection ? `${partnerName} · 위치 공유` : '상대방 연결 전'}</b><small>{connection ? '최근 위치를 확인해보세요' : '설정에서 상대방을 연결해 주세요'}</small></span></div>
-        <div className="home-map-person"><span className="home-map-halo" /><span className="home-map-avatar">{partnerInitial}</span><MapPin size={25} fill="currentColor" /></div><div className="home-map-locate"><MapPinned size={20} /></div>
+        <div className="home-map-person"><span className="home-map-halo" /><span className="home-map-avatar">{partnerInitial}</span><MapPin size={25} fill="currentColor" /></div>
+        <div className="home-map-locate"><MapPinned size={20} /></div>
       </button>
-      <div className="home-dashboard-side">
-        {latestMemory ? <button className="home-photo-card" type="button" onClick={() => onOpenMemory(latestMemory.id)}><MemoryImage src={latestMemory.images[0]} alt={latestMemory.title} loading="eager" /><span className="home-photo-shade" /><span className="home-photo-copy"><small>최근 추억</small><strong>{latestMemory.title}</strong><em>{latestMemory.date.replaceAll('-', '.')}</em></span><span className="home-photo-heart"><Heart size={16} /></span></button> : <button className="home-photo-card empty" type="button" onClick={() => onNavigate('memories')}><Image size={24} /><span>첫 추억을 남겨보세요</span></button>}
-        <button className="home-chat-card" type="button" onClick={onOpenChat}><span className="home-chat-head"><b>최근 대화</b><ChevronRight size={17} /></span><span className="home-chat-preview"><span className="home-chat-avatar">{partnerInitial}</span><span className="home-chat-copy"><b>{partnerName}</b><small>{chatPreview(latestPartnerMessage)}</small></span></span></button>
-      </div>
+
+      <aside className="home-dashboard-side" aria-label="홈 요약">
+        <CoupleHomeTools uid={uid} profile={profile} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} onOpenMyProfile={onSettings} onOpenConnect={onSettings} onOpenAnniversary={() => onNavigate('anniversary')} />
+
+        <section className="home-memory-card" aria-label="우리의 추억">
+          <header className="home-memory-head">
+            <span className="home-memory-title-icon" aria-hidden="true"><Image size={17} /></span>
+            <span className="home-memory-title-copy"><b>우리의 추억</b><small>함께한 소중한 순간들을 모아봤어요.</small></span>
+            <button type="button" onClick={() => onNavigate('memories')}>전체보기 <ChevronRight size={14} /></button>
+          </header>
+
+          {previewMemories.length ? <div className="home-memory-grid">
+            {previewMemories.map((memory) => <button className="home-memory-tile" type="button" key={memory.id} onClick={() => onOpenMemory(memory.id)}>
+              {memory.images[0] ? <MemoryImage src={memory.images[0]} alt={memory.title} loading="eager" /> : <span className="home-memory-tile-placeholder"><Image size={20} /></span>}
+              <span className="home-memory-tile-shade" />
+              <span className="home-memory-tile-copy"><b>{memory.title}</b><small>{memory.date.replaceAll('-', '.')}</small></span>
+            </button>)}
+          </div> : <button className="home-memory-empty" type="button" onClick={() => onNavigate('memories')}><Image size={22} /><span><b>첫 추억을 남겨보세요</b><small>함께한 사진과 이야기가 여기에 보여요.</small></span></button>}
+        </section>
+
+        <button className="home-chat-card" type="button" onClick={onOpenChat}>
+          <span className="home-chat-head"><span><MessageCircle size={17} /><b>최근 대화</b></span><em>전체보기 <ChevronRight size={14} /></em></span>
+          <span className="home-chat-preview"><span className="home-chat-avatar">{partnerInitial}</span><span className="home-chat-copy"><b>{partnerName}</b><small>{chatPreview(latestPartnerMessage)}</small></span><time>{latestPartnerMessage ? '최근' : ''}</time></span>
+        </button>
+      </aside>
     </div>
   </div>;
 });
