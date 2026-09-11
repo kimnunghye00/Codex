@@ -1,4 +1,4 @@
-import { CalendarClock, Gift, ImagePlus, Laugh, Plus, Send, X } from 'lucide-react';
+import { CalendarClock, Gift, ImagePlus, Plus, Send, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Message } from '../../types';
@@ -138,7 +138,9 @@ export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onIma
         />
         {draft.trim()
           ? <button type="button" className="send ready" onClick={onSend} aria-label="메시지 전송"><Send size={18} /></button>
-          : <button type="button" className="composer-gif-shortcut" onClick={() => gifRef.current?.click()} aria-label="움짤 보내기"><Laugh size={19} /></button>}
+          : <button type="button" className="composer-gif-shortcut" onClick={() => gifRef.current?.click()} aria-label="움짤 보내기">
+            <span className="composer-gif-icon" aria-hidden="true"><b>GIF</b><i /></span>
+          </button>}
       </div>
     </div>
     {preview}
