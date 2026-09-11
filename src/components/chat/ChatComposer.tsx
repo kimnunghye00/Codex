@@ -1,39 +1,16 @@
 import { CalendarClock, Gift, ImagePlus, Laugh, Plus, Send, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { clearPendingOriginalChatFiles, registerPendingOriginalChatFiles } from '../../lib/chatMediaOriginalRegistry';
 import type { Message } from '../../types';
 
 const QUICK = ['기분 좋아 😊', '배고파 🍚', '심심해 🫠', '우울해 🥺', '놀아줘 ❤️'];
 const MAX_CHAT_PHOTO_SELECTION = 100;
-const MAX_SOURCE_IMAGE_BYTES = 25 * 1024 * 1024;
-const LEGACY_ORIGINAL_GUARD_BYPASS_BYTES = 8 * 1024 * 1024;
 
 type PendingPhoto = {
   id: string;
   file: File;
   previewUrl: string;
 };
-
-/**
- * ChatPage still has a legacy 9 MB check for the old "original quality" mode.
- * We send a lightweight File wrapper to that preparation path while retaining
- * the untouched source File separately for Firebase Storage original download.
- * The 25 MB source limit is intentionally preserved.
- */
-function createPreparationFile(file: File) {
-  const clone = new File([file], file.name, { type: file.type, lastModified: file.lastModified });
-  if (file.size > MAX_SOURCE_IMAGE_BYTES) return clone;
-  try {
-    Object.defineProperty(clone, 'size', {
-      configurable: true,
-      value: Math.min(file.size, LEGACY_ORIGINAL_GUARD_BYPASS_BYTES),
-    });
-  } catch {
-    // The real source remains registered even if a future WebView disallows it.
-  }
-  return clone;
-}
 
 export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onImages, onGif, onQuick, onSchedule, onGift, onCancelReply }: {
   draft: string; reply?: Message; partnerName: string; onDraft: (value: string) => void; onSend: () => void;
@@ -55,7 +32,6 @@ export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onIma
 
   useEffect(() => () => {
     pendingRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-    clearPendingOriginalChatFiles();
   }, []);
 
   const clearPendingPhotos = () => {
@@ -90,16 +66,16 @@ export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onIma
     if (photoSending) return;
     const originals = pendingRef.current.map((item) => item.file);
     if (!originals.length) return;
-    const preparationFiles = originals.map(createPreparationFile);
     pendingRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
     pendingRef.current = [];
     setPendingPhotos([]);
     setPhotoSending(true);
-    registerPendingOriginalChatFiles(originals);
     try {
-      await Promise.resolve(onImages(preparationFiles));
+      // Keep the selected File objects intact all the way to ChatPage/Firebase.
+      // This avoids cloning and lets the upload path stream Blob bytes directly
+      // instead of first expanding every photo into a Base64 data URL.
+      await Promise.resolve(onImages(originals));
     } finally {
-      clearPendingOriginalChatFiles();
       setPhotoSending(false);
     }
   };
