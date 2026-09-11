@@ -1,100 +1,43 @@
-.home-dashboard {
-  display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
-  gap: 10px 12px;
-}
-
-.home-dashboard > .topbar {
-  grid-column: 1 / -1;
-  grid-row: 1;
-  margin-bottom: 0;
-}
-
-.home-dashboard > .home-couple-tools,
-.home-dashboard > .home-dashboard-grid,
-.home-dashboard .home-dashboard-side {
-  display: contents;
-}
-
-.home-dashboard .home-map-card {
-  display: block;
-  grid-column: 1;
-  width: 100%;
-  min-height: 0;
-}
-
-@media (max-width: 480px) {
-  .home-dashboard.page {
-    padding-left: 12px;
-    padding-right: 12px;
-  }
-
-  .home-dashboard {
-    grid-template-columns: minmax(0, 58%) minmax(0, 42%);
-    gap: 9px 10px;
-  }
-}
-
-@media (max-width: 390px) {
-  .home-dashboard {
-    grid-template-columns: minmax(0, 57%) minmax(0, 43%);
-    gap: 8px 9px;
-  }
-}
-
-/* Final romantic home hero: profiles, curved connection and relationship time.
- * The curved line lives in its own grid track SVG, so it scales with the card
- * instead of relying on viewport pixel coordinates. */
-.home-dashboard {
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
-}
-
-.home-dashboard .home-map-card {
-  grid-row: 2 / 6;
-}
-
-.home-dashboard .home-couple-time-card {
+.home-dashboard-side .home-couple-time-card {
   position: relative;
   isolation: isolate;
-  grid-column: 2;
-  grid-row: 2;
   width: 100%;
   min-width: 0;
-  min-height: 196px;
+  min-height: 0;
+  height: 100%;
   display: grid;
   grid-template-columns:
-    minmax(68px, .9fr)
-    minmax(18px, 1fr)
-    minmax(82px, 1.16fr)
-    minmax(18px, 1fr)
-    minmax(68px, .9fr);
-  grid-template-rows: 92px 86px;
+    minmax(62px, .9fr)
+    minmax(16px, 1fr)
+    minmax(86px, 1.2fr)
+    minmax(16px, 1fr)
+    minmax(62px, .9fr);
+  grid-template-rows: 82px minmax(0, 1fr);
   align-items: start;
   overflow: hidden;
-  margin: 0;
-  padding: 15px 16px 13px;
+  padding: 13px 15px 12px;
   border: 1px solid #ead8d4;
   border-radius: 24px;
   background:
-    radial-gradient(circle at 14% 22%, rgba(255, 155, 151, .10) 0 18%, transparent 19%),
-    radial-gradient(circle at 88% 22%, rgba(255, 155, 151, .10) 0 18%, transparent 19%),
+    radial-gradient(circle at 12% 20%, rgba(255, 155, 151, .11) 0 18%, transparent 19%),
+    radial-gradient(circle at 90% 20%, rgba(255, 155, 151, .11) 0 18%, transparent 19%),
     linear-gradient(145deg, #fff8f6 0%, #fffdfc 52%, #fff4f2 100%);
   box-shadow: 0 10px 30px rgba(91, 56, 52, .07);
 }
 
-.home-dashboard .home-couple-time-card::before,
-.home-dashboard .home-couple-time-card::after {
+.home-dashboard-side .home-couple-time-card::before,
+.home-dashboard-side .home-couple-time-card::after {
   content: "";
   position: absolute;
   z-index: -1;
-  bottom: -74px;
-  width: 190px;
-  height: 126px;
+  bottom: -68px;
+  width: 170px;
+  height: 116px;
   border-radius: 50%;
-  background: rgba(255, 139, 132, .065);
+  background: rgba(255, 139, 132, .06);
 }
-.home-dashboard .home-couple-time-card::before { left: -48px; transform: rotate(8deg); }
-.home-dashboard .home-couple-time-card::after { right: -48px; transform: rotate(-8deg); }
+.home-dashboard-side .home-couple-time-card::before { left: -48px; transform: rotate(8deg); }
+.home-dashboard-side .home-couple-time-card::after { right: -48px; transform: rotate(-8deg); }
 
 .home-couple-person {
   position: relative;
@@ -104,7 +47,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   padding: 0;
   border: 0;
   color: var(--text-primary);
@@ -115,8 +58,8 @@
 .home-couple-person-partner { grid-column: 5; }
 
 .home-couple-avatar {
-  width: clamp(54px, 5.6vw, 68px);
-  height: clamp(54px, 5.6vw, 68px);
+  width: clamp(52px, 5vw, 64px);
+  height: clamp(52px, 5vw, 64px);
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -125,40 +68,23 @@
   border-radius: 50%;
   color: #fff;
   background: linear-gradient(145deg, #3f4765, #252b48);
-  box-shadow:
-    0 0 0 2px rgba(226, 121, 112, .20),
-    0 8px 20px rgba(54, 46, 65, .16);
-  font-size: 16px;
+  box-shadow: 0 0 0 2px rgba(226,121,112,.18), 0 8px 20px rgba(54,46,65,.15);
+  font-size: 15px;
   font-weight: 850;
 }
-.home-couple-avatar.partner {
-  background: linear-gradient(145deg, #d97569, #a84132);
-}
-.home-couple-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.home-couple-person b {
-  display: block;
-  width: 100%;
-  overflow: hidden;
-  color: #303348;
-  font-size: 11px;
-  line-height: 1.15;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
+.home-couple-avatar.partner { background: linear-gradient(145deg, #d97569, #a84132); }
+.home-couple-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.home-couple-person b,
 .home-couple-person small {
   display: block;
   width: 100%;
   overflow: hidden;
-  color: #8c7e7b;
-  font-size: 8px;
-  line-height: 1.2;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+.home-couple-person b { color: #303348; font-size: 10px; line-height: 1.15; }
+.home-couple-person small { color: #8c7e7b; font-size: 7px; line-height: 1.2; }
 .home-couple-person small span { color: #e97870; }
 
 .home-couple-connector {
@@ -167,8 +93,8 @@
   grid-row: 1;
   align-self: start;
   width: 100%;
-  height: 52px;
-  margin-top: 12px;
+  height: 48px;
+  margin-top: 9px;
   overflow: visible;
   pointer-events: none;
 }
@@ -184,21 +110,19 @@
   z-index: 4;
   grid-column: 3;
   grid-row: 1;
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
   display: grid;
   place-items: center;
   justify-self: center;
-  margin-top: 1px;
+  margin-top: 0;
   border: 1px solid #f3d0cc;
   border-radius: 50%;
   color: #df6e65;
-  background: rgba(255,255,255,.96);
-  box-shadow:
-    0 0 0 6px rgba(255, 236, 233, .72),
-    0 5px 14px rgba(176, 86, 77, .13);
+  background: rgba(255,255,255,.97);
+  box-shadow: 0 0 0 5px rgba(255,236,233,.7), 0 5px 14px rgba(176,86,77,.13);
 }
-.home-couple-heart-node svg { width: 17px; height: 17px; }
+.home-couple-heart-node svg { width: 16px; height: 16px; }
 
 .home-couple-time-center {
   position: relative;
@@ -206,305 +130,189 @@
   min-width: 0;
   grid-column: 2 / 5;
   grid-row: 2;
-  align-self: start;
+  align-self: center;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-self: stretch;
-  margin-top: 1px;
-  padding: 0 4px;
+  padding: 0 4px 2px;
   border: 0;
   color: var(--text-primary);
   background: transparent;
   text-align: center;
 }
+
 .home-couple-time-center small {
   color: #b75346;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 850;
 }
 .home-couple-time-center strong {
   max-width: 100%;
-  margin-top: 3px;
+  margin-top: 2px;
   overflow: hidden;
   color: #9f392d;
-  font-size: clamp(28px, 3vw, 38px);
-  line-height: .98;
-  letter-spacing: -1.7px;
+  font-size: clamp(26px, 2.7vw, 35px);
+  line-height: 1;
+  letter-spacing: -1.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.home-couple-time-center em,
+.home-couple-time-center > span {
+  max-width: 100%;
+  overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 .home-couple-time-center em {
-  max-width: 100%;
-  margin-top: 9px;
-  overflow: hidden;
+  margin-top: 6px;
   color: #766d70;
-  font-size: 9px;
+  font-size: 8px;
   font-style: normal;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 .home-couple-time-center > span {
-  max-width: 100%;
-  margin-top: 3px;
-  overflow: hidden;
+  margin-top: 2px;
   color: #8f7773;
-  font-size: 8px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  font-size: 7px;
 }
 
 .home-couple-deco-heart {
   position: absolute;
   z-index: 0;
-  color: rgba(244, 126, 119, .43);
-  font-size: 18px;
+  color: rgba(244,126,119,.38);
+  font-size: 16px;
   line-height: 1;
   pointer-events: none;
 }
-.home-couple-deco-heart.deco-a { top: 18px; left: 6%; transform: rotate(-13deg); }
-.home-couple-deco-heart.deco-b { top: 24px; right: 7%; transform: rotate(15deg) scale(.8); }
-.home-couple-deco-heart.deco-c { top: 58px; left: 43%; transform: rotate(-8deg) scale(.6); }
+.home-couple-deco-heart.deco-a { top: 16px; left: 6%; transform: rotate(-13deg); }
+.home-couple-deco-heart.deco-b { top: 22px; right: 7%; transform: rotate(15deg) scale(.8); }
+.home-couple-deco-heart.deco-c { top: 54px; left: 43%; transform: rotate(-8deg) scale(.58); }
 
-.home-dashboard .home-schedule-card {
-  grid-column: 2;
-  grid-row: 3;
-  min-height: 164px;
-  margin: 0;
-  padding: 11px 12px 12px;
-}
-
-.home-dashboard .home-photo-card {
-  grid-column: 2;
-  grid-row: 4;
+.home-dashboard-side .home-schedule-card {
+  width: 100%;
+  min-width: 0;
   min-height: 0;
   height: 100%;
-  margin: 0;
-  border-radius: 20px;
+  overflow: hidden;
+  padding: 10px 11px;
+  border-radius: 22px;
 }
 
-.home-dashboard .home-chat-card {
-  grid-column: 2;
-  grid-row: 5;
-  min-height: 88px;
-  margin: 0;
-  padding: 9px 10px;
-  border-radius: 20px;
+.home-dashboard-side .home-schedule-head {
+  grid-template-columns: 32px minmax(0,1fr) auto;
+  gap: 8px;
+  padding-bottom: 8px;
 }
 
-@media (max-width: 700px) {
-  .home-dashboard .home-couple-time-card {
-    min-height: 156px;
-    grid-template-columns:
-      minmax(42px, .86fr)
-      minmax(5px, 1fr)
-      minmax(64px, 1.15fr)
-      minmax(5px, 1fr)
-      minmax(42px, .86fr);
-    grid-template-rows: 70px 70px;
-    padding: 10px 8px 9px;
-    border-radius: 18px;
+.home-dashboard-side .home-schedule-title-icon {
+  width: 32px;
+  height: 32px;
+}
+
+.home-dashboard-side .home-schedule-title-copy b { font-size: 10px; }
+.home-dashboard-side .home-schedule-title-copy small { font-size: 6px; }
+.home-dashboard-side .home-schedule-head > button { font-size: 7px; }
+
+.home-dashboard-side .home-schedule-list {
+  min-height: 0;
+  margin-top: 8px;
+}
+
+.home-dashboard-side .home-schedule-row:nth-child(n+2) { display: none; }
+
+.home-dashboard-side .home-schedule-empty {
+  min-height: 0;
+  height: 50px;
+}
+
+@media (max-height: 720px) {
+  .home-dashboard-side .home-couple-time-card {
+    grid-template-rows: 66px minmax(0,1fr);
+    padding: 9px 11px;
   }
-  .home-couple-avatar {
-    width: 42px;
-    height: 42px;
-    border-width: 3px;
-    font-size: 10px;
-  }
-  .home-couple-person { gap: 3px; }
+
+  .home-couple-avatar { width: 44px; height: 44px; border-width: 3px; font-size: 11px; }
   .home-couple-person b { font-size: 8px; }
   .home-couple-person small { font-size: 6px; }
-  .home-couple-connector {
-    height: 38px;
-    margin-top: 8px;
-  }
-  .home-couple-heart-node {
-    width: 29px;
-    height: 29px;
-    margin-top: 0;
-    box-shadow: 0 0 0 4px rgba(255,236,233,.72), 0 4px 10px rgba(176,86,77,.10);
-  }
-  .home-couple-heart-node svg { width: 12px; height: 12px; }
-  .home-couple-time-center { margin-top: -1px; }
+  .home-couple-connector { height: 38px; margin-top: 6px; }
+  .home-couple-heart-node { width: 30px; height: 30px; }
+  .home-couple-heart-node svg { width: 13px; height: 13px; }
   .home-couple-time-center small { font-size: 7px; }
-  .home-couple-time-center strong {
-    margin-top: 1px;
-    font-size: clamp(19px, 5vw, 24px);
-    letter-spacing: -.9px;
-  }
-  .home-couple-time-center em { margin-top: 5px; font-size: 7px; }
-  .home-couple-time-center > span { margin-top: 1px; font-size: 6px; }
+  .home-couple-time-center strong { font-size: 22px; }
+  .home-couple-time-center em { margin-top: 3px; font-size: 6px; }
+  .home-couple-time-center > span { font-size: 6px; }
   .home-couple-deco-heart { display: none; }
-  .home-dashboard .home-schedule-card { min-height: 146px; padding: 9px; }
-}
 
-@media (max-width: 390px) {
-  .home-dashboard .home-couple-time-card {
-    min-height: 144px;
-    grid-template-columns:
-      34px
-      minmax(2px, 1fr)
-      minmax(56px, 1.2fr)
-      minmax(2px, 1fr)
-      34px;
-    grid-template-rows: 61px 66px;
-    padding: 8px 5px;
-  }
-  .home-couple-avatar {
-    width: 34px;
-    height: 34px;
-    border-width: 2px;
-  }
-  .home-couple-person b { font-size: 7px; }
-  .home-couple-person small { display: none; }
-  .home-couple-connector { height: 31px; margin-top: 6px; }
-  .home-couple-heart-node {
-    width: 25px;
-    height: 25px;
-  }
-  .home-couple-time-center strong { font-size: 18px; }
-  .home-couple-time-center em { font-size: 6px; }
-}
-
-
-/* Home right-column rebalance:
- * relationship hero -> schedule -> album preview -> compact recent chat.
- * Explicit tracks prevent any card from swallowing the remaining height. */
-.home-dashboard {
-  grid-template-rows:
-    auto
-    196px
-    158px
-    minmax(210px, 1fr)
-    92px;
-  align-content: stretch;
-}
-
-.home-dashboard .home-map-card {
-  grid-row: 2 / 6;
-  min-height: 0;
-  height: 100%;
-}
-
-.home-dashboard .home-couple-time-card {
-  grid-column: 2;
-  grid-row: 2;
-  min-height: 0;
-  height: 100%;
-  align-self: stretch;
-}
-
-.home-dashboard .home-schedule-card {
-  grid-column: 2;
-  grid-row: 3;
-  min-height: 0;
-  height: 100%;
-  align-self: stretch;
-  overflow: hidden;
-}
-
-.home-dashboard .home-photo-card {
-  grid-column: 2;
-  grid-row: 4;
-  min-height: 0;
-  height: 100%;
-  align-self: stretch;
-  overflow: hidden;
-}
-
-.home-dashboard .home-chat-card {
-  grid-column: 2;
-  grid-row: 5;
-  min-height: 0;
-  height: 100%;
-  align-self: stretch;
-  padding: 10px 12px;
-  overflow: hidden;
-}
-
-.home-dashboard .home-chat-preview {
-  margin-top: 7px;
-}
-
-.home-dashboard .home-chat-avatar {
-  width: 34px;
-  height: 34px;
-}
-
-.home-dashboard .home-photo-copy {
-  bottom: 13px;
-}
-
-.home-dashboard .home-photo-copy strong {
-  font-size: 13px;
-}
-
-.home-dashboard .home-photo-copy small {
-  font-size: 8px;
+  .home-dashboard-side .home-schedule-card { padding: 7px 8px; }
+  .home-dashboard-side .home-schedule-head { padding-bottom: 5px; }
+  .home-dashboard-side .home-schedule-empty { height: 42px; padding: 5px 6px; }
 }
 
 @media (max-width: 700px) {
-  .home-dashboard {
-    grid-template-rows:
-      auto
-      156px
-      138px
-      minmax(165px, 1fr)
-      82px;
+  .home-dashboard-side .home-couple-time-card {
+    grid-template-columns:
+      42px
+      minmax(3px, 1fr)
+      minmax(60px, 1.18fr)
+      minmax(3px, 1fr)
+      42px;
+    grid-template-rows: 66px minmax(0,1fr);
+    padding: 9px 6px 8px;
+    border-radius: 18px;
   }
 
-  .home-dashboard .home-chat-card {
-    padding: 8px 9px;
-  }
-
-  .home-dashboard .home-chat-preview {
-    margin-top: 5px;
-  }
-
-  .home-dashboard .home-chat-avatar {
-    width: 30px;
-    height: 30px;
-  }
-
-  .home-dashboard .home-photo-copy {
-    left: 9px;
-    right: 34px;
-    bottom: 9px;
-  }
-
-  .home-dashboard .home-photo-copy strong {
-    font-size: 10px;
-  }
-}
-
-@media (max-width: 390px) {
-  .home-dashboard {
-    grid-template-rows:
-      auto
-      144px
-      130px
-      minmax(145px, 1fr)
-      76px;
-  }
-
-  .home-dashboard .home-chat-card {
-    padding: 7px 8px;
-  }
-
-  .home-dashboard .home-chat-head b {
+  .home-couple-avatar {
+    width: 40px;
+    height: 40px;
+    border-width: 2px;
     font-size: 9px;
   }
 
-  .home-dashboard .home-chat-copy b {
-    font-size: 8px;
+  .home-couple-person { gap: 2px; }
+  .home-couple-person b { font-size: 7px; }
+  .home-couple-person small { display: none; }
+  .home-couple-connector { height: 34px; margin-top: 6px; }
+  .home-couple-heart-node {
+    width: 27px;
+    height: 27px;
+    box-shadow: 0 0 0 4px rgba(255,236,233,.72), 0 4px 10px rgba(176,86,77,.1);
+  }
+  .home-couple-heart-node svg { width: 11px; height: 11px; }
+  .home-couple-time-center small { font-size: 6px; }
+  .home-couple-time-center strong { margin-top: 1px; font-size: clamp(17px, 5vw, 22px); letter-spacing: -.8px; }
+  .home-couple-time-center em { margin-top: 3px; font-size: 6px; }
+  .home-couple-time-center > span { font-size: 5px; }
+  .home-couple-deco-heart { display: none; }
+
+  .home-dashboard-side .home-schedule-card { padding: 7px; border-radius: 18px; }
+  .home-dashboard-side .home-schedule-head { grid-template-columns: 27px minmax(0,1fr) auto; gap: 5px; padding-bottom: 5px; }
+  .home-dashboard-side .home-schedule-title-icon { width: 27px; height: 27px; border-radius: 9px; }
+  .home-dashboard-side .home-schedule-title-copy b { font-size: 8px; }
+  .home-dashboard-side .home-schedule-title-copy small { display: none; }
+  .home-dashboard-side .home-schedule-head > button { font-size: 5px; padding-left: 2px; }
+  .home-dashboard-side .home-schedule-list { margin-top: 6px; }
+  .home-dashboard-side .home-schedule-empty {
+    height: 44px;
+    grid-template-columns: 28px minmax(0,1fr);
+    gap: 6px;
+    padding: 5px;
+  }
+  .home-dashboard-side .home-schedule-empty-icon { width: 28px; height: 28px; }
+  .home-dashboard-side .home-schedule-empty-copy b { font-size: 7px; }
+  .home-dashboard-side .home-schedule-empty-copy small { font-size: 5px; }
+}
+
+@media (max-width: 390px) {
+  .home-dashboard-side .home-couple-time-card {
+    grid-template-columns: 34px minmax(2px,1fr) minmax(54px,1.2fr) minmax(2px,1fr) 34px;
+    grid-template-rows: 58px minmax(0,1fr);
+    padding: 7px 5px;
   }
 
-  .home-dashboard .home-chat-copy small {
-    font-size: 7px;
-  }
-
-  .home-dashboard .home-chat-avatar {
-    width: 28px;
-    height: 28px;
-  }
+  .home-couple-avatar { width: 33px; height: 33px; }
+  .home-couple-person b { font-size: 6px; }
+  .home-couple-connector { height: 29px; margin-top: 5px; }
+  .home-couple-heart-node { width: 24px; height: 24px; }
+  .home-couple-time-center strong { font-size: 17px; }
 }
