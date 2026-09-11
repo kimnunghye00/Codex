@@ -172,6 +172,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
   const [requestedLocationTab, setRequestedLocationTab] = useState<LocationTabId>();
   const previousMessages = useRef(messages);
   const previousMemories = useRef(memories);
+  const chatClearAllActivityRef = useRef(false);
   const tabHistory = useRef<Tab[]>(['home']);
   const unreadCount = useMemo(() => notifications.filter((item) => !item.read).length, [notifications]);
   const coupleDay = useMemo(() => {
@@ -247,6 +248,12 @@ function App({ user, profile, onProfileChange }: AppProps) {
   }, [notificationsOpen, settingsOpen, tab]);
 
   useEffect(() => {
+    const markChatClearAll = () => { chatClearAllActivityRef.current = true; };
+    window.addEventListener('route-chat-cleared-all', markChatClearAll);
+    return () => window.removeEventListener('route-chat-cleared-all', markChatClearAll);
+  }, []);
+
+  useEffect(() => {
     saveMessages(messages);
     const before = previousMessages.current;
     const beforeById = new Map(before.map((message) => [message.id, message]));
@@ -255,7 +262,13 @@ function App({ user, profile, onProfileChange }: AppProps) {
     messages
       .filter((message) => !beforeById.has(message.id) && (before.length === 0 || messageTimestamp(message.timestamp) >= newestBeforeTime))
       .forEach((message) => addActivity({ actor: message.sender === 'me' ? 'me' : 'partner', kind: 'chat', title: message.sender === 'me' ? '메시지를 보냈어요' : '새 메시지가 왔어요', detail: message.type === 'image' ? '사진을 보냈어요.' : message.text?.slice(0, 70) }));
-    before.filter((message) => !afterById.has(message.id)).forEach((message) => addActivity({ actor: 'me', kind: 'chat', title: '메시지를 삭제했어요', detail: message.text?.slice(0, 60) }));
+    const removedMessages = before.filter((message) => !afterById.has(message.id));
+    if (chatClearAllActivityRef.current && removedMessages.length) {
+      addActivity({ actor: 'me', kind: 'chat', title: '채팅 내용을 모두 삭제했어요', detail: `${removedMessages.length}개의 메시지를 내 대화에서 삭제했어요.` });
+      chatClearAllActivityRef.current = false;
+    } else {
+      removedMessages.forEach((message) => addActivity({ actor: 'me', kind: 'chat', title: '메시지를 삭제했어요', detail: message.text?.slice(0, 60) }));
+    }
     previousMessages.current = messages;
   }, [addActivity, messages]);
 
