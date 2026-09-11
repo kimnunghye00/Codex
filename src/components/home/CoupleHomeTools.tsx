@@ -275,18 +275,44 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
         </button>
       </section>
 
-      <div className="home-schedule-card !min-w-0 !overflow-hidden">
-        <div className="home-schedule-head !flex !min-w-0 !items-center !justify-between !gap-1"><span className="!flex !min-w-0 !items-center !gap-1"><CalendarDays size={15} className="shrink-0" /><b className="truncate !leading-none">우리 일정</b></span><button className="!flex shrink-0 !items-center !gap-0.5" type="button" onClick={() => setAllOpen(true)}>전체보기 <ChevronRight size={13} /></button></div>
+      <section className="home-schedule-card" aria-label="우리 일정">
+        <header className="home-schedule-head">
+          <span className="home-schedule-title-icon" aria-hidden="true"><CalendarDays size={16} /></span>
+          <span className="home-schedule-title-copy">
+            <b>우리 일정</b>
+            <small>함께 기억할 일정을 한곳에 모아봐요.</small>
+          </span>
+          <button type="button" onClick={() => setAllOpen(true)}>전체보기 <ChevronRight size={14} /></button>
+        </header>
+
         {notice && <p className="schedule-help route-home-save-notice">{notice}</p>}
-        <div className="home-schedule-list !min-w-0">
-          {upcoming.length ? upcoming.map((item) => {
+
+        <div className="home-schedule-list">
+          {upcoming.length ? upcoming.slice(0, 2).map((item) => {
             const mine = item.ownerId === uid;
             const label = item.type === 'couple' ? '약속' : mine ? '나' : partnerName;
-            return <div className="home-schedule-row !min-w-0" key={item.id}><span className={`schedule-dot ${item.type === 'couple' ? 'couple' : mine ? 'mine' : 'partner'}`} /><span className="schedule-when !min-w-0"><b>{prettyDate(item.date)}</b><small>{item.startTime}</small></span><strong className="!min-w-0 !truncate">{item.title}</strong><em>{label}</em></div>;
-          }) : <div className="home-schedule-empty"><span>아직 예정된 일정이 없어요</span><small>일정은 일정 탭, 둘이 정한 약속은 약속 탭에서 추가해보세요 ❤️</small></div>}
+            return <article className="home-schedule-row" key={item.id}>
+              <span className={`home-schedule-date-badge ${item.type === 'couple' ? 'couple' : mine ? 'mine' : 'partner'}`}>
+                <b>{prettyDate(item.date)}</b>
+                <small>{item.startTime}</small>
+              </span>
+              <span className="home-schedule-row-copy">
+                <strong>{item.title}</strong>
+                <small>{item.location || (item.type === 'couple' ? '우리의 약속' : '개인 일정')}</small>
+              </span>
+              <em>{label}</em>
+            </article>;
+          }) : <div className="home-schedule-empty">
+            <span className="home-schedule-empty-icon" aria-hidden="true"><CalendarDays size={18} /></span>
+            <span className="home-schedule-empty-copy">
+              <b>아직 예정된 일정이 없어요</b>
+              <small>둘이 함께할 다음 일정을 만들어보세요.</small>
+            </span>
+          </div>}
         </div>
-        <button className="home-schedule-add !flex !w-full !items-center !justify-center" type="button" onClick={() => { setError(''); setNotice(''); setScheduleOpen(true); }}><Plus size={14} /> 일정 추가</button>
-      </div>
+
+        <button className="home-schedule-add" type="button" onClick={() => { setError(''); setNotice(''); setScheduleOpen(true); }}><Plus size={15} /> 일정 추가</button>
+      </section>
     </section>
 
     {partnerOpen && <div className="route-modal-backdrop" onMouseDown={() => setPartnerOpen(false)}><section className="route-modal partner-profile-modal" onMouseDown={(e) => e.stopPropagation()}>
