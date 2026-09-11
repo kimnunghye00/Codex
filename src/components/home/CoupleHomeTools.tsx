@@ -37,8 +37,10 @@ type Props = {
   profile: UserProfile;
   connection: RealCoupleConnection | null;
   relationshipStartDate?: string;
+  coupleDay: number;
   onOpenMyProfile: () => void;
   onOpenConnect: () => void;
+  onOpenAnniversary: () => void;
 };
 
 const localKey = (uid: string) => `route-local-schedules:${uid}`;
@@ -107,7 +109,7 @@ function prettyDate(value: string) {
   return `${date.getMonth() + 1}월 ${date.getDate()}일`;
 }
 
-export function CoupleHomeTools({ uid, profile, connection, relationshipStartDate, onOpenMyProfile, onOpenConnect }: Props) {
+export function CoupleHomeTools({ uid, profile, connection, relationshipStartDate, coupleDay, onOpenMyProfile, onOpenConnect, onOpenAnniversary }: Props) {
   const [remoteSchedules, setRemoteSchedules] = useState<Schedule[]>([]);
   const [localSchedules, setLocalSchedules] = useState<Schedule[]>(() => loadLocal(uid));
   const [legacyPromises, setLegacyPromises] = useState<Schedule[]>(() => loadLegacyPromises(uid));
@@ -243,17 +245,28 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
 
   return <>
     <section className="home-couple-tools" aria-label="커플 프로필과 일정">
-      <div className="home-couple-profile-card !grid !grid-cols-[minmax(0,1fr)_24px_minmax(0,1fr)] !items-center !gap-2 !overflow-hidden !px-3 !py-2 lg:!grid-cols-[minmax(0,1fr)_32px_minmax(0,1fr)] lg:!px-4">
-        <button type="button" className="home-person home-person-me !grid !min-w-0 !grid-cols-[32px_minmax(0,1fr)] !items-center !gap-2 !overflow-hidden !bg-transparent !p-0 !text-left" onClick={onOpenMyProfile}>
-          <span className="home-profile-avatar !grid !size-8 !shrink-0 place-items-center !overflow-hidden !rounded-full text-[10px] leading-none">{avatar(profile, '나')}</span>
-          <span className="home-profile-copy !block !min-w-0 !overflow-hidden"><b className="!block !w-full !truncate !text-[10px] !leading-none">{myRealName}</b><small className="!hidden">내 프로필 편집</small></span>
+      <section className="home-couple-time-card" aria-label="커플 프로필과 우리의 시간">
+        <button type="button" className="home-couple-person home-couple-person-me" onClick={onOpenMyProfile}>
+          <span className="home-couple-avatar">{avatar(profile, '나')}</span>
+          <b>{myRealName}</b>
         </button>
-        <span className="home-profile-heart !grid !size-6 shrink-0 place-items-center !leading-none" aria-hidden="true"><Heart size={15} fill="currentColor" /></span>
-        <button type="button" className="home-person !grid !min-w-0 !grid-cols-[minmax(0,1fr)_32px] !items-center !gap-2 !overflow-hidden !bg-transparent !p-0 !text-right" onClick={() => connection ? setPartnerOpen(true) : onOpenConnect()}>
-          <span className="home-profile-copy !order-1 !block !min-w-0 !overflow-hidden"><b className="!block !w-full !truncate !text-right !text-[10px] !leading-none">{partnerRealName}</b><small className="!hidden">{connection ? '프로필 보기' : '상대 연결하기'}</small></span>
-          <span className="home-profile-avatar partner !order-2 !grid !size-8 !shrink-0 place-items-center !overflow-hidden !rounded-full text-[10px] leading-none">{avatar(partner, '상')}</span>
+
+        <span className="home-couple-bridge home-couple-bridge-left" aria-hidden="true" />
+        <span className="home-couple-heart-node" aria-hidden="true"><Heart size={14} fill="currentColor" /></span>
+        <span className="home-couple-bridge home-couple-bridge-right" aria-hidden="true" />
+
+        <button type="button" className="home-couple-person home-couple-person-partner" onClick={() => connection ? setPartnerOpen(true) : onOpenConnect()}>
+          <span className="home-couple-avatar partner">{avatar(partner, '상')}</span>
+          <b>{partnerRealName}</b>
         </button>
-      </div>
+
+        <button type="button" className="home-couple-time-center" onClick={onOpenAnniversary}>
+          <small>우리의 시간</small>
+          <strong>{relationshipStartDate ? `D+${coupleDay}` : '설정하기'}</strong>
+          <em>{relationshipStartDate ? relationshipStartDate.replaceAll('-', '.') : '기념일 설정 필요'}</em>
+          <span>{relationshipStartDate ? '사귀는 날' : '우리의 시작일'}</span>
+        </button>
+      </section>
 
       <div className="home-schedule-card !min-w-0 !overflow-hidden">
         <div className="home-schedule-head !flex !min-w-0 !items-center !justify-between !gap-1"><span className="!flex !min-w-0 !items-center !gap-1"><CalendarDays size={15} className="shrink-0" /><b className="truncate !leading-none">우리 일정</b></span><button className="!flex shrink-0 !items-center !gap-0.5" type="button" onClick={() => setAllOpen(true)}>전체보기 <ChevronRight size={13} /></button></div>
