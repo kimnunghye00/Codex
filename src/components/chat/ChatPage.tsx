@@ -7,7 +7,7 @@ import { CALLING_ENABLED } from '../../config/releaseFlags';
 import { auth, db } from '../../lib/firebase';
 import { AI_TEST_PARTNER_NAME, loadLocalAiPartner } from '../../lib/coupleData';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
-import { deleteCoupleMessageForEveryone, hideCoupleMessageForMe, sendCoupleMessage, subscribeCoupleMessages, toggleCoupleMessageReaction } from '../../lib/chatRealtime';
+import { clearCoupleChatForMe, deleteCoupleMessageForEveryone, hideCoupleMessageForMe, sendCoupleMessage, subscribeCoupleMessages, toggleCoupleMessageReaction } from '../../lib/chatRealtime';
 import { deleteUploadedChatMedia, uploadChatMedia } from '../../lib/chatMedia';
 import { migrateLoadedLegacyChatMedia } from '../../lib/chatMediaMigration';
 import type { Message } from '../../types';
@@ -581,6 +581,25 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     );
   };
 
+  const clearAllChat = async () => {
+    if (!currentUid) throw new Error('chat-clear-no-user');
+    setSyncError('');
+    try {
+      if (connection) await clearCoupleChatForMe(connection.coupleId, currentUid);
+      setMessages([]);
+      setActive(undefined);
+      setReplyTo(undefined);
+      setDeleteSelection(null);
+      setDeleteConfirmOpen(false);
+      setLightbox(undefined);
+      showFlowNotice('채팅을 모두 삭제했어요. 상대방의 대화 기록은 그대로 유지돼요.');
+    } catch (cause) {
+      console.error('[ROUTE clear chat]', cause);
+      setSyncError('채팅을 모두 삭제하지 못했어요. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.');
+      throw cause;
+    }
+  };
+
   const saveMessage = (message: Message) => {
     if (isChatMediaMessage(message)) {
       const result = toggleChatMessageMemory(message, partnerName);
@@ -629,7 +648,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     })}</div><div ref={bottomRef} /></div>
     {scheduledDrafts.length > 0 && !deleteSelection && <div className="scheduled-strip"><CalendarClock size={14} /><span>예약 메시지 {scheduledDrafts.length}개</span><small>앱 실행 중 자동 전송</small></div>}
     {!deleteSelection && <ChatComposer draft={draft} reply={replyTo ? byId.get(replyTo) : undefined} partnerName={partnerName} onDraft={setDraft} onSend={send} onImages={sendImages} onGif={sendGif} onQuick={sendText} onSchedule={() => setScheduleOpen(true)} onGift={() => setGiftOpen(true)} onCancelReply={() => setReplyTo(undefined)} />}
-    {toolsOpen && <ChatToolsPanel messages={messages} partnerName={partnerName} preferences={preferences} onPreferences={setPreferences} onJump={jump} onImage={setLightbox} onImport={(imported) => setMessages(imported)} onSticker={sendText} onClose={() => setToolsOpen(false)} />}
+    {toolsOpen && <ChatToolsPanel messages={messages} partnerName={partnerName} preferences={preferences} onPreferences={setPreferences} onJump={jump} onImage={setLightbox} onImport={(imported) => setMessages(imported)} onSticker={sendText} onClearAll={clearAllChat} onClose={() => setToolsOpen(false)} />}
     {lightbox && <div className="lightbox" role="dialog" onClick={() => setLightbox(undefined)}><button aria-label="닫기"><X /></button><img src={lightbox} alt="확대된 채팅 사진" /></div>}
 
     {deleteConfirmOpen && <div className="chat-delete-backdrop" role="presentation" onMouseDown={() => !deleteBusy && setDeleteConfirmOpen(false)}>
