@@ -1,5 +1,5 @@
 import { Heart, MapPin } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Memory } from '../../types';
 import { isMemoryVideo, MemoryImage } from './MemoryMedia';
 
@@ -22,11 +22,32 @@ function wirePreviewVisibilityGuard() {
 export function MemoryCard({ memory, onOpen }: { memory: Memory; onOpen: () => void; onFavorite: () => void }) {
   const date = new Date(`${memory.date}T00:00:00`);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [videoReady, setVideoReady] = useState(false);
   const cover = memory.images[0];
 
   useEffect(() => {
+    if (!isMemoryVideo(cover)) {
+      setVideoReady(false);
+      return;
+    }
+    setVideoReady(false);
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || typeof IntersectionObserver === 'undefined') {
+      setVideoReady(true);
+      return;
+    }
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      observer.disconnect();
+      setVideoReady(true);
+    }, { rootMargin: '600px 0px', threshold: 0.01 });
+    observer.observe(video);
+    return () => observer.disconnect();
+  }, [cover]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !videoReady) return;
     wirePreviewVisibilityGuard();
 
     const observer = new IntersectionObserver(([entry]) => {
@@ -52,12 +73,12 @@ export function MemoryCard({ memory, onOpen }: { memory: Memory; onOpen: () => v
       video.pause();
       if (activePreviewVideo === video) activePreviewVideo = null;
     };
-  }, [cover]);
+  }, [cover, videoReady]);
 
   return <article className="memory-card" onClick={onOpen}>
     <div className="memory-cover">
       {isMemoryVideo(cover)
-        ? <video ref={videoRef} src={cover} muted loop playsInline preload="metadata" />
+        ? <video ref={videoRef} src={videoReady ? cover : undefined} muted loop playsInline preload={videoReady ? 'metadata' : 'none'} />
         : <MemoryImage src={cover} alt={memory.title} />}
       <span className={memory.favorite ? 'memory-favorite-badge active' : 'memory-favorite-badge'}><Heart size={17} fill={memory.favorite ? 'currentColor' : 'none'} /></span>
     </div>
