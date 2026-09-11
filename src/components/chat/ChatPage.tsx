@@ -156,7 +156,10 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     count: rows.length,
     getScrollElement: () => messagesRef.current,
     estimateSize: (index) => estimateChatRowHeight(rows[index]),
-    overscan: 6,
+    // Keep a couple of screens' worth of rows mounted on either side so a
+    // normal scroll (not a violent fling) rarely has to tear down and
+    // rebuild a photo row mid-gesture.
+    overscan: 10,
     getItemKey: (index) => rows[index].key,
   });
   const aiPartner = currentUid ? loadLocalAiPartner(currentUid) : null;
