@@ -1,4 +1,4 @@
-import { Bookmark, ChevronLeft, ChevronRight, CornerUpLeft, Download, Image as ImageIcon, RefreshCw, X } from 'lucide-react';
+import { Bookmark, Check, ChevronLeft, ChevronRight, CornerUpLeft, Download, Image as ImageIcon, RefreshCw, Trash2, X } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import '../../route-chat-gallery-v21.css';
@@ -257,8 +257,10 @@ function GalleryViewer({ urls, initialIndex, onClose }: { urls: string[]; initia
 
 type ChatBubbleProps = {
   message: Message; reply?: Message; partnerName: string; partnerInitial: string; active: boolean; highlighted: boolean;
+  selectionMode: boolean; selected: boolean;
   onAction: () => void; onReact: (emoji: string) => void; onReply: () => void;
-  onSave: () => void; onImage: (url: string) => void; onJump: (id: number) => void;
+  onSave: () => void; onDelete: () => void; onToggleSelect: () => void;
+  onImage: (url: string) => void; onJump: (id: number) => void;
 };
 
 function sameMessage(a?: Message, b?: Message) {
@@ -278,7 +280,7 @@ function sameMessage(a?: Message, b?: Message) {
     && a.scheduledFor === b.scheduledFor;
 }
 
-function ChatBubbleView({ message, reply, partnerName, partnerInitial, active, highlighted, onAction, onReact, onReply, onSave, onImage, onJump }: ChatBubbleProps) {
+function ChatBubbleView({ message, reply, partnerName, partnerInitial, active, highlighted, selectionMode, selected, onAction, onReact, onReply, onSave, onDelete, onToggleSelect, onImage, onJump }: ChatBubbleProps) {
   const [galleryIndex, setGalleryIndex] = useState<number>();
   const mine = message.sender === 'me';
   const mediaBubble = message.type === 'image' || message.type === 'gif';
@@ -293,11 +295,12 @@ function ChatBubbleView({ message, reply, partnerName, partnerInitial, active, h
   const mediaRow = message.type === 'image' || message.type === 'gif' || message.type === 'gallery';
 
   return <>
-    <div id={`message-${message.id}`} className={`bubble-row ${mine ? 'mine' : ''} ${highlighted ? 'highlighted' : ''} ${mediaRow ? 'bubble-row-media' : ''}`}>
+    <div id={`message-${message.id}`} className={`bubble-row ${mine ? 'mine' : ''} ${highlighted ? 'highlighted' : ''} ${mediaRow ? 'bubble-row-media' : ''} ${selectionMode && mine ? 'chat-selectable-row' : ''} ${selected ? 'chat-selected-row' : ''}`}>
+      {selectionMode && mine && <button type="button" className={`chat-message-select ${selected ? 'selected' : ''}`} aria-label={selected ? '선택 해제' : '메시지 선택'} onClick={(event) => { event.stopPropagation(); onToggleSelect(); }}>{selected ? <Check size={15} strokeWidth={3} /> : null}</button>}
       {!mine && <div className="avatar tiny">{partnerInitial}</div>}
       <div className="message-wrap">
-        {active && <><ReactionPicker onSelect={onReact} /><div className="message-actions"><button onClick={onReply}><CornerUpLeft size={14} />답장</button><button onClick={onSave}>{message.saved ? <Bookmark size={14} fill="currentColor" /> : <Bookmark size={14} />} {saveLabel}</button></div></>}
-        <button type="button" className={`bubble ${message.type === 'gallery' ? 'gallery-bubble' : ''} ${mediaBubble ? 'media-bubble' : ''}`} onClick={(event) => { event.stopPropagation(); onAction(); }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); onAction(); }}>
+        {active && !selectionMode && <><ReactionPicker onSelect={onReact} /><div className="message-actions"><button onClick={onReply}><CornerUpLeft size={14} />답장</button><button onClick={onSave}>{message.saved ? <Bookmark size={14} fill="currentColor" /> : <Bookmark size={14} />} {saveLabel}</button>{mine && <button className="message-delete-action" onClick={onDelete}><Trash2 size={14} />삭제</button>}</div></>}
+        <button type="button" className={`bubble ${message.type === 'gallery' ? 'gallery-bubble' : ''} ${mediaBubble ? 'media-bubble' : ''}`} onClick={(event) => { event.stopPropagation(); if (selectionMode && mine) onToggleSelect(); else if (!selectionMode) onAction(); }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); if (selectionMode && mine) onToggleSelect(); else if (!selectionMode) onAction(); }}>
           {reply && <span className="reply-preview" onClick={(event) => { event.stopPropagation(); onJump(reply.id); }}><b>{reply.sender === 'me' ? '나' : partnerName}</b>{reply.type !== 'text' ? <><ImageIcon size={12} /> {replyLabel(reply)}</> : replyLabel(reply)}</span>}
           {message.type === 'image' && message.imageUrl && <DeferredMediaImage className="chat-image" src={message.imageUrl} alt="채팅으로 보낸 사진" onClick={(event) => { event.stopPropagation(); onImage(message.imageUrl!); }} />}
           {message.type === 'gif' && message.imageUrl && <DeferredMediaImage className="chat-image chat-gif" src={message.imageUrl} alt="채팅으로 보낸 움짤" onClick={(event) => { event.stopPropagation(); onImage(message.imageUrl!); }} />}
@@ -323,4 +326,6 @@ export const ChatBubble = memo(ChatBubbleView, (previous, next) => (
   && previous.partnerInitial === next.partnerInitial
   && previous.active === next.active
   && previous.highlighted === next.highlighted
+  && previous.selectionMode === next.selectionMode
+  && previous.selected === next.selected
 ));
