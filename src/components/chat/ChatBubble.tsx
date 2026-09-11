@@ -10,7 +10,7 @@ import { ReactionPicker } from './ReactionPicker';
 
 const MAX_INLINE_GALLERY_ITEMS = 4;
 const SWIPE_THRESHOLD = 42;
-const LEGACY_MEDIA_PREFETCH_MARGIN = '700px 0px';
+const CHAT_MEDIA_PREFETCH_MARGIN = '900px 0px';
 const PREVIEW_STATUS_EVENT = 'route-chat-media-preview-status';
 const PREVIEW_STATUS_REQUEST_EVENT = 'route-chat-media-preview-status-request';
 const PREVIEW_RETRY_EVENT = 'route-chat-media-preview-retry';
@@ -46,33 +46,40 @@ function DeferredMediaImage({ src, alt, className, onClick, eager = false }: {
   const [failureCode, setFailureCode] = useState('');
   const [previewFailed, setPreviewFailed] = useState(false);
   const [previewRetry, setPreviewRetry] = useState(0);
+  const [mediaReady, setMediaReady] = useState(eager);
   const [legacyRequested, setLegacyRequested] = useState(eager);
-  const legacyAnchorRef = useRef<HTMLSpanElement>(null);
+  const mediaAnchorRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     setLegacyState('optimizing');
     setFailureCode('');
     setPreviewFailed(false);
     setPreviewRetry(0);
+    setMediaReady(eager);
     setLegacyRequested(eager);
   }, [src, eager]);
 
   useEffect(() => {
-    if (optimizedPreview || legacyRequested) return;
-    const target = legacyAnchorRef.current;
+    if (mediaReady || eager) return;
+    const target = mediaAnchorRef.current;
     if (!target || typeof IntersectionObserver === 'undefined') {
-      setLegacyRequested(true);
+      setMediaReady(true);
       return;
     }
 
     const observer = new IntersectionObserver(([entry]) => {
       if (!entry.isIntersecting) return;
       observer.disconnect();
-      setLegacyRequested(true);
-    }, { rootMargin: LEGACY_MEDIA_PREFETCH_MARGIN, threshold: 0.01 });
+      setMediaReady(true);
+    }, { rootMargin: CHAT_MEDIA_PREFETCH_MARGIN, threshold: 0.01 });
     observer.observe(target);
     return () => observer.disconnect();
-  }, [legacyRequested, optimizedPreview, src]);
+  }, [eager, mediaReady, src]);
+
+  useEffect(() => {
+    if (optimizedPreview || !mediaReady || legacyRequested) return;
+    setLegacyRequested(true);
+  }, [legacyRequested, mediaReady, optimizedPreview]);
 
   useEffect(() => {
     if (optimizedPreview || !legacyRequested) return;
@@ -104,9 +111,18 @@ function DeferredMediaImage({ src, alt, className, onClick, eager = false }: {
     window.dispatchEvent(new CustomEvent(PREVIEW_RETRY_EVENT, { detail: { reference: src } }));
   };
 
+  if (!mediaReady) {
+    return <span
+      ref={mediaAnchorRef}
+      className={`chat-legacy-media-gate ${className ?? ''}`}
+      role="img"
+      aria-label="사진 미리보기"
+    ><ImageIcon size={20} /><small>사진 미리보기</small></span>;
+  }
+
   if (!optimizedPreview && !legacyRequested) {
     return <span
-      ref={legacyAnchorRef}
+      ref={mediaAnchorRef}
       className={`chat-legacy-media-gate ${className ?? ''}`}
       role="img"
       aria-label="사진 미리보기"
