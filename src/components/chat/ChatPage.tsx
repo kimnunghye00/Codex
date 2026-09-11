@@ -586,6 +586,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     setSyncError('');
     try {
       if (connection) await clearCoupleChatForMe(connection.coupleId, currentUid);
+      window.dispatchEvent(new CustomEvent('route-chat-cleared-all'));
       setMessages([]);
       setActive(undefined);
       setReplyTo(undefined);
