@@ -246,18 +246,25 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
   return <>
     <section className="home-couple-tools" aria-label="커플 프로필과 일정">
       <section className="home-couple-time-card" aria-label="커플 프로필과 우리의 시간">
+        <span className="home-couple-deco-heart deco-a" aria-hidden="true">♥</span>
+        <span className="home-couple-deco-heart deco-b" aria-hidden="true">♥</span>
+        <span className="home-couple-deco-heart deco-c" aria-hidden="true">♥</span>
+
         <button type="button" className="home-couple-person home-couple-person-me" onClick={onOpenMyProfile}>
           <span className="home-couple-avatar">{avatar(profile, '나')}</span>
           <b>{myRealName}</b>
+          <small>늘 고마워 <span aria-hidden="true">♥</span></small>
         </button>
 
-        <span className="home-couple-bridge home-couple-bridge-left" aria-hidden="true" />
-        <span className="home-couple-heart-node" aria-hidden="true"><Heart size={14} fill="currentColor" /></span>
-        <span className="home-couple-bridge home-couple-bridge-right" aria-hidden="true" />
+        <svg className="home-couple-connector" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M0 20 C22 20 29 6 50 6 C71 6 78 20 100 20" />
+        </svg>
+        <span className="home-couple-heart-node" aria-hidden="true"><Heart size={15} fill="currentColor" /></span>
 
         <button type="button" className="home-couple-person home-couple-person-partner" onClick={() => connection ? setPartnerOpen(true) : onOpenConnect()}>
           <span className="home-couple-avatar partner">{avatar(partner, '상')}</span>
           <b>{partnerRealName}</b>
+          <small>항상 곁에 있어줘서 <span aria-hidden="true">♥</span></small>
         </button>
 
         <button type="button" className="home-couple-time-center" onClick={onOpenAnniversary}>
