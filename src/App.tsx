@@ -319,7 +319,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
 
   return <>
     <div className="app-shell"><main><Suspense fallback={<div className="page auth-loading" role="status" aria-live="polite"><div className="loading-mark" /><p>화면을 불러오는 중이에요</p></div>}>
-      {tab === 'home' && <HomePage uid={user.uid} profile={profile} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} memories={memories} latestPartnerMessage={latestPartnerMessage} onNavigate={navigateTab} onOpenChat={openChat} onOpenMemory={openMemory} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
+      {tab === 'home' && <HomePage uid={user.uid} profile={profile} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} memories={memories} latestPartnerMessage={latestPartnerMessage} onNavigate={navigateTab} onOpenChat={openChat} onOpenMemory={openMemory} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'memories' && <MemoriesPage requestedTab={requestedHubTab} Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={(place) => { setLocationFocus(place); setRequestedLocationTab('map'); navigateTab('location'); }} />}
       {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} connection={connection} />}
       {tab === 'location' && <LocationPage requestedTab={requestedLocationTab} Header={AppHeader} connection={connection} focusPlace={locationFocus} onClearFocus={() => setLocationFocus(undefined)} onCreateMemory={(draft) => { setMemoryToOpen(undefined); setMemoryDraft(draft); setRequestedHubTab('album'); navigateTab('memories'); }} onActivity={(title, detail) => addActivity({ actor: 'me', kind: 'location', title, detail })} />}
@@ -334,8 +334,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
   </>;
 }
 
-const HomePage = memo(function HomePage({ uid, profile, connection, relationshipStartDate, coupleDay, anniversaries, memories, latestPartnerMessage, onNavigate, onOpenChat, onOpenMemory, onSettings, onNotifications, unreadCount }: { uid: string; profile: UserProfile; connection: RealCoupleConnection | null; relationshipStartDate?: string; coupleDay: number; anniversaries: Anniversary[]; memories: Memory[]; latestPartnerMessage?: Message; onNavigate: (tab: Tab) => void; onOpenChat: () => void; onOpenMemory: (id: number) => void; onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
-  const nearest = anniversaries[0];
+const HomePage = memo(function HomePage({ uid, profile, connection, relationshipStartDate, coupleDay, memories, latestPartnerMessage, onNavigate, onOpenChat, onOpenMemory, onSettings, onNotifications, unreadCount }: { uid: string; profile: UserProfile; connection: RealCoupleConnection | null; relationshipStartDate?: string; coupleDay: number; memories: Memory[]; latestPartnerMessage?: Message; onNavigate: (tab: Tab) => void; onOpenChat: () => void; onOpenMemory: (id: number) => void; onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
   const latestMemory = memories[0];
   const partnerProfile = connection?.partnerProfile ?? null;
   const partnerName = partnerProfile ? displayName(partnerProfile) : '상대방';
@@ -343,7 +342,7 @@ const HomePage = memo(function HomePage({ uid, profile, connection, relationship
 
   return <div className="page home-page home-dashboard">
     <SharedAppHeader onSettings={onSettings} onNotifications={onNotifications} unreadCount={unreadCount} />
-    <CoupleHomeTools uid={uid} profile={profile} connection={connection} relationshipStartDate={relationshipStartDate} onOpenMyProfile={onSettings} onOpenConnect={onSettings} />
+    <CoupleHomeTools uid={uid} profile={profile} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} onOpenMyProfile={onSettings} onOpenConnect={onSettings} onOpenAnniversary={() => onNavigate('anniversary')} />
     <div className="home-dashboard-grid">
       <button className="home-map-card" type="button" aria-label="우리의 지도 열기" onClick={() => onNavigate('location')}>
         <div className="home-map-grid-lines" /><span className="home-map-road road-a" /><span className="home-map-road road-b" /><span className="home-map-river" />
@@ -352,12 +351,6 @@ const HomePage = memo(function HomePage({ uid, profile, connection, relationship
         <div className="home-map-person"><span className="home-map-halo" /><span className="home-map-avatar">{partnerInitial}</span><MapPin size={25} fill="currentColor" /></div><div className="home-map-locate"><MapPinned size={20} /></div>
       </button>
       <div className="home-dashboard-side">
-        <button className="home-time-card" type="button" onClick={() => onNavigate('anniversary')}>
-          <div className="home-card-title"><span>우리의 시간</span><Heart size={16} fill="currentColor" /></div>
-          <div className="home-time-block"><small>{relationshipStartDate ? '사귄 지' : '기념일'}</small><strong>{relationshipStartDate ? `D+${coupleDay}` : '설정하기'}</strong><em>{formatShortDate(relationshipStartDate)}</em></div>
-          <div className="home-time-divider" />
-          {nearest ? <div className="home-time-block upcoming-time"><small>다가오는 날</small><strong>D-{daysUntil(nearest.date)}</strong><em>{nearest.title}</em></div> : <div className="home-time-block upcoming-time"><small>다가오는 날</small><strong>-</strong><em>생일과 기념일을 준비하고 있어요</em></div>}
-        </button>
         {latestMemory ? <button className="home-photo-card" type="button" onClick={() => onOpenMemory(latestMemory.id)}><MemoryImage src={latestMemory.images[0]} alt={latestMemory.title} loading="eager" /><span className="home-photo-shade" /><span className="home-photo-copy"><small>최근 추억</small><strong>{latestMemory.title}</strong><em>{latestMemory.date.replaceAll('-', '.')}</em></span><span className="home-photo-heart"><Heart size={16} /></span></button> : <button className="home-photo-card empty" type="button" onClick={() => onNavigate('memories')}><Image size={24} /><span>첫 추억을 남겨보세요</span></button>}
         <button className="home-chat-card" type="button" onClick={onOpenChat}><span className="home-chat-head"><b>최근 대화</b><ChevronRight size={17} /></span><span className="home-chat-preview"><span className="home-chat-avatar">{partnerInitial}</span><span className="home-chat-copy"><b>{partnerName}</b><small>{chatPreview(latestPartnerMessage)}</small></span></span></button>
       </div>
