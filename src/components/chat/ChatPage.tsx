@@ -263,6 +263,14 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
 
   useEffect(() => { if (currentUid) setPreferences(loadChatPreferences(currentUid)); }, [currentUid]);
   useEffect(() => { if (currentUid) saveChatPreferences(currentUid, preferences); }, [currentUid, preferences]);
+  useEffect(() => {
+    const syncPreferences = (event: Event) => {
+      const next = (event as CustomEvent<ChatPreferences>).detail;
+      if (next) setPreferences(next);
+    };
+    window.addEventListener('route-chat-preferences-change', syncPreferences);
+    return () => window.removeEventListener('route-chat-preferences-change', syncPreferences);
+  }, []);
   useEffect(() => { localStorage.setItem(`route-scheduled-chat:${currentUid}`, JSON.stringify(scheduledDrafts)); }, [scheduledDrafts, currentUid]);
   useEffect(() => {
     const refreshSavedMedia = () => setSavedMediaIds(loadChatMemoryMessageIds());
