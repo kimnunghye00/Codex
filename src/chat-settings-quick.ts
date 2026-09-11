@@ -41,7 +41,8 @@ function quickButton(icon: string, title: string, description: string, action: (
   return button;
 }
 
-function openChatQuickSettings() {
+async function openChatQuickSettings() {
+  await import('./chat-settings-quick.css');
   closeChatQuickSettings();
 
   const backdrop = document.createElement('div');
@@ -92,7 +93,7 @@ document.addEventListener('click', (event) => {
   if (!button || !button.textContent?.includes('기능 / 옵션')) return;
   event.preventDefault();
   event.stopImmediatePropagation();
-  openChatQuickSettings();
+  void openChatQuickSettings();
 }, true);
 
 window.addEventListener('route-native-back', (event) => {
