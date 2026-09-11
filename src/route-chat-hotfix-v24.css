@@ -478,13 +478,13 @@
 /* Message action controls live in their own rail to the left of the bubble/media. */
 .chat-page .chat-message-side-tools {
   flex: 0 0 auto;
-  align-self: flex-end;
+  align-self: flex-start;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 6px;
   max-width: min(260px, 42vw);
-  margin: 0 6px 20px 0;
+  margin: 0 6px 0 0;
 }
 
 .chat-page .bubble-row:not(.mine) .chat-message-side-tools {
@@ -540,7 +540,7 @@
     max-width: 112px;
     gap: 5px;
     margin-right: 4px;
-    margin-bottom: 18px;
+    margin-bottom: 0;
   }
 
   .chat-page .chat-message-side-tools .reaction-picker {
