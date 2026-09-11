@@ -1,10 +1,13 @@
-import { collection, deleteDoc, doc, limitToLast, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, limitToLast, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Message, Reaction } from '../types';
 import { startLegacyChatMediaMigration } from './chatMediaMigration';
 
 type CloudReaction = { emoji: string; uid: string };
 type MessageStateSink = (value: Message[] | ((current: Message[]) => Message[])) => void;
+type UserChatState = {
+  chatClearBefore?: Record<string, string>;
+};
 
 type CloudMessage = {
   id: number;
@@ -27,6 +30,25 @@ const INITIAL_CHAT_PAGE = 40;
 const CHAT_PAGE_STEP = 40;
 const HISTORY_TRIGGER_PX = 110;
 const chatWindowSizeByRoom = new Map<string, number>();
+const CHAT_CLEAR_LOCAL_PREFIX = 'route-chat-clear-before:';
+
+function chatClearLocalKey(coupleId: string, currentUid: string) {
+  return `${CHAT_CLEAR_LOCAL_PREFIX}${currentUid}:${coupleId}`;
+}
+
+function normalizeClearIso(value: unknown) {
+  if (typeof value !== 'string') return '';
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : '';
+}
+
+function latestClearIso(first: string, second: string) {
+  const firstTime = Date.parse(first);
+  const secondTime = Date.parse(second);
+  if (!Number.isFinite(firstTime)) return Number.isFinite(secondTime) ? second : '';
+  if (!Number.isFinite(secondTime)) return first;
+  return secondTime > firstTime ? second : first;
+}
 
 function messageRef(coupleId: string, id: number) {
   return doc(db, 'couples', coupleId, 'messages', String(id));
@@ -90,6 +112,14 @@ export function subscribeCoupleMessages(
   let requestedCount = Math.max(1, pageSize, chatWindowSizeByRoom.get(roomKey) ?? 0);
   let lastSnapshotCount = 0;
   let snapshotUnsubscribe: (() => void) | undefined;
+  let clearStateUnsubscribe: (() => void) | undefined;
+  let clearStateReady = false;
+  let clearedBeforeIso = '';
+  try {
+    clearedBeforeIso = normalizeClearIso(localStorage.getItem(chatClearLocalKey(coupleId, currentUid)));
+  } catch {
+    clearedBeforeIso = '';
+  }
   let messageScroller: HTMLElement | null = null;
   let loadingOlder = false;
   let previousHeight = 0;
@@ -122,12 +152,21 @@ export function subscribeCoupleMessages(
   };
 
   const listen = () => {
+    if (!clearStateReady || disposed) return;
     snapshotUnsubscribe?.();
-    const q = query(
-      collection(db, 'couples', coupleId, 'messages'),
-      orderBy('timestamp', 'asc'),
-      limitToLast(requestedCount),
-    );
+    const messageCollection = collection(db, 'couples', coupleId, 'messages');
+    const q = clearedBeforeIso
+      ? query(
+        messageCollection,
+        where('timestamp', '>', clearedBeforeIso),
+        orderBy('timestamp', 'asc'),
+        limitToLast(requestedCount),
+      )
+      : query(
+        messageCollection,
+        orderBy('timestamp', 'asc'),
+        limitToLast(requestedCount),
+      );
     snapshotUnsubscribe = onSnapshot(q, (snapshot) => {
       lastSnapshotCount = snapshot.size;
       const incoming = snapshot.docs
@@ -172,7 +211,40 @@ export function subscribeCoupleMessages(
     messageScroller.addEventListener('scroll', handleScroll, { passive: true });
   };
 
-  listen();
+  const userRef = doc(db, 'users', currentUid);
+  clearStateUnsubscribe = onSnapshot(userRef, (snapshot) => {
+    const data = snapshot.data() as UserChatState | undefined;
+    const remoteClear = normalizeClearIso(data?.chatClearBefore?.[coupleId]);
+    const nextClear = latestClearIso(clearedBeforeIso, remoteClear);
+    const changed = nextClear !== clearedBeforeIso;
+    clearedBeforeIso = nextClear;
+
+    if (clearedBeforeIso) {
+      try {
+        localStorage.setItem(chatClearLocalKey(coupleId, currentUid), clearedBeforeIso);
+      } catch {
+        // Persistence is best-effort; Firestore remains the cross-device source.
+      }
+    }
+
+    const firstReady = !clearStateReady;
+    clearStateReady = true;
+    if (changed) {
+      const cutoff = Date.parse(clearedBeforeIso);
+      onMessages((current) => current.filter((message) => messageTimeValue(message) > cutoff));
+      requestedCount = Math.max(1, pageSize);
+      chatWindowSizeByRoom.set(roomKey, requestedCount);
+      loadingOlder = false;
+      messageScroller?.removeAttribute('data-history-loading');
+    }
+    if (firstReady || changed) listen();
+  }, (error) => {
+    console.warn('[ROUTE chat clear state]', error);
+    if (clearStateReady) return;
+    clearStateReady = true;
+    listen();
+  });
+
   attachTimer = window.setTimeout(() => attachScroller(), 0);
 
   // Give the room its first paint and live-message snapshot before the one-time
@@ -188,6 +260,7 @@ export function subscribeCoupleMessages(
   return () => {
     disposed = true;
     snapshotUnsubscribe?.();
+    clearStateUnsubscribe?.();
     if (attachTimer) window.clearTimeout(attachTimer);
     if (migrationTimer) window.clearTimeout(migrationTimer);
     messageScroller?.removeEventListener('scroll', handleScroll);
@@ -246,6 +319,31 @@ export async function setCoupleMessageSaved(coupleId: string, messageId: number,
   const ref = messageRef(coupleId, messageId);
   if (!saved) return;
   await updateDoc(ref, { lastSavedBy: currentUid });
+}
+
+export async function clearCoupleChatForMe(coupleId: string, currentUid: string) {
+  const clearedBefore = new Date().toISOString();
+  const userRef = doc(db, 'users', currentUid);
+
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(userRef);
+    const data = snapshot.exists() ? snapshot.data() as UserChatState : {};
+    const existing = data.chatClearBefore ?? {};
+    transaction.set(userRef, {
+      chatClearBefore: {
+        ...existing,
+        [coupleId]: clearedBefore,
+      },
+    }, { merge: true });
+  });
+
+  try {
+    localStorage.setItem(chatClearLocalKey(coupleId, currentUid), clearedBefore);
+  } catch {
+    // Firestore already persisted the clear marker.
+  }
+
+  return clearedBefore;
 }
 
 const DELETE_FOR_EVERYONE_WINDOW_MS = 10 * 60 * 1000;
