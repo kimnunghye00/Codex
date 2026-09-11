@@ -27,25 +27,6 @@
   max-height: 100%;
 }
 
-.home-dashboard .home-couple-profile-card {
-  grid-column: 2;
-  grid-row: 2;
-  width: 100%;
-  min-width: 0;
-  min-height: 62px;
-  padding: 6px 8px;
-}
-
-.home-dashboard .home-time-card {
-  grid-column: 2;
-  grid-row: 3;
-  width: 100%;
-  min-width: 0;
-  min-height: 122px;
-  margin: 0;
-  padding: 10px 12px;
-}
-
 .home-dashboard .home-schedule-card {
   grid-column: 2;
   grid-row: 4;
@@ -122,67 +103,6 @@
   font-size: 8px;
 }
 
-/* Symmetric couple profile: photo + my real name | heart | partner real name + photo */
-.home-dashboard .home-couple-profile-card {
-  grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr);
-  column-gap: 4px;
-}
-
-.home-dashboard .home-person {
-  min-width: 0;
-  gap: 4px;
-}
-
-.home-dashboard .home-person-me {
-  justify-content: flex-start;
-  text-align: left;
-}
-
-.home-dashboard .home-couple-profile-card > .home-person:last-child {
-  flex-direction: row-reverse;
-  justify-content: flex-start;
-  text-align: right;
-}
-
-.home-dashboard .home-couple-profile-card > .home-person:last-child .home-profile-copy {
-  align-items: flex-end;
-}
-
-.home-dashboard .home-profile-avatar {
-  width: 30px;
-  height: 30px;
-  font-size: 10px;
-}
-
-.home-dashboard .home-profile-heart {
-  width: 16px;
-  height: 20px;
-}
-
-.home-dashboard .home-profile-heart svg {
-  width: 13px;
-  height: 13px;
-}
-
-.home-dashboard .home-profile-copy {
-  min-width: 0;
-  flex: 1;
-}
-
-.home-dashboard .home-profile-copy b {
-  display: block;
-  width: 100%;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 9px;
-  line-height: 1.16;
-}
-
-.home-dashboard .home-profile-copy small {
-  display: none;
-}
-
 .home-dashboard .home-photo-copy {
   left: 12px;
   right: 42px;
@@ -239,29 +159,6 @@
     min-height: 608px;
   }
 
-  .home-dashboard .home-couple-profile-card {
-    min-height: 60px;
-    padding: 5px 7px;
-  }
-
-  .home-dashboard .home-profile-avatar {
-    width: 29px;
-    height: 29px;
-  }
-
-  .home-dashboard .home-profile-copy b {
-    font-size: 9px;
-  }
-
-  .home-dashboard .home-time-card {
-    min-height: 122px;
-    padding: 9px 10px;
-  }
-
-  .home-dashboard .home-time-block strong,
-  .home-dashboard .upcoming-time strong {
-    font-size: 18px;
-  }
 
   .home-dashboard .home-schedule-card {
     min-height: 130px;
@@ -290,23 +187,6 @@
     min-height: 582px;
   }
 
-  .home-dashboard .home-couple-profile-card {
-    min-height: 56px;
-    padding: 5px 6px;
-  }
-
-  .home-dashboard .home-profile-avatar {
-    width: 27px;
-    height: 27px;
-  }
-
-  .home-dashboard .home-profile-copy b {
-    font-size: 8px;
-  }
-
-  .home-dashboard .home-time-card {
-    min-height: 116px;
-  }
 
   .home-dashboard .home-schedule-card {
     min-height: 124px;
