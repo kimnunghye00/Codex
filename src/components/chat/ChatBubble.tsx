@@ -15,6 +15,14 @@ const PREVIEW_STATUS_EVENT = 'route-chat-media-preview-status';
 const PREVIEW_STATUS_REQUEST_EVENT = 'route-chat-media-preview-status-request';
 const PREVIEW_RETRY_EVENT = 'route-chat-media-preview-retry';
 
+// Virtualized rows are fully unmounted once they scroll out of range, so a
+// photo you already scrolled past would otherwise replay its whole
+// "wait to intersect -> start loading" dance the moment it re-enters view,
+// even though the browser still has it cached. Remembering which src values
+// have already painted once (module scope, so it survives remounts) lets a
+// returning row skip straight to "ready".
+const seenMediaSrcs = new Set<string>();
+
 type LegacyPreviewState = 'optimizing' | 'retrying' | 'failed';
 type PreviewStatusDetail = {
   reference?: string;
@@ -42,21 +50,27 @@ function DeferredMediaImage({ src, alt, className, onClick, eager = false }: {
   eager?: boolean;
 }) {
   const optimizedPreview = hasOptimizedChatPreview(src);
+  const alreadySeen = seenMediaSrcs.has(src);
   const [legacyState, setLegacyState] = useState<LegacyPreviewState>('optimizing');
   const [failureCode, setFailureCode] = useState('');
   const [previewFailed, setPreviewFailed] = useState(false);
   const [previewRetry, setPreviewRetry] = useState(0);
-  const [mediaReady, setMediaReady] = useState(eager);
-  const [legacyRequested, setLegacyRequested] = useState(eager);
+  const [mediaReady, setMediaReady] = useState(eager || alreadySeen);
+  const [legacyRequested, setLegacyRequested] = useState(eager || alreadySeen);
   const mediaAnchorRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
+    const ready = eager || seenMediaSrcs.has(src);
     setLegacyState('optimizing');
     setFailureCode('');
     setPreviewFailed(false);
     setPreviewRetry(0);
-    setMediaReady(eager);
-    setLegacyRequested(eager);
+    // Same-value setState calls below bail out without a re-render, so this
+    // is a no-op for a row that mounted already-ready — it only matters when
+    // `src` actually changes on a live instance (e.g. swiping the gallery
+    // viewer to the next photo).
+    setMediaReady(ready);
+    setLegacyRequested(ready);
   }, [src, eager]);
 
   useEffect(() => {
@@ -178,6 +192,7 @@ function DeferredMediaImage({ src, alt, className, onClick, eager = false }: {
     alt={alt}
     loading={eager ? 'eager' : 'lazy'}
     decoding="async"
+    onLoad={() => seenMediaSrcs.add(src)}
     onError={() => setPreviewFailed(true)}
     onClick={onClick}
   />;
