@@ -51,8 +51,13 @@ function TypingIndicator({ ai, initial, heart = false }: { ai: boolean; initial:
   return <div className={`typing-row ${heart ? 'heart-typing-row' : ''}`} aria-label="상대방이 입력 중입니다"><div className="avatar tiny">{ai ? <Bot size={14} /> : initial}</div>{heart ? <div className="heart-typing" aria-hidden="true"><Heart fill="currentColor" /></div> : <div className="typing-bubble" aria-hidden="true"><span /><span /><span /></div>}</div>;
 }
 
-async function readFile(file: File) {
-  return await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = reject; reader.readAsDataURL(file); });
+async function readFile(file: Blob) {
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 function yieldToUi() {
@@ -69,10 +74,19 @@ function estimateChatRowHeight(row: ChatRow) {
   return base + 68;
 }
 
+async function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number) {
+  return await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('image-encode-failed')), type, quality);
+  });
+}
+
 async function prepareImage(file: File, quality: ChatPreferences['mediaQuality']) {
   if (!file.type.startsWith('image/')) throw new Error('unsupported-image');
   if (file.size > MAX_SOURCE_IMAGE_BYTES) throw new Error('source-image-too-large');
-  if (file.type === 'image/gif') return readFile(file);
+  if (file.type === 'image/gif') {
+    if (file.size > MAX_GIF_BYTES) throw new Error('gif-too-large');
+    return readFile(file);
+  }
   if (quality === 'original') {
     if (file.size > MAX_ORIGINAL_IMAGE_BYTES) throw new Error('original-image-too-large');
     return readFile(file);
@@ -80,16 +94,31 @@ async function prepareImage(file: File, quality: ChatPreferences['mediaQuality']
 
   const max = quality === 'data' ? 1080 : 1800;
   const jpegQuality = quality === 'data' ? 0.68 : 0.86;
-  const src = await readFile(file);
-  const image = await new Promise<HTMLImageElement>((resolve, reject) => { const img = new Image(); img.onload = () => resolve(img); img.onerror = reject; img.src = src; });
-  const scale = Math.min(1, max / Math.max(image.width, image.height));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.round(image.width * scale));
-  canvas.height = Math.max(1, Math.round(image.height * scale));
-  const context = canvas.getContext('2d');
-  if (!context) throw new Error('image-canvas-unavailable');
-  context.drawImage(image, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL('image/jpeg', jpegQuality);
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = objectUrl;
+    });
+    const scale = Math.min(1, max / Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
+    canvas.height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('image-canvas-unavailable');
+
+    // Give pending scroll/input work a frame before the only synchronous
+    // raster step, then use asynchronous toBlob instead of blocking
+    // canvas.toDataURL().
+    await yieldToUi();
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const encoded = await canvasToBlob(canvas, 'image/jpeg', jpegQuality);
+    return await readFile(encoded);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 }
 
 function mediaErrorMessage(cause: unknown, kind: 'photo' | 'gif') {
@@ -352,26 +381,31 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
       setSyncError('');
       if (files.length > MAX_CHAT_PHOTOS) showFlowNotice(`한 번에 최대 ${MAX_CHAT_PHOTOS}장까지 전송할 수 있어요.`);
 
+      for (const file of selected) {
+        if (!file.type.startsWith('image/')) throw new Error('unsupported-image');
+        if (file.size > MAX_SOURCE_IMAGE_BYTES) throw new Error('source-image-too-large');
+        if (file.type === 'image/gif' && file.size > MAX_GIF_BYTES) throw new Error('gif-too-large');
+      }
+
       for (let offset = 0; offset < selected.length; offset += CHAT_MEDIA_BATCH_SIZE) {
         const batch = selected.slice(offset, offset + CHAT_MEDIA_BATCH_SIZE);
-        const preparedUrls: string[] = [];
-        for (const file of batch) {
-          preparedUrls.push(connection && file.type !== 'image/gif'
-            ? await readFile(file)
-            : await prepareImage(file, preferences.mediaQuality));
-          await yieldToUi();
-        }
 
         if (connection) {
-          const uploaded = await uploadChatMedia(connection.coupleId, currentUid, messageId, preparedUrls, {
+          // Pass File objects directly to Storage. This removes the expensive
+          // FileReader -> Base64 string -> fetch(data URL) -> Blob round-trip
+          // that used to happen for every selected photo.
+          const uploaded = await uploadChatMedia(connection.coupleId, currentUid, messageId, batch, {
             startIndex: offset,
             onUploaded: (completedInBatch) => setMediaProgress({ completed: offset + completedInBatch, total: selected.length }),
           });
           urls.push(...uploaded.urls);
           uploadedPaths = [...uploadedPaths, ...uploaded.paths];
         } else {
-          urls.push(...preparedUrls);
-          setMediaProgress({ completed: Math.min(offset + batch.length, selected.length), total: selected.length });
+          for (let index = 0; index < batch.length; index += 1) {
+            urls.push(await prepareImage(batch[index], preferences.mediaQuality));
+            setMediaProgress({ completed: Math.min(offset + index + 1, selected.length), total: selected.length });
+            await yieldToUi();
+          }
         }
       }
 
