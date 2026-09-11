@@ -246,10 +246,6 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
   return <>
     <section className="home-couple-tools" aria-label="커플 프로필과 일정">
       <section className="home-couple-time-card" aria-label="커플 프로필과 우리의 시간">
-        <span className="home-couple-deco-heart deco-a" aria-hidden="true">♥</span>
-        <span className="home-couple-deco-heart deco-b" aria-hidden="true">♥</span>
-        <span className="home-couple-deco-heart deco-c" aria-hidden="true">♥</span>
-
         <button type="button" className="home-couple-person home-couple-person-me" onClick={onOpenMyProfile}>
           <span className="home-couple-avatar">{avatar(profile, '나')}</span>
           <b>{myRealName}</b>
