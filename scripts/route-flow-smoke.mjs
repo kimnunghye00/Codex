@@ -106,10 +106,11 @@ check('CoupleConnect has no interval polling', !coupleConnect.includes('setInter
 check('CoupleConnect consumes realtime invite snapshots', coupleConnect.includes('subscribeCoupleInviteState') && coupleConnect.includes('subscribeRealCoupleConnection'));
 check('pending couple connection is restart-persisted', coupleConnect.includes('persistSession') && coupleConnect.includes('loadPersistedSession') && coupleSession.includes('route.coupleConnect.pending:'));
 
-check('More uses callback navigation', more.includes('onNavigate: (target: MoreNavigationTarget) => void'));
-check('More has settings beside service grid', more.includes("id: 'settings', label: '설정'") && more.includes("id: 'footprint', label: '발자취'"));
+check('More keeps typed navigation contract', more.includes('onNavigate: (target: MoreNavigationTarget) => void'));
+check('More is a customization hub', more.includes('ROUTE 꾸미기') && more.includes("'chat-style'") && more.includes("'profile-style'") && more.includes("'store'"));
 check('More removes duplicate quick-settings section', !more.includes('more-quick-settings'));
-check('More promise terminology', more.includes("id: 'date', label: '약속'"));
+check('More removes duplicated service navigation and settings', !more.includes("id: 'settings', label: '설정'") && !more.includes("id: 'date', label: '약속'") && !more.includes("id: 'footprint', label: '발자취'"));
+check('More exposes theme icon emoticon customization', more.includes("openSheet('theme')") && more.includes("openSheet('app-icon')") && more.includes("openSheet('emoticon')"));
 check('More does not search DOM for navigation', !more.includes('querySelectorAll'));
 
 check('chat screen title is 대화', chat.includes('<Header title="대화"'));
