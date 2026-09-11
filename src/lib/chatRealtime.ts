@@ -20,6 +20,7 @@ type CloudMessage = {
   reactions?: CloudReaction[];
   savedBy?: string[];
   scheduledFor?: string;
+  hiddenFor?: string[];
 };
 
 const INITIAL_CHAT_PAGE = 40;
@@ -31,8 +32,9 @@ function messageRef(coupleId: string, id: number) {
   return doc(db, 'couples', coupleId, 'messages', String(id));
 }
 
-function toMessage(snapshotDoc: { id: string; data: () => unknown }, currentUid: string): Message {
+function toMessage(snapshotDoc: { id: string; data: () => unknown }, currentUid: string): Message | undefined {
   const data = snapshotDoc.data() as CloudMessage;
+  if (data.hiddenFor?.includes(currentUid)) return undefined;
   const sender = data.authorUid === currentUid ? 'me' : 'partner';
   const reactions: Reaction[] | undefined = data.reactions?.map((reaction) => ({
     emoji: reaction.emoji,
@@ -128,7 +130,9 @@ export function subscribeCoupleMessages(
     );
     snapshotUnsubscribe = onSnapshot(q, (snapshot) => {
       lastSnapshotCount = snapshot.size;
-      const incoming = snapshot.docs.map((snapshotDoc) => toMessage(snapshotDoc, currentUid));
+      const incoming = snapshot.docs
+        .map((snapshotDoc) => toMessage(snapshotDoc, currentUid))
+        .filter((message): message is Message => Boolean(message));
       onMessages((current) => mergePagedSnapshot(current, incoming));
       if (loadingOlder) restoreScrollPosition();
     }, (error) => {
@@ -244,6 +248,42 @@ export async function setCoupleMessageSaved(coupleId: string, messageId: number,
   await updateDoc(ref, { lastSavedBy: currentUid });
 }
 
+const DELETE_FOR_EVERYONE_WINDOW_MS = 10 * 60 * 1000;
+
+export async function hideCoupleMessageForMe(coupleId: string, messageId: number, currentUid: string) {
+  const ref = messageRef(coupleId, messageId);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) return;
+    const data = snapshot.data() as CloudMessage;
+    const hiddenFor = Array.isArray(data.hiddenFor) ? data.hiddenFor : [];
+    if (hiddenFor.includes(currentUid)) return;
+    transaction.update(ref, { hiddenFor: [...hiddenFor, currentUid] });
+  });
+}
+
+export async function deleteCoupleMessageForEveryone(
+  coupleId: string,
+  messageId: number,
+  currentUid: string,
+) {
+  const ref = messageRef(coupleId, messageId);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) return;
+    const data = snapshot.data() as CloudMessage;
+    if (data.authorUid !== currentUid) throw new Error('message-not-owned');
+
+    const sentAt = Date.parse(data.timestamp);
+    if (!Number.isFinite(sentAt) || Date.now() - sentAt >= DELETE_FOR_EVERYONE_WINDOW_MS) {
+      throw new Error('delete-window-expired');
+    }
+    transaction.delete(ref);
+  });
+}
+
+// Legacy helper kept for older callers. New UI should use one of the
+// ownership-aware helpers above.
 export async function deleteCoupleMessage(coupleId: string, messageId: number) {
   await deleteDoc(messageRef(coupleId, messageId));
 }
