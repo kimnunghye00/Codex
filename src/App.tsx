@@ -19,7 +19,7 @@ import {
   saveNotifications,
   type AppNotification,
 } from './utils/notifications';
-import { ChevronRight, Heart, Image, MapPin, MapPinned, Plus } from 'lucide-react';
+import { ChevronRight, Heart, Image, MapPin, MapPinned, MessageCircle, Plus } from 'lucide-react';
 
 const ChatPage = lazy(() => Promise.all([
   import('./styles/features/chat'),
