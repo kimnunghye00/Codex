@@ -373,7 +373,7 @@ const HomePage = memo(function HomePage({ uid, profile, connection, relationship
 
         <button className="home-chat-card" type="button" onClick={onOpenChat}>
           <span className="home-chat-head"><span><MessageCircle size={17} /><b>최근 대화</b></span><em>전체보기 <ChevronRight size={14} /></em></span>
-          <span className="home-chat-preview"><span className="home-chat-avatar">{partnerInitial}</span><span className="home-chat-copy"><b>{partnerName}</b><small>{chatPreview(latestPartnerMessage)}</small></span><time>{latestPartnerMessage ? '최근' : ''}</time></span>
+          <span className="home-chat-preview"><span className="home-chat-avatar">{partnerInitial}</span><span className="home-chat-copy"><b>{partnerName}</b><small>{chatPreview(latestPartnerMessage)}</small></span></span>
         </button>
       </aside>
     </div>
