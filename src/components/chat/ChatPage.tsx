@@ -582,7 +582,8 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   };
 
   const clearAllChat = async () => {
-    if (!currentUid) throw new Error('chat-clear-no-user');
+    if (!currentUid || deleteBusy) return;
+    setDeleteBusy(true);
     setSyncError('');
     try {
       if (connection) await clearCoupleChatForMe(connection.coupleId, currentUid);
@@ -593,11 +594,12 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
       setDeleteSelection(null);
       setDeleteConfirmOpen(false);
       setLightbox(undefined);
-      showFlowNotice('채팅을 모두 삭제했어요. 상대방의 대화 기록은 그대로 유지돼요.');
+      showFlowNotice('모든 대화를 삭제했어요.');
     } catch (cause) {
       console.error('[ROUTE clear chat]', cause);
-      setSyncError('채팅을 모두 삭제하지 못했어요. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.');
-      throw cause;
+      setSyncError('모든 대화를 삭제하지 못했어요. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.');
+    } finally {
+      setDeleteBusy(false);
     }
   };
 
@@ -617,9 +619,10 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   return <div className={`page full-page chat-page chat-bg-${preferences.background} chat-font-${preferences.fontSize} ${deleteSelection ? 'chat-delete-mode' : ''}`}>
     {deleteSelection
       ? <div className="chat-delete-toolbar">
-        <button type="button" aria-label="삭제 선택 취소" onClick={closeDeleteSelection}><X size={22} /></button>
+        <button type="button" className="chat-delete-all-button" disabled={deleteBusy || messages.length === 0} onClick={() => void clearAllChat()}>{deleteBusy ? '삭제 중...' : '모든 대화 삭제'}</button>
         <strong>{deleteSelection.size}</strong>
         <span />
+        <button type="button" className="chat-delete-toolbar-cancel" aria-label="삭제 선택 취소" disabled={deleteBusy} onClick={closeDeleteSelection}><X size={21} /></button>
         <button type="button" className="chat-delete-toolbar-trash" aria-label="선택 메시지 삭제" disabled={!deleteSelection.size || deleteBusy} onClick={() => setDeleteConfirmOpen(true)}><Trash2 size={21} /></button>
       </div>
       : <Header title="대화" />}
@@ -649,7 +652,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     })}</div><div ref={bottomRef} /></div>
     {scheduledDrafts.length > 0 && !deleteSelection && <div className="scheduled-strip"><CalendarClock size={14} /><span>예약 메시지 {scheduledDrafts.length}개</span><small>앱 실행 중 자동 전송</small></div>}
     {!deleteSelection && <ChatComposer draft={draft} reply={replyTo ? byId.get(replyTo) : undefined} partnerName={partnerName} onDraft={setDraft} onSend={send} onImages={sendImages} onGif={sendGif} onQuick={sendText} onSchedule={() => setScheduleOpen(true)} onGift={() => setGiftOpen(true)} onCancelReply={() => setReplyTo(undefined)} />}
-    {toolsOpen && <ChatToolsPanel messages={messages} partnerName={partnerName} preferences={preferences} onPreferences={setPreferences} onJump={jump} onImage={setLightbox} onImport={(imported) => setMessages(imported)} onSticker={sendText} onClearAll={clearAllChat} onClose={() => setToolsOpen(false)} />}
+    {toolsOpen && <ChatToolsPanel messages={messages} partnerName={partnerName} preferences={preferences} onPreferences={setPreferences} onJump={jump} onImage={setLightbox} onImport={(imported) => setMessages(imported)} onSticker={sendText} onClose={() => setToolsOpen(false)} />}
     {lightbox && <div className="lightbox" role="dialog" onClick={() => setLightbox(undefined)}><button aria-label="닫기"><X /></button><img src={lightbox} alt="확대된 채팅 사진" /></div>}
 
     {deleteConfirmOpen && <div className="chat-delete-backdrop" role="presentation" onMouseDown={() => !deleteBusy && setDeleteConfirmOpen(false)}>
