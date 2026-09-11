@@ -1,4 +1,4 @@
-import { Bot, CalendarClock, Gift, Heart, MonitorUp, MoreHorizontal, Phone, Video, X } from 'lucide-react';
+import { Bot, CalendarClock, Gift, Heart, MonitorUp, MoreHorizontal, Phone, Trash2, Video, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { collection, doc, onSnapshot, orderBy, query, setDoc } from 'firebase/firestore';
@@ -7,7 +7,7 @@ import { CALLING_ENABLED } from '../../config/releaseFlags';
 import { auth, db } from '../../lib/firebase';
 import { AI_TEST_PARTNER_NAME, loadLocalAiPartner } from '../../lib/coupleData';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
-import { sendCoupleMessage, subscribeCoupleMessages, toggleCoupleMessageReaction } from '../../lib/chatRealtime';
+import { deleteCoupleMessageForEveryone, hideCoupleMessageForMe, sendCoupleMessage, subscribeCoupleMessages, toggleCoupleMessageReaction } from '../../lib/chatRealtime';
 import { deleteUploadedChatMedia, uploadChatMedia } from '../../lib/chatMedia';
 import { migrateLoadedLegacyChatMedia } from '../../lib/chatMediaMigration';
 import type { Message } from '../../types';
@@ -35,6 +35,7 @@ const CHAT_MEDIA_BATCH_SIZE = 4;
 const MAX_SCHEDULE_SLEEP_MS = 60 * 60 * 1000;
 const CHAT_BOTTOM_SLOP_PX = 140;
 const FINE_POINTER_WHEEL_MULTIPLIER = 2.35;
+const DELETE_FOR_EVERYONE_WINDOW_MS = 10 * 60 * 1000;
 
 function aiReplyFor(text: string) {
   const value = text.trim();
@@ -147,6 +148,9 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   const [syncError, setSyncError] = useState('');
   const [flowNotice, setFlowNotice] = useState('');
   const [mediaProgress, setMediaProgress] = useState<MediaProgress | null>(null);
+  const [deleteSelection, setDeleteSelection] = useState<Set<number> | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [savedMediaIds, setSavedMediaIds] = useState<Set<number>>(() => loadChatMemoryMessageIds());
   const [toolsOpen, setToolsOpen] = useState(false);
   const [preferences, setPreferences] = useState(() => loadChatPreferences(currentUid || 'guest'));
@@ -170,6 +174,17 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   const noticeTimerRef = useRef<number | undefined>(undefined);
   const videoRef = useRef<HTMLVideoElement>(null);
   const byId = useMemo(() => new Map(messages.map((message) => [message.id, message])), [messages]);
+  const selectedDeleteMessages = useMemo(
+    () => deleteSelection
+      ? messages.filter((message) => message.sender === 'me' && deleteSelection.has(message.id))
+      : [],
+    [messages, deleteSelection],
+  );
+  const recentDeleteCount = selectedDeleteMessages.filter((message) => {
+    const sentAt = Date.parse(message.timestamp);
+    return Number.isFinite(sentAt) && Date.now() - sentAt < DELETE_FOR_EVERYONE_WINDOW_MS;
+  }).length;
+  const localOnlyDeleteCount = selectedDeleteMessages.length - recentDeleteCount;
   const rows = useMemo<ChatRow[]>(() => {
     const result: ChatRow[] = [];
     messages.forEach((message, index) => {
@@ -489,6 +504,83 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     setHighlighted(id);
     window.setTimeout(() => setHighlighted(undefined), 1400);
   };
+  const beginDeleteSelection = (message: Message) => {
+    if (message.sender !== 'me') return;
+    setActive(undefined);
+    setDeleteSelection(new Set([message.id]));
+  };
+
+  const toggleDeleteSelection = (message: Message) => {
+    if (message.sender !== 'me') return;
+    setDeleteSelection((current) => {
+      if (!current) return new Set([message.id]);
+      const next = new Set(current);
+      if (next.has(message.id)) next.delete(message.id);
+      else next.add(message.id);
+      return next;
+    });
+  };
+
+  const closeDeleteSelection = () => {
+    if (deleteBusy) return;
+    setDeleteConfirmOpen(false);
+    setDeleteSelection(null);
+  };
+
+  const confirmDeleteSelection = async () => {
+    if (!selectedDeleteMessages.length || deleteBusy) return;
+    setDeleteBusy(true);
+    setSyncError('');
+
+    const succeeded = new Set<number>();
+    let failed = 0;
+
+    if (!connection || !currentUid) {
+      selectedDeleteMessages.forEach((message) => succeeded.add(message.id));
+    } else {
+      const results = await Promise.allSettled(selectedDeleteMessages.map(async (message) => {
+        const sentAt = Date.parse(message.timestamp);
+        const deleteForEveryone = Number.isFinite(sentAt) && Date.now() - sentAt < DELETE_FOR_EVERYONE_WINDOW_MS;
+        if (deleteForEveryone) {
+          await deleteCoupleMessageForEveryone(connection.coupleId, message.id, currentUid);
+        } else {
+          await hideCoupleMessageForMe(connection.coupleId, message.id, currentUid);
+        }
+        return message.id;
+      }));
+      results.forEach((result) => {
+        if (result.status === 'fulfilled') succeeded.add(result.value);
+        else failed += 1;
+      });
+    }
+
+    if (succeeded.size) {
+      setMessages((items) => items.filter((message) => !succeeded.has(message.id)));
+    }
+
+    setDeleteBusy(false);
+    setDeleteConfirmOpen(false);
+
+    if (failed) {
+      setDeleteSelection(new Set(
+        selectedDeleteMessages
+          .filter((message) => !succeeded.has(message.id))
+          .map((message) => message.id),
+      ));
+      setSyncError(`${failed}개 메시지를 삭제하지 못했어요. 다시 시도해 주세요.`);
+      return;
+    }
+
+    setDeleteSelection(null);
+    showFlowNotice(
+      localOnlyDeleteCount > 0 && recentDeleteCount > 0
+        ? `최근 메시지 ${recentDeleteCount}개는 모두에게, 10분이 지난 ${localOnlyDeleteCount}개는 나에게만 삭제했어요.`
+        : recentDeleteCount > 0
+          ? `메시지 ${recentDeleteCount}개를 모두에게 삭제했어요.`
+          : `메시지 ${localOnlyDeleteCount}개를 나에게만 삭제했어요.`,
+    );
+  };
+
   const saveMessage = (message: Message) => {
     if (isChatMediaMessage(message)) {
       const result = toggleChatMessageMemory(message, partnerName);
@@ -502,8 +594,15 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     setActive(undefined);
   };
 
-  return <div className={`page full-page chat-page chat-bg-${preferences.background} chat-font-${preferences.fontSize}`}>
-    <Header title="대화" />
+  return <div className={`page full-page chat-page chat-bg-${preferences.background} chat-font-${preferences.fontSize} ${deleteSelection ? 'chat-delete-mode' : ''}`}>
+    {deleteSelection
+      ? <div className="chat-delete-toolbar">
+        <button type="button" aria-label="삭제 선택 취소" onClick={closeDeleteSelection}><X size={22} /></button>
+        <strong>{deleteSelection.size}</strong>
+        <span />
+        <button type="button" className="chat-delete-toolbar-trash" aria-label="선택 메시지 삭제" disabled={!deleteSelection.size || deleteBusy} onClick={() => setDeleteConfirmOpen(true)}><Trash2 size={21} /></button>
+      </div>
+      : <Header title="대화" />}
     <div className="chat-profile"><div className="avatar large">{usingAiPartner ? <Bot size={22} /> : partnerInitial}</div><div><b>{partnerName}</b><span className={aiTyping || partnerTyping ? 'chat-status typing' : 'chat-status'}><i /> {aiTyping || partnerTyping ? '입력 중...' : connection ? '실시간 연결됨' : usingAiPartner ? 'AI 테스트 파트너 · 연결됨' : '상대방 연결 대기'}</span></div><div className="chat-call-actions">{CALLING_ENABLED && <><button aria-label="음성 통화" onClick={() => void startMedia('voice')}><Phone size={17} /></button><button aria-label="영상 통화" onClick={() => void startMedia('video')}><Video size={17} /></button><button aria-label="화면 공유" onClick={() => void startMedia('screen')}><MonitorUp size={17} /></button></>}<button aria-label="대화 메뉴" onClick={() => setToolsOpen(true)}><MoreHorizontal /></button></div></div>
     {nearestSchedule && <div className="chat-next-schedule"><CalendarClock size={16} /><div><small>가장 가까운 일정</small><b>{nearestSchedule.title}</b><span>{nearestSchedule.date.replaceAll('-', '.')} · {nearestSchedule.startTime}</span></div></div>}
     {syncError && <p className="chat-sync-error" role="alert">{syncError}</p>}
@@ -514,7 +613,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
       className="messages !min-h-0 !flex-1 !overflow-y-auto overscroll-contain [scroll-behavior:auto] [touch-action:pan-y] [-webkit-overflow-scrolling:touch]"
       onScroll={updateNearBottom}
       onWheel={handleMessagesWheel}
-      onClick={() => active && setActive(undefined)}
+      onClick={() => active && !deleteSelection && setActive(undefined)}
     ><div style={{ position: 'relative', width: '100%', height: rowVirtualizer.getTotalSize() }}>{rowVirtualizer.getVirtualItems().map((virtualRow) => {
       const row = rows[virtualRow.index];
       return <div
@@ -525,13 +624,24 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
       >{row.kind === 'message' ? (() => {
         const message = row.message;
         const displayedMessage = isChatMediaMessage(message) ? { ...message, saved: savedMediaIds.has(message.id) } : message;
-        return <>{row.showDate && <div className="date-chip">{messageDateLabel(message.timestamp)}</div>}<ChatBubble message={displayedMessage} reply={message.replyTo ? byId.get(message.replyTo) : undefined} partnerName={partnerName} partnerInitial={partnerInitial} active={active === message.id} highlighted={highlighted === message.id} onAction={() => setActive(active === message.id ? undefined : message.id)} onReact={(emoji) => react(message.id, emoji)} onReply={() => { setReplyTo(message.id); setActive(undefined); }} onSave={() => saveMessage(displayedMessage)} onImage={setLightbox} onJump={jump} /></>;
+        return <>{row.showDate && <div className="date-chip">{messageDateLabel(message.timestamp)}</div>}<ChatBubble message={displayedMessage} reply={message.replyTo ? byId.get(message.replyTo) : undefined} partnerName={partnerName} partnerInitial={partnerInitial} active={active === message.id} highlighted={highlighted === message.id} selectionMode={Boolean(deleteSelection)} selected={Boolean(deleteSelection?.has(message.id))} onAction={() => setActive(active === message.id ? undefined : message.id)} onReact={(emoji) => react(message.id, emoji)} onReply={() => { setReplyTo(message.id); setActive(undefined); }} onSave={() => saveMessage(displayedMessage)} onDelete={() => beginDeleteSelection(displayedMessage)} onToggleSelect={() => toggleDeleteSelection(displayedMessage)} onImage={setLightbox} onJump={jump} /></>;
       })() : row.kind === 'typing-ai' ? <TypingIndicator ai initial={partnerInitial} /> : <TypingIndicator ai={false} initial={partnerInitial} heart />}</div>;
     })}</div><div ref={bottomRef} /></div>
-    {scheduledDrafts.length > 0 && <div className="scheduled-strip"><CalendarClock size={14} /><span>예약 메시지 {scheduledDrafts.length}개</span><small>앱 실행 중 자동 전송</small></div>}
-    <ChatComposer draft={draft} reply={replyTo ? byId.get(replyTo) : undefined} partnerName={partnerName} onDraft={setDraft} onSend={send} onImages={sendImages} onGif={sendGif} onQuick={sendText} onSchedule={() => setScheduleOpen(true)} onGift={() => setGiftOpen(true)} onCancelReply={() => setReplyTo(undefined)} />
+    {scheduledDrafts.length > 0 && !deleteSelection && <div className="scheduled-strip"><CalendarClock size={14} /><span>예약 메시지 {scheduledDrafts.length}개</span><small>앱 실행 중 자동 전송</small></div>}
+    {!deleteSelection && <ChatComposer draft={draft} reply={replyTo ? byId.get(replyTo) : undefined} partnerName={partnerName} onDraft={setDraft} onSend={send} onImages={sendImages} onGif={sendGif} onQuick={sendText} onSchedule={() => setScheduleOpen(true)} onGift={() => setGiftOpen(true)} onCancelReply={() => setReplyTo(undefined)} />}
     {toolsOpen && <ChatToolsPanel messages={messages} partnerName={partnerName} preferences={preferences} onPreferences={setPreferences} onJump={jump} onImage={setLightbox} onImport={(imported) => setMessages(imported)} onSticker={sendText} onClose={() => setToolsOpen(false)} />}
     {lightbox && <div className="lightbox" role="dialog" onClick={() => setLightbox(undefined)}><button aria-label="닫기"><X /></button><img src={lightbox} alt="확대된 채팅 사진" /></div>}
+
+    {deleteConfirmOpen && <div className="chat-delete-backdrop" role="presentation" onMouseDown={() => !deleteBusy && setDeleteConfirmOpen(false)}>
+      <section className="chat-delete-sheet" role="dialog" aria-modal="true" aria-label="메시지 삭제 확인" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="chat-delete-sheet-handle" />
+        <h2>메시지 {selectedDeleteMessages.length}개 삭제</h2>
+        {recentDeleteCount > 0 && <p><b>{recentDeleteCount}개</b>는 보낸 지 10분이 지나지 않아 상대방과 나에게 모두 삭제돼요.</p>}
+        {localOnlyDeleteCount > 0 && <p><b>{localOnlyDeleteCount}개</b>는 보낸 지 10분이 지나 나에게만 삭제돼요.</p>}
+        <button type="button" className="chat-delete-confirm" disabled={deleteBusy} onClick={() => void confirmDeleteSelection()}>{deleteBusy ? '삭제 중...' : '삭제하기'}</button>
+        <button type="button" className="chat-delete-cancel" disabled={deleteBusy} onClick={() => setDeleteConfirmOpen(false)}>취소</button>
+      </section>
+    </div>}
 
     {scheduleOpen && <div className="chat-extra-backdrop" onMouseDown={() => setScheduleOpen(false)}><section className="chat-extra-modal" onMouseDown={(event) => event.stopPropagation()}><button className="chat-extra-close" onClick={() => setScheduleOpen(false)}><X /></button><CalendarClock className="modal-accent-icon" /><h2>예약 메시지</h2><p>현재 버전에서는 ROUTE가 실행 중일 때 예약 시간이 되면 자동으로 보내요.</p><label>메시지<textarea value={scheduleForm.text} onChange={(event) => setScheduleForm({ ...scheduleForm, text: event.target.value })} placeholder="나중에 전할 말을 적어주세요" /></label><label>보낼 시간<input type="datetime-local" value={scheduleForm.sendAt} onChange={(event) => setScheduleForm({ ...scheduleForm, sendAt: event.target.value })} /></label><button className="primary" disabled={!scheduleForm.text.trim() || !scheduleForm.sendAt} onClick={reserveMessage}>예약하기</button></section></div>}
 
