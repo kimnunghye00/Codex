@@ -416,7 +416,6 @@
 
 .home-chat-copy b { font-size: 9px; }
 .home-chat-copy small { margin-top: 2px; color: var(--text-secondary); font-size: 7px; }
-.home-chat-preview time { color: #aaa4aa; font-size: 6px; }
 
 .page:has(> .topbar + .title-block + .event-list) {
   height: calc(100dvh - 88px);
@@ -481,7 +480,6 @@
   .home-chat-avatar { width: 28px; height: 28px; font-size: 8px; }
   .home-chat-copy b { font-size: 7px; }
   .home-chat-copy small { font-size: 6px; }
-  .home-chat-preview time { display: none; }
 }
 
 @media (max-width: 390px) {
