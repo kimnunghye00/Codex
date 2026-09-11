@@ -8,6 +8,8 @@ export type UploadedChatMedia = {
   paths: string[];
 };
 
+export type ChatMediaUploadSource = string | Blob;
+
 type UploadChatMediaOptions = {
   startIndex?: number;
   onUploaded?: (completedInBatch: number) => void;
@@ -20,6 +22,11 @@ const LEGACY_FETCH_TIMEOUT_MS = 12_000;
 
 function dataUrlMime(dataUrl: string) {
   return /^data:([^;,]+)[;,]/.exec(dataUrl)?.[1] || 'image/jpeg';
+}
+
+function sourceMime(source: ChatMediaUploadSource) {
+  if (source instanceof Blob) return source.type || 'image/jpeg';
+  return dataUrlMime(source);
 }
 
 function extensionForMime(mime: string) {
@@ -164,7 +171,7 @@ export async function uploadChatMedia(
   coupleId: string,
   ownerUid: string,
   messageId: number,
-  dataUrls: string[],
+  sources: ChatMediaUploadSource[],
   options: UploadChatMediaOptions = {},
 ): Promise<UploadedChatMedia> {
   const urls: string[] = [];
@@ -172,9 +179,9 @@ export async function uploadChatMedia(
   const startIndex = Math.max(0, options.startIndex ?? 0);
 
   try {
-    for (let index = 0; index < dataUrls.length; index += 1) {
-      const dataUrl = dataUrls[index];
-      const mime = dataUrlMime(dataUrl);
+    for (let index = 0; index < sources.length; index += 1) {
+      const source = sources[index];
+      const mime = sourceMime(source);
       if (!mime.startsWith('image/')) throw new Error('unsupported-chat-media');
 
       const absoluteIndex = startIndex + index;
@@ -189,11 +196,13 @@ export async function uploadChatMedia(
       if (mime === 'image/gif') {
         const path = `couples/${coupleId}/chatMedia/${ownerUid}/${messageId}/${sequence}.gif`;
         const storageRef = ref(storage, path);
-        await uploadString(storageRef, dataUrl, 'data_url', {
+        const metadata = {
           contentType: mime,
           cacheControl: 'public,max-age=31536000,immutable',
           customMetadata: { ...metadataBase, variant: 'original' },
-        });
+        };
+        if (source instanceof Blob) await uploadBytes(storageRef, source, metadata);
+        else await uploadString(storageRef, source, 'data_url', metadata);
         paths.push(path);
         urls.push(await getDownloadURL(storageRef));
         options.onUploaded?.(index + 1);
@@ -201,7 +210,10 @@ export async function uploadChatMedia(
         continue;
       }
 
-      const originalFile = getPendingOriginalChatFile(absoluteIndex);
+      // New sends pass the selected File straight through. The registry is
+      // retained only as a compatibility fallback for older callers.
+      const directOriginal = source instanceof File ? source : undefined;
+      const originalFile = directOriginal ?? getPendingOriginalChatFile(absoluteIndex);
       const originalMime = originalFile?.type?.startsWith('image/') ? originalFile.type : mime;
       const originalPath = `couples/${coupleId}/chatMedia/${ownerUid}/${messageId}/${sequence}.original.${extensionForMime(originalMime)}`;
       const previewPath = `couples/${coupleId}/chatMedia/${ownerUid}/${messageId}/${sequence}.preview.webp`;
@@ -209,7 +221,7 @@ export async function uploadChatMedia(
       const previewRef = ref(storage, previewPath);
 
       await yieldToBrowser();
-      const compactPreview = await createCompactPreview(dataUrl);
+      const compactPreview = await createCompactPreview(source);
       await uploadBytes(previewRef, compactPreview, {
         contentType: compactPreview.type || 'image/webp',
         cacheControl: 'public,max-age=31536000,immutable',
@@ -223,8 +235,14 @@ export async function uploadChatMedia(
           cacheControl: 'public,max-age=31536000,immutable',
           customMetadata: { ...metadataBase, variant: 'original', originalName: originalFile.name },
         });
+      } else if (source instanceof Blob) {
+        await uploadBytes(originalRef, source, {
+          contentType: originalMime,
+          cacheControl: 'public,max-age=31536000,immutable',
+          customMetadata: { ...metadataBase, variant: 'original-fallback' },
+        });
       } else {
-        await uploadString(originalRef, dataUrl, 'data_url', {
+        await uploadString(originalRef, source, 'data_url', {
           contentType: originalMime,
           cacheControl: 'public,max-age=31536000,immutable',
           customMetadata: { ...metadataBase, variant: 'original-fallback' },
