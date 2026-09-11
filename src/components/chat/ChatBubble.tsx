@@ -295,7 +295,7 @@ function ChatBubbleView({ message, reply, partnerName, partnerInitial, active, h
   const mediaRow = message.type === 'image' || message.type === 'gif' || message.type === 'gallery';
 
   return <>
-    <div id={`message-${message.id}`} className={`bubble-row ${mine ? 'mine' : ''} ${highlighted ? 'highlighted' : ''} ${mediaRow ? 'bubble-row-media' : ''} ${selectionMode && mine ? 'chat-selectable-row' : ''} ${selected ? 'chat-selected-row' : ''}`}>
+    <div id={`message-${message.id}`} className={`bubble-row ${mine ? 'mine' : ''} ${highlighted ? 'highlighted' : ''} ${mediaRow ? 'bubble-row-media' : ''} ${active && !selectionMode ? 'chat-actions-open' : ''} ${selectionMode && mine ? 'chat-selectable-row' : ''} ${selected ? 'chat-selected-row' : ''}`}>
       {selectionMode && mine && <button type="button" className={`chat-message-select ${selected ? 'selected' : ''}`} aria-label={selected ? '선택 해제' : '메시지 선택'} onClick={(event) => { event.stopPropagation(); onToggleSelect(); }}>{selected ? <Check size={15} strokeWidth={3} /> : null}</button>}
       {!mine && <div className="avatar tiny">{partnerInitial}</div>}
       {active && !selectionMode && <div className="chat-message-side-tools" onClick={(event) => event.stopPropagation()}>
