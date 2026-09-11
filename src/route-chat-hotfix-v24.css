@@ -27,19 +27,17 @@
   box-shadow: none !important;
 }
 
-/* Off-screen message rows do not take full layout/paint cost. */
+/* Row mounting/unmounting is now handled by the message list's own virtual
+ * scroller (only rows near the viewport are ever in the DOM), and it
+ * measures each row's real height via ResizeObserver to position everything
+ * else. `content-visibility: auto` here used to fight that: an overscan row
+ * that's mounted but not actually on-screen would report its collapsed
+ * placeholder height instead of its true size, so the moment it scrolled
+ * into view the browser had to redo layout and the row visibly popped/
+ * corrected. Plain rows avoid that mismatch entirely now that virtualization
+ * is doing the heavy lifting. */
 .chat-page .bubble-row {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 68px;
   margin: 9px 0 !important;
-}
-
-/* Photo/GIF/gallery rows render much taller than a text bubble. Giving them
- * their own placeholder height keeps it close to the real rendered size, so
- * the browser doesn't have to re-layout (and visibly nudge scroll position)
- * every time one of these rows crosses the content-visibility boundary. */
-.chat-page .bubble-row.bubble-row-media {
-  contain-intrinsic-size: auto 300px;
 }
 
 .chat-page .message-wrap {
