@@ -64,6 +64,21 @@ export function MemoryDetail({ memory, onBack, onFavorite, onEdit, onDelete, onO
   }, [memory.id]);
 
   useEffect(() => {
+    const pauseVideos = () => {
+      document.querySelectorAll<HTMLVideoElement>('.memory-detail video').forEach((video) => video.pause());
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') pauseVideos();
+    };
+    window.addEventListener('route-app-pause', pauseVideos);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('route-app-pause', pauseVideos);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, []);
+
+  useEffect(() => {
     const handleBack = (event: Event) => {
       if (relatedPreview) { event.preventDefault(); setRelatedPreview(undefined); return; }
       if (confirm) { event.preventDefault(); setConfirm(false); return; }
