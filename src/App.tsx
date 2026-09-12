@@ -246,29 +246,34 @@ function App({ user, profile, onProfileChange }: AppProps) {
 
     let disposed = false;
     let migrationBusy = false;
+    let migrationPhase = true;
     let firstStableSnapshot = true;
 
-    return subscribeCoupleMemories(coupleId, user.uid, (remoteMemories) => {
+    const unsubscribe = subscribeCoupleMemories(coupleId, user.uid, (remoteMemories) => {
       if (disposed) return;
 
-      const localMemories = memoriesRef.current;
-      const remoteIds = new Set(remoteMemories.map((memory) => memory.id));
-      const localOnly = localMemories.filter((memory) => !remoteIds.has(memory.id));
+      if (migrationPhase) {
+        const localMemories = memoriesRef.current;
+        const remoteIds = new Set(remoteMemories.map((memory) => memory.id));
+        const localOnly = localMemories.filter((memory) => !remoteIds.has(memory.id));
 
-      if (localOnly.length) {
-        const merged = [...remoteMemories, ...localOnly]
-          .filter((memory, index, items) => items.findIndex((candidate) => candidate.id === memory.id) === index)
-          .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
-        memoriesRef.current = merged;
-        setMemories(merged);
+        if (localOnly.length) {
+          const merged = [...remoteMemories, ...localOnly]
+            .filter((memory, index, items) => items.findIndex((candidate) => candidate.id === memory.id) === index)
+            .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+          memoriesRef.current = merged;
+          setMemories(merged);
 
-        if (!migrationBusy) {
-          migrationBusy = true;
-          void migrateLocalMemoriesToCouple(coupleId, user.uid, localOnly)
-            .catch((cause) => console.error('[ROUTE couple memories migration]', cause))
-            .finally(() => { migrationBusy = false; });
+          if (!migrationBusy) {
+            migrationBusy = true;
+            void migrateLocalMemoriesToCouple(coupleId, user.uid, localOnly)
+              .catch((cause) => console.error('[ROUTE couple memories migration]', cause))
+              .finally(() => { migrationBusy = false; });
+          }
+          return;
         }
-        return;
+
+        migrationPhase = false;
       }
 
       const next = remoteMemories;
@@ -287,6 +292,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
 
     return () => {
       disposed = true;
+      unsubscribe();
     };
   }, [connection?.coupleId, user.uid]);
 
