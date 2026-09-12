@@ -8,6 +8,8 @@ export type UserProfile = {
   birthDate: string;
   gender: Gender;
   photoDataUrl?: string;
+  backgroundPhotoDataUrl?: string;
+  statusMessage?: string;
   nickname?: string;
   nicknameSetBy?: NicknameSetBy;
   nicknameChangedAt?: string;
