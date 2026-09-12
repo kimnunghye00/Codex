@@ -56,27 +56,24 @@ const SPECIAL_DAYS = [
   [12, 25, '크리스마스', '🎄'],
 ] as const;
 
-function nextAnnual(month: number, day: number) {
-  const now = new Date();
-  let date = new Date(now.getFullYear(), month - 1, day);
-  if (date < new Date(now.getFullYear(), now.getMonth(), now.getDate())) date = new Date(now.getFullYear() + 1, month - 1, day);
-  return localDateKey(date);
+function dateInYear(year: number, month: number, day: number) {
+  return localDateKey(new Date(year, month - 1, day));
 }
 
-function upcomingSpecialDays() {
+function specialDaysForYear(year: number) {
   return SPECIAL_DAYS.map(([month, day, title, icon]) => ({
     title,
-    date: nextAnnual(month, day),
+    date: dateInYear(year, month, day),
     icon,
     special: true,
   })).sort((a, b) => a.date.localeCompare(b.date));
 }
 
-function nextBirthday(profile: UserProfile | null, label: string) {
+function birthdayForYear(profile: UserProfile | null, label: string, year: number) {
   if (!profile?.birthDate) return null;
   const [, month, day] = profile.birthDate.split('-').map(Number);
   if (!month || !day) return null;
-  return { title: `${label} 생일`, date: nextAnnual(month, day), icon: '🎂', special: false };
+  return { title: `${label} 생일`, date: dateInYear(year, month, day), icon: '🎂', special: false };
 }
 
 function dayBadge(date: string) {
@@ -189,32 +186,53 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
   }, [memories]);
 
   const anniversaries = useMemo(() => {
+    const now = new Date(`${todayKey()}T00:00:00`);
+    const currentYear = now.getFullYear();
+    const yearStart = new Date(currentYear, 0, 1);
+    const yearEnd = new Date(currentYear, 11, 31, 23, 59, 59, 999);
     const personal: AnniversaryItem[] = [];
-    const mine = nextBirthday(profile, realName(profile, '내'));
-    const theirs = nextBirthday(partner, realName(partner, '상대방'));
-    if (mine) personal.push(mine); if (theirs) personal.push(theirs);
+
+    const mine = birthdayForYear(profile, realName(profile, '내'), currentYear);
+    const theirs = birthdayForYear(partner, realName(partner, '상대방'), currentYear);
+    if (mine) personal.push(mine);
+    if (theirs) personal.push(theirs);
+
     if (relationshipStartDate) {
       const start = new Date(`${relationshipStartDate}T00:00:00`);
-      const now = new Date(`${todayKey()}T00:00:00`);
-      const current = Math.max(1, Math.floor((now.getTime() - start.getTime()) / DAY) + 1);
-      const milestoneStep = current > 365 ? 1000 : 100;
-      const nextMilestone = Math.ceil(current / milestoneStep) * milestoneStep;
-      personal.push({
-        title: `우리의 ${nextMilestone}일`,
-        date: localDateKey(new Date(start.getTime() + (nextMilestone - 1) * DAY)),
-        icon: '❤️',
-        special: false,
-      });
+      const currentDays = Math.max(1, Math.floor((now.getTime() - start.getTime()) / DAY) + 1);
+      const milestoneStep = currentDays > 365 ? 1000 : 100;
+      const firstDayAtYearStart = Math.max(1, Math.floor((yearStart.getTime() - start.getTime()) / DAY) + 1);
+      const lastDayAtYearEnd = Math.max(1, Math.floor((yearEnd.getTime() - start.getTime()) / DAY) + 1);
+      const firstMilestone = Math.max(milestoneStep, Math.ceil(firstDayAtYearStart / milestoneStep) * milestoneStep);
 
-      let year = now.getFullYear() - start.getFullYear();
-      let anniversary = new Date(start.getFullYear() + year, start.getMonth(), start.getDate());
-      if (anniversary < now) {
-        year += 1;
-        anniversary = new Date(start.getFullYear() + year, start.getMonth(), start.getDate());
+      for (let milestone = firstMilestone; milestone <= lastDayAtYearEnd; milestone += milestoneStep) {
+        const milestoneDate = new Date(start.getTime() + (milestone - 1) * DAY);
+        if (milestoneDate < start || milestoneDate.getFullYear() !== currentYear) continue;
+        personal.push({
+          title: `우리의 ${milestone}일`,
+          date: localDateKey(milestoneDate),
+          icon: '❤️',
+          special: false,
+        });
       }
-      if (year > 0) personal.push({ title: `${year}주년`, date: localDateKey(anniversary), icon: '💞', special: false });
+
+      const yearsTogether = currentYear - start.getFullYear();
+      if (yearsTogether > 0) {
+        const yearlyAnniversary = new Date(currentYear, start.getMonth(), start.getDate());
+        if (yearlyAnniversary >= start && yearlyAnniversary.getFullYear() === currentYear) {
+          personal.push({
+            title: `${yearsTogether}주년`,
+            date: localDateKey(yearlyAnniversary),
+            icon: '💞',
+            special: false,
+          });
+        }
+      }
     }
-    return [...upcomingSpecialDays(), ...personal].sort((a, b) => a.date.localeCompare(b.date));
+
+    return [...specialDaysForYear(currentYear), ...personal]
+      .filter((item, index, items) => items.findIndex((candidate) => candidate.title === item.title && candidate.date === item.date) === index)
+      .sort((a, b) => a.date.localeCompare(b.date));
   }, [profile, partner, relationshipStartDate]);
 
   const visits = uid ? loadLocationVisits(uid) : [];
