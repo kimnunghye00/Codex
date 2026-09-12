@@ -586,7 +586,6 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
     {profileCrop && <div className="route-modal-backdrop route-profile-crop-backdrop" onMouseDown={() => !cropApplying && setProfileCrop(null)}><section className="route-modal route-profile-crop-modal" onMouseDown={(event) => event.stopPropagation()}>
       <header className="route-profile-crop-head"><div><small>PHOTO EDIT</small><h2>{profileCrop.kind === 'avatar' ? '프로필 사진 맞추기' : '배경사진 맞추기'}</h2></div><button type="button" disabled={cropApplying} onClick={() => setProfileCrop(null)} aria-label="사진 편집 닫기"><X size={18} /></button></header>
       <p className="route-profile-crop-help">{profileCrop.kind === 'avatar' ? '가운데 원 안에 얼굴이나 캐릭터가 들어오도록 사진을 움직여 주세요.' : '배경으로 보여줄 영역을 프레임 안에 맞춰 주세요.'}</p>
-      <div className="route-profile-crop-spec"><b>{profileCrop.kind === 'avatar' ? '프로필 표시 영역' : '배경 표시 영역'}</b><span>{profileCrop.kind === 'avatar' ? '1:1 · 720 × 720' : '16:9 · 1200 × 675'}</span></div>
       <div className={`route-profile-crop-stage ${profileCrop.kind === 'avatar' ? 'avatar' : 'background'}`} onPointerDown={beginCropDrag} onPointerMove={moveCropDrag} onPointerUp={endCropDrag} onPointerCancel={endCropDrag}>
         <img src={profileCrop.src} alt="사진 위치 및 크기 미리보기" draggable={false} style={cropPreviewStyle(profileCrop)} />
         <span className="route-profile-crop-guide" aria-hidden="true" />
@@ -594,7 +593,7 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
       </div>
       <div className="route-profile-crop-controls">
         <span className="route-profile-crop-control-label">사진 크기</span>
-        <div className="route-profile-crop-slider-row"><Minus size={15} /><input type="range" min="1" max="3" step="0.01" value={profileCrop.zoom} onChange={(event) => updateCropZoom(Number(event.target.value))} aria-label="사진 크기 조절" /><Plus size={15} /></div>
+        <div className="route-profile-crop-slider-row"><Minus size={15} /><input type="range" min="0" max="2" step="0.01" value={profileCrop.zoom - 1} onChange={(event) => updateCropZoom(1 + Number(event.target.value))} aria-label="사진 크기 조절" /><Plus size={15} /></div>
         <button type="button" className="route-profile-crop-reset" onClick={() => setProfileCrop((current) => current ? { ...current, zoom: 1, offsetX: 0, offsetY: 0 } : current)}><RotateCcw size={14} />초기화</button>
       </div>
       <div className="route-profile-crop-actions"><button type="button" className="route-profile-crop-cancel" disabled={cropApplying} onClick={() => setProfileCrop(null)}>취소</button><button type="button" className="route-profile-crop-apply" disabled={cropApplying} onClick={() => void applyProfileCrop()}>{cropApplying ? '적용 중...' : '이 크기로 적용'}</button></div>
