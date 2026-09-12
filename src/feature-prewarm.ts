@@ -1,3 +1,4 @@
+import { isNativePlatform } from './lib/native';
 export {};
 
 type IdleCapableWindow = Window & {
@@ -27,7 +28,10 @@ function warmPrimaryFeatures() {
 }
 
 function scheduleWarmup() {
-  if (scheduled || warmed) return;
+  // APK assets are already local, so native benefits from idle prewarming.
+  // On Web this would download/parse every heavy tab shortly after startup,
+  // making the home screen sluggish even when the user never opens them.
+  if (!isNativePlatform() || scheduled || warmed) return;
   scheduled = true;
 
   const run = () => {
