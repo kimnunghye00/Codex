@@ -81,10 +81,9 @@ export function LocationPage({ requestedTab, Header, connection, focusPlace, onC
   onActivity?: (title: string, detail?: string) => void;
 }) {
   const uid = auth.currentUser?.uid ?? '';
-  const initialVisits = uid ? loadLocationVisits(uid) : [];
   const [activeTab, setActiveTab] = useState<LocationTabId>(requestedTab ?? 'map');
   const [sharing, setSharing] = useState(() => uid ? loadLocationSharing(uid).enabled : false);
-  const [visits, setVisits] = useState<LocationVisit[]>(initialVisits);
+  const [visits, setVisits] = useState<LocationVisit[]>(() => uid ? loadLocationVisits(uid) : []);
   const [partnerVisits, setPartnerVisits] = useState<LocationVisit[]>([]);
   const [selectedDay, setSelectedDay] = useState(todayKey());
   const [status, setStatus] = useState('위치 공유를 켜면 이동 기록을 만들어요.');
@@ -235,7 +234,6 @@ export function LocationPage({ requestedTab, Header, connection, focusPlace, onC
         setMapReady(true);
         setMapFailed(false);
         setMapStatus('');
-        window.setTimeout(() => postMapMessage({ type: 'render', visits: mapVisits, mode: activeTab }), 0);
         return;
       }
 
