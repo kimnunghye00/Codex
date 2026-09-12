@@ -179,11 +179,9 @@ function startDeferredRuntimeServices() {
     void Promise.all([
       import('./lib/persistentBackup'),
       import('./lib/persistentBackupEfficient'),
-      import('./lib/crossDeviceAlbumSync'),
-    ]).then(async ([backup, efficientBackup, albumSync]) => {
+    ]).then(async ([backup, efficientBackup]) => {
       await backup.preparePersistentBackup();
       efficientBackup.startEfficientPersistentBackup();
-      albumSync.initializeCrossDeviceAlbumSync();
     }).catch((error) => {
       console.warn('[ROUTE deferred durability]', error);
     });
