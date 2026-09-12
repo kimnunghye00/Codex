@@ -125,6 +125,7 @@ export function MemoryForm({ memory, draft, onSave, onClose }: { memory?: Memory
       location: location.trim() || undefined,
       tags: tags.split(',').map((tag) => tag.trim().replace(/^#/, '')).filter(Boolean),
       createdBy: memory?.createdBy ?? 'me',
+      ownerUid: memory?.ownerUid ?? auth.currentUser?.uid,
       favorite: memory?.favorite ?? false,
     });
   };
