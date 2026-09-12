@@ -200,7 +200,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   const mediaSendingRef = useRef(false);
   const noticeTimerRef = useRef<number | undefined>(undefined);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const mediaStreamRef = useRef<MediaStream>();
+  const mediaStreamRef = useRef<MediaStream | undefined>(undefined);
   mediaStreamRef.current = mediaStream;
   const byId = useMemo(() => new Map(messages.map((message) => [message.id, message])), [messages]);
   const selectedDeleteMessages = useMemo(
