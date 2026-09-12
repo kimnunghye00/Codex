@@ -27,6 +27,7 @@ export type Memory = {
   location?: string;
   tags?: string[];
   createdBy: Sender;
+  ownerUid?: string;
   favorite?: boolean;
 };
 
