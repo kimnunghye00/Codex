@@ -417,7 +417,7 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
       </div>
       <div className="home-profile-body">
         <div className="home-profile-avatar-wrap">
-          <span className="home-profile-avatar">{profileDraft.photoDataUrl ? <img src={profileDraft.photoDataUrl} alt="내 프로필" /> : avatar(profile, '나')}</span>
+          <span className="home-profile-avatar">{profileDraft.photoDataUrl ? <img src={profileDraft.photoDataUrl} alt="내 프로필" /> : <span>{profile.name?.trim()?.slice(0, 1) || '나'}</span>}</span>
           <button type="button" className="home-profile-avatar-edit" onClick={() => profilePhotoRef.current?.click()} aria-label="프로필 사진 변경"><Camera size={15} /></button>
         </div>
         <h2>{displayName(profile)}</h2>
