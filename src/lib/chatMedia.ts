@@ -127,6 +127,11 @@ async function createCompactPreview(source: string | Blob) {
     return jpeg;
   } finally {
     decoded.release();
+    // Chromium/WebView can retain the canvas backing store until GC. Shrink it
+    // explicitly after each photo so a long multi-photo send does not stack
+    // several decoded/raster buffers in native memory.
+    canvas.width = 1;
+    canvas.height = 1;
   }
 }
 
