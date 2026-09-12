@@ -101,7 +101,8 @@ export function LocationPage({ requestedTab, Header, connection, focusPlace, onC
   const watchRef = useRef<RouteLocationWatch | null>(null);
   const watchStartingRef = useRef(false);
   const recordingRef = useRef(false);
-  const visitsRef = useRef<LocationVisit[]>(initialVisits);
+  const visitsRef = useRef<LocationVisit[]>(visits);
+  const loadedVisitsUidRef = useRef(uid);
   const mapFrame = useRef<HTMLIFrameElement>(null);
   const mapTimeoutRef = useRef<number | undefined>(undefined);
   const handledFocus = useRef('');
@@ -140,7 +141,8 @@ export function LocationPage({ requestedTab, Header, connection, focusPlace, onC
   }, []);
 
   useEffect(() => {
-    if (!uid) return;
+    if (!uid || loadedVisitsUidRef.current === uid) return;
+    loadedVisitsUidRef.current = uid;
     const savedVisits = loadLocationVisits(uid);
     visitsRef.current = savedVisits;
     setVisits(savedVisits);
@@ -148,6 +150,10 @@ export function LocationPage({ requestedTab, Header, connection, focusPlace, onC
   }, [uid]);
 
   useEffect(() => {
+    if (activeTab !== 'footprints') {
+      setPartnerVisits([]);
+      return;
+    }
     if (!connection?.coupleId || !connection.partnerUid) {
       setPartnerVisits([]);
       setPartnerStatus('상대방을 연결하면 발자취를 볼 수 있어요.');
@@ -158,7 +164,7 @@ export function LocationPage({ requestedTab, Header, connection, focusPlace, onC
       setPartnerVisits(items);
       setPartnerStatus(items.length ? '' : selectedDay === todayKey() ? '아직 오늘 공유된 발자취가 없어요.' : '이 날짜에는 공유된 발자취가 없어요.');
     }, () => setPartnerStatus('발자취를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.'));
-  }, [connection?.coupleId, connection?.partnerUid, partnerName, selectedDay]);
+  }, [activeTab, connection?.coupleId, connection?.partnerUid, partnerName, selectedDay]);
 
   useEffect(() => {
     const requestedFocus = focusPlace?.trim() || queuedFocus;
