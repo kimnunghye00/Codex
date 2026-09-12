@@ -182,6 +182,18 @@ function clampCropOffset(state: ProfileCropState, offsetX = state.offsetX, offse
   };
 }
 
+function cropPreviewStyle(state: ProfileCropState): React.CSSProperties {
+  const target = cropTarget(state.kind);
+  const baseScale = Math.max(target.width / Math.max(1, state.naturalWidth), target.height / Math.max(1, state.naturalHeight));
+  return {
+    width: `${(state.naturalWidth * baseScale * state.zoom / target.width) * 100}%`,
+    height: `${(state.naturalHeight * baseScale * state.zoom / target.height) * 100}%`,
+    left: `${50 + state.offsetX}%`,
+    top: `${50 + state.offsetY}%`,
+    transform: 'translate(-50%, -50%)',
+  };
+}
+
 async function renderProfileCrop(state: ProfileCropState) {
   const image = await loadProfileImage(state.src);
   const target = cropTarget(state.kind);
@@ -574,7 +586,7 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
       <header className="route-profile-crop-head"><div><small>PHOTO EDIT</small><h2>{profileCrop.kind === 'avatar' ? '프로필 사진 맞추기' : '배경사진 맞추기'}</h2></div><button type="button" disabled={cropApplying} onClick={() => setProfileCrop(null)} aria-label="사진 편집 닫기"><X size={18} /></button></header>
       <p className="route-profile-crop-help">사진을 끌어서 위치를 맞추고, 아래 슬라이더로 크기를 조절해 주세요.</p>
       <div className={`route-profile-crop-stage ${profileCrop.kind === 'avatar' ? 'avatar' : 'background'}`} onPointerDown={beginCropDrag} onPointerMove={moveCropDrag} onPointerUp={endCropDrag} onPointerCancel={endCropDrag}>
-        <img src={profileCrop.src} alt="사진 위치 및 크기 미리보기" draggable={false} style={{ transform: `translate(${profileCrop.offsetX}%, ${profileCrop.offsetY}%) scale(${profileCrop.zoom})` }} />
+        <img src={profileCrop.src} alt="사진 위치 및 크기 미리보기" draggable={false} style={cropPreviewStyle(profileCrop)} />
         <span className="route-profile-crop-guide" aria-hidden="true" />
       </div>
       <div className="route-profile-crop-controls">
