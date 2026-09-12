@@ -1,14 +1,10 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { HubTabId } from './components/memories/MemoriesPage';
 import type { LocationTabId } from './components/location/LocationPage';
-import { CoupleHomeTools } from './components/home/CoupleHomeTools';
-import { MemoryImage } from './components/memories/MemoryMedia';
 import type { MoreNavigationTarget } from './components/more/MoreServices';
 import { AppHeader as SharedAppHeader } from './components/navigation/AppHeader';
 import { BottomNav, type AppTab } from './components/navigation/BottomNav';
-import { subscribeRealCoupleConnection, type RealCoupleConnection } from './lib/coupleConnection';
-import { saveRelationshipStartDate, subscribeCoupleShared } from './lib/coupleShared';
-import { deleteCoupleMemory, memorySyncSignature, migrateLocalMemoriesToCouple, subscribeCoupleMemories, upsertCoupleMemory } from './lib/coupleMemories';
+import type { RealCoupleConnection } from './lib/coupleConnection';
 import type { User } from 'firebase/auth';
 import type { Memory, MemoryDraft, Message } from './types';
 import { loadMemories, loadMessages, saveMemories, saveMessages } from './utils/storage';
@@ -21,6 +17,14 @@ import {
   type AppNotification,
 } from './utils/notifications';
 import { ChevronRight, Heart, Image, MapPin, MapPinned, MessageCircle, Plus } from 'lucide-react';
+import './home-simple.css';
+import './home-dashboard.css';
+import './home-couple-tools.css';
+import './home-couple-layout.css';
+import './home-map-overlay.css';
+import './home-brand-polish-v5.css';
+
+const CoupleHomeTools = lazy(() => import('./components/home/CoupleHomeTools').then((module) => ({ default: module.CoupleHomeTools })));
 
 const ChatPage = lazy(() => Promise.all([
   import('./styles/features/chat'),
@@ -54,6 +58,28 @@ type AppProps = { user: User; profile: UserProfile; onProfileChange: (profile: U
 const DAY = 86_400_000;
 const initialMemories: Memory[] = [];
 const initialMessages: Message[] = [];
+
+function memoryPersistedSignature(memory: Memory) {
+  return JSON.stringify({
+    id: memory.id,
+    title: memory.title,
+    date: memory.date,
+    description: memory.description,
+    images: memory.images,
+    videos: memory.videos ?? [],
+    location: memory.location ?? '',
+    tags: memory.tags ?? [],
+    favorite: memory.favorite ?? false,
+    ownerUid: memory.ownerUid ?? '',
+  });
+}
+
+function homeMemoryPreview(source?: string) {
+  if (!source || source.startsWith('gs://') || source.startsWith('data:') || source.startsWith('blob:')) return '';
+  const marker = '#route-original=';
+  const index = source.indexOf(marker);
+  return index >= 0 ? source.slice(0, index) : source;
+}
 const COUPLE_SPECIAL_DAYS = [
   { month: 1, day: 14, icon: '📔', title: '다이어리데이' },
   { month: 2, day: 14, icon: '💝', title: '발렌타인데이' },
@@ -222,16 +248,47 @@ function App({ user, profile, onProfileChange }: AppProps) {
   }, [user.uid]);
 
   useEffect(() => {
-    return subscribeRealCoupleConnection(
-      user.uid,
-      setConnection,
-      () => setConnection(null),
-    );
+    let disposed = false;
+    let unsubscribe: (() => void) | undefined;
+    void import('./lib/coupleConnection').then(({ subscribeRealCoupleConnection }) => {
+      if (disposed) return;
+      unsubscribe = subscribeRealCoupleConnection(
+        user.uid,
+        setConnection,
+        () => setConnection(null),
+      );
+    }).catch((cause) => {
+      if (!disposed) {
+        console.warn('[ROUTE couple connection lazy load]', cause);
+        setConnection(null);
+      }
+    });
+    return () => {
+      disposed = true;
+      unsubscribe?.();
+    };
   }, [user.uid]);
 
   useEffect(() => {
-    if (!connection?.coupleId) { setRelationshipStartDate(undefined); return; }
-    return subscribeCoupleShared(connection.coupleId, (shared) => setRelationshipStartDate(shared.relationshipStartDate));
+    const coupleId = connection?.coupleId;
+    if (!coupleId) {
+      setRelationshipStartDate(undefined);
+      return;
+    }
+    let disposed = false;
+    let unsubscribe: (() => void) | undefined;
+    void import('./lib/coupleShared').then(({ subscribeCoupleShared }) => {
+      if (disposed) return;
+      unsubscribe = subscribeCoupleShared(coupleId, (shared) => {
+        if (!disposed) setRelationshipStartDate(shared.relationshipStartDate);
+      });
+    }).catch((cause) => {
+      if (!disposed) console.warn('[ROUTE couple shared lazy load]', cause);
+    });
+    return () => {
+      disposed = true;
+      unsubscribe?.();
+    };
   }, [connection?.coupleId]);
 
   useEffect(() => {
@@ -245,54 +302,59 @@ function App({ user, profile, onProfileChange }: AppProps) {
     if (!coupleId) return;
 
     let disposed = false;
+    let unsubscribe: (() => void) | undefined;
     let migrationBusy = false;
     let migrationPhase = true;
     let firstStableSnapshot = true;
 
-    const unsubscribe = subscribeCoupleMemories(coupleId, user.uid, (remoteMemories) => {
+    void import('./lib/coupleMemories').then(({ subscribeCoupleMemories, migrateLocalMemoriesToCouple }) => {
       if (disposed) return;
+      unsubscribe = subscribeCoupleMemories(coupleId, user.uid, (remoteMemories) => {
+        if (disposed) return;
 
-      if (migrationPhase) {
-        const localMemories = memoriesRef.current;
-        const remoteIds = new Set(remoteMemories.map((memory) => memory.id));
-        const localOnly = localMemories.filter((memory) => !remoteIds.has(memory.id));
+        if (migrationPhase) {
+          const localMemories = memoriesRef.current;
+          const remoteIds = new Set(remoteMemories.map((memory) => memory.id));
+          const localOnly = localMemories.filter((memory) => !remoteIds.has(memory.id));
 
-        if (localOnly.length) {
-          const merged = [...remoteMemories, ...localOnly]
-            .filter((memory, index, items) => items.findIndex((candidate) => candidate.id === memory.id) === index)
-            .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
-          memoriesRef.current = merged;
-          setMemories(merged);
+          if (localOnly.length) {
+            const merged = [...remoteMemories, ...localOnly]
+              .filter((memory, index, items) => items.findIndex((candidate) => candidate.id === memory.id) === index)
+              .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+            memoriesRef.current = merged;
+            setMemories(merged);
 
-          if (!migrationBusy) {
-            migrationBusy = true;
-            void migrateLocalMemoriesToCouple(coupleId, user.uid, localOnly)
-              .catch((cause) => console.error('[ROUTE couple memories migration]', cause))
-              .finally(() => { migrationBusy = false; });
+            if (!migrationBusy) {
+              migrationBusy = true;
+              void migrateLocalMemoriesToCouple(coupleId, user.uid, localOnly)
+                .catch((cause) => console.error('[ROUTE couple memories migration]', cause))
+                .finally(() => { migrationBusy = false; });
+            }
+            return;
           }
-          return;
+
+          migrationPhase = false;
         }
 
-        migrationPhase = false;
-      }
-
-      const next = remoteMemories;
-      syncedCoupleMemoriesRef.current = next;
-      coupleMemoriesReadyRef.current = true;
-      memoriesRef.current = next;
-      if (firstStableSnapshot) {
-        previousMemories.current = next;
-        firstStableSnapshot = false;
-      }
-      setMemories(next);
-    }, (cause) => {
-      if (disposed) return;
-      console.error('[ROUTE couple memories subscribe]', cause);
+        const next = remoteMemories;
+        syncedCoupleMemoriesRef.current = next;
+        coupleMemoriesReadyRef.current = true;
+        memoriesRef.current = next;
+        if (firstStableSnapshot) {
+          previousMemories.current = next;
+          firstStableSnapshot = false;
+        }
+        setMemories(next);
+      }, (cause) => {
+        if (!disposed) console.error('[ROUTE couple memories subscribe]', cause);
+      });
+    }).catch((cause) => {
+      if (!disposed) console.warn('[ROUTE couple memories lazy load]', cause);
     });
 
     return () => {
       disposed = true;
-      unsubscribe();
+      unsubscribe?.();
     };
   }, [connection?.coupleId, user.uid]);
 
@@ -312,21 +374,24 @@ function App({ user, profile, onProfileChange }: AppProps) {
     // forth without ever converging - flooding Firestore with writes.
     const upserts = memories.filter((memory) => {
       const before = previousById.get(memory.id);
-      return !before || memorySyncSignature(before) !== memorySyncSignature(memory);
+      return !before || memoryPersistedSignature(before) !== memoryPersistedSignature(memory);
     });
     const removed = previous.filter((memory) => !currentById.has(memory.id));
 
     if (!upserts.length && !removed.length) return;
 
     syncedCoupleMemoriesRef.current = memories;
-    void Promise.allSettled([
+    void import('./lib/coupleMemories').then(({ upsertCoupleMemory, deleteCoupleMemory }) => Promise.allSettled([
       ...upserts.map((memory) => upsertCoupleMemory(coupleId, user.uid, memory)),
       ...removed.map((memory) => deleteCoupleMemory(coupleId, memory.id)),
-    ]).then((results) => {
+    ])).then((results) => {
       if (results.some((result) => result.status === 'rejected')) {
         console.error('[ROUTE couple memories sync] 일부 추억을 동기화하지 못했어요.', results);
         coupleMemoriesReadyRef.current = false;
       }
+    }).catch((cause) => {
+      console.error('[ROUTE couple memories lazy sync]', cause);
+      coupleMemoriesReadyRef.current = false;
     });
   }, [connection?.coupleId, memories, user.uid]);
 
@@ -412,6 +477,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
   }, [navigateTab]);
   const saveStartDate = async (value: string) => {
     if (!connection?.coupleId) throw new Error('not-connected');
+    const { saveRelationshipStartDate } = await import('./lib/coupleShared');
     await saveRelationshipStartDate(connection.coupleId, value);
     setRelationshipStartDate(value);
   };
@@ -454,7 +520,9 @@ const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connect
       </button>
 
       <aside className="home-dashboard-side" aria-label="홈 요약">
-        <CoupleHomeTools uid={uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} onOpenConnect={onSettings} onOpenAnniversary={() => onNavigate('anniversary')} />
+        <Suspense fallback={<section className="home-profile-card" aria-label="커플 정보 불러오는 중"><div className="loading-mark" /><small>커플 정보를 불러오는 중이에요</small></section>}>
+          <CoupleHomeTools uid={uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} onOpenConnect={onSettings} onOpenAnniversary={() => onNavigate('anniversary')} />
+        </Suspense>
 
         <section className="home-memory-card" aria-label="우리의 추억">
           <header className="home-memory-head">
@@ -465,7 +533,7 @@ const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connect
 
           {previewMemories.length ? <div className="home-memory-grid">
             {previewMemories.map((memory) => <button className="home-memory-tile" type="button" key={memory.id} onClick={() => onOpenMemory(memory.id)}>
-              {memory.images[0] ? <MemoryImage src={memory.images[0]} alt={memory.title} loading="lazy" /> : <span className="home-memory-tile-placeholder"><Image size={20} /></span>}
+              {homeMemoryPreview(memory.images[0]) ? <img src={homeMemoryPreview(memory.images[0])} alt={memory.title} loading="lazy" decoding="async" /> : <span className="home-memory-tile-placeholder"><Image size={20} /></span>}
               <span className="home-memory-tile-shade" />
               <span className="home-memory-tile-copy"><b>{memory.title}</b><small>{memory.date.replaceAll('-', '.')}</small></span>
             </button>)}
