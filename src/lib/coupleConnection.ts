@@ -36,8 +36,41 @@ function makeCode() {
   return value;
 }
 
+function profileSignature(value: unknown) {
+  const profile = (value && typeof value === 'object' ? value : {}) as Partial<UserProfile>;
+  return JSON.stringify({
+    name: String(profile.name ?? ''),
+    birthDate: String(profile.birthDate ?? ''),
+    gender: String(profile.gender ?? ''),
+    photoDataUrl: String(profile.photoDataUrl ?? ''),
+    backgroundPhotoDataUrl: String(profile.backgroundPhotoDataUrl ?? ''),
+    statusMessage: String(profile.statusMessage ?? ''),
+    nickname: String(profile.nickname ?? ''),
+    nicknameSetBy: String(profile.nicknameSetBy ?? ''),
+    nicknameChangedAt: String(profile.nicknameChangedAt ?? ''),
+    selfNicknameChangedAt: String(profile.selfNicknameChangedAt ?? ''),
+    completedAt: String(profile.completedAt ?? ''),
+  });
+}
+
 function sameProfile(a: unknown, b: UserProfile) {
-  try { return JSON.stringify(a ?? null) === JSON.stringify(b); } catch { return false; }
+  return profileSignature(a) === profileSignature(b);
+}
+
+const profileRepairAttempts = new Map<string, string>();
+
+function repairCloudProfileOnce(uid: string, cloudProfile: unknown, localProfile: UserProfile, onError: (error: unknown) => void) {
+  if (sameProfile(cloudProfile, localProfile)) return;
+  const signature = profileSignature(localProfile);
+  if (profileRepairAttempts.get(uid) === signature) return;
+  profileRepairAttempts.set(uid, signature);
+  void setDoc(doc(db, 'users', uid), {
+    uid,
+    profile: localProfile,
+    updatedAt: serverTimestamp(),
+  }, { merge: true }).catch((cause) => {
+    onError(cause);
+  });
 }
 
 function partnerProfileFromData(coupleData: Record<string, any>, partnerUid: string, partnerData: Record<string, any>): UserProfile | null {
@@ -80,7 +113,11 @@ export async function getRealCoupleConnection(uid: string): Promise<RealCoupleCo
   const userData = userSnap.data();
   const localProfile = loadProfile(uid);
   if (localProfile && !sameProfile(userData?.profile, localProfile)) {
-    await setDoc(userRef, { uid, profile: localProfile, updatedAt: serverTimestamp() }, { merge: true });
+    const signature = profileSignature(localProfile);
+    if (profileRepairAttempts.get(uid) !== signature) {
+      profileRepairAttempts.set(uid, signature);
+      await setDoc(userRef, { uid, profile: localProfile, updatedAt: serverTimestamp() }, { merge: true });
+    }
   }
 
   const coupleId = String(userData?.coupleId ?? '');
@@ -124,9 +161,7 @@ export function subscribeRealCoupleConnection(
 
     const userData = userSnap.data();
     const localProfile = loadProfile(uid);
-    if (localProfile && !sameProfile(userData?.profile, localProfile)) {
-      void setDoc(userRef, { uid, profile: localProfile, updatedAt: serverTimestamp() }, { merge: true }).catch(onError);
-    }
+    if (localProfile) repairCloudProfileOnce(uid, userData?.profile, localProfile, onError);
 
     const coupleId = String(userData?.coupleId ?? '');
     const partnerUid = String(userData?.partnerUid ?? '');
