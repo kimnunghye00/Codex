@@ -90,7 +90,7 @@ function scheduleSignature(item: Pick<Schedule, 'title' | 'date' | 'startTime'>)
   return `${item.title}|${item.date}|${item.startTime}`;
 }
 
-export function MemoriesPage({ requestedTab, Header, memories, setMemories, initialMemoryId, initialDraft, onClearInitial, onClearInitialDraft, onOpenLocation }: {
+export function MemoriesPage({ requestedTab, Header, memories, setMemories, initialMemoryId, initialDraft, onClearInitial, onClearInitialDraft, onOpenLocation, sharedProfile, sharedConnection, sharedRelationshipStartDate }: {
   requestedTab?: HubTabId;
   Header: ({ title }: { title?: string }) => React.ReactNode;
   memories: Memory[];
@@ -100,11 +100,16 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
   onClearInitial: () => void;
   onClearInitialDraft: () => void;
   onOpenLocation?: (place: string) => void;
+  sharedProfile?: UserProfile;
+  sharedConnection?: RealCoupleConnection | null;
+  sharedRelationshipStartDate?: string;
 }) {
   const uid = auth.currentUser?.uid ?? '';
-  const profile = uid ? loadProfile(uid) : null;
-  const [connection, setConnection] = useState<RealCoupleConnection | null>(null);
-  const [relationshipStartDate, setRelationshipStartDate] = useState<string>();
+  const profile = sharedProfile ?? (uid ? loadProfile(uid) : null);
+  const [fallbackConnection, setFallbackConnection] = useState<RealCoupleConnection | null>(null);
+  const connection = sharedConnection !== undefined ? sharedConnection : fallbackConnection;
+  const [fallbackRelationshipStartDate, setFallbackRelationshipStartDate] = useState<string>();
+  const relationshipStartDate = sharedRelationshipStartDate ?? fallbackRelationshipStartDate;
   const [activeTab, setActiveTab] = useState<HubTabId>(requestedTab ?? 'album');
   const [tabOrder, setTabOrder] = useState<HubTabId[]>(() => {
     try {
@@ -142,8 +147,18 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
   const [dateForm, setDateForm] = useState({ title: '', date: todayKey(), time: '18:00', location: '', memo: '' });
   const [placeTimelineFocus, setPlaceTimelineFocus] = useState<string>();
 
-  useEffect(() => { if (!uid) return; void getRealCoupleConnection(uid).then(setConnection).catch(() => setConnection(null)); }, [uid]);
-  useEffect(() => { if (!connection?.coupleId) { setRelationshipStartDate(undefined); return; } return subscribeCoupleShared(connection.coupleId, (shared) => setRelationshipStartDate(shared.relationshipStartDate)); }, [connection?.coupleId]);
+  useEffect(() => {
+    if (sharedConnection !== undefined || !uid) return;
+    void getRealCoupleConnection(uid).then(setFallbackConnection).catch(() => setFallbackConnection(null));
+  }, [sharedConnection, uid]);
+  useEffect(() => {
+    if (sharedRelationshipStartDate !== undefined) return;
+    if (!connection?.coupleId) {
+      setFallbackRelationshipStartDate(undefined);
+      return;
+    }
+    return subscribeCoupleShared(connection.coupleId, (shared) => setFallbackRelationshipStartDate(shared.relationshipStartDate));
+  }, [connection?.coupleId, sharedRelationshipStartDate]);
   useEffect(() => { if (!connection?.coupleId) { setSchedules([]); return; } const q = query(collection(db, 'couples', connection.coupleId, 'schedules'), orderBy('date', 'asc')); return onSnapshot(q, (snap) => setSchedules(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Schedule, 'id'>) }))), () => setScheduleFeedback('공유 일정을 불러오지 못해 이 기기에 저장된 일정만 표시해요.')); }, [connection?.coupleId]);
   useEffect(() => { try { localStorage.setItem(`route-hub-tabs:${uid}`, JSON.stringify(tabOrder)); } catch {} }, [tabOrder, uid]);
   useEffect(() => {
