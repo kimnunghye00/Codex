@@ -193,8 +193,11 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
   }, [dateOpen, editing, initialDraft, onClearInitial, onClearInitialDraft, orderOpen, scheduleOpen, selected]);
 
   const years = useMemo(() => [...new Set(memories.map((memory) => memory.date.slice(0, 4)))].sort().reverse(), [memories]);
-  const shown = memories.filter((memory) => filter === 'all' || filter === 'favorite' && memory.favorite || memory.date.startsWith(filter));
-  const selectedMemory = memories.find((memory) => memory.id === selected);
+  const shown = useMemo(
+    () => memories.filter((memory) => filter === 'all' || filter === 'favorite' && memory.favorite || memory.date.startsWith(filter)),
+    [filter, memories],
+  );
+  const selectedMemory = useMemo(() => memories.find((memory) => memory.id === selected), [memories, selected]);
   const update = (memory: Memory) => setMemories((items) => items.some((item) => item.id === memory.id) ? items.map((item) => item.id === memory.id ? memory : item) : [memory, ...items]);
   const favorite = (id: number) => setMemories((items) => items.map((item) => item.id === id ? { ...item, favorite: !item.favorite } : item));
   const partner = connection?.partnerProfile ?? null;
