@@ -115,6 +115,13 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
     }
   });
   const [orderOpen, setOrderOpen] = useState(false);
+  const [showDefaultAnniversaries, setShowDefaultAnniversaries] = useState(() => {
+    try {
+      return localStorage.getItem(`route-show-default-anniversaries:${uid}`) !== 'false';
+    } catch {
+      return true;
+    }
+  });
   const draggingTabRef = useRef<HubTabId | null>(null);
   const [draggingTab, setDraggingTab] = useState<HubTabId | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
@@ -139,6 +146,11 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
   useEffect(() => { if (!connection?.coupleId) { setRelationshipStartDate(undefined); return; } return subscribeCoupleShared(connection.coupleId, (shared) => setRelationshipStartDate(shared.relationshipStartDate)); }, [connection?.coupleId]);
   useEffect(() => { if (!connection?.coupleId) { setSchedules([]); return; } const q = query(collection(db, 'couples', connection.coupleId, 'schedules'), orderBy('date', 'asc')); return onSnapshot(q, (snap) => setSchedules(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Schedule, 'id'>) }))), () => setScheduleFeedback('공유 일정을 불러오지 못해 이 기기에 저장된 일정만 표시해요.')); }, [connection?.coupleId]);
   useEffect(() => { try { localStorage.setItem(`route-hub-tabs:${uid}`, JSON.stringify(tabOrder)); } catch {} }, [tabOrder, uid]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(`route-show-default-anniversaries:${uid}`, String(showDefaultAnniversaries));
+    } catch {}
+  }, [showDefaultAnniversaries, uid]);
   useEffect(() => { try { localStorage.setItem(`route-date-plans:${uid}`, JSON.stringify(datePlans)); window.dispatchEvent(new Event('route-schedules-local-change')); } catch { setDateFeedback('기기 저장 공간을 확인해 주세요.'); } }, [datePlans, uid]);
   useEffect(() => { try { localStorage.setItem(`route-local-schedules:${uid}`, JSON.stringify(localSchedules)); window.dispatchEvent(new Event('route-schedules-local-change')); } catch { setScheduleFeedback('기기 저장 공간을 확인해 주세요.'); } }, [localSchedules, uid]);
   useEffect(() => {
@@ -230,10 +242,12 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
       }
     }
 
-    return [...specialDaysForYear(currentYear), ...personal]
+    const defaultDays = showDefaultAnniversaries ? specialDaysForYear(currentYear) : [];
+    return [...defaultDays, ...personal]
+      .filter((item) => dayDiff(item.date) >= 0)
       .filter((item, index, items) => items.findIndex((candidate) => candidate.title === item.title && candidate.date === item.date) === index)
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [profile, partner, relationshipStartDate]);
+  }, [profile, partner, relationshipStartDate, showDefaultAnniversaries]);
 
   const visits = uid ? loadLocationVisits(uid) : [];
   const placeCounts = visits.reduce<Record<string, number>>((acc, visit) => { const key = visit.placeName || '기록된 장소'; acc[key] = (acc[key] || 0) + 1; return acc; }, {});
@@ -639,7 +653,7 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
 
     {activeTab === 'date' && <div className="hub-stack"><div className="hub-section-head"><div><small>OUR PROMISE</small><h2>약속</h2></div><button type="button" onClick={() => openDatePlan()}><Plus size={15} />약속 추가</button></div>{dateFeedback && <p className="hub-note date-flow-feedback">{dateFeedback}</p>}{[...datePlans].sort((a,b) => a.date.localeCompare(b.date)).map((item) => <article key={item.id} className="hub-list-row date-row"><Heart size={17} /><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')} · {item.time}{item.location ? ` · ${item.location}` : ''}</small>{item.memo && <em>{item.memo}</em>}</div><div className="date-flow-actions route-card-actions"><span className="route-status-chip">우리 약속</span><div className="route-action-cluster">{item.location && <button type="button" className="route-action-btn map" onClick={() => onOpenLocation?.(item.location)}><MapPin size={13} />지도</button>}<button type="button" className="route-action-btn edit" onClick={() => openDatePlanEdit(item)}><Pencil size={13} />수정</button><button type="button" className="route-action-btn delete" onClick={() => void deleteDatePlan(item)}><Trash2 size={13} />삭제</button></div></div></article>)}{promiseScheduleExtras.map((item) => <article key={`legacy-${item.id}`} className="hub-list-row date-row"><Heart size={17} /><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')} · {item.startTime}{item.location ? ` · ${item.location}` : ''}</small>{item.memo && <em>{item.memo}</em>}</div><div className="date-flow-actions route-card-actions"><span className="route-status-chip">기존 약속</span><div className="route-action-cluster">{item.location && <button type="button" className="route-action-btn map" onClick={() => onOpenLocation?.(item.location!)}><MapPin size={13} />지도</button>}{item.ownerId === uid && <><button type="button" className="route-action-btn edit" onClick={() => openLegacyPromiseEdit(item)}><Pencil size={13} />수정</button><button type="button" className="route-action-btn delete" onClick={() => void deleteLegacyPromise(item)}><Trash2 size={13} />삭제</button></>}</div></div></article>)}{!datePlans.length && !promiseScheduleExtras.length && <div className="memory-empty">아직 등록된 약속이 없어요 ❤️</div>}</div>}
 
-    {orderOpen && <div className="hub-order-backdrop"><section className="hub-order-panel route-order-fixed-shell"><header><div><small>추억 구성</small><h2>탭 순서 편집</h2></div><button onClick={() => setOrderOpen(false)} aria-label="탭 순서 편집 닫기"><X size={18} /></button></header>{tabOrder.map((tab) => <div className={`hub-order-row ${draggingTab === tab ? 'dragging' : ''}`} data-hub-tab={tab} key={tab}><button type="button" className="hub-order-drag-handle" aria-label={`${TAB_LABEL[tab]} 순서 이동`} onPointerDown={(event) => startTabDrag(event, tab)} onPointerMove={updateTabDrag} onPointerUp={endTabDrag} onPointerCancel={endTabDrag} onKeyDown={(event) => { if (event.key === 'ArrowUp') { event.preventDefault(); moveTab(tab, -1); } if (event.key === 'ArrowDown') { event.preventDefault(); moveTab(tab, 1); } }}><GripVertical size={18} /></button><b>{TAB_LABEL[tab]}</b></div>)}<footer className="hub-order-footer route-hub-order-native-footer"><button type="button" className="route-hub-order-reset" onClick={() => setTabOrder([...DEFAULT_TABS])}>기본 순서</button><button type="button" className="route-hub-order-done" onClick={() => setOrderOpen(false)}>완료</button></footer></section></div>}
+    {orderOpen && <div className="hub-order-backdrop"><section className="hub-order-panel route-order-fixed-shell"><header><div><small>추억 구성</small><h2>추억 설정</h2></div><button onClick={() => setOrderOpen(false)} aria-label="추억 설정 닫기"><X size={18} /></button></header><section className="hub-anniversary-setting"><div><b>기본 기념일 표시</b><small>발렌타인데이, 화이트데이, 로즈데이 등</small></div><button type="button" role="switch" aria-checked={showDefaultAnniversaries} className={`hub-toggle-switch ${showDefaultAnniversaries ? 'on' : ''}`} onClick={() => setShowDefaultAnniversaries((value) => !value)}><span /></button></section><div className="hub-order-section-title"><span>탭 순서</span><small>점 6개를 드래그해서 순서를 바꿀 수 있어요.</small></div>{tabOrder.map((tab) => <div className={`hub-order-row ${draggingTab === tab ? 'dragging' : ''}`} data-hub-tab={tab} key={tab}><button type="button" className="hub-order-drag-handle" aria-label={`${TAB_LABEL[tab]} 순서 이동`} onPointerDown={(event) => startTabDrag(event, tab)} onPointerMove={updateTabDrag} onPointerUp={endTabDrag} onPointerCancel={endTabDrag} onKeyDown={(event) => { if (event.key === 'ArrowUp') { event.preventDefault(); moveTab(tab, -1); } if (event.key === 'ArrowDown') { event.preventDefault(); moveTab(tab, 1); } }}><GripVertical size={18} /></button><b>{TAB_LABEL[tab]}</b></div>)}<footer className="hub-order-footer route-hub-order-native-footer"><button type="button" className="route-hub-order-reset" onClick={() => setTabOrder([...DEFAULT_TABS])}>기본 순서</button><button type="button" className="route-hub-order-done" onClick={() => setOrderOpen(false)}>완료</button></footer></section></div>}
 
     {scheduleOpen && <div className="hub-order-backdrop route-form-sheet-backdrop"><section className="hub-order-panel compact route-form-sheet route-schedule-sheet"><header><div><small>{editingScheduleId ? 'EDIT SCHEDULE' : 'NEW SCHEDULE'}</small><h2>{editingScheduleId ? '일정 수정' : '일정 추가'}</h2></div><button onClick={() => { setScheduleOpen(false); resetScheduleForm(); }}><X size={18} /></button></header><label>제목<input value={scheduleForm.title} onChange={(e) => setScheduleForm({...scheduleForm,title:e.target.value})} /></label><label>날짜<input type="date" value={scheduleForm.date} onChange={(e) => setScheduleForm({...scheduleForm,date:e.target.value})} /></label><label>시간<input type="time" value={scheduleForm.startTime} onChange={(e) => setScheduleForm({...scheduleForm,startTime:e.target.value})} /></label><label>장소<input value={scheduleForm.location} onChange={(e) => setScheduleForm({...scheduleForm,location:e.target.value})} /></label><p className="hub-note">날짜, 시간, 장소는 저장한 뒤에도 언제든 다시 수정할 수 있어요.</p><button className="primary" disabled={!scheduleForm.title.trim()} onClick={() => void saveSchedule()}>{editingScheduleId ? '수정 저장' : '일정 저장'}</button></section></div>}
 
