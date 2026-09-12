@@ -427,21 +427,24 @@
   cursor:grabbing;
 }
 .route-profile-crop-stage.background{
-  aspect-ratio:16 / 9;
-  border-radius:18px;
+  aspect-ratio:16 / 9!important;
+  min-height:180px;
+  border-radius:18px!important;
 }
 .route-profile-crop-stage.avatar{
-  width:min(360px,82vw);
-  aspect-ratio:1;
+  width:min(360px,82vw)!important;
+  height:min(360px,82vw)!important;
+  aspect-ratio:auto!important;
   margin:0 auto;
-  border-radius:50%;
+  border-radius:18px!important;
 }
 .route-profile-crop-stage>img{
   position:absolute;
   max-width:none!important;
   max-height:none!important;
   display:block;
-  object-fit:fill;
+  object-fit:contain!important;
+  aspect-ratio:auto!important;
   pointer-events:none;
   -webkit-user-drag:none;
 }
@@ -451,15 +454,56 @@
   pointer-events:none;
 }
 .route-profile-crop-stage.avatar .route-profile-crop-guide{
-  border:2px solid #ffffffd6;
+  inset:0;
+  border:3px solid #fffffff0;
   border-radius:50%;
-  box-shadow:inset 0 0 0 999px #10121a12;
+  box-shadow:0 0 0 999px #10121a4a,inset 0 0 0 1px #1f223026;
 }
 .route-profile-crop-stage.background .route-profile-crop-guide{
   border:1px solid #ffffffb8;
   border-radius:18px;
   box-shadow:inset 0 0 0 999px #10121a0c;
 }
+.route-profile-crop-spec{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin:0 0 10px;
+  padding:9px 11px;
+  border:1px solid color-mix(in srgb,var(--border) 88%,transparent);
+  border-radius:12px;
+  background:var(--surface-soft,#f7f6fa);
+}
+.route-profile-crop-spec b{
+  color:var(--text-primary);
+  font-size:9px;
+}
+.route-profile-crop-spec span{
+  color:var(--text-secondary);
+  font-size:9px;
+  font-weight:700;
+  white-space:nowrap;
+}
+.route-profile-crop-safe-label{
+  position:absolute;
+  z-index:5;
+  left:50%;
+  bottom:12px;
+  transform:translateX(-50%);
+  padding:6px 9px;
+  border-radius:999px;
+  color:#fff;
+  background:#25283aa8;
+  box-shadow:0 4px 14px #11182724;
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+  font-size:8px;
+  font-weight:800;
+  white-space:nowrap;
+  pointer-events:none;
+}
+
 .route-profile-crop-controls{
   display:grid;
   gap:8px;
@@ -559,7 +603,8 @@
     transform:translateX(-50%);
   }
   .route-profile-crop-stage.avatar{
-    width:min(320px,78vw);
+    width:min(320px,78vw)!important;
+    height:min(320px,78vw)!important;
   }
   .route-profile-crop-actions{
     position:sticky;
