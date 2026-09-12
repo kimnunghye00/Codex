@@ -13,7 +13,16 @@ const MEMORY_MEDIA_PREFETCH_MARGIN = '240px 0px';
 type MemorySlot = { memoryId: number; index: number };
 type LegacyRecovery = { url: string; slot: MemorySlot | null };
 
+const STORAGE_URL_CACHE_LIMIT = 160;
 const storageUrlCache = new Map<string, Promise<string>>();
+
+function cacheStorageResolution(key: string, value: Promise<string>) {
+  if (!storageUrlCache.has(key) && storageUrlCache.size >= STORAGE_URL_CACHE_LIMIT) {
+    const oldest = storageUrlCache.keys().next().value as string | undefined;
+    if (oldest) storageUrlCache.delete(oldest);
+  }
+  storageUrlCache.set(key, value);
+}
 
 export function isMemoryVideo(src?: string) {
   if (!src) return false;
@@ -53,7 +62,7 @@ async function resolveStorageReference(value: string) {
     console.warn('[ROUTE memory storage recovery]', cause);
     return value;
   });
-  storageUrlCache.set(value, pending);
+  cacheStorageResolution(value, pending);
   return pending;
 }
 
