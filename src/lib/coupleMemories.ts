@@ -12,6 +12,29 @@ function memoryRef(coupleId: string, memoryId: number) {
   return doc(db, 'couples', coupleId, 'memories', String(memoryId));
 }
 
+const remoteMemorySignatures = new Map<string, string>();
+const inFlightMemoryWrites = new Map<string, { signature: string; promise: Promise<void> }>();
+const inFlightMemoryDeletes = new Map<string, Promise<void>>();
+
+function memoryWriteKey(coupleId: string, memoryId: number) {
+  return `${coupleId}:${memoryId}`;
+}
+
+function payloadSignature(payload: Omit<CloudMemory, 'updatedAt' | 'createdAt'>) {
+  return JSON.stringify({
+    id: payload.id,
+    title: payload.title,
+    date: payload.date,
+    description: payload.description,
+    images: payload.images,
+    videos: payload.videos ?? [],
+    location: payload.location ?? '',
+    tags: payload.tags ?? [],
+    favorite: payload.favorite ?? false,
+    ownerUid: payload.ownerUid ?? '',
+  });
+}
+
 function sanitizeMemory(memory: Memory, currentUid: string) {
   const ownerUid = memory.ownerUid || currentUid;
   const payload = JSON.parse(JSON.stringify({
@@ -70,6 +93,7 @@ export function subscribeCoupleMemories(
 ) {
   return onSnapshot(collection(db, 'couples', coupleId, 'memories'), (snapshot) => {
     const memories: Memory[] = [];
+    const seenKeys = new Set<string>();
     snapshot.docs.forEach((item) => {
       const data = item.data() as Partial<CloudMemory>;
       const id = Number(data.id ?? item.id);
@@ -90,7 +114,14 @@ export function subscribeCoupleMemories(
       if (data.location) memory.location = String(data.location);
       if (Array.isArray(data.tags)) memory.tags = data.tags.filter((value): value is string => typeof value === 'string');
       memories.push(memory);
+      const key = memoryWriteKey(coupleId, id);
+      seenKeys.add(key);
+      remoteMemorySignatures.set(key, memorySyncSignature(memory));
     });
+    const prefix = `${coupleId}:`;
+    for (const key of [...remoteMemorySignatures.keys()]) {
+      if (key.startsWith(prefix) && !seenKeys.has(key)) remoteMemorySignatures.delete(key);
+    }
     memories.sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
     onChange(memories);
   }, onError);
@@ -98,26 +129,69 @@ export function subscribeCoupleMemories(
 
 export async function upsertCoupleMemory(coupleId: string, currentUid: string, memory: Memory) {
   const { payload } = sanitizeMemory(memory, currentUid);
-  // Only bump updatedAt. createdAt isn't read back into the app's Memory type
-  // (see subscribeCoupleMemories below), so re-stamping it on every edit only
-  // churns the document for no benefit - and every churn re-broadcasts to
-  // both partners' onSnapshot listeners, which used to feed the sync loop
-  // described above.
-  await setDoc(memoryRef(coupleId, memory.id), {
+  const key = memoryWriteKey(coupleId, memory.id);
+  const signature = payloadSignature(payload);
+
+  // onSnapshot already tells us the exact persisted shape. If Firestore has
+  // this same payload, do not enqueue another write merely to refresh updatedAt.
+  if (remoteMemorySignatures.get(key) === signature) return;
+
+  const inFlight = inFlightMemoryWrites.get(key);
+  if (inFlight?.signature === signature) {
+    await inFlight.promise;
+    return;
+  }
+
+  const promise = setDoc(memoryRef(coupleId, memory.id), {
     ...payload,
     updatedAt: serverTimestamp(),
-  }, { merge: true });
+  }, { merge: true }).then(() => {
+    remoteMemorySignatures.set(key, signature);
+  }).finally(() => {
+    const current = inFlightMemoryWrites.get(key);
+    if (current?.promise === promise) inFlightMemoryWrites.delete(key);
+  });
+
+  inFlightMemoryWrites.set(key, { signature, promise });
+  await promise;
 }
 
 export async function deleteCoupleMemory(coupleId: string, memoryId: number) {
-  await deleteDoc(memoryRef(coupleId, memoryId));
+  const key = memoryWriteKey(coupleId, memoryId);
+  if (!remoteMemorySignatures.has(key) && !inFlightMemoryWrites.has(key)) return;
+
+  const existing = inFlightMemoryDeletes.get(key);
+  if (existing) {
+    await existing;
+    return;
+  }
+
+  const promise = deleteDoc(memoryRef(coupleId, memoryId)).then(() => {
+    remoteMemorySignatures.delete(key);
+  }).finally(() => {
+    if (inFlightMemoryDeletes.get(key) === promise) inFlightMemoryDeletes.delete(key);
+  });
+
+  inFlightMemoryDeletes.set(key, promise);
+  await promise;
 }
 
 export async function migrateLocalMemoriesToCouple(coupleId: string, currentUid: string, memories: Memory[]) {
   if (!memories.length) return;
-  await Promise.all(memories.map((memory) => upsertCoupleMemory(coupleId, currentUid, {
-    ...memory,
-    ownerUid: memory.ownerUid || currentUid,
-    createdBy: memory.ownerUid && memory.ownerUid !== currentUid ? 'partner' : 'me',
-  })));
+
+  // Do not dump dozens of migration writes into Firestore at once. A tiny
+  // concurrency window keeps the SDK write stream responsive and still moves
+  // an old local album quickly enough for the first sync.
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < memories.length) {
+      const memory = memories[cursor++];
+      await upsertCoupleMemory(coupleId, currentUid, {
+        ...memory,
+        ownerUid: memory.ownerUid || currentUid,
+        createdBy: memory.ownerUid && memory.ownerUid !== currentUid ? 'partner' : 'me',
+      });
+    }
+  };
+  await Promise.all([worker(), worker()]);
 }
