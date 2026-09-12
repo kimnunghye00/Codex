@@ -1,5 +1,4 @@
 import type { Memory, Message } from '../types';
-import { signalPersistentStateChange } from './persistenceSignal';
 
 const MESSAGE_KEY = 'route.messages.v2';
 const MEMORY_KEY = 'route.memories.v2';
@@ -85,7 +84,7 @@ export function loadDeletedMemories(): MemoryDeletionMap {
 }
 
 export function saveDeletedMemories(value: MemoryDeletionMap) {
-  if (save(MEMORY_DELETED_KEY, value)) signalPersistentStateChange();
+  save(MEMORY_DELETED_KEY, value);
 }
 
 export function recordDeletedMemory(id: string | number) {
@@ -131,7 +130,7 @@ export const saveMessages = (messages: Message[]) => {
   // Firestore is the durable chat history. Local storage is only a fast startup
   // cache, so keeping the latest page prevents Android WebView from parsing a
   // growing multi-year conversation every time the app starts.
-  if (save(MESSAGE_KEY, recentChatCache(messages))) signalPersistentStateChange();
+  save(MESSAGE_KEY, recentChatCache(messages));
 };
 export const loadMemories = (_fallback: Memory[]) => {
   const deleted = loadDeletedMemories();
@@ -147,7 +146,6 @@ export const saveMemories = (memories: Memory[]) => {
   const deletionsChanged = reconcileDeletionMap(previous, memories);
   const memoriesChanged = save(MEMORY_KEY, recentMemoryCache(memories));
   if (memoriesChanged || deletionsChanged) {
-    signalPersistentStateChange();
     window.dispatchEvent(new CustomEvent(MEMORY_CHANGE_EVENT, {
       detail: { deleted: deletionsChanged },
     }));
