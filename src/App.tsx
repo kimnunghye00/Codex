@@ -8,6 +8,7 @@ import { AppHeader as SharedAppHeader } from './components/navigation/AppHeader'
 import { BottomNav, type AppTab } from './components/navigation/BottomNav';
 import { subscribeRealCoupleConnection, type RealCoupleConnection } from './lib/coupleConnection';
 import { saveRelationshipStartDate, subscribeCoupleShared } from './lib/coupleShared';
+import { deleteCoupleMemory, migrateLocalMemoriesToCouple, subscribeCoupleMemories, upsertCoupleMemory } from './lib/coupleMemories';
 import type { User } from 'firebase/auth';
 import type { Memory, MemoryDraft, Message } from './types';
 import { loadMemories, loadMessages, saveMemories, saveMessages } from './utils/storage';
@@ -172,6 +173,9 @@ function App({ user, profile, onProfileChange }: AppProps) {
   const [requestedLocationTab, setRequestedLocationTab] = useState<LocationTabId>();
   const previousMessages = useRef(messages);
   const previousMemories = useRef(memories);
+  const memoriesRef = useRef(memories);
+  const syncedCoupleMemoriesRef = useRef<Memory[]>([]);
+  const coupleMemoriesReadyRef = useRef(false);
   const chatClearAllActivityRef = useRef(false);
   const tabHistory = useRef<Tab[]>(['home']);
   const unreadCount = useMemo(() => notifications.filter((item) => !item.read).length, [notifications]);
@@ -231,6 +235,89 @@ function App({ user, profile, onProfileChange }: AppProps) {
   }, [connection?.coupleId]);
 
   useEffect(() => {
+    memoriesRef.current = memories;
+  }, [memories]);
+
+  useEffect(() => {
+    const coupleId = connection?.coupleId;
+    coupleMemoriesReadyRef.current = false;
+    syncedCoupleMemoriesRef.current = [];
+    if (!coupleId) return;
+
+    let disposed = false;
+    let migrationBusy = false;
+    let firstStableSnapshot = true;
+
+    return subscribeCoupleMemories(coupleId, user.uid, (remoteMemories) => {
+      if (disposed) return;
+
+      const localMemories = memoriesRef.current;
+      const remoteIds = new Set(remoteMemories.map((memory) => memory.id));
+      const localOnly = localMemories.filter((memory) => !remoteIds.has(memory.id));
+
+      if (localOnly.length) {
+        const merged = [...remoteMemories, ...localOnly]
+          .filter((memory, index, items) => items.findIndex((candidate) => candidate.id === memory.id) === index)
+          .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+        memoriesRef.current = merged;
+        setMemories(merged);
+
+        if (!migrationBusy) {
+          migrationBusy = true;
+          void migrateLocalMemoriesToCouple(coupleId, user.uid, localOnly)
+            .catch((cause) => console.error('[ROUTE couple memories migration]', cause))
+            .finally(() => { migrationBusy = false; });
+        }
+        return;
+      }
+
+      const next = remoteMemories;
+      syncedCoupleMemoriesRef.current = next;
+      coupleMemoriesReadyRef.current = true;
+      memoriesRef.current = next;
+      if (firstStableSnapshot) {
+        previousMemories.current = next;
+        firstStableSnapshot = false;
+      }
+      setMemories(next);
+    }, (cause) => {
+      if (disposed) return;
+      console.error('[ROUTE couple memories subscribe]', cause);
+    });
+
+    return () => {
+      disposed = true;
+    };
+  }, [connection?.coupleId, user.uid]);
+
+  useEffect(() => {
+    const coupleId = connection?.coupleId;
+    if (!coupleId || !coupleMemoriesReadyRef.current) return;
+
+    const previous = syncedCoupleMemoriesRef.current;
+    const previousById = new Map(previous.map((memory) => [memory.id, memory]));
+    const currentById = new Map(memories.map((memory) => [memory.id, memory]));
+    const upserts = memories.filter((memory) => {
+      const before = previousById.get(memory.id);
+      return !before || JSON.stringify(before) !== JSON.stringify(memory);
+    });
+    const removed = previous.filter((memory) => !currentById.has(memory.id));
+
+    if (!upserts.length && !removed.length) return;
+
+    syncedCoupleMemoriesRef.current = memories;
+    void Promise.allSettled([
+      ...upserts.map((memory) => upsertCoupleMemory(coupleId, user.uid, memory)),
+      ...removed.map((memory) => deleteCoupleMemory(coupleId, memory.id)),
+    ]).then((results) => {
+      if (results.some((result) => result.status === 'rejected')) {
+        console.error('[ROUTE couple memories sync] 일부 추억을 동기화하지 못했어요.', results);
+        coupleMemoriesReadyRef.current = false;
+      }
+    });
+  }, [connection?.coupleId, memories, user.uid]);
+
+  useEffect(() => {
     const handleBack = (event: Event) => {
       if (event.defaultPrevented) return;
       if (settingsOpen) { event.preventDefault(); setSettingsOpen(false); return; }
@@ -274,12 +361,13 @@ function App({ user, profile, onProfileChange }: AppProps) {
 
   useEffect(() => {
     const handleRemoteMemories = (event: Event) => {
+      if (connection?.coupleId) return;
       const next = (event as CustomEvent<Memory[]>).detail;
       if (Array.isArray(next)) setMemories(next);
     };
     window.addEventListener('route-memories-remote-change', handleRemoteMemories);
     return () => window.removeEventListener('route-memories-remote-change', handleRemoteMemories);
-  }, []);
+  }, [connection?.coupleId]);
 
   useEffect(() => {
     saveMemories(memories);
