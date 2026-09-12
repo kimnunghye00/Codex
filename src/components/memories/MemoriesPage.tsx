@@ -200,8 +200,6 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
   const anniversaries = useMemo(() => {
     const now = new Date(`${todayKey()}T00:00:00`);
     const currentYear = now.getFullYear();
-    const yearStart = new Date(currentYear, 0, 1);
-    const yearEnd = new Date(currentYear, 11, 31, 23, 59, 59, 999);
     const personal: AnniversaryItem[] = [];
 
     const mine = birthdayForYear(profile, realName(profile, '내'), currentYear);
