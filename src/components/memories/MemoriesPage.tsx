@@ -37,7 +37,8 @@ function normalizeTabOrder(value: unknown): HubTabId[] {
   return next;
 }
 const DAY = 86400000;
-const todayKey = () => new Date().toISOString().slice(0, 10);
+const localDateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+const todayKey = () => localDateKey(new Date());
 const dayDiff = (date: string) => Math.ceil((new Date(`${date}T00:00:00`).getTime() - new Date(`${todayKey()}T00:00:00`).getTime()) / DAY);
 const realName = (profile: UserProfile | null | undefined, fallback: string) => profile?.name?.trim() || fallback;
 const SPECIAL_DAYS = [
@@ -59,7 +60,7 @@ function nextAnnual(month: number, day: number) {
   const now = new Date();
   let date = new Date(now.getFullYear(), month - 1, day);
   if (date < new Date(now.getFullYear(), now.getMonth(), now.getDate())) date = new Date(now.getFullYear() + 1, month - 1, day);
-  return date.toISOString().slice(0, 10);
+  return localDateKey(date);
 }
 
 function upcomingSpecialDays() {
@@ -200,7 +201,7 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
       const nextMilestone = Math.ceil(current / milestoneStep) * milestoneStep;
       personal.push({
         title: `우리의 ${nextMilestone}일`,
-        date: new Date(start.getTime() + (nextMilestone - 1) * DAY).toISOString().slice(0, 10),
+        date: localDateKey(new Date(start.getTime() + (nextMilestone - 1) * DAY)),
         icon: '❤️',
         special: false,
       });
@@ -211,7 +212,7 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
         year += 1;
         anniversary = new Date(start.getFullYear() + year, start.getMonth(), start.getDate());
       }
-      if (year > 0) personal.push({ title: `${year}주년`, date: anniversary.toISOString().slice(0, 10), icon: '💞', special: false });
+      if (year > 0) personal.push({ title: `${year}주년`, date: localDateKey(anniversary), icon: '💞', special: false });
     }
     return [...upcomingSpecialDays(), ...personal].sort((a, b) => a.date.localeCompare(b.date));
   }, [profile, partner, relationshipStartDate]);
