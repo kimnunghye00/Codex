@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
-import { CalendarDays, Camera, ChevronRight, Clock3, Heart, ImagePlus, MapPin, Plus, X } from 'lucide-react';
+import { CalendarDays, Camera, ChevronRight, Clock3, Heart, ImagePlus, MapPin, Plus, Trash2, X } from 'lucide-react';
 import { db } from '../../lib/firebase';
 import { syncUserProfile } from '../../lib/coupleData';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
@@ -425,8 +425,8 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
         <div className="home-profile-editor">
           <label>상태 메시지<textarea maxLength={60} value={profileDraft.statusMessage} onChange={(event) => setProfileDraft((current) => ({ ...current, statusMessage: event.target.value }))} placeholder="지금 내 마음이나 한마디를 남겨보세요" /></label>
           <div className="home-profile-photo-actions">
-            {profileDraft.photoDataUrl && <button type="button" onClick={() => setProfileDraft((current) => ({ ...current, photoDataUrl: '' }))}>프로필 사진 삭제</button>}
-            {profileDraft.backgroundPhotoDataUrl && <button type="button" onClick={() => setProfileDraft((current) => ({ ...current, backgroundPhotoDataUrl: '' }))}>배경사진 삭제</button>}
+            {profileDraft.photoDataUrl && <button type="button" className="home-profile-secondary-action" onClick={() => setProfileDraft((current) => ({ ...current, photoDataUrl: '' }))}><Trash2 size={12} />프로필 사진 삭제</button>}
+            {profileDraft.backgroundPhotoDataUrl && <button type="button" className="home-profile-secondary-action" onClick={() => setProfileDraft((current) => ({ ...current, backgroundPhotoDataUrl: '' }))}><Trash2 size={12} />배경사진 삭제</button>}
           </div>
           {profileFeedback && <p className="home-profile-feedback">{profileFeedback}</p>}
           <button className="primary home-profile-save" type="button" disabled={profileSaving} onClick={() => void saveHomeProfile()}>{profileSaving ? '저장 중...' : '프로필 저장'}</button>
