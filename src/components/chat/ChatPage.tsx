@@ -200,6 +200,8 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   const mediaSendingRef = useRef(false);
   const noticeTimerRef = useRef<number | undefined>(undefined);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const mediaStreamRef = useRef<MediaStream>();
+  mediaStreamRef.current = mediaStream;
   const byId = useMemo(() => new Map(messages.map((message) => [message.id, message])), [messages]);
   const selectedDeleteMessages = useMemo(
     () => deleteSelection
@@ -392,9 +394,37 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     if (aiTimerRef.current) window.clearTimeout(aiTimerRef.current);
     if (typingTimerRef.current) window.clearTimeout(typingTimerRef.current);
     if (noticeTimerRef.current) window.clearTimeout(noticeTimerRef.current);
-    mediaStream?.getTracks().forEach((track) => track.stop());
-  }, [mediaStream]);
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+  }, []);
   useEffect(() => { if (videoRef.current && mediaStream) videoRef.current.srcObject = mediaStream; }, [mediaStream, callMode]);
+  useEffect(() => {
+    const releaseForegroundResources = () => {
+      if (typingTimerRef.current) {
+        window.clearTimeout(typingTimerRef.current);
+        typingTimerRef.current = undefined;
+      }
+      if (typingActiveRef.current && connection?.coupleId && currentUid) {
+        void setDoc(doc(db, 'couples', connection.coupleId, 'typing', currentUid), {
+          typing: false,
+          updatedAt: Date.now(),
+        }, { merge: true }).catch(() => undefined);
+      }
+      typingActiveRef.current = false;
+      setPartnerTyping(false);
+
+      const stream = mediaStreamRef.current;
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = undefined;
+        setMediaStream(undefined);
+        setCallMode(undefined);
+      }
+      if (videoRef.current) videoRef.current.srcObject = null;
+    };
+
+    window.addEventListener('route-app-pause', releaseForegroundResources);
+    return () => window.removeEventListener('route-app-pause', releaseForegroundResources);
+  }, [connection?.coupleId, currentUid]);
 
   const showFlowNotice = (text: string) => {
     setFlowNotice(text);
@@ -532,14 +562,18 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
       setSyncError('');
       if (file.size > MAX_GIF_BYTES) throw new Error('gif-too-large');
       showFlowNotice('움짤을 전송하고 있어요.');
-      const preparedUrl = await readFile(file);
       const messageId = createMessageId();
-      let imageUrl = preparedUrl;
+      let imageUrl: string;
 
       if (connection) {
-        const uploaded = await uploadChatMedia(connection.coupleId, currentUid, messageId, [preparedUrl]);
+        // Keep the GIF as a File/Blob all the way into Firebase Storage.
+        // Converting a multi-megabyte GIF to Base64 first creates another ~33%
+        // larger string copy in Android WebView memory for no benefit.
+        const uploaded = await uploadChatMedia(connection.coupleId, currentUid, messageId, [file]);
         imageUrl = uploaded.urls[0];
         uploadedPaths = uploaded.paths;
+      } else {
+        imageUrl = await readFile(file);
       }
 
       const message: Message = { id: messageId, sender: 'me', type: 'gif', imageUrl, timestamp: new Date().toISOString(), read: usingAiPartner, replyTo };
