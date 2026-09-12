@@ -14,6 +14,9 @@ const safeFileName = (value: string) => value.replace(/[^a-zA-Z0-9._-]/g, '_').s
 const MEMORY_UPLOAD_CONCURRENCY = 2;
 const MEMORY_PREVIEW_MAX_SIDE = 1600;
 const MEMORY_PREVIEW_QUALITY = 0.82;
+const MAX_MEMORY_MEDIA = 30;
+const MAX_MEMORY_IMAGE_BYTES = 25 * 1024 * 1024;
+const MAX_MEMORY_VIDEO_BYTES = 250 * 1024 * 1024;
 
 async function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number) {
   return await new Promise<Blob>((resolve, reject) => {
@@ -23,6 +26,23 @@ async function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: nu
 
 async function createMemoryPreviewBlob(file: File) {
   if (!file.type.startsWith('image/') || file.type === 'image/gif') return null;
+
+  if (typeof createImageBitmap === 'function') {
+    const bitmap = await createImageBitmap(file);
+    try {
+      const scale = Math.min(1, MEMORY_PREVIEW_MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('memory-preview-canvas-failed');
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      return await canvasToBlob(canvas, 'image/jpeg', MEMORY_PREVIEW_QUALITY);
+    } finally {
+      bitmap.close();
+    }
+  }
+
   const objectUrl = URL.createObjectURL(file);
   try {
     const image = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -79,8 +99,27 @@ export function MemoryForm({ memory, draft, onSave, onClose }: { memory?: Memory
   };
 
   const addMedia = async (files: FileList | null) => {
-    const selected = Array.from(files ?? []);
-    if (!selected.length) return;
+    const incoming = Array.from(files ?? []);
+    const remainingSlots = Math.max(0, MAX_MEMORY_MEDIA - images.length - pendingPreviews.length);
+    if (!incoming.length || remainingSlots === 0) {
+      if (incoming.length) setUploadError(`추억 하나에는 미디어를 최대 ${MAX_MEMORY_MEDIA}개까지 넣을 수 있어요.`);
+      return;
+    }
+
+    const selected = incoming.slice(0, remainingSlots);
+    const oversized = selected.filter((file) =>
+      file.type.startsWith('video/')
+        ? file.size > MAX_MEMORY_VIDEO_BYTES
+        : file.size > MAX_MEMORY_IMAGE_BYTES
+    );
+    if (oversized.length) {
+      setUploadError('사진은 장당 25MB, 영상은 장당 250MB 이하로 선택해 주세요.');
+      return;
+    }
+    if (incoming.length > remainingSlots) {
+      setUploadError(`최대 ${MAX_MEMORY_MEDIA}개까지만 추가할 수 있어 앞에서부터 ${remainingSlots}개를 선택했어요.`);
+    }
+
     const uid = auth.currentUser?.uid;
     if (!uid) {
       setUploadError('로그인 정보를 확인한 뒤 다시 시도해 주세요.');
