@@ -39,40 +39,42 @@ async function syncNativeIconState() {
   }
 }
 
-document.addEventListener('click', (event) => {
-  const target = event.target as Element | null;
-  const button = target?.closest<HTMLButtonElement>('.app-icon-picker button[data-icon-id]');
-  if (!button || !Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return;
+if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
+  document.addEventListener('click', (event) => {
+    const target = event.target as Element | null;
+    const button = target?.closest<HTMLButtonElement>('.app-icon-picker button[data-icon-id]');
+    if (!button) return;
 
-  event.preventDefault();
-  if (changing) {
-    event.stopPropagation();
-    return;
-  }
+    event.preventDefault();
+    if (changing) {
+      event.stopPropagation();
+      return;
+    }
 
-  const icon = iconIdFromButton(button);
-  if (!icon) return;
-  const picker = button.closest<HTMLElement>('.app-icon-picker');
-  changing = true;
-  picker?.setAttribute('aria-busy', 'true');
-  button.setAttribute('aria-busy', 'true');
-  updateNotice('앱 아이콘을 변경하고 있어요…');
+    const icon = iconIdFromButton(button);
+    if (!icon) return;
+    const picker = button.closest<HTMLElement>('.app-icon-picker');
+    changing = true;
+    picker?.setAttribute('aria-busy', 'true');
+    button.setAttribute('aria-busy', 'true');
+    updateNotice('앱 아이콘을 변경하고 있어요…');
 
-  void RouteAppIcon.setIcon({ icon })
-    .then((result) => {
-      notifyIcon(result.icon);
-      updateNotice('핸드폰 홈 화면의 ROUTE 아이콘을 변경했어요. 런처에 따라 반영에 몇 초 걸릴 수 있어요.');
-    })
-    .catch((cause) => {
-      console.error('[ROUTE app icon]', cause);
-      updateNotice('앱 아이콘 변경에 실패했어요. 잠시 뒤 다시 선택해 주세요.');
-      void syncNativeIconState();
-    })
-    .finally(() => {
-      changing = false;
-      picker?.removeAttribute('aria-busy');
-      button.removeAttribute('aria-busy');
-    });
-}, true);
+    void RouteAppIcon.setIcon({ icon })
+      .then((result) => {
+        notifyIcon(result.icon);
+        updateNotice('핸드폰 홈 화면의 ROUTE 아이콘을 변경했어요. 런처에 따라 반영에 몇 초 걸릴 수 있어요.');
+      })
+      .catch((cause) => {
+        console.error('[ROUTE app icon]', cause);
+        updateNotice('앱 아이콘 변경에 실패했어요. 잠시 뒤 다시 선택해 주세요.');
+        void syncNativeIconState();
+      })
+      .finally(() => {
+        changing = false;
+        picker?.removeAttribute('aria-busy');
+        button.removeAttribute('aria-busy');
+      });
+  }, true);
 
-void syncNativeIconState();
+  void syncNativeIconState();
+}
