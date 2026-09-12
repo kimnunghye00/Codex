@@ -39,14 +39,6 @@ function backupRef(uid: string, key: string) {
 
 
 
-function mergeDeleted(a: MemoryDeletionMap, b: MemoryDeletionMap) {
-  const merged: MemoryDeletionMap = { ...a };
-  Object.entries(b).forEach(([id, timestamp]) => {
-    if (!merged[id] || timestamp > merged[id]) merged[id] = timestamp;
-  });
-  return merged;
-}
-
 function localStateKeys(uid: string) {
   return [
     `meluni-profile:${uid}`,
