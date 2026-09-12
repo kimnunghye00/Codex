@@ -1,5 +1,5 @@
 import { CalendarDays, ChevronRight, Crown, GripVertical, Heart, MapPin, Phone, Plus, Settings2, Sparkles, Trophy, Video, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
 import type { Memory, MemoryDraft } from '../../types';
@@ -111,6 +111,8 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
     }
   });
   const [orderOpen, setOrderOpen] = useState(false);
+  const draggingTabRef = useRef<HubTabId | null>(null);
+  const [draggingTab, setDraggingTab] = useState<HubTabId | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [selected, setSelected] = useState<number | undefined>(initialMemoryId);
   const [editing, setEditing] = useState<Memory | null>();
@@ -207,6 +209,34 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
     [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
     return next;
   });
+  const moveTabTo = (tab: HubTabId, target: HubTabId) => setTabOrder((items) => {
+    const next = normalizeTabOrder(items);
+    const from = next.indexOf(tab);
+    const to = next.indexOf(target);
+    if (from < 0 || to < 0 || from === to) return next;
+    next.splice(from, 1);
+    next.splice(to, 0, tab);
+    return next;
+  });
+  const startTabDrag = (event: React.PointerEvent<HTMLButtonElement>, tab: HubTabId) => {
+    event.preventDefault();
+    draggingTabRef.current = tab;
+    setDraggingTab(tab);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+  const updateTabDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const source = draggingTabRef.current;
+    if (!source) return;
+    const row = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-hub-tab]');
+    const target = row?.dataset.hubTab as HubTabId | undefined;
+    if (!target || target === source || !DEFAULT_TABS.includes(target)) return;
+    moveTabTo(source, target);
+  };
+  const endTabDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    draggingTabRef.current = null;
+    setDraggingTab(null);
+  };
   const resetScheduleForm = () => setScheduleForm({ title: '', date: todayKey(), startTime: '19:00', location: '' });
   const resetDateForm = () => { setDateForm({ title: '', date: todayKey(), time: '18:00', location: '', memo: '' }); setDateSourceKey(undefined); };
   const saveSchedule = async () => {
@@ -339,7 +369,7 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
 
     {activeTab === 'date' && <div className="hub-stack"><div className="hub-section-head"><div><small>OUR PROMISE</small><h2>약속</h2></div><button type="button" onClick={() => openDatePlan()}><Plus size={15} />약속 추가</button></div>{dateFeedback && <p className="hub-note date-flow-feedback">{dateFeedback}</p>}{[...datePlans].sort((a,b) => a.date.localeCompare(b.date)).map((item) => <article key={item.id} className="hub-list-row date-row"><Heart size={17} /><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')} · {item.time}{item.location ? ` · ${item.location}` : ''}</small>{item.memo && <em>{item.memo}</em>}</div><div className="date-flow-actions">{item.location && <button type="button" className="map-link" onClick={() => onOpenLocation?.(item.location)}><MapPin size={11} />지도</button>}<button type="button" onClick={() => void deleteDatePlan(item)}>삭제</button></div></article>)}{promiseScheduleExtras.map((item) => <article key={`legacy-${item.id}`} className="hub-list-row date-row"><Heart size={17} /><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')} · {item.startTime}{item.location ? ` · ${item.location}` : ''}</small>{item.memo && <em>{item.memo}</em>}</div><div className="date-flow-actions"><span>기존 약속</span>{item.location && <button type="button" className="map-link" onClick={() => onOpenLocation?.(item.location!)}><MapPin size={11} />지도</button>}</div></article>)}{!datePlans.length && !promiseScheduleExtras.length && <div className="memory-empty">아직 등록된 약속이 없어요 ❤️</div>}</div>}
 
-    {orderOpen && <div className="hub-order-backdrop"><section className="hub-order-panel route-order-fixed-shell"><header><div><small>추억 구성</small><h2>탭 순서 편집</h2></div><button onClick={() => setOrderOpen(false)} aria-label="탭 순서 편집 닫기"><X size={18} /></button></header>{tabOrder.map((tab, index) => <div className="hub-order-row" key={tab}><GripVertical size={16} /><b>{TAB_LABEL[tab]}</b><span><button disabled={index === 0} onClick={() => moveTab(tab,-1)}>↑</button><button disabled={index === tabOrder.length-1} onClick={() => moveTab(tab,1)}>↓</button></span></div>)}<footer className="hub-order-footer route-hub-order-native-footer"><button type="button" className="route-hub-order-reset" onClick={() => setTabOrder([...DEFAULT_TABS])}>기본 순서</button><button type="button" className="route-hub-order-done" onClick={() => setOrderOpen(false)}>완료</button></footer></section></div>}
+    {orderOpen && <div className="hub-order-backdrop"><section className="hub-order-panel route-order-fixed-shell"><header><div><small>추억 구성</small><h2>탭 순서 편집</h2></div><button onClick={() => setOrderOpen(false)} aria-label="탭 순서 편집 닫기"><X size={18} /></button></header>{tabOrder.map((tab) => <div className={`hub-order-row ${draggingTab === tab ? 'dragging' : ''}`} data-hub-tab={tab} key={tab}><button type="button" className="hub-order-drag-handle" aria-label={`${TAB_LABEL[tab]} 순서 이동`} onPointerDown={(event) => startTabDrag(event, tab)} onPointerMove={updateTabDrag} onPointerUp={endTabDrag} onPointerCancel={endTabDrag} onKeyDown={(event) => { if (event.key === 'ArrowUp') { event.preventDefault(); moveTab(tab, -1); } if (event.key === 'ArrowDown') { event.preventDefault(); moveTab(tab, 1); } }}><GripVertical size={18} /></button><b>{TAB_LABEL[tab]}</b></div>)}<footer className="hub-order-footer route-hub-order-native-footer"><button type="button" className="route-hub-order-reset" onClick={() => setTabOrder([...DEFAULT_TABS])}>기본 순서</button><button type="button" className="route-hub-order-done" onClick={() => setOrderOpen(false)}>완료</button></footer></section></div>}
 
     {scheduleOpen && <div className="hub-order-backdrop"><section className="hub-order-panel compact"><header><div><small>NEW SCHEDULE</small><h2>일정 추가</h2></div><button onClick={() => setScheduleOpen(false)}><X size={18} /></button></header><label>제목<input value={scheduleForm.title} onChange={(e) => setScheduleForm({...scheduleForm,title:e.target.value})} /></label><label>날짜<input type="date" value={scheduleForm.date} onChange={(e) => setScheduleForm({...scheduleForm,date:e.target.value})} /></label><label>시간<input type="time" value={scheduleForm.startTime} onChange={(e) => setScheduleForm({...scheduleForm,startTime:e.target.value})} /></label><label>장소<input value={scheduleForm.location} onChange={(e) => setScheduleForm({...scheduleForm,location:e.target.value})} /></label><p className="hub-note">둘이 함께 정한 항목은 약속 탭에서 따로 추가할 수 있어요.</p><button className="primary" disabled={!scheduleForm.title.trim()} onClick={() => void saveSchedule()}>일정 저장</button></section></div>}
 
