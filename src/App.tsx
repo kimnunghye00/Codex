@@ -458,7 +458,7 @@ const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connect
 
           {previewMemories.length ? <div className="home-memory-grid">
             {previewMemories.map((memory) => <button className="home-memory-tile" type="button" key={memory.id} onClick={() => onOpenMemory(memory.id)}>
-              {memory.images[0] ? <MemoryImage src={memory.images[0]} alt={memory.title} loading="eager" /> : <span className="home-memory-tile-placeholder"><Image size={20} /></span>}
+              {memory.images[0] ? <MemoryImage src={memory.images[0]} alt={memory.title} loading="lazy" /> : <span className="home-memory-tile-placeholder"><Image size={20} /></span>}
               <span className="home-memory-tile-shade" />
               <span className="home-memory-tile-copy"><b>{memory.title}</b><small>{memory.date.replaceAll('-', '.')}</small></span>
             </button>)}
