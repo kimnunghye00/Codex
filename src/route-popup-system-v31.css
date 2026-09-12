@@ -1,0 +1,454 @@
+/* ROUTE unified popup system v31
+ * One visual language for dialogs, sheets, overlays and long-form popups.
+ * Desktop/web: centered dialog.
+ * Mobile: bottom sheet.
+ * Destructive confirmations remain compact centered dialogs.
+ */
+
+:root {
+  --route-popup-backdrop: #11182766;
+  --route-popup-radius: 28px;
+  --route-popup-mobile-radius: 28px 28px 0 0;
+  --route-popup-shadow: 0 28px 80px #1118272e;
+  --route-popup-border: color-mix(in srgb, var(--border) 88%, transparent);
+  --route-popup-soft: color-mix(in srgb, var(--surface) 95%, var(--primary) 5%);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Shared backdrops                                                       */
+/* ---------------------------------------------------------------------- */
+
+html body :is(
+  .sheet-backdrop,
+  .chat-tools-backdrop,
+  .chat-extra-backdrop,
+  .hub-order-backdrop,
+  .hub-modal-backdrop,
+  .route-modal-backdrop,
+  .more-sheet-backdrop,
+  .route-theme-overlay,
+  .route-password-backdrop,
+  .notification-backdrop,
+  .related-memory-backdrop,
+  .home-map-overlay,
+  .route-settings-hub-backdrop,
+  .couple-connect-settings-backdrop
+) {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 12000 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 24px !important;
+  background: var(--route-popup-backdrop) !important;
+  backdrop-filter: blur(7px) !important;
+  -webkit-backdrop-filter: blur(7px) !important;
+}
+
+/* Small destructive / yes-no confirmations intentionally stay centered. */
+html body :is(.confirm-backdrop, .route-disconnect-backdrop) {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 16000 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 24px !important;
+  background: var(--route-popup-backdrop) !important;
+  backdrop-filter: blur(7px) !important;
+  -webkit-backdrop-filter: blur(7px) !important;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Shared panels                                                          */
+/* ---------------------------------------------------------------------- */
+
+html body :is(
+  .account-settings,
+  .chat-tools-sheet,
+  .chat-extra-modal,
+  .chat-call-modal,
+  .hub-order-panel,
+  .hub-modal,
+  .route-modal,
+  .more-sheet,
+  .route-theme-sheet,
+  .route-password-panel,
+  .notification-panel,
+  .related-memory-preview,
+  .home-map-overlay-panel,
+  .route-settings-hub,
+  .couple-connect-settings-backdrop .couple-connect-shell
+) {
+  position: relative !important;
+  width: min(520px, 100%) !important;
+  max-width: 520px !important;
+  max-height: min(88dvh, 820px) !important;
+  height: auto !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  box-sizing: border-box !important;
+  border: 1px solid var(--route-popup-border) !important;
+  border-radius: var(--route-popup-radius) !important;
+  color: var(--text-primary) !important;
+  background: var(--surface) !important;
+  box-shadow: var(--route-popup-shadow) !important;
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+  animation: route-popup-enter .2s cubic-bezier(.2,.8,.2,1) !important;
+}
+
+/* Larger content variants use the same shell, only more room. */
+html body :is(
+  .account-settings,
+  .route-settings-hub,
+  .home-map-overlay-panel,
+  .couple-connect-settings-backdrop .couple-connect-shell
+) {
+  width: min(620px, 100%) !important;
+  max-width: 620px !important;
+  max-height: min(92dvh, 900px) !important;
+}
+
+/* Compact confirmation shell. */
+html body :is(.confirm-dialog, .route-disconnect-dialog) {
+  position: relative !important;
+  width: min(390px, 100%) !important;
+  max-width: 390px !important;
+  max-height: min(82dvh, 680px) !important;
+  overflow: auto !important;
+  box-sizing: border-box !important;
+  border: 1px solid var(--route-popup-border) !important;
+  border-radius: 24px !important;
+  color: var(--text-primary) !important;
+  background: var(--surface) !important;
+  box-shadow: var(--route-popup-shadow) !important;
+  animation: route-popup-enter .18s cubic-bezier(.2,.8,.2,1) !important;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Mobile drag handle                                                     */
+/* ---------------------------------------------------------------------- */
+
+html body .route-theme-sheet-handle {
+  display: none !important;
+}
+
+@media (max-width: 700px) {
+  html body :is(
+    .account-settings,
+    .chat-tools-sheet,
+    .chat-extra-modal,
+    .hub-order-panel,
+    .hub-modal,
+    .route-modal,
+    .more-sheet,
+    .route-theme-sheet,
+    .route-password-panel,
+    .notification-panel,
+    .related-memory-preview,
+    .home-map-overlay-panel,
+    .route-settings-hub,
+    .couple-connect-settings-backdrop .couple-connect-shell
+  )::before {
+    content: "" !important;
+    position: absolute !important;
+    z-index: 12 !important;
+    top: 10px !important;
+    left: 50% !important;
+    width: 42px !important;
+    height: 4px !important;
+    border-radius: 999px !important;
+    background: color-mix(in srgb, var(--text-secondary) 28%, transparent) !important;
+    transform: translateX(-50%) !important;
+    pointer-events: none !important;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Headers + close buttons                                                */
+/* ---------------------------------------------------------------------- */
+
+html body :is(
+  .account-settings,
+  .chat-tools-sheet,
+  .hub-order-panel,
+  .notification-panel,
+  .home-map-overlay-panel,
+  .route-theme-sheet,
+  .route-password-panel,
+  .route-settings-hub
+) > header,
+html body .route-theme-sheet-header,
+html body .more-sheet-head {
+  box-sizing: border-box !important;
+  min-height: 64px !important;
+  margin: 0 !important;
+  padding: 16px 18px 14px !important;
+  border-bottom: 1px solid var(--route-popup-border) !important;
+  background: var(--surface) !important;
+}
+
+html body :is(
+  .account-settings,
+  .chat-tools-sheet,
+  .hub-order-panel,
+  .notification-panel,
+  .home-map-overlay-panel
+) :is(h2, strong),
+html body .route-theme-sheet-header h2,
+html body .more-sheet-head strong {
+  letter-spacing: -.035em !important;
+}
+
+html body :is(
+  .account-settings > header > button,
+  .chat-tools-close,
+  .chat-extra-close,
+  .hub-order-panel > header > button,
+  .notification-close,
+  .home-map-overlay-close,
+  .route-theme-sheet-close,
+  .more-sheet-head > button,
+  .route-password-panel > header button,
+  .route-disconnect-close
+) {
+  width: 40px !important;
+  min-width: 40px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  color: var(--text-primary) !important;
+  background: var(--primary-soft) !important;
+  box-shadow: none !important;
+  line-height: 1 !important;
+}
+
+html body :is(
+  .account-settings > header > button,
+  .chat-tools-close,
+  .chat-extra-close,
+  .hub-order-panel > header > button,
+  .notification-close,
+  .home-map-overlay-close,
+  .route-theme-sheet-close,
+  .more-sheet-head > button,
+  .route-password-panel > header button,
+  .route-disconnect-close
+):active {
+  transform: scale(.96) !important;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Fields                                                                 */
+/* ---------------------------------------------------------------------- */
+
+html body :is(
+  .account-settings,
+  .chat-tools-sheet,
+  .chat-extra-modal,
+  .hub-order-panel,
+  .route-modal,
+  .route-password-panel,
+  .route-settings-hub,
+  .couple-connect-settings-backdrop .couple-connect-shell
+) :is(input, textarea, select) {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 46px !important;
+  padding: 11px 13px !important;
+  border: 1px solid var(--route-popup-border) !important;
+  border-radius: 14px !important;
+  outline: none !important;
+  color: var(--text-primary) !important;
+  background: var(--route-popup-soft) !important;
+  font: inherit !important;
+}
+
+html body :is(
+  .account-settings,
+  .chat-tools-sheet,
+  .chat-extra-modal,
+  .hub-order-panel,
+  .route-modal,
+  .route-password-panel
+) textarea {
+  min-height: 88px !important;
+  resize: vertical !important;
+}
+
+html body :is(
+  .account-settings,
+  .chat-tools-sheet,
+  .chat-extra-modal,
+  .hub-order-panel,
+  .route-modal,
+  .route-password-panel
+) :is(input, textarea, select):focus {
+  border-color: color-mix(in srgb, var(--primary) 55%, var(--border)) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent) !important;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Primary / secondary popup actions                                      */
+/* ---------------------------------------------------------------------- */
+
+html body :is(
+  .chat-extra-modal,
+  .hub-order-panel,
+  .route-modal,
+  .route-password-panel,
+  .account-settings
+) .primary,
+html body .route-password-submit {
+  min-height: 46px !important;
+  border: 0 !important;
+  border-radius: 14px !important;
+  color: #fff !important;
+  background: var(--primary) !important;
+  font-weight: 800 !important;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--primary) 18%, transparent) !important;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Mobile = one bottom-sheet behavior                                     */
+/* ---------------------------------------------------------------------- */
+
+@media (max-width: 700px) {
+  html body :is(
+    .sheet-backdrop,
+    .chat-tools-backdrop,
+    .chat-extra-backdrop,
+    .hub-order-backdrop,
+    .hub-modal-backdrop,
+    .route-modal-backdrop,
+    .more-sheet-backdrop,
+    .route-theme-overlay,
+    .route-password-backdrop,
+    .notification-backdrop,
+    .related-memory-backdrop,
+    .home-map-overlay,
+    .route-settings-hub-backdrop,
+    .couple-connect-settings-backdrop
+  ) {
+    align-items: flex-end !important;
+    justify-content: center !important;
+    padding: 0 !important;
+  }
+
+  html body :is(
+    .account-settings,
+    .chat-tools-sheet,
+    .chat-extra-modal,
+    .hub-order-panel,
+    .hub-modal,
+    .route-modal,
+    .more-sheet,
+    .route-theme-sheet,
+    .route-password-panel,
+    .notification-panel,
+    .related-memory-preview,
+    .home-map-overlay-panel,
+    .route-settings-hub,
+    .couple-connect-settings-backdrop .couple-connect-shell
+  ) {
+    width: 100% !important;
+    max-width: none !important;
+    max-height: 90dvh !important;
+    margin: 0 !important;
+    padding-top: 28px !important;
+    border-left: 0 !important;
+    border-right: 0 !important;
+    border-bottom: 0 !important;
+    border-radius: var(--route-popup-mobile-radius) !important;
+    animation: route-popup-sheet-enter .22s cubic-bezier(.2,.8,.2,1) !important;
+  }
+
+  html body :is(
+    .account-settings,
+    .route-settings-hub,
+    .home-map-overlay-panel,
+    .couple-connect-settings-backdrop .couple-connect-shell
+  ) {
+    height: 94dvh !important;
+    max-height: 94dvh !important;
+  }
+
+  html body :is(
+    .account-settings,
+    .chat-tools-sheet,
+    .hub-order-panel,
+    .notification-panel,
+    .home-map-overlay-panel,
+    .route-theme-sheet,
+    .route-password-panel,
+    .route-settings-hub
+  ) > header,
+  html body .route-theme-sheet-header,
+  html body .more-sheet-head {
+    position: sticky !important;
+    z-index: 10 !important;
+    top: 0 !important;
+    padding-top: 14px !important;
+    background: color-mix(in srgb, var(--surface) 97%, transparent) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+  }
+
+  html body .home-map-overlay-map-wrap,
+  html body .home-map-overlay-map {
+    min-height: 360px !important;
+  }
+}
+
+/* Compact confirmations remain centered on mobile. */
+@media (max-width: 700px) {
+  html body :is(.confirm-backdrop, .route-disconnect-backdrop) {
+    align-items: center !important;
+    padding: 18px !important;
+  }
+
+  html body :is(.confirm-dialog, .route-disconnect-dialog) {
+    width: min(390px, 100%) !important;
+    border-radius: 24px !important;
+  }
+}
+
+@keyframes route-popup-enter {
+  from { opacity: 0; transform: translateY(10px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes route-popup-sheet-enter {
+  from { opacity: 0; transform: translateY(34px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html body :is(
+    .account-settings,
+    .chat-tools-sheet,
+    .chat-extra-modal,
+    .chat-call-modal,
+    .hub-order-panel,
+    .hub-modal,
+    .route-modal,
+    .more-sheet,
+    .route-theme-sheet,
+    .route-password-panel,
+    .notification-panel,
+    .related-memory-preview,
+    .home-map-overlay-panel,
+    .route-settings-hub,
+    .confirm-dialog,
+    .route-disconnect-dialog
+  ) {
+    animation: none !important;
+  }
+}
