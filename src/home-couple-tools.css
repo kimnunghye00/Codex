@@ -628,3 +628,36 @@
     background:linear-gradient(to top,var(--surface) 78%,transparent);
   }
 }
+
+
+/* Keep the profile-photo edit control above and outside the avatar. */
+.home-profile-avatar-wrap{
+  overflow:visible!important;
+  isolation:isolate;
+}
+.home-profile-avatar{
+  position:relative;
+  z-index:1;
+}
+.home-profile-avatar-edit{
+  z-index:12!important;
+  right:-9px!important;
+  bottom:-5px!important;
+  width:34px!important;
+  height:34px!important;
+  border:3px solid var(--surface)!important;
+  background:var(--surface)!important;
+  color:var(--primary)!important;
+  box-shadow:0 7px 18px #1f22302b!important;
+}
+.home-profile-avatar-edit:hover{
+  z-index:13!important;
+}
+@media(max-width:700px){
+  .home-profile-avatar-edit{
+    right:-8px!important;
+    bottom:-5px!important;
+    width:32px!important;
+    height:32px!important;
+  }
+}
