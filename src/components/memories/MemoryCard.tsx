@@ -1,5 +1,5 @@
 import { Heart, MapPin } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import type { Memory } from '../../types';
 import { isMemoryVideo, MemoryImage } from './MemoryMedia';
 
@@ -19,35 +19,31 @@ function wirePreviewVisibilityGuard() {
   window.addEventListener('route-app-pause', pauseActive);
 }
 
-export function MemoryCard({ memory, onOpen }: { memory: Memory; onOpen: () => void; onFavorite: () => void }) {
+function MemoryCardComponent({ memory, onOpen }: { memory: Memory; onOpen: () => void; onFavorite: () => void }) {
   const date = new Date(`${memory.date}T00:00:00`);
+  const cardRef = useRef<HTMLElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [videoReady, setVideoReady] = useState(false);
+  const [mediaActive, setMediaActive] = useState(false);
   const cover = memory.images[0];
 
   useEffect(() => {
-    if (!isMemoryVideo(cover)) {
-      setVideoReady(false);
+    const card = cardRef.current;
+    if (!card || typeof IntersectionObserver === 'undefined') {
+      setMediaActive(true);
       return;
     }
-    setVideoReady(false);
-    const video = videoRef.current;
-    if (!video || typeof IntersectionObserver === 'undefined') {
-      setVideoReady(true);
-      return;
-    }
+
     const observer = new IntersectionObserver(([entry]) => {
-      if (!entry.isIntersecting) return;
-      observer.disconnect();
-      setVideoReady(true);
-    }, { rootMargin: '600px 0px', threshold: 0.01 });
-    observer.observe(video);
+      setMediaActive(entry.isIntersecting);
+    }, { rootMargin: '520px 0px', threshold: 0.01 });
+
+    observer.observe(card);
     return () => observer.disconnect();
-  }, [cover]);
+  }, []);
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !videoReady) return;
+    if (!video || !mediaActive || !isMemoryVideo(cover)) return;
     wirePreviewVisibilityGuard();
 
     const observer = new IntersectionObserver(([entry]) => {
@@ -72,16 +68,24 @@ export function MemoryCard({ memory, onOpen }: { memory: Memory; onOpen: () => v
       observer.disconnect();
       video.pause();
       if (activePreviewVideo === video) activePreviewVideo = null;
+      // Removing src and forcing load() asks Chromium/WebView to release the
+      // decoded frame/buffer instead of retaining every video card ever seen.
+      video.removeAttribute('src');
+      try { video.load(); } catch {}
     };
-  }, [cover, videoReady]);
+  }, [cover, mediaActive]);
 
-  return <article className="memory-card" onClick={onOpen}>
+  return <article ref={cardRef} className="memory-card" onClick={onOpen}>
     <div className="memory-cover">
-      {isMemoryVideo(cover)
-        ? <video ref={videoRef} src={videoReady ? cover : undefined} muted loop playsInline preload={videoReady ? 'metadata' : 'none'} />
-        : <MemoryImage src={cover} alt={memory.title} />}
+      {!mediaActive
+        ? <span className="memory-media-fallback" aria-hidden="true" />
+        : isMemoryVideo(cover)
+          ? <video ref={videoRef} src={cover} muted loop playsInline preload="metadata" />
+          : <MemoryImage src={cover} alt={memory.title} loading="eager" />}
       <span className={memory.favorite ? 'memory-favorite-badge active' : 'memory-favorite-badge'}><Heart size={17} fill={memory.favorite ? 'currentColor' : 'none'} /></span>
     </div>
     <div className="memory-card-copy"><span>{date.getMonth() + 1}월 {date.getDate()}일</span><h3>{memory.title}</h3>{memory.location && <p><MapPin size={12} />{memory.location}</p>}</div>
   </article>;
 }
+
+export const MemoryCard = memo(MemoryCardComponent, (previous, next) => previous.memory === next.memory);
