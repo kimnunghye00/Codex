@@ -15,6 +15,7 @@ function memoryRef(coupleId: string, memoryId: number) {
 const remoteMemorySignatures = new Map<string, string>();
 const inFlightMemoryWrites = new Map<string, { signature: string; promise: Promise<void> }>();
 const inFlightMemoryDeletes = new Map<string, Promise<void>>();
+const activeMemorySubscriptions = new Map<string, number>();
 
 function memoryWriteKey(coupleId: string, memoryId: number) {
   return `${coupleId}:${memoryId}`;
@@ -85,46 +86,100 @@ export function memorySyncSignature(memory: Memory) {
   });
 }
 
+function toMemory(item: { id: string; data: () => unknown }, currentUid: string): Memory | undefined {
+  const data = item.data() as Partial<CloudMemory>;
+  const id = Number(data.id ?? item.id);
+  if (!Number.isFinite(id)) return undefined;
+  const ownerUid = String(data.ownerUid ?? '');
+
+  const memory: Memory = {
+    id,
+    title: String(data.title ?? ''),
+    date: String(data.date ?? ''),
+    description: String(data.description ?? ''),
+    images: Array.isArray(data.images) ? data.images.filter((value): value is string => typeof value === 'string') : [],
+    ownerUid: ownerUid || undefined,
+    createdBy: ownerUid && ownerUid !== currentUid ? 'partner' : 'me',
+    favorite: Boolean(data.favorite),
+  };
+  if (Array.isArray(data.videos)) memory.videos = data.videos.filter((value): value is string => typeof value === 'string');
+  if (data.location) memory.location = String(data.location);
+  if (Array.isArray(data.tags)) memory.tags = data.tags.filter((value): value is string => typeof value === 'string');
+  return memory;
+}
+
+function retainMemorySubscription(coupleId: string) {
+  activeMemorySubscriptions.set(coupleId, (activeMemorySubscriptions.get(coupleId) ?? 0) + 1);
+}
+
+function releaseMemorySubscription(coupleId: string) {
+  const remaining = Math.max(0, (activeMemorySubscriptions.get(coupleId) ?? 1) - 1);
+  if (remaining > 0) {
+    activeMemorySubscriptions.set(coupleId, remaining);
+    return;
+  }
+  activeMemorySubscriptions.delete(coupleId);
+  const prefix = `${coupleId}:`;
+  for (const key of [...remoteMemorySignatures.keys()]) {
+    if (key.startsWith(prefix)) remoteMemorySignatures.delete(key);
+  }
+}
+
 export function subscribeCoupleMemories(
   coupleId: string,
   currentUid: string,
   onChange: (memories: Memory[]) => void,
   onError: (error: unknown) => void = () => undefined,
 ) {
-  return onSnapshot(collection(db, 'couples', coupleId, 'memories'), (snapshot) => {
-    const memories: Memory[] = [];
-    const seenKeys = new Set<string>();
-    snapshot.docs.forEach((item) => {
-      const data = item.data() as Partial<CloudMemory>;
-      const id = Number(data.id ?? item.id);
-      if (!Number.isFinite(id)) return;
-      const ownerUid = String(data.ownerUid ?? '');
+  const byId = new Map<number, Memory>();
+  let emitted = false;
+  retainMemorySubscription(coupleId);
 
-      const memory: Memory = {
-        id,
-        title: String(data.title ?? ''),
-        date: String(data.date ?? ''),
-        description: String(data.description ?? ''),
-        images: Array.isArray(data.images) ? data.images.filter((value): value is string => typeof value === 'string') : [],
-        ownerUid: ownerUid || undefined,
-        createdBy: ownerUid && ownerUid !== currentUid ? 'partner' : 'me',
-        favorite: Boolean(data.favorite),
-      };
-      if (Array.isArray(data.videos)) memory.videos = data.videos.filter((value): value is string => typeof value === 'string');
-      if (data.location) memory.location = String(data.location);
-      if (Array.isArray(data.tags)) memory.tags = data.tags.filter((value): value is string => typeof value === 'string');
-      memories.push(memory);
-      const key = memoryWriteKey(coupleId, id);
-      seenKeys.add(key);
-      remoteMemorySignatures.set(key, memorySyncSignature(memory));
-    });
-    const prefix = `${coupleId}:`;
-    for (const key of [...remoteMemorySignatures.keys()]) {
-      if (key.startsWith(prefix) && !seenKeys.has(key)) remoteMemorySignatures.delete(key);
+  const unsubscribe = onSnapshot(collection(db, 'couples', coupleId, 'memories'), (snapshot) => {
+    let semanticChanged = !emitted;
+
+    // Firestore already knows which documents changed. Rebuilding every memory
+    // object from snapshot.docs on each write was O(total album size) work even
+    // when one favorite flag changed. Process only document changes instead.
+    for (const change of snapshot.docChanges()) {
+      const item = change.doc;
+      const rawId = Number((item.data() as Partial<CloudMemory>).id ?? item.id);
+      if (!Number.isFinite(rawId)) continue;
+      const key = memoryWriteKey(coupleId, rawId);
+
+      if (change.type === 'removed') {
+        if (byId.delete(rawId)) semanticChanged = true;
+        remoteMemorySignatures.delete(key);
+        continue;
+      }
+
+      const memory = toMemory(item, currentUid);
+      if (!memory) continue;
+      const signature = memorySyncSignature(memory);
+      const previous = byId.get(memory.id);
+      const previousSignature = previous ? memorySyncSignature(previous) : '';
+
+      // A serverTimestamp acknowledgement can produce another snapshot even
+      // though none of the fields rendered by ROUTE changed. Keep the remote
+      // write signature current but skip the React update in that case.
+      remoteMemorySignatures.set(key, signature);
+      if (previousSignature === signature) continue;
+
+      byId.set(memory.id, memory);
+      semanticChanged = true;
     }
-    memories.sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+
+    if (!semanticChanged) return;
+    const memories = [...byId.values()].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+    emitted = true;
     onChange(memories);
   }, onError);
+
+  return () => {
+    unsubscribe();
+    byId.clear();
+    releaseMemorySubscription(coupleId);
+  };
 }
 
 export async function upsertCoupleMemory(coupleId: string, currentUid: string, memory: Memory) {
