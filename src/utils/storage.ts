@@ -6,6 +6,7 @@ const MEMORY_KEY = 'route.memories.v2';
 export const MEMORY_DELETED_KEY = 'route.memories.deleted.v1';
 const MEMORY_CHANGE_EVENT = 'route-memories-local-change';
 const CHAT_CACHE_LIMIT = 40;
+const MEMORY_CACHE_LIMIT = 60;
 
 export type MemoryDeletionMap = Record<string, string>;
 
@@ -50,6 +51,33 @@ function sanitizeMessagesForStorage(messages: Message[]) {
 
 function recentChatCache(messages: Message[]) {
   return sanitizeMessagesForStorage(messages).slice(-CHAT_CACHE_LIMIT);
+}
+
+/**
+ * Memories can carry temporary blob:/data: URLs while a photo/video is still
+ * being uploaded (see MemoryForm's preview handling). Unlike chat, this path
+ * had no protection at all: a single in-flight upload could persist several
+ * megabytes of base64 per item into localStorage, and every subsequent
+ * unrelated save (favoriting a memory, editing a title, etc.) would then
+ * re-stringify and rewrite that same multi-megabyte payload. Repeated over a
+ * session this is exactly the kind of steady, generic memory growth that
+ * eventually crashes the tab with "Out of Memory" - it is not tied to any one
+ * screen because saveMemories() is called from the top-level App effect
+ * whenever `memories` changes, regardless of which tab is open.
+ */
+function sanitizeMemoriesForStorage(memories: Memory[]) {
+  return memories.map((memory) => ({
+    ...memory,
+    images: (memory.images ?? []).filter((url) => !isEphemeralMediaUrl(url)),
+    videos: memory.videos?.filter((url) => !isEphemeralMediaUrl(url)),
+  }));
+}
+
+function recentMemoryCache(memories: Memory[]) {
+  // Firestore's couple-scoped memories collection is the durable source of
+  // truth (see subscribeCoupleMemories in App.tsx); this cache only needs to
+  // cover the fast first paint before that listener resolves.
+  return sanitizeMemoriesForStorage(memories).slice(0, MEMORY_CACHE_LIMIT);
 }
 
 export function loadDeletedMemories(): MemoryDeletionMap {
@@ -107,12 +135,17 @@ export const saveMessages = (messages: Message[]) => {
 };
 export const loadMemories = (_fallback: Memory[]) => {
   const deleted = loadDeletedMemories();
-  return load<Memory[]>(MEMORY_KEY, []).filter((memory) => !deleted[String(memory.id)]);
+  const stored = load<Memory[]>(MEMORY_KEY, []);
+  const cleaned = recentMemoryCache(stored);
+  // Rewrite immediately so an old cache saved before this fix (which could
+  // hold embedded base64 photos with no size cap) never gets read again.
+  if (JSON.stringify(cleaned) !== JSON.stringify(stored)) save(MEMORY_KEY, cleaned);
+  return cleaned.filter((memory) => !deleted[String(memory.id)]);
 };
 export const saveMemories = (memories: Memory[]) => {
   const previous = load<Memory[]>(MEMORY_KEY, []);
   const deletionsChanged = reconcileDeletionMap(previous, memories);
-  const memoriesChanged = save(MEMORY_KEY, memories);
+  const memoriesChanged = save(MEMORY_KEY, recentMemoryCache(memories));
   if (memoriesChanged || deletionsChanged) {
     signalPersistentStateChange();
     window.dispatchEvent(new CustomEvent(MEMORY_CHANGE_EVENT, {
