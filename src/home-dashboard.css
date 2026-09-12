@@ -502,3 +502,34 @@
   .home-memory-title-icon { width: 25px; height: 25px; }
   .home-memory-head > button { font-size: 5px; }
 }
+
+
+/* Mobile home header/card separation and safe-edge guard.
+ * AppHeader must keep both action buttons inside the viewport, while the map
+ * and couple card should never visually touch the header divider. */
+@media (max-width: 700px) {
+  .home-dashboard > .topbar {
+    width: calc(100% + (var(--route-mobile-gutter, 16px) * 2)) !important;
+    max-width: none !important;
+    margin-left: calc(var(--route-mobile-gutter, 16px) * -1) !important;
+    margin-right: calc(var(--route-mobile-gutter, 16px) * -1) !important;
+    margin-bottom: 0 !important;
+    padding-left: max(var(--route-mobile-gutter, 16px), env(safe-area-inset-left)) !important;
+    padding-right: max(var(--route-mobile-gutter, 16px), env(safe-area-inset-right)) !important;
+  }
+
+  .home-dashboard > .topbar .header-actions {
+    flex: 0 0 auto !important;
+    padding-right: 2px;
+  }
+
+  .home-dashboard-grid {
+    margin-top: 12px;
+  }
+}
+
+@media (max-width: 390px) {
+  .home-dashboard-grid {
+    margin-top: 10px;
+  }
+}
