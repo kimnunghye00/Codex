@@ -19,7 +19,7 @@ function wirePreviewVisibilityGuard() {
   window.addEventListener('route-app-pause', pauseActive);
 }
 
-function MemoryCardComponent({ memory, onOpen }: { memory: Memory; onOpen: () => void; onFavorite: () => void }) {
+function MemoryCardComponent({ memory, onOpen }: { memory: Memory; onOpen: (id: number) => void }) {
   const date = new Date(`${memory.date}T00:00:00`);
   const cardRef = useRef<HTMLElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -75,7 +75,7 @@ function MemoryCardComponent({ memory, onOpen }: { memory: Memory; onOpen: () =>
     };
   }, [cover, mediaActive]);
 
-  return <article ref={cardRef} className="memory-card" onClick={onOpen}>
+  return <article ref={cardRef} className="memory-card" onClick={() => onOpen(memory.id)}>
     <div className="memory-cover">
       {!mediaActive
         ? <span className="memory-media-fallback" aria-hidden="true" />
@@ -88,4 +88,4 @@ function MemoryCardComponent({ memory, onOpen }: { memory: Memory; onOpen: () =>
   </article>;
 }
 
-export const MemoryCard = memo(MemoryCardComponent, (previous, next) => previous.memory === next.memory);
+export const MemoryCard = memo(MemoryCardComponent, (previous, next) => previous.memory === next.memory && previous.onOpen === next.onOpen);
