@@ -1,8 +1,6 @@
 export const PERSISTENT_STATE_CHANGE_EVENT = 'route-persistent-state-change';
 
 const OBSERVED_KEYS = new Set([
-  'route.messages.v2',
-  'route.memories.v2',
   'route.memories.deleted.v1',
 ]);
 
@@ -34,8 +32,10 @@ export function installPersistentStorageObserver() {
   const originalRemoveItem = Storage.prototype.removeItem;
 
   Storage.prototype.setItem = function setItem(key: string, value: string) {
+    const observed = this === window.localStorage && shouldSignal(key);
+    const previous = observed ? localStorage.getItem(key) : null;
     originalSetItem.call(this, key, value);
-    if (this === window.localStorage && shouldSignal(key)) signalPersistentStateChange();
+    if (observed && previous !== value) signalPersistentStateChange();
   };
 
   Storage.prototype.removeItem = function removeItem(key: string) {
