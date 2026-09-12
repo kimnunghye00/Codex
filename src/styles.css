@@ -361,9 +361,9 @@ main { padding-bottom: 88px; }
   .account-settings>header{
     position:sticky;
     z-index:8;
-    top:calc(-1 * max(18px,env(safe-area-inset-top)));
-    margin:-2px 0 16px;
-    padding:max(18px,env(safe-area-inset-top)) 0 10px;
+    top:0;
+    margin:0 0 16px;
+    padding:4px 0 10px;
     background:linear-gradient(to bottom,var(--background) 86%,color-mix(in srgb,var(--background) 90%,transparent));
   }
 }
