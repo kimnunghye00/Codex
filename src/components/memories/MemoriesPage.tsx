@@ -1,7 +1,7 @@
 import { CalendarDays, ChevronRight, Crown, GripVertical, Heart, MapPin, Phone, Plus, Settings2, Sparkles, Trophy, Video, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
-import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
 import type { Memory, MemoryDraft } from '../../types';
 import { auth, db } from '../../lib/firebase';
 import { getRealCoupleConnection, type RealCoupleConnection } from '../../lib/coupleConnection';
@@ -119,10 +119,13 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [localSchedules, setLocalSchedules] = useState<Schedule[]>(() => { try { return JSON.parse(localStorage.getItem(`route-local-schedules:${uid}`) || '[]') as Schedule[]; } catch { return []; } });
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [editingScheduleId, setEditingScheduleId] = useState<string>();
   const [scheduleFeedback, setScheduleFeedback] = useState('');
   const [scheduleForm, setScheduleForm] = useState({ title: '', date: todayKey(), startTime: '19:00', location: '' });
   const [datePlans, setDatePlans] = useState<DatePlan[]>(() => { try { return JSON.parse(localStorage.getItem(`route-date-plans:${uid}`) || '[]'); } catch { return []; } });
   const [dateOpen, setDateOpen] = useState(false);
+  const [editingDatePlanId, setEditingDatePlanId] = useState<number>();
+  const [editingLegacyPromiseId, setEditingLegacyPromiseId] = useState<string>();
   const [dateFeedback, setDateFeedback] = useState('');
   const [dateSourceKey, setDateSourceKey] = useState<string>();
   const [dateForm, setDateForm] = useState({ title: '', date: todayKey(), time: '18:00', location: '', memo: '' });
@@ -149,8 +152,8 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
     const handleBack = (event: Event) => {
       if (event.defaultPrevented) return;
       if (editing !== undefined) { event.preventDefault(); setEditing(undefined); if (initialDraft) onClearInitialDraft(); return; }
-      if (scheduleOpen) { event.preventDefault(); setScheduleOpen(false); return; }
-      if (dateOpen) { event.preventDefault(); setDateOpen(false); setDateSourceKey(undefined); return; }
+      if (scheduleOpen) { event.preventDefault(); setScheduleOpen(false); setEditingScheduleId(undefined); return; }
+      if (dateOpen) { event.preventDefault(); setDateOpen(false); setEditingDatePlanId(undefined); setEditingLegacyPromiseId(undefined); setDateSourceKey(undefined); return; }
       if (orderOpen) { event.preventDefault(); setOrderOpen(false); return; }
       if (selected !== undefined) { event.preventDefault(); setSelected(undefined); onClearInitial(); }
     };
@@ -237,13 +240,89 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
     draggingTabRef.current = null;
     setDraggingTab(null);
   };
-  const resetScheduleForm = () => setScheduleForm({ title: '', date: todayKey(), startTime: '19:00', location: '' });
-  const resetDateForm = () => { setDateForm({ title: '', date: todayKey(), time: '18:00', location: '', memo: '' }); setDateSourceKey(undefined); };
+  const resetScheduleForm = () => {
+    setScheduleForm({ title: '', date: todayKey(), startTime: '19:00', location: '' });
+    setEditingScheduleId(undefined);
+  };
+  const resetDateForm = () => {
+    setDateForm({ title: '', date: todayKey(), time: '18:00', location: '', memo: '' });
+    setDateSourceKey(undefined);
+    setEditingDatePlanId(undefined);
+    setEditingLegacyPromiseId(undefined);
+  };
+  const openScheduleEdit = (item: Schedule) => {
+    if (item.ownerId !== uid) {
+      setScheduleFeedback('상대방이 만든 일정은 상대방이 수정할 수 있어요.');
+      return;
+    }
+    setScheduleFeedback('');
+    setEditingScheduleId(item.id);
+    setScheduleForm({ title: item.title, date: item.date, startTime: item.startTime, location: item.location || '' });
+    setScheduleOpen(true);
+  };
+  const deleteSchedule = async (item: Schedule) => {
+    if (item.ownerId !== uid) {
+      setScheduleFeedback('상대방이 만든 일정은 상대방이 삭제할 수 있어요.');
+      return;
+    }
+    if (item.localOnly || item.id.startsWith('local-')) {
+      setLocalSchedules((items) => items.filter((candidate) => candidate.id !== item.id));
+      setScheduleFeedback('일정을 삭제했어요.');
+      return;
+    }
+    if (!connection?.coupleId) {
+      setScheduleFeedback('연결 상태를 확인한 뒤 다시 삭제해 주세요.');
+      return;
+    }
+    try {
+      await deleteDoc(doc(db, 'couples', connection.coupleId, 'schedules', item.id));
+      setScheduleFeedback('일정을 삭제했어요.');
+    } catch (cause) {
+      console.error('[ROUTE schedule delete]', cause);
+      setScheduleFeedback('일정을 삭제하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    }
+  };
   const saveSchedule = async () => {
     const title = scheduleForm.title.trim();
     if (!title) { setScheduleFeedback('일정 제목을 입력해 주세요.'); return; }
-    const payload = { ...scheduleForm, title, type: 'personal' as const, ownerId: uid };
+    const existing = editingScheduleId ? visibleSchedules.find((item) => item.id === editingScheduleId) : undefined;
+    const payload = { ...scheduleForm, title, location: scheduleForm.location.trim(), type: 'personal' as const, ownerId: existing?.ownerId || uid };
     setScheduleFeedback('');
+
+    if (editingScheduleId && existing) {
+      if (existing.ownerId !== uid) {
+        setScheduleFeedback('상대방이 만든 일정은 상대방이 수정할 수 있어요.');
+        return;
+      }
+      if (existing.localOnly || existing.id.startsWith('local-')) {
+        setLocalSchedules((items) => items.map((item) => item.id === existing.id ? { ...item, ...payload, localOnly: true } : item));
+        setScheduleFeedback('일정을 수정했어요.');
+        setScheduleOpen(false);
+        resetScheduleForm();
+        return;
+      }
+      if (!connection?.coupleId) {
+        setScheduleFeedback('연결 상태를 확인한 뒤 다시 수정해 주세요.');
+        return;
+      }
+      try {
+        await updateDoc(doc(db, 'couples', connection.coupleId, 'schedules', existing.id), {
+          title: payload.title,
+          date: payload.date,
+          startTime: payload.startTime,
+          location: payload.location,
+          updatedAt: serverTimestamp(),
+        });
+        setScheduleFeedback('일정을 수정했어요.');
+        setScheduleOpen(false);
+        resetScheduleForm();
+      } catch (cause) {
+        console.error('[ROUTE schedule update]', cause);
+        setScheduleFeedback('일정을 수정하지 못했어요. 잠시 후 다시 시도해 주세요.');
+      }
+      return;
+    }
+
     if (connection?.coupleId) {
       try {
         await addDoc(collection(db, 'couples', connection.coupleId, 'schedules'), { ...payload, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
@@ -278,9 +357,155 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
     setDateOpen(true);
   };
 
+  const openDatePlanEdit = (plan: DatePlan) => {
+    setDateFeedback('');
+    setEditingDatePlanId(plan.id);
+    setEditingLegacyPromiseId(undefined);
+    setDateSourceKey(plan.anniversaryKey);
+    setDateForm({ title: plan.title, date: plan.date, time: plan.time, location: plan.location || '', memo: plan.memo || '' });
+    setDateOpen(true);
+  };
+
+  const openLegacyPromiseEdit = (item: Schedule) => {
+    if (item.ownerId !== uid) {
+      setDateFeedback('상대방이 만든 약속은 상대방이 수정할 수 있어요.');
+      return;
+    }
+    setDateFeedback('');
+    setEditingDatePlanId(undefined);
+    setEditingLegacyPromiseId(item.id);
+    setDateSourceKey(undefined);
+    setDateForm({ title: item.title, date: item.date, time: item.startTime, location: item.location || '', memo: item.memo || '' });
+    setDateOpen(true);
+  };
+
+  const deleteLegacyPromise = async (item: Schedule) => {
+    if (item.ownerId !== uid) {
+      setDateFeedback('상대방이 만든 약속은 상대방이 삭제할 수 있어요.');
+      return;
+    }
+    if (item.localOnly || item.id.startsWith('local-') || item.id.startsWith('promise-') || item.id.startsWith('date-')) {
+      setLocalSchedules((items) => items.filter((candidate) => candidate.id !== item.id));
+      setDateFeedback('약속을 삭제했어요.');
+      return;
+    }
+    if (!connection?.coupleId) {
+      setDateFeedback('연결 상태를 확인한 뒤 다시 삭제해 주세요.');
+      return;
+    }
+    try {
+      await deleteDoc(doc(db, 'couples', connection.coupleId, 'schedules', item.id));
+      setDateFeedback('약속을 삭제했어요.');
+    } catch (cause) {
+      console.error('[ROUTE promise delete]', cause);
+      setDateFeedback('약속을 삭제하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    }
+  };
+
   const saveDatePlan = async () => {
     const title = dateForm.title.trim();
     if (!title) { setDateFeedback('약속 이름을 입력해 주세요.'); return; }
+
+    if (editingLegacyPromiseId) {
+      const existing = visibleSchedules.find((item) => item.id === editingLegacyPromiseId);
+      if (!existing) {
+        setDateFeedback('수정할 약속을 다시 선택해 주세요.');
+        return;
+      }
+      if (existing.ownerId !== uid) {
+        setDateFeedback('상대방이 만든 약속은 상대방이 수정할 수 있어요.');
+        return;
+      }
+      const updatePayload = {
+        title,
+        date: dateForm.date,
+        startTime: dateForm.time,
+        location: dateForm.location.trim(),
+        memo: dateForm.memo.trim(),
+      };
+      if (existing.localOnly || existing.id.startsWith('local-') || existing.id.startsWith('promise-') || existing.id.startsWith('date-')) {
+        setLocalSchedules((items) => items.map((item) => item.id === existing.id ? { ...item, ...updatePayload } : item));
+        setDateFeedback('약속을 수정했어요.');
+        setDateOpen(false);
+        resetDateForm();
+        return;
+      }
+      if (!connection?.coupleId) {
+        setDateFeedback('연결 상태를 확인한 뒤 다시 수정해 주세요.');
+        return;
+      }
+      try {
+        await updateDoc(doc(db, 'couples', connection.coupleId, 'schedules', existing.id), { ...updatePayload, updatedAt: serverTimestamp() });
+        setDateFeedback('약속을 수정했어요.');
+        setDateOpen(false);
+        resetDateForm();
+      } catch (cause) {
+        console.error('[ROUTE legacy promise update]', cause);
+        setDateFeedback('약속을 수정하지 못했어요. 잠시 후 다시 시도해 주세요.');
+      }
+      return;
+    }
+
+    if (editingDatePlanId !== undefined) {
+      const existingPlan = datePlans.find((plan) => plan.id === editingDatePlanId);
+      if (!existingPlan) {
+        setDateFeedback('수정할 약속을 다시 선택해 주세요.');
+        return;
+      }
+      const updatedPlan: DatePlan = {
+        ...existingPlan,
+        title,
+        date: dateForm.date,
+        time: dateForm.time,
+        location: dateForm.location.trim(),
+        memo: dateForm.memo.trim(),
+      };
+      const schedulePayload = {
+        title,
+        date: updatedPlan.date,
+        startTime: updatedPlan.time,
+        location: updatedPlan.location,
+        memo: updatedPlan.memo,
+        source: 'date-plan' as const,
+        sourceId: String(updatedPlan.id),
+      };
+      const linkedId = existingPlan.scheduleId;
+      if (!linkedId) {
+        setDatePlans((items) => items.map((plan) => plan.id === existingPlan.id ? updatedPlan : plan));
+        setDateFeedback('약속을 수정했어요.');
+        setDateOpen(false);
+        resetDateForm();
+        return;
+      }
+      if (linkedId.startsWith('date-') || linkedId.startsWith('promise-') || linkedId.startsWith('local-')) {
+        setLocalSchedules((items) => items.map((item) => item.id === linkedId ? { ...item, ...schedulePayload, ownerId: item.ownerId || uid, type: 'couple', localOnly: true } : item));
+        setDatePlans((items) => items.map((plan) => plan.id === existingPlan.id ? updatedPlan : plan));
+        setDateFeedback('약속을 수정했어요.');
+        setDateOpen(false);
+        resetDateForm();
+        return;
+      }
+      const linkedSchedule = visibleSchedules.find((item) => item.id === linkedId);
+      if (linkedSchedule && linkedSchedule.ownerId !== uid) {
+        setDateFeedback('상대방이 만든 약속은 상대방이 수정할 수 있어요.');
+        return;
+      }
+      if (!connection?.coupleId) {
+        setDateFeedback('연결 상태를 확인한 뒤 다시 수정해 주세요.');
+        return;
+      }
+      try {
+        await updateDoc(doc(db, 'couples', connection.coupleId, 'schedules', linkedId), { ...schedulePayload, updatedAt: serverTimestamp() });
+        setDatePlans((items) => items.map((plan) => plan.id === existingPlan.id ? updatedPlan : plan));
+        setDateFeedback('약속을 수정했어요.');
+        setDateOpen(false);
+        resetDateForm();
+      } catch (cause) {
+        console.error('[ROUTE promise update]', cause);
+        setDateFeedback('약속을 수정하지 못했어요. 잠시 후 다시 시도해 주세요.');
+      }
+      return;
+    }
 
     const id = Date.now();
     const localScheduleId = `promise-${id}`;
@@ -322,26 +547,36 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
   };
 
   const deleteDatePlan = async (plan: DatePlan) => {
-    setDatePlans((items) => items.filter((item) => item.id !== plan.id));
-    if (!plan.scheduleId) { setDateFeedback('약속을 삭제했어요.'); return; }
-
-    if (plan.scheduleId.startsWith('date-') || plan.scheduleId.startsWith('promise-') || plan.scheduleId.startsWith('local-')) {
-      setLocalSchedules((items) => items.filter((item) => item.id !== plan.scheduleId));
+    if (!plan.scheduleId) {
+      setDatePlans((items) => items.filter((item) => item.id !== plan.id));
       setDateFeedback('약속을 삭제했어요.');
       return;
     }
 
+    if (plan.scheduleId.startsWith('date-') || plan.scheduleId.startsWith('promise-') || plan.scheduleId.startsWith('local-')) {
+      setLocalSchedules((items) => items.filter((item) => item.id !== plan.scheduleId));
+      setDatePlans((items) => items.filter((item) => item.id !== plan.id));
+      setDateFeedback('약속을 삭제했어요.');
+      return;
+    }
+
+    const linkedSchedule = visibleSchedules.find((item) => item.id === plan.scheduleId);
+    if (linkedSchedule && linkedSchedule.ownerId !== uid) {
+      setDateFeedback('상대방이 만든 약속은 상대방이 삭제할 수 있어요.');
+      return;
+    }
     if (!connection?.coupleId) {
-      setDateFeedback('이 기기의 약속을 삭제했어요. 공유된 항목은 연결 후 다시 확인해 주세요.');
+      setDateFeedback('연결 상태를 확인한 뒤 다시 삭제해 주세요.');
       return;
     }
 
     try {
       await deleteDoc(doc(db, 'couples', connection.coupleId, 'schedules', plan.scheduleId));
+      setDatePlans((items) => items.filter((item) => item.id !== plan.id));
       setDateFeedback('약속을 삭제했어요.');
     } catch (cause) {
       console.error('[ROUTE linked promise delete]', cause);
-      setDateFeedback('약속 기록은 삭제했지만 공유 항목 삭제에 실패했어요. 잠시 후 다시 확인해 주세요.');
+      setDateFeedback('약속을 삭제하지 못했어요. 잠시 후 다시 시도해 주세요.');
     }
   };
 
@@ -365,14 +600,14 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
 
     {activeTab === 'tier' && <div className="hub-stack"><section className="hub-hero tier-hero"><Trophy /><div><small>COUPLE TIER</small><h2>이번 달 커플 랭킹</h2><p>공개 참여를 선택한 커플끼리 재미로 경쟁해요.</p></div></section><div className="tier-card"><span>🥇</span><div><b>달달커플</b><small>이번 달 데이트 기록</small></div><strong>24회</strong></div><div className="tier-card"><span>🥈</span><div><b>콩떡커플</b><small>이번 달 데이트 기록</small></div><strong>21회</strong></div><div className="tier-card"><span>🥉</span><div><b>{realName(profile,'나')} ❤️ {realName(partner,'상대방')}</b><small>내 커플 · 샘플 순위</small></div><strong>{Math.max(0, Math.min(20, datePlans.length))}회</strong></div><p className="hub-note">실제 전체 사용자 순위는 서버 집계와 공개 동의 기능을 연결한 뒤 활성화돼요.</p></div>}
 
-    {activeTab === 'schedule' && <div className="hub-stack"><div className="hub-section-head"><div><small>CALENDAR</small><h2>일정</h2></div><button type="button" onClick={() => { setScheduleFeedback(''); setScheduleOpen(true); }}><Plus size={15} />일정 추가</button></div>{scheduleFeedback && <p className="hub-note">{scheduleFeedback}</p>}{scheduleItems.map((item) => <article key={item.id} className="hub-list-row"><CalendarDays size={17} /><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')} · {item.startTime}{item.location ? ` · ${item.location}` : ''}{item.localOnly ? ' · 기기 저장' : ''}</small></div><div className="schedule-flow-actions"><span>{item.ownerId === uid ? '나' : realName(partner, '상대')}</span>{item.location && <button type="button" onClick={() => onOpenLocation?.(item.location!)}><MapPin size={12} />지도</button>}</div></article>)}{!scheduleItems.length && <div className="memory-empty">등록된 일정이 없어요.</div>}</div>}
+    {activeTab === 'schedule' && <div className="hub-stack"><div className="hub-section-head"><div><small>CALENDAR</small><h2>일정</h2></div><button type="button" onClick={() => { setScheduleFeedback(''); resetScheduleForm(); setScheduleOpen(true); }}><Plus size={15} />일정 추가</button></div>{scheduleFeedback && <p className="hub-note">{scheduleFeedback}</p>}{scheduleItems.map((item) => <article key={item.id} className="hub-list-row"><CalendarDays size={17} /><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')} · {item.startTime}{item.location ? ` · ${item.location}` : ''}{item.localOnly ? ' · 기기 저장' : ''}</small></div><div className="schedule-flow-actions"><span>{item.ownerId === uid ? '나' : realName(partner, '상대')}</span>{item.location && <button type="button" onClick={() => onOpenLocation?.(item.location!)}><MapPin size={12} />지도</button>}{item.ownerId === uid && <><button type="button" onClick={() => openScheduleEdit(item)}>수정</button><button type="button" onClick={() => void deleteSchedule(item)}>삭제</button></>}</div></article>)}{!scheduleItems.length && <div className="memory-empty">등록된 일정이 없어요.</div>}</div>}
 
-    {activeTab === 'date' && <div className="hub-stack"><div className="hub-section-head"><div><small>OUR PROMISE</small><h2>약속</h2></div><button type="button" onClick={() => openDatePlan()}><Plus size={15} />약속 추가</button></div>{dateFeedback && <p className="hub-note date-flow-feedback">{dateFeedback}</p>}{[...datePlans].sort((a,b) => a.date.localeCompare(b.date)).map((item) => <article key={item.id} className="hub-list-row date-row"><Heart size={17} /><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')} · {item.time}{item.location ? ` · ${item.location}` : ''}</small>{item.memo && <em>{item.memo}</em>}</div><div className="date-flow-actions">{item.location && <button type="button" className="map-link" onClick={() => onOpenLocation?.(item.location)}><MapPin size={11} />지도</button>}<button type="button" onClick={() => void deleteDatePlan(item)}>삭제</button></div></article>)}{promiseScheduleExtras.map((item) => <article key={`legacy-${item.id}`} className="hub-list-row date-row"><Heart size={17} /><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')} · {item.startTime}{item.location ? ` · ${item.location}` : ''}</small>{item.memo && <em>{item.memo}</em>}</div><div className="date-flow-actions"><span>기존 약속</span>{item.location && <button type="button" className="map-link" onClick={() => onOpenLocation?.(item.location!)}><MapPin size={11} />지도</button>}</div></article>)}{!datePlans.length && !promiseScheduleExtras.length && <div className="memory-empty">아직 등록된 약속이 없어요 ❤️</div>}</div>}
+    {activeTab === 'date' && <div className="hub-stack"><div className="hub-section-head"><div><small>OUR PROMISE</small><h2>약속</h2></div><button type="button" onClick={() => openDatePlan()}><Plus size={15} />약속 추가</button></div>{dateFeedback && <p className="hub-note date-flow-feedback">{dateFeedback}</p>}{[...datePlans].sort((a,b) => a.date.localeCompare(b.date)).map((item) => <article key={item.id} className="hub-list-row date-row"><Heart size={17} /><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')} · {item.time}{item.location ? ` · ${item.location}` : ''}</small>{item.memo && <em>{item.memo}</em>}</div><div className="date-flow-actions">{item.location && <button type="button" className="map-link" onClick={() => onOpenLocation?.(item.location)}><MapPin size={11} />지도</button>}<button type="button" onClick={() => openDatePlanEdit(item)}>수정</button><button type="button" onClick={() => void deleteDatePlan(item)}>삭제</button></div></article>)}{promiseScheduleExtras.map((item) => <article key={`legacy-${item.id}`} className="hub-list-row date-row"><Heart size={17} /><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')} · {item.startTime}{item.location ? ` · ${item.location}` : ''}</small>{item.memo && <em>{item.memo}</em>}</div><div className="date-flow-actions"><span>기존 약속</span>{item.location && <button type="button" className="map-link" onClick={() => onOpenLocation?.(item.location!)}><MapPin size={11} />지도</button>}{item.ownerId === uid && <><button type="button" onClick={() => openLegacyPromiseEdit(item)}>수정</button><button type="button" onClick={() => void deleteLegacyPromise(item)}>삭제</button></>}</div></article>)}{!datePlans.length && !promiseScheduleExtras.length && <div className="memory-empty">아직 등록된 약속이 없어요 ❤️</div>}</div>}
 
     {orderOpen && <div className="hub-order-backdrop"><section className="hub-order-panel route-order-fixed-shell"><header><div><small>추억 구성</small><h2>탭 순서 편집</h2></div><button onClick={() => setOrderOpen(false)} aria-label="탭 순서 편집 닫기"><X size={18} /></button></header>{tabOrder.map((tab) => <div className={`hub-order-row ${draggingTab === tab ? 'dragging' : ''}`} data-hub-tab={tab} key={tab}><button type="button" className="hub-order-drag-handle" aria-label={`${TAB_LABEL[tab]} 순서 이동`} onPointerDown={(event) => startTabDrag(event, tab)} onPointerMove={updateTabDrag} onPointerUp={endTabDrag} onPointerCancel={endTabDrag} onKeyDown={(event) => { if (event.key === 'ArrowUp') { event.preventDefault(); moveTab(tab, -1); } if (event.key === 'ArrowDown') { event.preventDefault(); moveTab(tab, 1); } }}><GripVertical size={18} /></button><b>{TAB_LABEL[tab]}</b></div>)}<footer className="hub-order-footer route-hub-order-native-footer"><button type="button" className="route-hub-order-reset" onClick={() => setTabOrder([...DEFAULT_TABS])}>기본 순서</button><button type="button" className="route-hub-order-done" onClick={() => setOrderOpen(false)}>완료</button></footer></section></div>}
 
-    {scheduleOpen && <div className="hub-order-backdrop"><section className="hub-order-panel compact"><header><div><small>NEW SCHEDULE</small><h2>일정 추가</h2></div><button onClick={() => setScheduleOpen(false)}><X size={18} /></button></header><label>제목<input value={scheduleForm.title} onChange={(e) => setScheduleForm({...scheduleForm,title:e.target.value})} /></label><label>날짜<input type="date" value={scheduleForm.date} onChange={(e) => setScheduleForm({...scheduleForm,date:e.target.value})} /></label><label>시간<input type="time" value={scheduleForm.startTime} onChange={(e) => setScheduleForm({...scheduleForm,startTime:e.target.value})} /></label><label>장소<input value={scheduleForm.location} onChange={(e) => setScheduleForm({...scheduleForm,location:e.target.value})} /></label><p className="hub-note">둘이 함께 정한 항목은 약속 탭에서 따로 추가할 수 있어요.</p><button className="primary" disabled={!scheduleForm.title.trim()} onClick={() => void saveSchedule()}>일정 저장</button></section></div>}
+    {scheduleOpen && <div className="hub-order-backdrop"><section className="hub-order-panel compact"><header><div><small>{editingScheduleId ? 'EDIT SCHEDULE' : 'NEW SCHEDULE'}</small><h2>{editingScheduleId ? '일정 수정' : '일정 추가'}</h2></div><button onClick={() => { setScheduleOpen(false); resetScheduleForm(); }}><X size={18} /></button></header><label>제목<input value={scheduleForm.title} onChange={(e) => setScheduleForm({...scheduleForm,title:e.target.value})} /></label><label>날짜<input type="date" value={scheduleForm.date} onChange={(e) => setScheduleForm({...scheduleForm,date:e.target.value})} /></label><label>시간<input type="time" value={scheduleForm.startTime} onChange={(e) => setScheduleForm({...scheduleForm,startTime:e.target.value})} /></label><label>장소<input value={scheduleForm.location} onChange={(e) => setScheduleForm({...scheduleForm,location:e.target.value})} /></label><p className="hub-note">날짜, 시간, 장소는 저장한 뒤에도 언제든 다시 수정할 수 있어요.</p><button className="primary" disabled={!scheduleForm.title.trim()} onClick={() => void saveSchedule()}>{editingScheduleId ? '수정 저장' : '일정 저장'}</button></section></div>}
 
-    {dateOpen && <div className="hub-order-backdrop"><section className="hub-order-panel compact"><header><div><small>{dateSourceKey ? 'FROM ANNIVERSARY' : 'NEW PROMISE'}</small><h2>{dateSourceKey ? '기념일 약속 만들기' : '약속 추가'}</h2></div><button onClick={() => { setDateOpen(false); resetDateForm(); }}><X size={18} /></button></header><p className="date-flow-hint"><Heart size={14} />둘이 함께 정한 약속으로 저장되고 상대방과 동기화돼요.</p><label>약속 이름<input value={dateForm.title} onChange={(e) => setDateForm({...dateForm,title:e.target.value})} /></label><label>날짜<input type="date" value={dateForm.date} onChange={(e) => setDateForm({...dateForm,date:e.target.value})} /></label><label>시간<input type="time" value={dateForm.time} onChange={(e) => setDateForm({...dateForm,time:e.target.value})} /></label><label>장소<input value={dateForm.location} onChange={(e) => setDateForm({...dateForm,location:e.target.value})} /></label><label>메모<textarea value={dateForm.memo} onChange={(e) => setDateForm({...dateForm,memo:e.target.value})} /></label><button className="primary" disabled={!dateForm.title.trim()} onClick={() => void saveDatePlan()}>약속 저장</button></section></div>}
+    {dateOpen && <div className="hub-order-backdrop"><section className="hub-order-panel compact"><header><div><small>{editingDatePlanId !== undefined || editingLegacyPromiseId ? 'EDIT PROMISE' : dateSourceKey ? 'FROM ANNIVERSARY' : 'NEW PROMISE'}</small><h2>{editingDatePlanId !== undefined || editingLegacyPromiseId ? '약속 수정' : dateSourceKey ? '기념일 약속 만들기' : '약속 추가'}</h2></div><button onClick={() => { setDateOpen(false); resetDateForm(); }}><X size={18} /></button></header><p className="date-flow-hint"><Heart size={14} />날짜, 시간, 장소를 수정하면 공유된 약속에도 함께 반영돼요.</p><label>약속 이름<input value={dateForm.title} onChange={(e) => setDateForm({...dateForm,title:e.target.value})} /></label><label>날짜<input type="date" value={dateForm.date} onChange={(e) => setDateForm({...dateForm,date:e.target.value})} /></label><label>시간<input type="time" value={dateForm.time} onChange={(e) => setDateForm({...dateForm,time:e.target.value})} /></label><label>장소<input value={dateForm.location} onChange={(e) => setDateForm({...dateForm,location:e.target.value})} /></label><label>메모<textarea value={dateForm.memo} onChange={(e) => setDateForm({...dateForm,memo:e.target.value})} /></label><button className="primary" disabled={!dateForm.title.trim()} onClick={() => void saveDatePlan()}>{editingDatePlanId !== undefined || editingLegacyPromiseId ? '수정 저장' : '약속 저장'}</button></section></div>}
   </div>;
 }
