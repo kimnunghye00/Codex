@@ -67,11 +67,10 @@ function flushPendingState() {
   if (!navigator.onLine || accountResetInProgress) return;
 
   if (localStorage.getItem(ALBUM_PENDING_KEY) === '1') {
-    // Album sync is a comparatively heavy Firestore/Storage module. Keep it out
-    // of the bootstrap chunk and only load it when recovery actually needs it.
-    void import('./lib/crossDeviceAlbumSync')
-      .then(({ requestAlbumSyncNow }) => requestAlbumSyncNow())
-      .catch((error) => console.warn('[ROUTE reconnect album]', error));
+    // The legacy per-account album synchronizer was retired after memories
+    // moved to the couple-scoped realtime collection. Clear its old pending
+    // marker instead of loading a second, duplicate album sync pipeline.
+    try { localStorage.removeItem(ALBUM_PENDING_KEY); } catch {}
   }
   try { signalPersistentStateChange(); } catch (error) { console.warn('[ROUTE reconnect backup]', error); }
   window.dispatchEvent(new Event('route-network-restored'));
