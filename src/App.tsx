@@ -396,6 +396,17 @@ function App({ user, profile, onProfileChange }: AppProps) {
   }, [connection?.coupleId, memories, user.uid]);
 
   useEffect(() => {
+    const handleHomeRequest = () => {
+      tabHistory.current = ['home'];
+      setTab('home');
+      setSettingsOpen(false);
+      setNotificationsOpen(false);
+    };
+    window.addEventListener('route-home-request', handleHomeRequest);
+    return () => window.removeEventListener('route-home-request', handleHomeRequest);
+  }, []);
+
+  useEffect(() => {
     const handleBack = (event: Event) => {
       if (event.defaultPrevented) return;
       if (settingsOpen) { event.preventDefault(); setSettingsOpen(false); return; }
