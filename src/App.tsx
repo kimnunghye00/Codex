@@ -319,7 +319,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
 
   return <>
     <div className="app-shell"><main><Suspense fallback={<div className="page auth-loading" role="status" aria-live="polite"><div className="loading-mark" /><p>화면을 불러오는 중이에요</p></div>}>
-      {tab === 'home' && <HomePage uid={user.uid} profile={profile} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} memories={memories} latestPartnerMessage={latestPartnerMessage} onNavigate={navigateTab} onOpenChat={openChat} onOpenMemory={openMemory} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
+      {tab === 'home' && <HomePage uid={user.uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} memories={memories} latestPartnerMessage={latestPartnerMessage} onNavigate={navigateTab} onOpenChat={openChat} onOpenMemory={openMemory} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'memories' && <MemoriesPage requestedTab={requestedHubTab} Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={(place) => { setLocationFocus(place); setRequestedLocationTab('map'); navigateTab('location'); }} />}
       {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} connection={connection} />}
       {tab === 'location' && <LocationPage requestedTab={requestedLocationTab} Header={AppHeader} connection={connection} focusPlace={locationFocus} onClearFocus={() => setLocationFocus(undefined)} onCreateMemory={(draft) => { setMemoryToOpen(undefined); setMemoryDraft(draft); setRequestedHubTab('album'); navigateTab('memories'); }} onActivity={(title, detail) => addActivity({ actor: 'me', kind: 'location', title, detail })} />}
@@ -334,7 +334,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
   </>;
 }
 
-const HomePage = memo(function HomePage({ uid, profile, connection, relationshipStartDate, coupleDay, memories, latestPartnerMessage, onNavigate, onOpenChat, onOpenMemory, onSettings, onNotifications, unreadCount }: { uid: string; profile: UserProfile; connection: RealCoupleConnection | null; relationshipStartDate?: string; coupleDay: number; memories: Memory[]; latestPartnerMessage?: Message; onNavigate: (tab: Tab) => void; onOpenChat: () => void; onOpenMemory: (id: number) => void; onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
+const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connection, relationshipStartDate, coupleDay, memories, latestPartnerMessage, onNavigate, onOpenChat, onOpenMemory, onSettings, onNotifications, unreadCount }: { uid: string; profile: UserProfile; onProfileChange: (profile: UserProfile) => void; connection: RealCoupleConnection | null; relationshipStartDate?: string; coupleDay: number; memories: Memory[]; latestPartnerMessage?: Message; onNavigate: (tab: Tab) => void; onOpenChat: () => void; onOpenMemory: (id: number) => void; onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
   const previewMemories = memories.slice(0, 4);
   const partnerProfile = connection?.partnerProfile ?? null;
   const partnerName = partnerProfile ? displayName(partnerProfile) : '상대방';
@@ -353,7 +353,7 @@ const HomePage = memo(function HomePage({ uid, profile, connection, relationship
       </button>
 
       <aside className="home-dashboard-side" aria-label="홈 요약">
-        <CoupleHomeTools uid={uid} profile={profile} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} onOpenMyProfile={onSettings} onOpenConnect={onSettings} onOpenAnniversary={() => onNavigate('anniversary')} />
+        <CoupleHomeTools uid={uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} onOpenConnect={onSettings} onOpenAnniversary={() => onNavigate('anniversary')} />
 
         <section className="home-memory-card" aria-label="우리의 추억">
           <header className="home-memory-head">
