@@ -17,6 +17,35 @@ const ACCOUNT_SHARED_CACHE_KEYS = [
 
 const rawStorageSetItem = typeof Storage !== 'undefined' ? Storage.prototype.setItem : undefined;
 const rawStorageRemoveItem = typeof Storage !== 'undefined' ? Storage.prototype.removeItem : undefined;
+const LEGACY_MEDIA_CACHE_LIMIT = 2_000_000;
+
+function purgeLegacyHeavyMediaCaches() {
+  try {
+    for (const key of ['route.memories.v2', 'route.messages.v2'] as const) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const containsEmbeddedMedia =
+        raw.includes('data:image/') ||
+        raw.includes('data:video/') ||
+        raw.includes('blob:');
+      if (!containsEmbeddedMedia && raw.length <= LEGACY_MEDIA_CACHE_LIMIT) continue;
+
+      if (rawStorageRemoveItem) rawStorageRemoveItem.call(localStorage, key);
+      else localStorage.removeItem(key);
+      console.warn('[ROUTE memory recovery] cleared oversized legacy cache', key);
+    }
+
+    // These markers belong to the retired per-account album synchronizer.
+    for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+      const key = localStorage.key(index);
+      if (!key || (!key.startsWith('route.albumSync.pending') && key !== 'route.albumSync.pending')) continue;
+      if (rawStorageRemoveItem) rawStorageRemoveItem.call(localStorage, key);
+      else localStorage.removeItem(key);
+    }
+  } catch (error) {
+    console.warn('[ROUTE memory recovery] legacy cache cleanup failed', error);
+  }
+}
 let onlineHideTimer: number | undefined;
 let accountResetInProgress = false;
 let runtimeListenersInstalled = false;
@@ -225,6 +254,7 @@ function installRuntimeListeners() {
 
 export function initializeRuntimeRecovery() {
   if (runtimeRecoveryPromise) return runtimeRecoveryPromise;
+  purgeLegacyHeavyMediaCaches();
   installRuntimeListeners();
 
   runtimeRecoveryPromise = new Promise<void>((resolve) => {
