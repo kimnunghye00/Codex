@@ -249,7 +249,9 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   const updateNearBottom = () => {
     const element = messagesRef.current;
     if (!element) return;
-    nearBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight <= CHAT_BOTTOM_SLOP_PX;
+    const distance = element.scrollHeight - element.scrollTop - element.clientHeight;
+    nearBottomRef.current = distance <= CHAT_BOTTOM_SLOP_PX;
+    element.dataset.routeUserAwayFromBottom = distance > CHAT_BOTTOM_SLOP_PX ? '1' : '0';
   };
 
   const finePointerRef = useRef(false);
@@ -263,9 +265,25 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
 
   const handleMessagesWheel = (event: React.WheelEvent<HTMLDivElement>) => {
     if (!event.deltaY || !finePointerRef.current) return;
-    // Keep the browser's native wheel delta and add only the extra distance.
-    // Touch/trackpad momentum is left fully native; this boosts mouse wheels.
+
+    if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) {
+      event.preventDefault();
+      event.currentTarget.scrollTop += event.deltaY * 56;
+      updateNearBottom();
+      return;
+    }
+
+    if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+      event.preventDefault();
+      event.currentTarget.scrollTop += event.deltaY * event.currentTarget.clientHeight * 0.82;
+      updateNearBottom();
+      return;
+    }
+
+    // Pixel-mode trackpads keep native momentum; mouse wheels get only the
+    // small extra distance that users requested.
     event.currentTarget.scrollTop += event.deltaY * (FINE_POINTER_WHEEL_MULTIPLIER - 1);
+    updateNearBottom();
   };
 
   useEffect(() => { if (currentUid) setPreferences(loadChatPreferences(currentUid)); }, [currentUid]);
