@@ -1,7 +1,7 @@
 import { Bot, CalendarClock, Gift, Heart, MonitorUp, MoreHorizontal, Phone, Trash2, Video, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
-import { collection, doc, onSnapshot, orderBy, query, setDoc } from 'firebase/firestore';
+import { collection, doc, limit, onSnapshot, orderBy, query, setDoc, where } from 'firebase/firestore';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { CALLING_ENABLED } from '../../config/releaseFlags';
 import { auth, db } from '../../lib/firebase';
@@ -9,9 +9,9 @@ import { AI_TEST_PARTNER_NAME, loadLocalAiPartner } from '../../lib/coupleData';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
 import { clearCoupleChatForMe, deleteCoupleMessageForEveryone, hideCoupleMessageForMe, sendCoupleMessage, subscribeCoupleMessages, toggleCoupleMessageReaction } from '../../lib/chatRealtime';
 import { deleteUploadedChatMedia, uploadChatMedia } from '../../lib/chatMedia';
-import { migrateLoadedLegacyChatMedia } from '../../lib/chatMediaMigration';
+import { migrateLoadedLegacyChatMedia, releaseLegacyChatMediaRoom } from '../../lib/chatMediaMigration';
 import type { Message } from '../../types';
-import { messageDateLabel } from '../../utils/dates';
+import { localDateKey, messageDateLabel } from '../../utils/dates';
 import { isChatMediaMessage, loadChatMemoryMessageIds, toggleChatMessageMemory } from '../../utils/featureFlow';
 import { createMessageId } from '../../utils/messageId';
 import { ChatBubble } from './ChatBubble';
@@ -316,9 +316,32 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     migrateLoadedLegacyChatMedia(connection.coupleId, currentUid, messages);
   }, [connection?.coupleId, currentUid, messages]);
   useEffect(() => {
+    const coupleId = connection?.coupleId;
+    if (!coupleId || !currentUid) return;
+    return () => releaseLegacyChatMediaRoom(coupleId, currentUid);
+  }, [connection?.coupleId, currentUid]);
+  useEffect(() => {
     if (!connection?.coupleId) { setSchedules([]); return; }
-    const q = query(collection(db, 'couples', connection.coupleId, 'schedules'), orderBy('date', 'asc'));
-    return onSnapshot(q, (snapshot) => setSchedules(snapshot.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<ChatSchedule, 'id'>) }))));
+    const q = query(
+      collection(db, 'couples', connection.coupleId, 'schedules'),
+      where('date', '>=', localDateKey()),
+      orderBy('date', 'asc'),
+      limit(24),
+    );
+    return onSnapshot(q, (snapshot) => {
+      const next = snapshot.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<ChatSchedule, 'id'>) }));
+      setSchedules((current) => {
+        if (current.length === next.length && current.every((item, index) =>
+          item.id === next[index]?.id &&
+          item.title === next[index]?.title &&
+          item.date === next[index]?.date &&
+          item.startTime === next[index]?.startTime &&
+          item.type === next[index]?.type &&
+          item.ownerId === next[index]?.ownerId
+        )) return current;
+        return next;
+      });
+    });
   }, [connection?.coupleId]);
   useEffect(() => {
     if (!connection?.coupleId || !connection.partnerUid) { setPartnerTyping(false); return; }
