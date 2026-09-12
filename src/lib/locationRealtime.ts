@@ -46,6 +46,7 @@ export function subscribePartnerLocationVisits(
     where('dayKey', '==', dayKey),
   );
 
+  let lastSignature = '';
   return onSnapshot(q, (snapshot) => {
     const visits = snapshot.docs.map((snapshotDoc) => {
       const data = snapshotDoc.data() as CloudLocationVisit;
@@ -61,6 +62,17 @@ export function subscribePartnerLocationVisits(
     }).filter((visit) => Number.isFinite(visit.latitude) && Number.isFinite(visit.longitude))
       .sort((a, b) => a.arrivedAt.localeCompare(b.arrivedAt));
 
+    const signature = JSON.stringify(visits.map((visit) => [
+      visit.id,
+      visit.latitude,
+      visit.longitude,
+      visit.accuracy,
+      visit.placeName ?? '',
+      visit.arrivedAt,
+      visit.leftAt ?? '',
+    ]));
+    if (signature === lastSignature) return;
+    lastSignature = signature;
     onVisits(visits);
   }, onError);
 }
