@@ -45,3 +45,10 @@
   width: 100%;
   height: 100%;
 }
+
+
+/* Large albums should not keep paying layout/paint cost for every offscreen card. */
+.route-hub .memory-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 280px;
+}
