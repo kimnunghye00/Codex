@@ -30,43 +30,57 @@ export type RouteLocationWatch = {
 
 let nativeFirestoreDesiredState = true;
 let nativeFirestoreAppliedState: boolean | undefined;
-let nativeFirestoreTransition: Promise<void> | null = null;
+let nativeFirestoreWorker: Promise<void> | null = null;
+let nativeFirestoreApi: Promise<{
+  enableNetwork: (database: import('firebase/firestore').Firestore) => Promise<void>;
+  disableNetwork: (database: import('firebase/firestore').Firestore) => Promise<void>;
+  db: import('firebase/firestore').Firestore;
+}> | null = null;
 
-async function applyNativeFirestoreNetworkState() {
-  if (nativeFirestoreTransition) {
-    await nativeFirestoreTransition;
-    if (nativeFirestoreAppliedState === nativeFirestoreDesiredState) return;
+function loadNativeFirestoreApi() {
+  if (!nativeFirestoreApi) {
+    nativeFirestoreApi = Promise.all([
+      import('firebase/firestore'),
+      import('./firebase'),
+    ]).then(([firestore, firebase]) => ({
+      enableNetwork: firestore.enableNetwork,
+      disableNetwork: firestore.disableNetwork,
+      db: firebase.db,
+    }));
   }
-
-  const desired = nativeFirestoreDesiredState;
-  nativeFirestoreTransition = (async () => {
-    try {
-      const [{ enableNetwork, disableNetwork }, { db }] = await Promise.all([
-        import('firebase/firestore'),
-        import('./firebase'),
-      ]);
-      if (desired) await enableNetwork(db);
-      else await disableNetwork(db);
-      nativeFirestoreAppliedState = desired;
-    } catch {
-      // Lifecycle network hints are best-effort and must never block the UI.
-    } finally {
-      nativeFirestoreTransition = null;
-    }
-  })();
-
-  await nativeFirestoreTransition;
-
-  // appStateChange can flip again while the async Firebase transition is in
-  // flight. Converge once more instead of allowing enable/disable calls to race.
-  if (nativeFirestoreAppliedState !== nativeFirestoreDesiredState) {
-    await applyNativeFirestoreNetworkState();
-  }
+  return nativeFirestoreApi;
 }
 
 function setNativeFirestoreNetwork(enabled: boolean) {
   nativeFirestoreDesiredState = enabled;
-  return applyNativeFirestoreNetworkState();
+  if (nativeFirestoreWorker) return nativeFirestoreWorker;
+
+  nativeFirestoreWorker = (async () => {
+    try {
+      const { enableNetwork, disableNetwork, db } = await loadNativeFirestoreApi();
+
+      while (nativeFirestoreAppliedState !== nativeFirestoreDesiredState) {
+        const target = nativeFirestoreDesiredState;
+        try {
+          if (target) await enableNetwork(db);
+          else await disableNetwork(db);
+          nativeFirestoreAppliedState = target;
+        } catch {
+          // Lifecycle network hints are best-effort and must never block the UI.
+          break;
+        }
+      }
+    } finally {
+      nativeFirestoreWorker = null;
+      // The desired state may have changed between the last loop check and
+      // worker teardown. Start exactly one follow-up worker if needed.
+      if (nativeFirestoreAppliedState !== nativeFirestoreDesiredState) {
+        void setNativeFirestoreNetwork(nativeFirestoreDesiredState);
+      }
+    }
+  })();
+
+  return nativeFirestoreWorker;
 }
 
 export async function initializeNativeApp() {
