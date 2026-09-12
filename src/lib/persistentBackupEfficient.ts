@@ -1,11 +1,8 @@
 import { onAuthStateChanged } from 'firebase/auth';
-import type { Memory, Message } from '../types';
 import { PERSISTENT_STATE_CHANGE_EVENT } from '../utils/persistenceSignal';
 import { auth } from './firebase';
-import { saveBackupValue, saveMemoriesBackup, saveMessagesBackup } from './persistentBackup';
+import { saveBackupValue } from './persistentBackup';
 
-const MESSAGE_KEY = 'route.messages.v2';
-const MEMORY_KEY = 'route.memories.v2';
 const DEBOUNCE_MS = 1_500;
 const STARTUP_FLUSH_MS = 4_000;
 const SAFETY_INTERVAL_MS = 120_000;
@@ -17,8 +14,6 @@ let flushTimer: number | undefined;
 let safetyTimer: number | undefined;
 let running = false;
 let rerun = false;
-let lastMessages = '';
-let lastMemories = '';
 let lastLocalState = '';
 
 function localStateKeys(uid: string) {
@@ -40,14 +35,6 @@ function readLocalState(uid: string) {
     if (value !== null) result[key] = value;
   }
   return result;
-}
-
-function parse<T>(value: string, fallback: T): T {
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
 }
 
 function clearFlushTimer() {
@@ -74,33 +61,19 @@ async function flushBackup(force = false) {
     return;
   }
 
-  const messageSnapshot = localStorage.getItem(MESSAGE_KEY) ?? '[]';
-  const memorySnapshot = localStorage.getItem(MEMORY_KEY) ?? '[]';
   const localStateSnapshot = JSON.stringify(readLocalState(uid));
-  const messagesChanged = messageSnapshot !== lastMessages;
-  const memoriesChanged = memorySnapshot !== lastMemories;
   const localStateChanged = localStateSnapshot !== lastLocalState;
 
-  if (!force && !dirty && !messagesChanged && !memoriesChanged && !localStateChanged) return;
-  if (!messagesChanged && !memoriesChanged && !localStateChanged) {
+  if (!force && !dirty && !localStateChanged) return;
+  if (!localStateChanged) {
     dirty = false;
     return;
   }
 
   running = true;
   try {
-    if (messagesChanged) {
-      await saveMessagesBackup(uid, parse<Message[]>(messageSnapshot, []));
-      lastMessages = messageSnapshot;
-    }
-    if (memoriesChanged) {
-      await saveMemoriesBackup(uid, parse<Memory[]>(memorySnapshot, []));
-      lastMemories = memorySnapshot;
-    }
-    if (localStateChanged) {
-      await saveBackupValue(uid, 'local-state-latest', JSON.parse(localStateSnapshot) as Record<string, string>);
-      lastLocalState = localStateSnapshot;
-    }
+    await saveBackupValue(uid, 'local-state-latest', JSON.parse(localStateSnapshot) as Record<string, string>);
+    lastLocalState = localStateSnapshot;
     dirty = false;
     localStorage.setItem('route.backup.lastSuccess', new Date().toISOString());
     localStorage.removeItem('route.backup.lastError');
@@ -120,8 +93,6 @@ async function flushBackup(force = false) {
 function resetForUser(uid: string) {
   activeUid = uid;
   dirty = Boolean(uid);
-  lastMessages = localStorage.getItem(MESSAGE_KEY) ?? '[]';
-  lastMemories = localStorage.getItem(MEMORY_KEY) ?? '[]';
   lastLocalState = uid ? JSON.stringify(readLocalState(uid)) : '';
   clearFlushTimer();
   if (safetyTimer !== undefined) window.clearInterval(safetyTimer);
