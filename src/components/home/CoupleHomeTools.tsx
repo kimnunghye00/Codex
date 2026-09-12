@@ -585,10 +585,12 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
 
     {profileCrop && <div className="route-modal-backdrop route-profile-crop-backdrop" onMouseDown={() => !cropApplying && setProfileCrop(null)}><section className="route-modal route-profile-crop-modal" onMouseDown={(event) => event.stopPropagation()}>
       <header className="route-profile-crop-head"><div><small>PHOTO EDIT</small><h2>{profileCrop.kind === 'avatar' ? '프로필 사진 맞추기' : '배경사진 맞추기'}</h2></div><button type="button" disabled={cropApplying} onClick={() => setProfileCrop(null)} aria-label="사진 편집 닫기"><X size={18} /></button></header>
-      <p className="route-profile-crop-help">사진을 끌어서 위치를 맞추고, 아래 슬라이더로 크기를 조절해 주세요.</p>
+      <p className="route-profile-crop-help">{profileCrop.kind === 'avatar' ? '가운데 원 안에 얼굴이나 캐릭터가 들어오도록 사진을 움직여 주세요.' : '배경으로 보여줄 영역을 프레임 안에 맞춰 주세요.'}</p>
+      <div className="route-profile-crop-spec"><b>{profileCrop.kind === 'avatar' ? '프로필 표시 영역' : '배경 표시 영역'}</b><span>{profileCrop.kind === 'avatar' ? '1:1 · 720 × 720' : '16:9 · 1200 × 675'}</span></div>
       <div className={`route-profile-crop-stage ${profileCrop.kind === 'avatar' ? 'avatar' : 'background'}`} onPointerDown={beginCropDrag} onPointerMove={moveCropDrag} onPointerUp={endCropDrag} onPointerCancel={endCropDrag}>
         <img src={profileCrop.src} alt="사진 위치 및 크기 미리보기" draggable={false} style={cropPreviewStyle(profileCrop)} />
         <span className="route-profile-crop-guide" aria-hidden="true" />
+        {profileCrop.kind === 'avatar' && <span className="route-profile-crop-safe-label" aria-hidden="true">원 안의 영역이 실제 프로필에 보여요</span>}
       </div>
       <div className="route-profile-crop-controls">
         <span className="route-profile-crop-control-label">사진 크기</span>
