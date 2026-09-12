@@ -160,6 +160,133 @@
   background: color-mix(in srgb, var(--surface) 95%, var(--primary) 5%);
 }
 
+
+/* Modern schedule / promise card actions -------------------------------- */
+.route-hub .route-card-actions {
+  flex: 0 0 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.route-hub .route-status-chip {
+  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 9px;
+  border: 1px solid color-mix(in srgb, var(--primary) 14%, var(--border));
+  border-radius: 999px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--surface) 94%, var(--primary) 6%);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  white-space: nowrap;
+}
+
+.route-hub .route-action-cluster {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.route-hub .route-action-btn {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 11px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+  box-shadow: 0 5px 14px #30305a0a;
+  transition: transform .15s ease, box-shadow .15s ease, background .15s ease, border-color .15s ease, color .15s ease;
+}
+
+.route-hub .route-action-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px #30305a10;
+}
+
+.route-hub .route-action-btn:active {
+  transform: translateY(0);
+}
+
+.route-hub .route-action-btn.map {
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 20%, var(--border));
+  background: color-mix(in srgb, var(--surface) 94%, var(--primary) 6%);
+}
+
+.route-hub .route-action-btn.edit {
+  color: #fff;
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+.route-hub .route-action-btn.delete {
+  color: #c95866;
+  border-color: color-mix(in srgb, #d55b68 22%, var(--border));
+  background: color-mix(in srgb, #fff 92%, #ef7180 8%);
+  box-shadow: none;
+}
+
+.route-hub .route-action-btn.delete:hover {
+  color: #b94c5b;
+  background: color-mix(in srgb, #fff 88%, #ef7180 12%);
+}
+
+.route-hub .route-action-btn svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2;
+}
+
+.route-hub .hub-list-row:has(.route-card-actions) {
+  min-height: 86px;
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+@media (max-width: 640px) {
+  .route-hub .hub-list-row:has(.route-card-actions) {
+    grid-template-columns: 30px minmax(0, 1fr);
+    align-items: start;
+    row-gap: 8px;
+  }
+
+  .route-hub .route-card-actions {
+    grid-column: 2;
+    width: 100%;
+    align-items: flex-start;
+  }
+
+  .route-hub .route-action-cluster {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .route-hub .route-action-btn {
+    min-height: 32px;
+    padding: 0 10px;
+    border-radius: 11px;
+    font-size: 8px;
+  }
+
+  .route-hub .route-status-chip {
+    min-height: 24px;
+    font-size: 7px;
+  }
+}
+
 /* Schedule / date -> map -------------------------------------------------- */
 .location-page .location-focus-banner {
   position: absolute;
