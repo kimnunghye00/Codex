@@ -342,3 +342,28 @@ main { padding-bottom: 88px; }
   .memory-list { grid-template-columns: 1fr; }
   .message-wrap { max-width: 80%; }
 }
+
+
+/* Long account settings become a full-height mobile sheet instead of a small popup. */
+@media(max-width:600px){
+  .account-backdrop{
+    align-items:stretch;
+    padding:0;
+  }
+  .account-settings{
+    width:100%;
+    height:100dvh;
+    max-height:100dvh;
+    padding:max(18px,env(safe-area-inset-top)) 16px max(22px,env(safe-area-inset-bottom));
+    border-radius:0;
+    overscroll-behavior:contain;
+  }
+  .account-settings>header{
+    position:sticky;
+    z-index:8;
+    top:calc(-1 * max(18px,env(safe-area-inset-top)));
+    margin:-2px 0 16px;
+    padding:max(18px,env(safe-area-inset-top)) 0 10px;
+    background:linear-gradient(to bottom,var(--background) 86%,color-mix(in srgb,var(--background) 90%,transparent));
+  }
+}
