@@ -1,5 +1,5 @@
 import { CalendarDays, ChevronRight, Crown, GripVertical, Heart, MapPin, Pencil, Phone, Plus, Settings2, Sparkles, Trash2, Trophy, Video, X } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
 import type { Memory, MemoryDraft } from '../../types';
@@ -198,6 +198,7 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
     [filter, memories],
   );
   const selectedMemory = useMemo(() => memories.find((memory) => memory.id === selected), [memories, selected]);
+  const openMemory = useCallback((id: number) => setSelected(id), []);
   const update = (memory: Memory) => setMemories((items) => items.some((item) => item.id === memory.id) ? items.map((item) => item.id === memory.id ? memory : item) : [memory, ...items]);
   const favorite = (id: number) => setMemories((items) => items.map((item) => item.id === id ? { ...item, favorite: !item.favorite } : item));
   const partner = connection?.partnerProfile ?? null;
@@ -660,7 +661,7 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
     {activeTab === 'album' && <>
       {sameDayMemories.length > 0 && <section className="last-year-card"><div><Sparkles size={16} /><span><b>작년 우리</b><small>같은 날짜의 추억을 다시 만나보세요</small></span></div><button onClick={() => setSelected(sameDayMemories[0].id)}>바로 보기 <ChevronRight size={15} /></button></section>}
       <div className="memory-filters"><button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>전체</button><button className={filter === 'favorite' ? 'active' : ''} onClick={() => setFilter('favorite')}>즐겨찾기</button>{years.map((year) => <button key={year} className={filter === year ? 'active' : ''} onClick={() => setFilter(year)}>{year}</button>)}</div>
-      <div className="memory-list">{shown.map((memory) => <MemoryCard key={memory.id} memory={memory} onOpen={() => setSelected(memory.id)} onFavorite={() => favorite(memory.id)} />)}{!shown.length && <div className="memory-empty">아직 남긴 추억이 없어요.</div>}</div>
+      <div className="memory-list">{shown.map((memory) => <MemoryCard key={memory.id} memory={memory} onOpen={openMemory} />)}{!shown.length && <div className="memory-empty">아직 남긴 추억이 없어요.</div>}</div>
       <button className="fab" onClick={() => { onClearInitialDraft(); setEditing(null); }}><Plus size={18} />추억 추가</button>
       {editing !== undefined && <MemoryForm memory={editing ?? undefined} draft={editing === null ? initialDraft : undefined} onClose={() => { setEditing(undefined); if (initialDraft) onClearInitialDraft(); }} onSave={(memory) => { update(memory); setEditing(undefined); onClearInitialDraft(); setSelected(memory.id); }} />}
     </>}
