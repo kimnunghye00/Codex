@@ -28,17 +28,45 @@ export type RouteLocationWatch = {
   stop: () => Promise<void>;
 };
 
-async function setNativeFirestoreNetwork(enabled: boolean) {
-  try {
-    const [{ enableNetwork, disableNetwork }, { db }] = await Promise.all([
-      import('firebase/firestore'),
-      import('./firebase'),
-    ]);
-    if (enabled) await enableNetwork(db);
-    else await disableNetwork(db);
-  } catch {
-    // Lifecycle network hints are best-effort and must never block the UI.
+let nativeFirestoreDesiredState = true;
+let nativeFirestoreAppliedState: boolean | undefined;
+let nativeFirestoreTransition: Promise<void> | null = null;
+
+async function applyNativeFirestoreNetworkState() {
+  if (nativeFirestoreTransition) {
+    await nativeFirestoreTransition;
+    if (nativeFirestoreAppliedState === nativeFirestoreDesiredState) return;
   }
+
+  const desired = nativeFirestoreDesiredState;
+  nativeFirestoreTransition = (async () => {
+    try {
+      const [{ enableNetwork, disableNetwork }, { db }] = await Promise.all([
+        import('firebase/firestore'),
+        import('./firebase'),
+      ]);
+      if (desired) await enableNetwork(db);
+      else await disableNetwork(db);
+      nativeFirestoreAppliedState = desired;
+    } catch {
+      // Lifecycle network hints are best-effort and must never block the UI.
+    } finally {
+      nativeFirestoreTransition = null;
+    }
+  })();
+
+  await nativeFirestoreTransition;
+
+  // appStateChange can flip again while the async Firebase transition is in
+  // flight. Converge once more instead of allowing enable/disable calls to race.
+  if (nativeFirestoreAppliedState !== nativeFirestoreDesiredState) {
+    await applyNativeFirestoreNetworkState();
+  }
+}
+
+function setNativeFirestoreNetwork(enabled: boolean) {
+  nativeFirestoreDesiredState = enabled;
+  return applyNativeFirestoreNetworkState();
 }
 
 export async function initializeNativeApp() {
