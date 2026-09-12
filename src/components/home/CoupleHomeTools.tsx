@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
-import { CalendarDays, Camera, ChevronRight, Clock3, Heart, ImagePlus, MapPin, Plus, Trash2, X } from 'lucide-react';
+import { CalendarDays, Camera, ChevronRight, Clock3, Heart, ImagePlus, MapPin, Minus, Plus, RotateCcw, Trash2, X } from 'lucide-react';
 import { db } from '../../lib/firebase';
 import { syncUserProfile } from '../../lib/coupleData';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
@@ -9,6 +9,16 @@ import { displayName, saveProfile, type UserProfile } from '../../utils/profile'
 type ScheduleType = 'personal' | 'couple';
 type ScheduleFilter = 'all' | 'couple' | 'mine' | 'partner';
 type CloudWriteState = 'confirmed' | 'queued' | 'failed';
+type ProfileImageKind = 'avatar' | 'background';
+type ProfileCropState = {
+  kind: ProfileImageKind;
+  src: string;
+  zoom: number;
+  offsetX: number;
+  offsetY: number;
+  naturalWidth: number;
+  naturalHeight: number;
+};
 
 type Schedule = {
   id: string;
@@ -138,6 +148,61 @@ async function compressProfileImage(file: File, maxSide: number, quality = 0.84)
   }
 }
 
+function loadProfileImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('image-load-failed'));
+    image.src = src;
+  });
+}
+
+function cropTarget(kind: ProfileImageKind) {
+  return kind === 'avatar'
+    ? { width: 720, height: 720, quality: 0.84 }
+    : { width: 1200, height: 675, quality: 0.78 };
+}
+
+function cropOffsetBounds(state: Pick<ProfileCropState, 'kind' | 'zoom' | 'naturalWidth' | 'naturalHeight'>) {
+  const target = cropTarget(state.kind);
+  const baseScale = Math.max(target.width / Math.max(1, state.naturalWidth), target.height / Math.max(1, state.naturalHeight));
+  const scaledWidth = state.naturalWidth * baseScale * state.zoom;
+  const scaledHeight = state.naturalHeight * baseScale * state.zoom;
+  return {
+    x: Math.max(0, ((scaledWidth - target.width) / 2 / target.width) * 100),
+    y: Math.max(0, ((scaledHeight - target.height) / 2 / target.height) * 100),
+  };
+}
+
+function clampCropOffset(state: ProfileCropState, offsetX = state.offsetX, offsetY = state.offsetY) {
+  const bounds = cropOffsetBounds(state);
+  return {
+    offsetX: Math.max(-bounds.x, Math.min(bounds.x, offsetX)),
+    offsetY: Math.max(-bounds.y, Math.min(bounds.y, offsetY)),
+  };
+}
+
+async function renderProfileCrop(state: ProfileCropState) {
+  const image = await loadProfileImage(state.src);
+  const target = cropTarget(state.kind);
+  const canvas = document.createElement('canvas');
+  canvas.width = target.width;
+  canvas.height = target.height;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('canvas-unavailable');
+
+  const baseScale = Math.max(target.width / image.naturalWidth, target.height / image.naturalHeight);
+  const scale = baseScale * state.zoom;
+  const width = image.naturalWidth * scale;
+  const height = image.naturalHeight * scale;
+  const clamped = clampCropOffset(state);
+  const x = (target.width - width) / 2 + (clamped.offsetX / 100) * target.width;
+  const y = (target.height - height) / 2 + (clamped.offsetY / 100) * target.height;
+
+  context.drawImage(image, x, y, width, height);
+  return canvas.toDataURL('image/jpeg', target.quality);
+}
+
 export function CoupleHomeTools({ uid, profile, onProfileChange, connection, relationshipStartDate, coupleDay, onOpenConnect, onOpenAnniversary }: Props) {
   const [remoteSchedules, setRemoteSchedules] = useState<Schedule[]>([]);
   const [localSchedules, setLocalSchedules] = useState<Schedule[]>(() => loadLocal(uid));
@@ -151,8 +216,11 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
   }));
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileFeedback, setProfileFeedback] = useState('');
+  const [profileCrop, setProfileCrop] = useState<ProfileCropState | null>(null);
+  const [cropApplying, setCropApplying] = useState(false);
   const profilePhotoRef = useRef<HTMLInputElement>(null);
   const profileBackgroundRef = useRef<HTMLInputElement>(null);
+  const cropDragRef = useRef<{ pointerId: number; x: number; y: number; offsetX: number; offsetY: number; width: number; height: number } | null>(null);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [allOpen, setAllOpen] = useState(false);
   const [filter, setFilter] = useState<ScheduleFilter>('all');
@@ -252,19 +320,85 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
     setMyProfileOpen(true);
   };
 
-  const chooseProfileImage = async (file: File | undefined, kind: 'avatar' | 'background') => {
+  const chooseProfileImage = async (file: File | undefined, kind: ProfileImageKind) => {
     if (!file) return;
     setProfileFeedback('');
     try {
-      const dataUrl = await compressProfileImage(file, kind === 'avatar' ? 560 : 1200, kind === 'avatar' ? 0.8 : 0.72);
-      setProfileDraft((current) => kind === 'avatar'
-        ? { ...current, photoDataUrl: dataUrl }
-        : { ...current, backgroundPhotoDataUrl: dataUrl });
+      const dataUrl = await compressProfileImage(file, kind === 'avatar' ? 1400 : 1800, 0.88);
+      const image = await loadProfileImage(dataUrl);
+      setProfileCrop({
+        kind,
+        src: dataUrl,
+        zoom: 1,
+        offsetX: 0,
+        offsetY: 0,
+        naturalWidth: image.naturalWidth,
+        naturalHeight: image.naturalHeight,
+      });
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : '';
       setProfileFeedback(message === 'image-too-large'
         ? '사진은 12MB 이하로 선택해 주세요.'
         : '사진을 불러오지 못했어요. 다른 사진으로 다시 시도해 주세요.');
+    }
+  };
+
+  const updateCropZoom = (zoom: number) => {
+    setProfileCrop((current) => {
+      if (!current) return current;
+      const next = { ...current, zoom };
+      return { ...next, ...clampCropOffset(next) };
+    });
+  };
+
+  const beginCropDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!profileCrop) return;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    const rect = event.currentTarget.getBoundingClientRect();
+    cropDragRef.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      offsetX: profileCrop.offsetX,
+      offsetY: profileCrop.offsetY,
+      width: Math.max(1, rect.width),
+      height: Math.max(1, rect.height),
+    };
+  };
+
+  const moveCropDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = cropDragRef.current;
+    if (!drag || !profileCrop || drag.pointerId !== event.pointerId) return;
+    const nextX = drag.offsetX + ((event.clientX - drag.x) / drag.width) * 100;
+    const nextY = drag.offsetY + ((event.clientY - drag.y) / drag.height) * 100;
+    setProfileCrop((current) => {
+      if (!current) return current;
+      const clamped = clampCropOffset(current, nextX, nextY);
+      return { ...current, ...clamped };
+    });
+  };
+
+  const endCropDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (cropDragRef.current?.pointerId !== event.pointerId) return;
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    cropDragRef.current = null;
+  };
+
+  const applyProfileCrop = async () => {
+    if (!profileCrop || cropApplying) return;
+    setCropApplying(true);
+    setProfileFeedback('');
+    try {
+      const cropped = await renderProfileCrop(profileCrop);
+      setProfileDraft((current) => profileCrop.kind === 'avatar'
+        ? { ...current, photoDataUrl: cropped }
+        : { ...current, backgroundPhotoDataUrl: cropped });
+      setProfileCrop(null);
+    } catch (cause) {
+      console.warn('[ROUTE profile crop]', cause);
+      setProfileFeedback('사진 크기를 적용하지 못했어요. 다시 시도해 주세요.');
+    } finally {
+      setCropApplying(false);
     }
   };
 
@@ -434,6 +568,21 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
         <input ref={profilePhotoRef} hidden type="file" accept="image/*" onChange={(event) => { void chooseProfileImage(event.target.files?.[0], 'avatar'); event.currentTarget.value = ''; }} />
         <input ref={profileBackgroundRef} hidden type="file" accept="image/*" onChange={(event) => { void chooseProfileImage(event.target.files?.[0], 'background'); event.currentTarget.value = ''; }} />
       </div>
+    </section></div>}
+
+    {profileCrop && <div className="route-modal-backdrop route-profile-crop-backdrop" onMouseDown={() => !cropApplying && setProfileCrop(null)}><section className="route-modal route-profile-crop-modal" onMouseDown={(event) => event.stopPropagation()}>
+      <header className="route-profile-crop-head"><div><small>PHOTO EDIT</small><h2>{profileCrop.kind === 'avatar' ? '프로필 사진 맞추기' : '배경사진 맞추기'}</h2></div><button type="button" disabled={cropApplying} onClick={() => setProfileCrop(null)} aria-label="사진 편집 닫기"><X size={18} /></button></header>
+      <p className="route-profile-crop-help">사진을 끌어서 위치를 맞추고, 아래 슬라이더로 크기를 조절해 주세요.</p>
+      <div className={`route-profile-crop-stage ${profileCrop.kind === 'avatar' ? 'avatar' : 'background'}`} onPointerDown={beginCropDrag} onPointerMove={moveCropDrag} onPointerUp={endCropDrag} onPointerCancel={endCropDrag}>
+        <img src={profileCrop.src} alt="사진 위치 및 크기 미리보기" draggable={false} style={{ transform: `translate(${profileCrop.offsetX}%, ${profileCrop.offsetY}%) scale(${profileCrop.zoom})` }} />
+        <span className="route-profile-crop-guide" aria-hidden="true" />
+      </div>
+      <div className="route-profile-crop-controls">
+        <span className="route-profile-crop-control-label">사진 크기</span>
+        <div className="route-profile-crop-slider-row"><Minus size={15} /><input type="range" min="1" max="3" step="0.01" value={profileCrop.zoom} onChange={(event) => updateCropZoom(Number(event.target.value))} aria-label="사진 크기 조절" /><Plus size={15} /></div>
+        <button type="button" className="route-profile-crop-reset" onClick={() => setProfileCrop((current) => current ? { ...current, zoom: 1, offsetX: 0, offsetY: 0 } : current)}><RotateCcw size={14} />초기화</button>
+      </div>
+      <div className="route-profile-crop-actions"><button type="button" className="route-profile-crop-cancel" disabled={cropApplying} onClick={() => setProfileCrop(null)}>취소</button><button type="button" className="route-profile-crop-apply" disabled={cropApplying} onClick={() => void applyProfileCrop()}>{cropApplying ? '적용 중...' : '이 크기로 적용'}</button></div>
     </section></div>}
 
     {partnerOpen && <div className="route-modal-backdrop" onMouseDown={() => setPartnerOpen(false)}><section className="route-modal home-profile-modal partner-profile-modal" onMouseDown={(e) => e.stopPropagation()}>
