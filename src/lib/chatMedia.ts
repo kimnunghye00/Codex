@@ -111,9 +111,9 @@ function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number) 
 async function createCompactPreview(source: string | Blob) {
   const blob = await sourceToBlob(source);
   const decoded = await decodeImage(blob);
+  const canvas = document.createElement('canvas');
   try {
     const scale = Math.min(1, PREVIEW_MAX_EDGE / Math.max(decoded.width, decoded.height));
-    const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(decoded.width * scale));
     canvas.height = Math.max(1, Math.round(decoded.height * scale));
     const context = canvas.getContext('2d', { alpha: false });
