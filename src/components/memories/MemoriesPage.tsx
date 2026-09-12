@@ -213,38 +213,45 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
       const start = new Date(`${relationshipStartDate}T00:00:00`);
       const currentDays = Math.max(1, Math.floor((now.getTime() - start.getTime()) / DAY) + 1);
       const milestoneStep = currentDays > 365 ? 1000 : 100;
-      const firstDayAtYearStart = Math.max(1, Math.floor((yearStart.getTime() - start.getTime()) / DAY) + 1);
-      const lastDayAtYearEnd = Math.max(1, Math.floor((yearEnd.getTime() - start.getTime()) / DAY) + 1);
-      const firstMilestone = Math.max(milestoneStep, Math.ceil(firstDayAtYearStart / milestoneStep) * milestoneStep);
+      const nextMilestone = Math.max(milestoneStep, Math.ceil(currentDays / milestoneStep) * milestoneStep);
+      const milestoneDate = new Date(start.getTime() + (nextMilestone - 1) * DAY);
 
-      for (let milestone = firstMilestone; milestone <= lastDayAtYearEnd; milestone += milestoneStep) {
-        const milestoneDate = new Date(start.getTime() + (milestone - 1) * DAY);
-        if (milestoneDate < start || milestoneDate.getFullYear() !== currentYear) continue;
+      personal.push({
+        title: `우리의 ${nextMilestone}일`,
+        date: localDateKey(milestoneDate),
+        icon: '❤️',
+        special: false,
+      });
+
+      let anniversaryYear = currentYear;
+      let yearsTogether = anniversaryYear - start.getFullYear();
+      let yearlyAnniversary = new Date(anniversaryYear, start.getMonth(), start.getDate());
+
+      if (yearlyAnniversary < now || yearsTogether <= 0) {
+        anniversaryYear += 1;
+        yearsTogether = anniversaryYear - start.getFullYear();
+        yearlyAnniversary = new Date(anniversaryYear, start.getMonth(), start.getDate());
+      }
+
+      if (yearsTogether > 0) {
         personal.push({
-          title: `우리의 ${milestone}일`,
-          date: localDateKey(milestoneDate),
-          icon: '❤️',
+          title: `${yearsTogether}주년`,
+          date: localDateKey(yearlyAnniversary),
+          icon: '💞',
           special: false,
         });
       }
-
-      const yearsTogether = currentYear - start.getFullYear();
-      if (yearsTogether > 0) {
-        const yearlyAnniversary = new Date(currentYear, start.getMonth(), start.getDate());
-        if (yearlyAnniversary >= start && yearlyAnniversary.getFullYear() === currentYear) {
-          personal.push({
-            title: `${yearsTogether}주년`,
-            date: localDateKey(yearlyAnniversary),
-            icon: '💞',
-            special: false,
-          });
-        }
-      }
     }
 
-    const defaultDays = showDefaultAnniversaries ? specialDaysForYear(currentYear) : [];
-    return [...defaultDays, ...personal]
-      .filter((item) => dayDiff(item.date) >= 0)
+    const defaultDays = showDefaultAnniversaries
+      ? specialDaysForYear(currentYear).filter((item) => dayDiff(item.date) >= 0)
+      : [];
+    const personalDays = personal.filter((item) => {
+      if (/우리의 \d+일$/.test(item.title) || /\d+주년$/.test(item.title)) return dayDiff(item.date) >= 0;
+      return item.date.startsWith(String(currentYear)) && dayDiff(item.date) >= 0;
+    });
+
+    return [...defaultDays, ...personalDays]
       .filter((item, index, items) => items.findIndex((candidate) => candidate.title === item.title && candidate.date === item.date) === index)
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [profile, partner, relationshipStartDate, showDefaultAnniversaries]);
