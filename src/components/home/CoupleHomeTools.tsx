@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
-import { CalendarDays, ChevronRight, Clock3, Heart, MapPin, Plus, X } from 'lucide-react';
+import { CalendarDays, Camera, ChevronRight, Clock3, Heart, ImagePlus, MapPin, Plus, X } from 'lucide-react';
 import { db } from '../../lib/firebase';
+import { syncUserProfile } from '../../lib/coupleData';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
-import { displayName, type UserProfile } from '../../utils/profile';
+import { displayName, saveProfile, type UserProfile } from '../../utils/profile';
 
 type ScheduleType = 'personal' | 'couple';
 type ScheduleFilter = 'all' | 'couple' | 'mine' | 'partner';
@@ -35,10 +36,10 @@ type DatePlan = {
 type Props = {
   uid: string;
   profile: UserProfile;
+  onProfileChange: (profile: UserProfile) => void;
   connection: RealCoupleConnection | null;
   relationshipStartDate?: string;
   coupleDay: number;
-  onOpenMyProfile: () => void;
   onOpenConnect: () => void;
   onOpenAnniversary: () => void;
 };
@@ -109,11 +110,49 @@ function prettyDate(value: string) {
   return `${date.getMonth() + 1}월 ${date.getDate()}일`;
 }
 
-export function CoupleHomeTools({ uid, profile, connection, relationshipStartDate, coupleDay, onOpenMyProfile, onOpenConnect, onOpenAnniversary }: Props) {
+async function compressProfileImage(file: File, maxSide: number, quality = 0.84): Promise<string> {
+  if (!file.type.startsWith('image/')) throw new Error('image-only');
+  if (file.size > 12 * 1024 * 1024) throw new Error('image-too-large');
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const next = new Image();
+      next.onload = () => resolve(next);
+      next.onerror = () => reject(new Error('image-load-failed'));
+      next.src = objectUrl;
+    });
+
+    const ratio = Math.min(1, maxSide / Math.max(image.naturalWidth || 1, image.naturalHeight || 1));
+    const width = Math.max(1, Math.round(image.naturalWidth * ratio));
+    const height = Math.max(1, Math.round(image.naturalHeight * ratio));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('canvas-unavailable');
+    context.drawImage(image, 0, 0, width, height);
+    return canvas.toDataURL('image/jpeg', quality);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+export function CoupleHomeTools({ uid, profile, onProfileChange, connection, relationshipStartDate, coupleDay, onOpenConnect, onOpenAnniversary }: Props) {
   const [remoteSchedules, setRemoteSchedules] = useState<Schedule[]>([]);
   const [localSchedules, setLocalSchedules] = useState<Schedule[]>(() => loadLocal(uid));
   const [legacyPromises, setLegacyPromises] = useState<Schedule[]>(() => loadLegacyPromises(uid));
+  const [myProfileOpen, setMyProfileOpen] = useState(false);
   const [partnerOpen, setPartnerOpen] = useState(false);
+  const [profileDraft, setProfileDraft] = useState(() => ({
+    photoDataUrl: profile.photoDataUrl ?? '',
+    backgroundPhotoDataUrl: profile.backgroundPhotoDataUrl ?? '',
+    statusMessage: profile.statusMessage ?? '',
+  }));
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileFeedback, setProfileFeedback] = useState('');
+  const profilePhotoRef = useRef<HTMLInputElement>(null);
+  const profileBackgroundRef = useRef<HTMLInputElement>(null);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [allOpen, setAllOpen] = useState(false);
   const [filter, setFilter] = useState<ScheduleFilter>('all');
@@ -126,6 +165,15 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
     setLocalSchedules(loadLocal(uid));
     setLegacyPromises(loadLegacyPromises(uid));
   }, [uid]);
+
+  useEffect(() => {
+    if (myProfileOpen) return;
+    setProfileDraft({
+      photoDataUrl: profile.photoDataUrl ?? '',
+      backgroundPhotoDataUrl: profile.backgroundPhotoDataUrl ?? '',
+      statusMessage: profile.statusMessage ?? '',
+    });
+  }, [myProfileOpen, profile.backgroundPhotoDataUrl, profile.photoDataUrl, profile.statusMessage]);
 
   useEffect(() => {
     const refresh = () => setLegacyPromises(loadLegacyPromises(uid));
@@ -194,6 +242,57 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
     return item.type === 'personal' && item.ownerId !== uid;
   }), [filter, schedules, uid]);
 
+  const openMyProfile = () => {
+    setProfileDraft({
+      photoDataUrl: profile.photoDataUrl ?? '',
+      backgroundPhotoDataUrl: profile.backgroundPhotoDataUrl ?? '',
+      statusMessage: profile.statusMessage ?? '',
+    });
+    setProfileFeedback('');
+    setMyProfileOpen(true);
+  };
+
+  const chooseProfileImage = async (file: File | undefined, kind: 'avatar' | 'background') => {
+    if (!file) return;
+    setProfileFeedback('');
+    try {
+      const dataUrl = await compressProfileImage(file, kind === 'avatar' ? 720 : 1600, kind === 'avatar' ? 0.86 : 0.8);
+      setProfileDraft((current) => kind === 'avatar'
+        ? { ...current, photoDataUrl: dataUrl }
+        : { ...current, backgroundPhotoDataUrl: dataUrl });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : '';
+      setProfileFeedback(message === 'image-too-large'
+        ? '사진은 12MB 이하로 선택해 주세요.'
+        : '사진을 불러오지 못했어요. 다른 사진으로 다시 시도해 주세요.');
+    }
+  };
+
+  const saveHomeProfile = async () => {
+    if (profileSaving) return;
+    setProfileSaving(true);
+    setProfileFeedback('');
+    const next: UserProfile = {
+      ...profile,
+      photoDataUrl: profileDraft.photoDataUrl || undefined,
+      backgroundPhotoDataUrl: profileDraft.backgroundPhotoDataUrl || undefined,
+      statusMessage: profileDraft.statusMessage.trim().slice(0, 60) || undefined,
+    };
+
+    saveProfile(uid, next);
+    onProfileChange(next);
+    try {
+      await syncUserProfile(uid, next);
+      setProfileFeedback('프로필을 저장했어요.');
+      window.setTimeout(() => setMyProfileOpen(false), 280);
+    } catch (cause) {
+      console.warn('[ROUTE home profile sync]', cause);
+      setProfileFeedback('이 기기에는 저장했어요. 연결이 안정되면 다시 동기화해 주세요.');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
   const persistLocal = (schedule: Omit<Schedule, 'id'>) => {
     const local: Schedule = { ...schedule, id: `local-${Date.now()}`, localOnly: true };
     const next = [...localSchedules, local];
@@ -246,10 +345,10 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
   return <>
     <section className="home-couple-tools" aria-label="커플 프로필과 일정">
       <section className="home-couple-time-card" aria-label="커플 프로필과 우리의 시간">
-        <button type="button" className="home-couple-person home-couple-person-me" onClick={onOpenMyProfile}>
+        <button type="button" className="home-couple-person home-couple-person-me" onClick={openMyProfile}>
           <span className="home-couple-avatar">{avatar(profile, '나')}</span>
           <b>{myRealName}</b>
-          <small>늘 고마워 <span aria-hidden="true">♥</span></small>
+          <small>{profile.statusMessage || '늘 고마워'} <span aria-hidden="true">♥</span></small>
         </button>
 
         <svg className="home-couple-connector" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true">
@@ -260,7 +359,7 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
         <button type="button" className="home-couple-person home-couple-person-partner" onClick={() => connection ? setPartnerOpen(true) : onOpenConnect()}>
           <span className="home-couple-avatar partner">{avatar(partner, '상')}</span>
           <b>{partnerRealName}</b>
-          <small>항상 곁에 있어줘서 <span aria-hidden="true">♥</span></small>
+          <small>{partner?.statusMessage || '항상 곁에 있어줘서'} <span aria-hidden="true">♥</span></small>
         </button>
 
         <button type="button" className="home-couple-time-center" onClick={onOpenAnniversary}>
@@ -310,12 +409,46 @@ export function CoupleHomeTools({ uid, profile, connection, relationshipStartDat
       </section>
     </section>
 
-    {partnerOpen && <div className="route-modal-backdrop" onMouseDown={() => setPartnerOpen(false)}><section className="route-modal partner-profile-modal" onMouseDown={(e) => e.stopPropagation()}>
-      <button className="route-modal-close" type="button" onClick={() => setPartnerOpen(false)} aria-label="닫기"><X size={19} /></button>
-      <span className="partner-profile-avatar">{avatar(partner, '상')}</span>
-      <h2>{partnerRealName}</h2>
-      <p className="partner-status">{(partner as UserProfile & { statusMessage?: string } | null)?.statusMessage || '함께하는 하루를 기록하고 있어요 ❤️'}</p>
-      <div className="partner-profile-info"><span><small>생일</small><b>{partner?.birthDate ? partner.birthDate.replaceAll('-', '.') : '등록되지 않음'}</b></span><span><small>우리의 시작</small><b>{relationshipStartDate?.replaceAll('-', '.') || '등록되지 않음'}</b></span></div>
+    {myProfileOpen && <div className="route-modal-backdrop" onMouseDown={() => setMyProfileOpen(false)}><section className="route-modal home-profile-modal self-profile-modal" onMouseDown={(e) => e.stopPropagation()}>
+      <button className="route-modal-close home-profile-close" type="button" onClick={() => setMyProfileOpen(false)} aria-label="닫기"><X size={19} /></button>
+      <div className="home-profile-cover">
+        {profileDraft.backgroundPhotoDataUrl ? <img src={profileDraft.backgroundPhotoDataUrl} alt="내 프로필 배경" /> : <span className="home-profile-cover-placeholder" />}
+        <button className="home-profile-cover-edit" type="button" onClick={() => profileBackgroundRef.current?.click()}><ImagePlus size={15} />배경사진</button>
+      </div>
+      <div className="home-profile-body">
+        <div className="home-profile-avatar-wrap">
+          <span className="home-profile-avatar">{profileDraft.photoDataUrl ? <img src={profileDraft.photoDataUrl} alt="내 프로필" /> : avatar(profile, '나')}</span>
+          <button type="button" className="home-profile-avatar-edit" onClick={() => profilePhotoRef.current?.click()} aria-label="프로필 사진 변경"><Camera size={15} /></button>
+        </div>
+        <h2>{displayName(profile)}</h2>
+        <p className="home-profile-status-preview">{profileDraft.statusMessage.trim() || '상태 메시지를 입력해 보세요.'}</p>
+        <div className="home-profile-editor">
+          <label>상태 메시지<textarea maxLength={60} value={profileDraft.statusMessage} onChange={(event) => setProfileDraft((current) => ({ ...current, statusMessage: event.target.value }))} placeholder="지금 내 마음이나 한마디를 남겨보세요" /></label>
+          <div className="home-profile-photo-actions">
+            {profileDraft.photoDataUrl && <button type="button" onClick={() => setProfileDraft((current) => ({ ...current, photoDataUrl: '' }))}>프로필 사진 삭제</button>}
+            {profileDraft.backgroundPhotoDataUrl && <button type="button" onClick={() => setProfileDraft((current) => ({ ...current, backgroundPhotoDataUrl: '' }))}>배경사진 삭제</button>}
+          </div>
+          {profileFeedback && <p className="home-profile-feedback">{profileFeedback}</p>}
+          <button className="primary home-profile-save" type="button" disabled={profileSaving} onClick={() => void saveHomeProfile()}>{profileSaving ? '저장 중...' : '프로필 저장'}</button>
+        </div>
+        <input ref={profilePhotoRef} hidden type="file" accept="image/*" onChange={(event) => { void chooseProfileImage(event.target.files?.[0], 'avatar'); event.currentTarget.value = ''; }} />
+        <input ref={profileBackgroundRef} hidden type="file" accept="image/*" onChange={(event) => { void chooseProfileImage(event.target.files?.[0], 'background'); event.currentTarget.value = ''; }} />
+      </div>
+    </section></div>}
+
+    {partnerOpen && <div className="route-modal-backdrop" onMouseDown={() => setPartnerOpen(false)}><section className="route-modal home-profile-modal partner-profile-modal" onMouseDown={(e) => e.stopPropagation()}>
+      <button className="route-modal-close home-profile-close" type="button" onClick={() => setPartnerOpen(false)} aria-label="닫기"><X size={19} /></button>
+      <div className="home-profile-cover">
+        {partner?.backgroundPhotoDataUrl ? <img src={partner.backgroundPhotoDataUrl} alt="상대방 프로필 배경" /> : <span className="home-profile-cover-placeholder partner" />}
+      </div>
+      <div className="home-profile-body">
+        <div className="home-profile-avatar-wrap">
+          <span className="home-profile-avatar">{avatar(partner, '상')}</span>
+        </div>
+        <h2>{partnerRealName}</h2>
+        <p className="home-profile-status-preview">{partner?.statusMessage || '함께하는 하루를 기록하고 있어요 ❤️'}</p>
+        <div className="partner-profile-info"><span><small>생일</small><b>{partner?.birthDate ? partner.birthDate.replaceAll('-', '.') : '등록되지 않음'}</b></span><span><small>우리의 시작</small><b>{relationshipStartDate?.replaceAll('-', '.') || '등록되지 않음'}</b></span></div>
+      </div>
     </section></div>}
 
     {scheduleOpen && <div className="route-modal-backdrop" onMouseDown={() => setScheduleOpen(false)}><section className="route-modal schedule-form-modal" onMouseDown={(e) => e.stopPropagation()}>
