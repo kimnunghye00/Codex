@@ -1,4 +1,4 @@
-import { auth } from './lib/firebase';
+import { auth } from './lib/firebaseAuth';
 import { loadLocationVisits } from './utils/location';
 
 const ROUTE_MAP_ORIGIN = 'https://meluni-f4e00.web.app';
