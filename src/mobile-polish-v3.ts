@@ -31,26 +31,29 @@ function improveHubOrderPanel() {
   const close = header?.querySelector<HTMLButtonElement>('button');
   close?.setAttribute('aria-label', '탭 순서 편집 닫기');
 
-  const footer = document.createElement('div');
-  footer.className = 'hub-order-footer';
-  const reset = document.createElement('button');
-  reset.type = 'button';
-  reset.className = 'hub-order-reset';
-  reset.textContent = '기본 순서';
-  reset.addEventListener('click', () => {
-    try {
-      const uid = Object.keys(localStorage).find((key) => key.startsWith('route-hub-tabs:'))?.split(':').slice(1).join(':');
-      if (uid) localStorage.removeItem(`route-hub-tabs:${uid}`);
-    } catch { /* noop */ }
-    window.location.reload();
-  });
-  const done = document.createElement('button');
-  done.type = 'button';
-  done.className = 'primary hub-order-done';
-  done.textContent = '완료';
-  done.addEventListener('click', () => close?.click());
-  footer.append(reset, done);
-  panel.append(footer);
+  const existingFooter = panel.querySelector<HTMLElement>('.hub-order-footer, .route-hub-order-footer');
+  if (!existingFooter) {
+    const footer = document.createElement('div');
+    footer.className = 'hub-order-footer';
+    const reset = document.createElement('button');
+    reset.type = 'button';
+    reset.className = 'hub-order-reset';
+    reset.textContent = '기본 순서';
+    reset.addEventListener('click', () => {
+      try {
+        const uid = Object.keys(localStorage).find((key) => key.startsWith('route-hub-tabs:'))?.split(':').slice(1).join(':');
+        if (uid) localStorage.removeItem(`route-hub-tabs:${uid}`);
+      } catch { /* noop */ }
+      window.location.reload();
+    });
+    const done = document.createElement('button');
+    done.type = 'button';
+    done.className = 'primary hub-order-done';
+    done.textContent = '완료';
+    done.addEventListener('click', () => close?.click());
+    footer.append(reset, done);
+    panel.append(footer);
+  }
 
   const backdrop = panel.closest<HTMLElement>('.hub-order-backdrop');
   backdrop?.addEventListener('pointerdown', (event) => {
