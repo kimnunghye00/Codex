@@ -41,13 +41,33 @@
 .hub-order-row {
   min-height: 54px;
   display: grid !important;
-  grid-template-columns: 26px minmax(0, 1fr) auto !important;
+  grid-template-columns: 38px minmax(0, 1fr) !important;
   align-items: center !important;
-  gap: 8px !important;
+  gap: 4px !important;
   border-bottom: 1px solid var(--border, #eee);
+  transition: background .15s ease, transform .15s ease;
 }
-.hub-order-row > span { display: flex; gap: 6px; }
-.hub-order-row > span button { width: 36px; height: 36px; border-radius: 10px; }
+.hub-order-drag-handle {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary, #6f7480);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.hub-order-drag-handle:active { cursor: grabbing; background: var(--surface-soft, #f5f3f8); }
+.hub-order-drag-handle:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.hub-order-row.dragging {
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface, #fff));
+}
+.hub-order-row.dragging .hub-order-drag-handle { cursor: grabbing; color: var(--primary); }
 .hub-order-footer { position: sticky; bottom: -16px; display: grid; grid-template-columns: 1fr 1.35fr; gap: 8px; padding: 14px 0 2px; background: inherit; }
 .hub-order-footer button { min-height: 46px; border-radius: 13px; }
 .hub-order-reset { border: 1px solid var(--border, #ddd); background: #fff; }
