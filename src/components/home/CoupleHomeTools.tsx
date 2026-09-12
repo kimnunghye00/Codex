@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type React from 'react';
 import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
 import { CalendarDays, Camera, ChevronRight, Clock3, Heart, ImagePlus, MapPin, Minus, Plus, RotateCcw, Trash2, X } from 'lucide-react';
 import { db } from '../../lib/firebase';
