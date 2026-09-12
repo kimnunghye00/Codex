@@ -6,11 +6,45 @@ import type { Memory, MemoryDraft } from '../../types';
 import { auth } from '../../lib/firebase';
 import { storage } from '../../lib/firebaseStorage';
 import { localDateKey } from '../../utils/dates';
+import { createChatMediaReference } from '../../lib/chatMediaReference';
 import { MemoryImage } from './MemoryMedia';
 
 const isVideo = (src: string) => src.startsWith('data:video/') || /\.(mp4|webm|mov)(\?|$)/i.test(decodeURIComponent(src.split('#')[0]));
 const safeFileName = (value: string) => value.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-100) || 'media';
-const MEMORY_UPLOAD_CONCURRENCY = 3;
+const MEMORY_UPLOAD_CONCURRENCY = 2;
+const MEMORY_PREVIEW_MAX_SIDE = 1600;
+const MEMORY_PREVIEW_QUALITY = 0.82;
+
+async function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number) {
+  return await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('memory-preview-encode-failed')), type, quality);
+  });
+}
+
+async function createMemoryPreviewBlob(file: File) {
+  if (!file.type.startsWith('image/') || file.type === 'image/gif') return null;
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const next = new Image();
+      next.onload = () => resolve(next);
+      next.onerror = () => reject(new Error('memory-preview-load-failed'));
+      next.src = objectUrl;
+    });
+    const width = image.naturalWidth || image.width;
+    const height = image.naturalHeight || image.height;
+    const scale = Math.min(1, MEMORY_PREVIEW_MAX_SIDE / Math.max(width, height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(width * scale));
+    canvas.height = Math.max(1, Math.round(height * scale));
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('memory-preview-canvas-failed');
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return await canvasToBlob(canvas, 'image/jpeg', MEMORY_PREVIEW_QUALITY);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
 
 type PendingPreview = {
   id: string;
@@ -54,20 +88,35 @@ export function MemoryForm({ memory, draft, onSave, onClose }: { memory?: Memory
     }
 
     const batchId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const localPreviews = selected.map((file, index) => {
-      const url = URL.createObjectURL(file);
-      objectUrls.current.add(url);
-      return {
-        id: `${batchId}-${index}`,
-        url,
-        video: file.type.startsWith('video/'),
-      } satisfies PendingPreview;
-    });
-
-    setPendingPreviews((items) => [...items, ...localPreviews]);
     setUploading(true);
     setUploadProgress({ completed: 0, total: selected.length });
     setUploadError('');
+
+    const previewBlobs: Array<Blob | null> = [];
+    const localPreviews: PendingPreview[] = [];
+    for (let index = 0; index < selected.length; index += 1) {
+      const file = selected[index];
+      let previewBlob: Blob | null = null;
+      try {
+        previewBlob = await createMemoryPreviewBlob(file);
+      } catch (error) {
+        console.warn('[ROUTE memory preview]', error);
+      }
+      previewBlobs[index] = previewBlob;
+      const previewSource = previewBlob ?? file;
+      const url = URL.createObjectURL(previewSource);
+      objectUrls.current.add(url);
+      localPreviews.push({
+        id: `${batchId}-${index}`,
+        url,
+        video: file.type.startsWith('video/'),
+      });
+      // Let the browser release the decoded source before preparing the next
+      // large phone photo instead of decoding an entire batch at once.
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    }
+
+    setPendingPreviews((items) => [...items, ...localPreviews]);
 
     const uploaded = new Array<string | undefined>(selected.length);
     let cursor = 0;
@@ -86,7 +135,19 @@ export function MemoryForm({ memory, draft, onSave, onClose }: { memory?: Memory
             contentType: file.type || undefined,
             cacheControl: 'public,max-age=31536000,immutable',
           });
-          uploaded[index] = await getDownloadURL(target);
+          const originalUrl = await getDownloadURL(target);
+          const previewBlob = previewBlobs[index];
+          if (previewBlob && file.type.startsWith('image/') && file.type !== 'image/gif') {
+            const previewTarget = ref(storage, `users/${uid}/backupMedia/memories/previews/${batchId}-${index}.jpg`);
+            await uploadBytes(previewTarget, previewBlob, {
+              contentType: 'image/jpeg',
+              cacheControl: 'public,max-age=31536000,immutable',
+            });
+            const previewUrl = await getDownloadURL(previewTarget);
+            uploaded[index] = createChatMediaReference(previewUrl, originalUrl);
+          } else {
+            uploaded[index] = originalUrl;
+          }
         } catch (error) {
           failures += 1;
           console.error('[ROUTE memory media upload]', error);
