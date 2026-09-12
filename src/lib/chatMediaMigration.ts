@@ -32,6 +32,7 @@ type RoomState = {
   requested: Set<string>;
   active: number;
   timer?: number;
+  released?: boolean;
 };
 
 type Candidate = {
@@ -182,7 +183,7 @@ function nextWakeDelay(state: RoomState) {
 }
 
 function schedulePump(state: RoomState, preferredDelay = MIGRATION_GAP_MS) {
-  if (state.timer !== undefined || document.visibilityState === 'hidden') return;
+  if (state.released || state.timer !== undefined || document.visibilityState === 'hidden') return;
   if (state.active >= MAX_CONCURRENT_MIGRATIONS || state.requested.size === 0) return;
 
   const immediate = nextCandidate(state);
@@ -197,7 +198,7 @@ function schedulePump(state: RoomState, preferredDelay = MIGRATION_GAP_MS) {
 }
 
 function pump(state: RoomState) {
-  if (document.visibilityState === 'hidden') return;
+  if (state.released || document.visibilityState === 'hidden') return;
 
   while (state.active < MAX_CONCURRENT_MIGRATIONS) {
     const candidate = nextCandidate(state);
@@ -289,7 +290,9 @@ export function migrateLoadedLegacyChatMedia(coupleId: string, ownerUid: string,
     jobs: new Map<string, JobState>(),
     requested: new Set<string>(),
     active: 0,
+    released: false,
   };
+  state.released = false;
   state.messages = messages;
 
   const availableReferences = new Set(candidates(state).map((candidate) => candidate.url));
@@ -308,6 +311,19 @@ export function migrateLoadedLegacyChatMedia(coupleId: string, ownerUid: string,
 
 export async function startLegacyChatMediaMigration(_coupleId: string, _ownerUid: string) {
   return Promise.resolve();
+}
+
+export function releaseLegacyChatMediaRoom(coupleId: string, ownerUid: string) {
+  const key = roomKey(coupleId, ownerUid);
+  const state = rooms.get(key);
+  if (!state) return;
+  state.released = true;
+  if (state.timer !== undefined) window.clearTimeout(state.timer);
+  state.timer = undefined;
+  state.messages = [];
+  state.requested.clear();
+  state.jobs.clear();
+  rooms.delete(key);
 }
 
 window.addEventListener(PREVIEW_STATUS_REQUEST_EVENT, (event) => {
