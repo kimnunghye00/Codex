@@ -83,8 +83,33 @@ function messageTimeValue(message: Message) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function messageRenderSignature(message: Message) {
+  return JSON.stringify({
+    id: message.id,
+    sender: message.sender,
+    type: message.type,
+    text: message.text ?? '',
+    imageUrl: message.imageUrl ?? '',
+    imageUrls: message.imageUrls ?? [],
+    timestamp: message.timestamp ?? '',
+    read: message.read ?? false,
+    replyTo: message.replyTo ?? null,
+    reactions: message.reactions ?? [],
+    saved: message.saved ?? false,
+    scheduledFor: message.scheduledFor ?? '',
+  });
+}
+
+function sameMessageList(first: Message[], second: Message[]) {
+  if (first.length !== second.length) return false;
+  for (let index = 0; index < first.length; index += 1) {
+    if (messageRenderSignature(first[index]) !== messageRenderSignature(second[index])) return false;
+  }
+  return true;
+}
+
 function mergePagedSnapshot(current: Message[], incoming: Message[]) {
-  if (!incoming.length) return [];
+  if (!incoming.length) return current.length ? [] : current;
   const incomingIds = new Set(incoming.map((message) => message.id));
   const earliestIncoming = messageTimeValue(incoming[0]);
 
@@ -97,7 +122,8 @@ function mergePagedSnapshot(current: Message[], incoming: Message[]) {
 
   const deduped = new Map<number, Message>();
   [...preservedOlder, ...incoming].forEach((message) => deduped.set(message.id, message));
-  return [...deduped.values()].sort((a, b) => messageTimeValue(a) - messageTimeValue(b));
+  const next = [...deduped.values()].sort((a, b) => messageTimeValue(a) - messageTimeValue(b));
+  return sameMessageList(current, next) ? current : next;
 }
 
 export function subscribeCoupleMessages(
@@ -264,6 +290,7 @@ export function subscribeCoupleMessages(
     if (attachTimer) window.clearTimeout(attachTimer);
     if (migrationTimer) window.clearTimeout(migrationTimer);
     messageScroller?.removeEventListener('scroll', handleScroll);
+    chatWindowSizeByRoom.delete(roomKey);
   };
 }
 
