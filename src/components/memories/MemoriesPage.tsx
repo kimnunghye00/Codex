@@ -41,11 +41,18 @@ const todayKey = () => new Date().toISOString().slice(0, 10);
 const dayDiff = (date: string) => Math.ceil((new Date(`${date}T00:00:00`).getTime() - new Date(`${todayKey()}T00:00:00`).getTime()) / DAY);
 const realName = (profile: UserProfile | null | undefined, fallback: string) => profile?.name?.trim() || fallback;
 const SPECIAL_DAYS = [
-  [1, 14, '다이어리데이', '📔'], [2, 14, '발렌타인데이', '💝'], [3, 14, '화이트데이', '🤍'],
-  [4, 14, '블랙데이', '🍜'], [5, 14, '로즈데이', '🌹'], [6, 14, '키스데이', '💋'],
-  [7, 14, '실버데이', '💍'], [8, 14, '그린데이', '🌿'], [9, 14, '포토데이', '📷'],
-  [10, 14, '와인데이', '🍷'], [11, 11, '빼빼로데이', '🍫'], [11, 14, '무비데이', '🎬'],
-  [12, 14, '허그데이', '🤗'], [12, 25, '크리스마스', '🎄'],
+  [2, 14, '발렌타인데이', '💝'],
+  [3, 14, '화이트데이', '🤍'],
+  [5, 14, '로즈데이', '🌹'],
+  [6, 14, '키스데이', '💋'],
+  [7, 14, '실버데이', '💍'],
+  [8, 14, '그린데이', '🌿'],
+  [9, 14, '포토·뮤직데이', '📷'],
+  [10, 14, '와인데이', '🍷'],
+  [11, 11, '빼빼로데이', '🍫'],
+  [11, 14, '무비데이', '🎬'],
+  [12, 14, '허그데이', '🤗'],
+  [12, 25, '크리스마스', '🎄'],
 ] as const;
 
 function nextAnnual(month: number, day: number) {
@@ -55,14 +62,13 @@ function nextAnnual(month: number, day: number) {
   return date.toISOString().slice(0, 10);
 }
 
-function thisMonthSpecialDays() {
-  const now = new Date();
-  return SPECIAL_DAYS.filter(([month]) => month === now.getMonth() + 1).map(([month, day, title, icon]) => ({
+function upcomingSpecialDays() {
+  return SPECIAL_DAYS.map(([month, day, title, icon]) => ({
     title,
-    date: `${now.getFullYear()}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+    date: nextAnnual(month, day),
     icon,
     special: true,
-  }));
+  })).sort((a, b) => a.date.localeCompare(b.date));
 }
 
 function nextBirthday(profile: UserProfile | null, label: string) {
@@ -190,14 +196,24 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
       const start = new Date(`${relationshipStartDate}T00:00:00`);
       const now = new Date(`${todayKey()}T00:00:00`);
       const current = Math.max(1, Math.floor((now.getTime() - start.getTime()) / DAY) + 1);
-      const nextHundred = Math.ceil(current / 100) * 100;
-      personal.push({ title: `우리의 ${nextHundred}일`, date: new Date(start.getTime() + (nextHundred - 1) * DAY).toISOString().slice(0, 10), icon: '❤️', special: false });
+      const milestoneStep = current > 365 ? 1000 : 100;
+      const nextMilestone = Math.ceil(current / milestoneStep) * milestoneStep;
+      personal.push({
+        title: `우리의 ${nextMilestone}일`,
+        date: new Date(start.getTime() + (nextMilestone - 1) * DAY).toISOString().slice(0, 10),
+        icon: '❤️',
+        special: false,
+      });
+
       let year = now.getFullYear() - start.getFullYear();
       let anniversary = new Date(start.getFullYear() + year, start.getMonth(), start.getDate());
-      if (anniversary < now) { year += 1; anniversary = new Date(start.getFullYear() + year, start.getMonth(), start.getDate()); }
+      if (anniversary < now) {
+        year += 1;
+        anniversary = new Date(start.getFullYear() + year, start.getMonth(), start.getDate());
+      }
       if (year > 0) personal.push({ title: `${year}주년`, date: anniversary.toISOString().slice(0, 10), icon: '💞', special: false });
     }
-    return [...thisMonthSpecialDays(), ...personal].sort((a, b) => a.date.localeCompare(b.date));
+    return [...upcomingSpecialDays(), ...personal].sort((a, b) => a.date.localeCompare(b.date));
   }, [profile, partner, relationshipStartDate]);
 
   const visits = uid ? loadLocationVisits(uid) : [];
