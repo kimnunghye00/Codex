@@ -295,15 +295,15 @@ function ChatBubbleView({ message, reply, partnerName, partnerInitial, active, h
   const mediaRow = message.type === 'image' || message.type === 'gif' || message.type === 'gallery';
 
   return <>
-    <div id={`message-${message.id}`} className={`bubble-row ${mine ? 'mine' : ''} ${highlighted ? 'highlighted' : ''} ${mediaRow ? 'bubble-row-media' : ''} ${active && !selectionMode ? 'chat-actions-open' : ''} ${selectionMode && mine ? 'chat-selectable-row' : ''} ${selected ? 'chat-selected-row' : ''}`}>
-      {selectionMode && mine && <button type="button" className={`chat-message-select ${selected ? 'selected' : ''}`} aria-label={selected ? '선택 해제' : '메시지 선택'} onClick={(event) => { event.stopPropagation(); onToggleSelect(); }}>{selected ? <Check size={15} strokeWidth={3} /> : null}</button>}
+    <div id={`message-${message.id}`} className={`bubble-row ${mine ? 'mine' : ''} ${highlighted ? 'highlighted' : ''} ${mediaRow ? 'bubble-row-media' : ''} ${active && !selectionMode ? 'chat-actions-open' : ''} ${selectionMode ? 'chat-selectable-row' : ''} ${selected ? 'chat-selected-row' : ''}`}>
+      {selectionMode && <button type="button" className={`chat-message-select ${selected ? 'selected' : ''}`} aria-label={selected ? '선택 해제' : '메시지 선택'} onClick={(event) => { event.stopPropagation(); onToggleSelect(); }}>{selected ? <Check size={15} strokeWidth={3} /> : null}</button>}
       {!mine && <div className="avatar tiny">{partnerInitial}</div>}
       {active && !selectionMode && <div className="chat-message-side-tools" onClick={(event) => event.stopPropagation()}>
         <ReactionPicker onSelect={onReact} />
-        <div className="message-actions"><button onClick={onReply}><CornerUpLeft size={14} />답장</button><button onClick={onSave}>{message.saved ? <Bookmark size={14} fill="currentColor" /> : <Bookmark size={14} />} {saveLabel}</button>{mine && <button className="message-delete-action" onClick={onDelete}><Trash2 size={14} />삭제</button>}</div>
+        <div className="message-actions"><button onClick={onReply}><CornerUpLeft size={14} />답장</button><button onClick={onSave}>{message.saved ? <Bookmark size={14} fill="currentColor" /> : <Bookmark size={14} />} {saveLabel}</button><button className="message-delete-action" onClick={onDelete}><Trash2 size={14} />삭제</button></div>
       </div>}
       <div className="message-wrap">
-        <button type="button" className={`bubble ${message.type === 'gallery' ? 'gallery-bubble' : ''} ${mediaBubble ? 'media-bubble' : ''}`} onClick={(event) => { event.stopPropagation(); if (selectionMode && mine) onToggleSelect(); else if (!selectionMode) onAction(); }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); if (selectionMode && mine) onToggleSelect(); else if (!selectionMode) onAction(); }}>
+        <button type="button" className={`bubble ${message.type === 'gallery' ? 'gallery-bubble' : ''} ${mediaBubble ? 'media-bubble' : ''}`} onClick={(event) => { event.stopPropagation(); if (selectionMode) onToggleSelect(); else onAction(); }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); if (selectionMode) onToggleSelect(); else onAction(); }}>
           {reply && <span className="reply-preview" onClick={(event) => { event.stopPropagation(); onJump(reply.id); }}><b>{reply.sender === 'me' ? '나' : partnerName}</b>{reply.type !== 'text' ? <><ImageIcon size={12} /> {replyLabel(reply)}</> : replyLabel(reply)}</span>}
           {message.type === 'image' && message.imageUrl && <DeferredMediaImage className="chat-image" src={message.imageUrl} alt="채팅으로 보낸 사진" onClick={(event) => { event.stopPropagation(); onImage(message.imageUrl!); }} />}
           {message.type === 'gif' && message.imageUrl && <DeferredMediaImage className="chat-image chat-gif" src={message.imageUrl} alt="채팅으로 보낸 움짤" onClick={(event) => { event.stopPropagation(); onImage(message.imageUrl!); }} />}
