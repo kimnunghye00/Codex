@@ -203,15 +203,22 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   const byId = useMemo(() => new Map(messages.map((message) => [message.id, message])), [messages]);
   const selectedDeleteMessages = useMemo(
     () => deleteSelection
-      ? messages.filter((message) => message.sender === 'me' && deleteSelection.has(message.id))
+      ? messages.filter((message) => deleteSelection.has(message.id))
       : [],
     [messages, deleteSelection],
   );
   const recentDeleteCount = selectedDeleteMessages.filter((message) => {
+    if (message.sender !== 'me') return false;
     const sentAt = Date.parse(message.timestamp);
     return Number.isFinite(sentAt) && Date.now() - sentAt < DELETE_FOR_EVERYONE_WINDOW_MS;
   }).length;
-  const localOnlyDeleteCount = selectedDeleteMessages.length - recentDeleteCount;
+  const partnerDeleteCount = selectedDeleteMessages.filter((message) => message.sender !== 'me').length;
+  const ownLocalOnlyDeleteCount = selectedDeleteMessages.filter((message) => {
+    if (message.sender !== 'me') return false;
+    const sentAt = Date.parse(message.timestamp);
+    return !Number.isFinite(sentAt) || Date.now() - sentAt >= DELETE_FOR_EVERYONE_WINDOW_MS;
+  }).length;
+  const localOnlyDeleteCount = partnerDeleteCount + ownLocalOnlyDeleteCount;
   const rows = useMemo<ChatRow[]>(() => {
     const result: ChatRow[] = [];
     messages.forEach((message, index) => {
@@ -561,13 +568,11 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     window.setTimeout(() => setHighlighted(undefined), 1400);
   };
   const beginDeleteSelection = (message: Message) => {
-    if (message.sender !== 'me') return;
     setActive(undefined);
     setDeleteSelection(new Set([message.id]));
   };
 
   const toggleDeleteSelection = (message: Message) => {
-    if (message.sender !== 'me') return;
     setDeleteSelection((current) => {
       if (!current) return new Set([message.id]);
       const next = new Set(current);
@@ -596,7 +601,9 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     } else {
       const results = await Promise.allSettled(selectedDeleteMessages.map(async (message) => {
         const sentAt = Date.parse(message.timestamp);
-        const deleteForEveryone = Number.isFinite(sentAt) && Date.now() - sentAt < DELETE_FOR_EVERYONE_WINDOW_MS;
+        const deleteForEveryone = message.sender === 'me'
+          && Number.isFinite(sentAt)
+          && Date.now() - sentAt < DELETE_FOR_EVERYONE_WINDOW_MS;
         if (deleteForEveryone) {
           await deleteCoupleMessageForEveryone(connection.coupleId, message.id, currentUid);
         } else {
@@ -630,10 +637,10 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     setDeleteSelection(null);
     showFlowNotice(
       localOnlyDeleteCount > 0 && recentDeleteCount > 0
-        ? `최근 메시지 ${recentDeleteCount}개는 모두에게, 10분이 지난 ${localOnlyDeleteCount}개는 나에게만 삭제했어요.`
+        ? `내 최근 메시지 ${recentDeleteCount}개는 모두에게, 나머지 ${localOnlyDeleteCount}개는 내 화면에서 삭제했어요.`
         : recentDeleteCount > 0
           ? `메시지 ${recentDeleteCount}개를 모두에게 삭제했어요.`
-          : `메시지 ${localOnlyDeleteCount}개를 나에게만 삭제했어요.`,
+          : `메시지 ${localOnlyDeleteCount}개를 내 화면에서 삭제했어요.`,
     );
   };
 
@@ -715,8 +722,9 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
       <section className="chat-delete-sheet" role="dialog" aria-modal="true" aria-label="메시지 삭제 확인" onMouseDown={(event) => event.stopPropagation()}>
         <div className="chat-delete-sheet-handle" />
         <h2>메시지 {selectedDeleteMessages.length}개 삭제</h2>
-        {recentDeleteCount > 0 && <p><b>{recentDeleteCount}개</b>는 보낸 지 10분이 지나지 않아 상대방과 나에게 모두 삭제돼요.</p>}
-        {localOnlyDeleteCount > 0 && <p><b>{localOnlyDeleteCount}개</b>는 보낸 지 10분이 지나 나에게만 삭제돼요.</p>}
+        {recentDeleteCount > 0 && <p><b>{recentDeleteCount}개</b>는 내가 보낸 지 10분이 지나지 않아 상대방과 나에게 모두 삭제돼요.</p>}
+        {ownLocalOnlyDeleteCount > 0 && <p><b>{ownLocalOnlyDeleteCount}개</b>는 내가 보낸 지 10분이 지나 내 화면에서만 삭제돼요.</p>}
+        {partnerDeleteCount > 0 && <p><b>{partnerDeleteCount}개</b>는 상대방이 보낸 메시지라 내 화면에서만 삭제돼요.</p>}
         <button type="button" className="chat-delete-confirm" disabled={deleteBusy} onClick={() => void confirmDeleteSelection()}>{deleteBusy ? '삭제 중...' : '삭제하기'}</button>
         <button type="button" className="chat-delete-cancel" disabled={deleteBusy} onClick={() => setDeleteConfirmOpen(false)}>취소</button>
       </section>
