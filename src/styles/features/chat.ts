@@ -1,3 +1,4 @@
+import '../../chat-settings-quick';
 import '../../chat-typing.css';
 import '../../chat-tools.css';
 import '../../chat-extras.css';
