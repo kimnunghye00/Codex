@@ -8,7 +8,7 @@ import { chatMediaOriginalUrl, chatMediaPreviewUrl } from '../../lib/chatMediaRe
 
 const IMAGE_RETRY_DELAYS_MS = [500, 1_400] as const;
 const MEMORY_KEY = 'route.memories.v2';
-const MEMORY_MEDIA_PREFETCH_MARGIN = '900px 0px';
+const MEMORY_MEDIA_PREFETCH_MARGIN = '240px 0px';
 
 type MemorySlot = { memoryId: number; index: number };
 type LegacyRecovery = { url: string; slot: MemorySlot | null };
@@ -200,9 +200,13 @@ export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 
     }
 
     const observer = new IntersectionObserver(([entry]) => {
-      if (!entry.isIntersecting) return;
-      observer.disconnect();
-      activateMedia();
+      if (entry.isIntersecting) {
+        activateMedia();
+      } else {
+        // Unmount off-screen decoded images again. Large phone photos can use
+        // tens of megabytes each after decode even when the card itself is tiny.
+        setMediaReady(false);
+      }
     }, { rootMargin: MEMORY_MEDIA_PREFETCH_MARGIN, threshold: 0.01 });
     observer.observe(target);
 
