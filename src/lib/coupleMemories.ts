@@ -36,28 +36,29 @@ export function subscribeCoupleMemories(
   onError: (error: unknown) => void = () => undefined,
 ) {
   return onSnapshot(collection(db, 'couples', coupleId, 'memories'), (snapshot) => {
-    const memories = snapshot.docs
-      .map((item) => {
-        const data = item.data() as Partial<CloudMemory>;
-        const id = Number(data.id ?? item.id);
-        if (!Number.isFinite(id)) return null;
-        const ownerUid = String(data.ownerUid ?? '');
-        return {
-          id,
-          title: String(data.title ?? ''),
-          date: String(data.date ?? ''),
-          description: String(data.description ?? ''),
-          images: Array.isArray(data.images) ? data.images.filter((value): value is string => typeof value === 'string') : [],
-          videos: Array.isArray(data.videos) ? data.videos.filter((value): value is string => typeof value === 'string') : undefined,
-          location: data.location ? String(data.location) : undefined,
-          tags: Array.isArray(data.tags) ? data.tags.filter((value): value is string => typeof value === 'string') : undefined,
-          ownerUid: ownerUid || undefined,
-          createdBy: ownerUid && ownerUid !== currentUid ? 'partner' : 'me',
-          favorite: Boolean(data.favorite),
-        } satisfies Memory;
-      })
-      .filter((memory): memory is Memory => Boolean(memory))
-      .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+    const memories: Memory[] = [];
+    snapshot.docs.forEach((item) => {
+      const data = item.data() as Partial<CloudMemory>;
+      const id = Number(data.id ?? item.id);
+      if (!Number.isFinite(id)) return;
+      const ownerUid = String(data.ownerUid ?? '');
+
+      const memory: Memory = {
+        id,
+        title: String(data.title ?? ''),
+        date: String(data.date ?? ''),
+        description: String(data.description ?? ''),
+        images: Array.isArray(data.images) ? data.images.filter((value): value is string => typeof value === 'string') : [],
+        ownerUid: ownerUid || undefined,
+        createdBy: ownerUid && ownerUid !== currentUid ? 'partner' : 'me',
+        favorite: Boolean(data.favorite),
+      };
+      if (Array.isArray(data.videos)) memory.videos = data.videos.filter((value): value is string => typeof value === 'string');
+      if (data.location) memory.location = String(data.location);
+      if (Array.isArray(data.tags)) memory.tags = data.tags.filter((value): value is string => typeof value === 'string');
+      memories.push(memory);
+    });
+    memories.sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
     onChange(memories);
   }, onError);
 }
