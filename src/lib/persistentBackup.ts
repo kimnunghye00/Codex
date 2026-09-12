@@ -41,7 +41,6 @@ function backupRef(uid: string, key: string) {
 
 function localStateKeys(uid: string) {
   return [
-    `meluni-profile:${uid}`,
     `route-scheduled-chat:${uid}`,
     `route-date-plans:${uid}`,
     `route-local-schedules:${uid}`,
