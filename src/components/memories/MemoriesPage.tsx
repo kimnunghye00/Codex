@@ -259,10 +259,9 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
     const defaultDays = showDefaultAnniversaries
       ? specialDaysForYear(currentYear).filter((item) => dayDiff(item.date) >= 0)
       : [];
-    const personalDays = personal.filter((item) => {
-      if (/우리의 \d+일$/.test(item.title) || /\d+주년$/.test(item.title)) return dayDiff(item.date) >= 0;
-      return item.date.startsWith(String(currentYear)) && dayDiff(item.date) >= 0;
-    });
+    const personalDays = personal.filter((item) =>
+      item.date.startsWith(String(currentYear)) && dayDiff(item.date) >= 0
+    );
 
     return [...defaultDays, ...personalDays]
       .filter((item, index, items) => items.findIndex((candidate) => candidate.title === item.title && candidate.date === item.date) === index)
