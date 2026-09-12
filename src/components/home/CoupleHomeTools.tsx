@@ -256,7 +256,7 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
     if (!file) return;
     setProfileFeedback('');
     try {
-      const dataUrl = await compressProfileImage(file, kind === 'avatar' ? 720 : 1600, kind === 'avatar' ? 0.86 : 0.8);
+      const dataUrl = await compressProfileImage(file, kind === 'avatar' ? 560 : 1200, kind === 'avatar' ? 0.8 : 0.72);
       setProfileDraft((current) => kind === 'avatar'
         ? { ...current, photoDataUrl: dataUrl }
         : { ...current, backgroundPhotoDataUrl: dataUrl });
