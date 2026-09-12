@@ -8,7 +8,7 @@ import { AppHeader as SharedAppHeader } from './components/navigation/AppHeader'
 import { BottomNav, type AppTab } from './components/navigation/BottomNav';
 import { subscribeRealCoupleConnection, type RealCoupleConnection } from './lib/coupleConnection';
 import { saveRelationshipStartDate, subscribeCoupleShared } from './lib/coupleShared';
-import { deleteCoupleMemory, migrateLocalMemoriesToCouple, subscribeCoupleMemories, upsertCoupleMemory } from './lib/coupleMemories';
+import { deleteCoupleMemory, memorySyncSignature, migrateLocalMemoriesToCouple, subscribeCoupleMemories, upsertCoupleMemory } from './lib/coupleMemories';
 import type { User } from 'firebase/auth';
 import type { Memory, MemoryDraft, Message } from './types';
 import { loadMemories, loadMessages, saveMemories, saveMessages } from './utils/storage';
@@ -303,9 +303,16 @@ function App({ user, profile, onProfileChange }: AppProps) {
     const previous = syncedCoupleMemoriesRef.current;
     const previousById = new Map(previous.map((memory) => [memory.id, memory]));
     const currentById = new Map(memories.map((memory) => [memory.id, memory]));
+    // Compare using the same canonical, persisted-only shape that actually
+    // gets written to/read from Firestore (see memorySyncSignature). Comparing
+    // raw Memory objects here used to flag memories as "changed" forever
+    // because of fields like createdBy (locally computed, never persisted)
+    // and favorite (undefined locally vs. false once round-tripped), which
+    // meant both partners' devices kept re-writing the same memories back and
+    // forth without ever converging - flooding Firestore with writes.
     const upserts = memories.filter((memory) => {
       const before = previousById.get(memory.id);
-      return !before || JSON.stringify(before) !== JSON.stringify(memory);
+      return !before || memorySyncSignature(before) !== memorySyncSignature(memory);
     });
     const removed = previous.filter((memory) => !currentById.has(memory.id));
 
