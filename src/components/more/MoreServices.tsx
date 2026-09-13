@@ -73,7 +73,7 @@ function AppIconGlyph({ id }: { id: AppIconId }) {
   if (id === 'heart-chat') return <span className="relative grid place-items-center" aria-hidden="true"><MessageCircle size={29} strokeWidth={1.8} /><Heart className="absolute !text-[#FF8075]" size={12} fill="currentColor" strokeWidth={1.5} /></span>;
   if (id === 'our-route') return <span className="relative block h-8 w-9" aria-hidden="true"><span className="absolute left-1 top-5 h-0.5 w-7 -rotate-[24deg] rounded-full bg-current" /><span className="absolute left-0.5 top-5 size-2 rounded-full !bg-[#E07A5F]" /><span className="absolute right-0.5 top-1 size-2 rounded-full bg-current" /><Heart className="absolute bottom-0 right-2 !text-[#E07A5F]" size={11} fill="currentColor" /></span>;
   if (id === 'night') return <span className="text-[30px] font-medium leading-none" aria-hidden="true">☾</span>;
-  if (id === 'cream') return <span className="grid size-9 place-items-center rounded-full border border-[#D8CBBB] bg-[#FFF9F1] text-[19px] font-black" aria-hidden="true">R</span>;
+  if (id === 'cream') return <span className="grid size-9 place-items-center rounded-full border border-[#D8CBBB] bg-[#FFF9F1] text-[19px] font-black" aria-hidden="true">단</span>;
   if (id === 'minimal') return <span className="relative text-[24px] font-black leading-none" aria-hidden="true">단<span className="absolute -right-2 -top-1 size-2 rounded-full bg-[#E07A5F]" /></span>;
   return <span className="relative text-[24px] font-black leading-none" aria-hidden="true">단<span className="absolute -right-2 -top-1 size-2 rounded-full bg-[#FF786B]" /></span>;
 }
