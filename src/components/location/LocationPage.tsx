@@ -428,6 +428,7 @@ export function LocationPage({ requestedTab, Header, connection, focusPlace, onC
       <button type="button" role="tab" aria-selected={activeTab === 'footprints'} className={activeTab === 'footprints' ? 'active' : ''} onClick={() => { clearFocusedPlace(); setActiveTab('footprints'); }}>발자취</button>
     </div>
 
+    <div className="location-workspace">
     {activeTab === 'footprints' && <div className="footprint-daybar"><button type="button" onClick={() => moveDay(-1)}>‹</button><label><CalendarDays size={14} /><input type="date" value={selectedDay} max={todayKey()} onChange={(event) => setSelectedDay(event.target.value)} /></label><button type="button" disabled={selectedDay >= todayKey()} onClick={() => moveDay(1)}>›</button></div>}
 
     <section className="location-map-card" aria-label={activeTab === 'footprints' ? `${partnerName}의 발자취 지도` : '네이버 이동 지도'}>
@@ -468,5 +469,6 @@ export function LocationPage({ requestedTab, Header, connection, focusPlace, onC
       <div className="location-section-head"><div><small>FOOTPRINTS</small><h2>{selectedDay === todayKey() ? `오늘 ${partnerName}의 발자취` : `${partnerName}의 발자취`}</h2></div><span>{partnerVisits.length}곳</span></div>
       {!connection ? <div className="location-empty"><MapPin size={24} /><strong>상대방 연결이 필요해요</strong><p>커플 연결을 완료하면 서로 위치 공유를 켠 시간의 발자취를 볼 수 있어요.</p></div> : !partnerVisits.length ? <div className="location-empty"><MapPin size={24} /><strong>아직 발자취가 없어요</strong><p>{partnerStatus || '상대방이 위치 공유를 켜고 이동하면 시간순으로 표시돼요.'}</p></div> : <div className="location-list footprint-list">{partnerVisits.map((visit, index) => <button type="button" key={visit.id} className="location-visit" onClick={() => focusVisit(visit)}><div className="location-rail footprint-rail"><i className={!visit.leftAt && index === partnerVisits.length - 1 ? 'live' : ''}>{index + 1}</i>{index < partnerVisits.length - 1 && <span />}</div><div className="location-visit-copy"><small>{timeText(visit.arrivedAt)}{visit.leftAt ? ` ~ ${timeText(visit.leftAt)}` : ' ~ 현재'}</small><strong>{visit.placeName || '위치 기록'}</strong><p><Clock3 size={13} /> {visit.leftAt ? '머문 뒤 다음 장소로 이동' : '현재 머무는 중'}</p><em>눌러서 지도에서 보기</em></div></button>)}</div>}
     </section>}
+    </div>
   </div>;
 }
