@@ -55,8 +55,8 @@ export function ChatComposer({
   const gifRef = useRef<HTMLInputElement>(null);
   const composingRef = useRef(false);
   const pendingRef = useRef<PendingPhoto[]>([]);
-  const recorderRef = useRef<MediaRecorder>();
-  const voiceStreamRef = useRef<MediaStream>();
+  const recorderRef = useRef<MediaRecorder | undefined>(undefined);
+  const voiceStreamRef = useRef<MediaStream | undefined>(undefined);
   const voiceChunksRef = useRef<Blob[]>([]);
   const voiceStartedAtRef = useRef(0);
   const [extras, setExtras] = useState(false);
