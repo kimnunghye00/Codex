@@ -1,4 +1,4 @@
-import { Mic, PhoneCall, PhoneOff, Video, VideoOff } from 'lucide-react';
+import { Mic, MicOff, PhoneCall, PhoneOff, Video, VideoOff } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
 import { clearIncomingCallNotification, prepareIncomingCallNotifications, showIncomingCallNotification } from '../../lib/callNotifications';
@@ -139,18 +139,6 @@ function endMessage(signal: CoupleCallSignal) {
   if (signal.status === 'rejected') return '상대방이 통화를 거절했어요.';
   if (signal.status === 'failed') return '통화 연결이 끊어졌어요.';
   return '통화가 종료됐어요.';
-}
-
-function MutedMicIcon() {
-  return (
-    <svg className="danduli-call-muted-icon" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-      <circle cx="24" cy="24" r="20" fill="none" stroke="currentColor" strokeWidth="3.4" />
-      <rect x="20" y="11" width="8" height="20" rx="4" fill="currentColor" />
-      <path d="M16 24.5v2a8 8 0 0 0 16 0v-2" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" />
-      <path d="M24 34.5v5M18.5 39.5h11" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" />
-      <path d="M10.5 10.5l27 27" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
-    </svg>
-  );
 }
 
 export function DanduliCallManager({
@@ -492,12 +480,10 @@ export function DanduliCallManager({
   }, [connection?.coupleId, resetLocalSession]);
 
   const toggleMute = useCallback(() => {
-    setMuted((currentMuted) => {
-      const nextMuted = !currentMuted;
-      const tracks = localStreamRef.current?.getAudioTracks() ?? [];
-      tracks.forEach((track) => { track.enabled = !nextMuted; });
-      return nextMuted;
-    });
+    // Keep the visual state update completely separate from the MediaStream.
+    // This guarantees the icon swaps immediately even if the audio track is
+    // temporarily unavailable while the call is connecting.
+    setMuted((currentMuted) => !currentMuted);
   }, []);
 
   const toggleCamera = useCallback(() => {
@@ -673,7 +659,17 @@ export function DanduliCallManager({
       {showVideo && session.phase !== 'connected' && <div className="danduli-call-video-status">{message || (session.phase === 'calling' ? '응답을 기다리고 있어요' : '영상통화를 연결하고 있어요')}</div>}
 
       <div className="danduli-call-controls">
-        <button type="button" className={muted ? 'active muted' : ''} onClick={toggleMute} aria-label={muted ? '음소거 해제' : '음소거'} aria-pressed={muted}>{muted ? <MutedMicIcon /> : <Mic />}<span>{muted ? '음소거됨' : '음소거'}</span></button>
+        {muted ? (
+          <button key="muted" type="button" className="muted" onClick={toggleMute} aria-label="음소거 해제" aria-pressed="true">
+            <MicOff />
+            <span>음소거</span>
+          </button>
+        ) : (
+          <button key="unmuted" type="button" onClick={toggleMute} aria-label="음소거" aria-pressed="false">
+            <Mic />
+            <span>음소거</span>
+          </button>
+        )}
         {showVideo && <button type="button" className={cameraOff ? 'active' : ''} onClick={toggleCamera} aria-label={cameraOff ? '카메라 켜기' : '카메라 끄기'}>{cameraOff ? <VideoOff /> : <Video />}<span>{cameraOff ? '카메라 켜기' : '카메라'}</span></button>}
         <button type="button" className="hangup" onClick={hangUp} aria-label="통화 종료"><PhoneOff /><span>종료</span></button>
       </div>
