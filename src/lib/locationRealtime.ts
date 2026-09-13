@@ -1,6 +1,6 @@
 import { collection, doc, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import { db } from './firebase';
-import type { LocationVisit } from '../utils/location';
+import { normalizeLocationVisit, type LocationVisit } from '../utils/location';
 
 type CloudLocationVisit = LocationVisit & {
   ownerUid: string;
@@ -48,18 +48,20 @@ export function subscribePartnerLocationVisits(
 
   let lastSignature = '';
   return onSnapshot(q, (snapshot) => {
-    const visits = snapshot.docs.map((snapshotDoc) => {
-      const data = snapshotDoc.data() as CloudLocationVisit;
-      return {
-        id: data.id || snapshotDoc.id,
-        latitude: Number(data.latitude),
-        longitude: Number(data.longitude),
-        accuracy: Number(data.accuracy || 0),
-        placeName: data.placeName,
-        arrivedAt: data.arrivedAt,
-        leftAt: data.leftAt,
-      } satisfies LocationVisit;
-    }).filter((visit) => Number.isFinite(visit.latitude) && Number.isFinite(visit.longitude))
+    const visits = snapshot.docs
+      .map((snapshotDoc) => {
+        const data = snapshotDoc.data() as CloudLocationVisit;
+        return normalizeLocationVisit({
+          id: data.id || snapshotDoc.id,
+          latitude: data.latitude,
+          longitude: data.longitude,
+          accuracy: data.accuracy,
+          placeName: data.placeName,
+          arrivedAt: data.arrivedAt,
+          leftAt: data.leftAt,
+        }, snapshotDoc.id);
+      })
+      .filter((visit): visit is LocationVisit => Boolean(visit))
       .sort((a, b) => a.arrivedAt.localeCompare(b.arrivedAt));
 
     const signature = JSON.stringify(visits.map((visit) => [
