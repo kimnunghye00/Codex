@@ -1,4 +1,4 @@
-const CACHE_NAME = 'danduli-web-v12-clean-sticker-cells';
+const CACHE_NAME = 'danduli-web-v13-chat-action-grid';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.add('./')).catch(() => undefined));
