@@ -92,7 +92,7 @@ function configureBundledAppProtocol(ses) {
     const bundledFile = resolveBundledFile(requestUrl.pathname);
     if (bundledFile) return net.fetch(pathToFileURL(bundledFile).toString());
 
-    // Client-side ROUTE pages have no extension, so serve the packaged app shell.
+    // Client-side 단둘이 pages have no extension, so serve the packaged app shell.
     if (!path.extname(requestUrl.pathname)) {
       const appShell = path.join(DIST_DIR, 'index.html');
       if (fs.existsSync(appShell)) return net.fetch(pathToFileURL(appShell).toString());
@@ -107,7 +107,7 @@ function configureSession() {
   const ses = session.defaultSession;
 
   // Keep the browser identity Chrome-like so Firebase/reCAPTCHA web flows
-  // behave the same way as they do on the authorized ROUTE web origin.
+  // behave the same way as they do on the authorized 단둘이 web origin.
   const currentUserAgent = ses.getUserAgent();
   ses.setUserAgent(currentUserAgent.replace(/\sElectron\/\S+/g, ''));
 
@@ -134,7 +134,7 @@ function configureSession() {
 
 function createWindow() {
   const win = new BrowserWindow({
-    title: 'ROUTE',
+    title: '단둘이',
     width: 430,
     height: 860,
     minWidth: 360,
