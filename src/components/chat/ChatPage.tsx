@@ -18,6 +18,7 @@ import { typingTimeRemaining } from '../../utils/typingStatus';
 import { ChatBubble } from './ChatBubble';
 import { ChatComposer } from './ChatComposer';
 import { ChatToolsPanel, loadChatPreferences, saveChatPreferences, type ChatPreferences } from './ChatToolsPanel';
+import { stickerIdFromToken } from './DanduliSticker';
 
 type ChatSchedule = { id: string; title: string; date: string; startTime: string; type: 'personal' | 'couple'; ownerId: string };
 type ScheduledDraft = { id: number; text: string; sendAt: string };
@@ -99,6 +100,7 @@ function estimateChatRowHeight(row: ChatRow) {
   const base = row.showDate ? 36 : 0;
   if (row.message.type === 'image' || row.message.type === 'gif') return base + 260;
   if (row.message.type === 'gallery') return base + 300;
+  if (row.message.type === 'sticker') return base + 205;
   return base + 68;
 }
 
@@ -477,6 +479,19 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     deliver(message); setReplyTo(undefined);
   };
 
+  const sendStickerChoice = (value: string) => {
+    const stickerId = stickerIdFromToken(value);
+    if (!stickerId) {
+      sendText(value);
+      return;
+    }
+    if (!currentUid) return;
+    forceBottomRef.current = true;
+    const message: Message = { id: createMessageId(), sender: 'me', type: 'sticker', stickerId, timestamp: new Date().toISOString(), read: usingAiPartner, replyTo };
+    deliver(message);
+    setReplyTo(undefined);
+  };
+
   useEffect(() => {
     if (!scheduledDrafts.length) return;
     let timer: number | undefined;
@@ -805,8 +820,8 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
       })() : row.kind === 'typing-ai' ? <TypingIndicator ai initial={partnerInitial} /> : <TypingIndicator ai={false} initial={partnerInitial} heart />}</div>;
     })}</div><div ref={bottomRef} /></div>
     {scheduledDrafts.length > 0 && !deleteSelection && <div className="scheduled-strip"><CalendarClock size={14} /><span>예약 메시지 {scheduledDrafts.length}개</span><small>앱 실행 중 자동 전송</small></div>}
-    {!deleteSelection && <ChatComposer draft={draft} reply={replyTo ? byId.get(replyTo) : undefined} partnerName={partnerName} onDraft={setDraft} onSend={send} onImages={sendImages} onGif={sendGif} onQuick={sendText} onSchedule={openScheduleMessage} onGift={() => setGiftOpen(true)} onCancelReply={() => setReplyTo(undefined)} />}
-    {toolsOpen && <ChatToolsPanel messages={messages} partnerName={partnerName} preferences={preferences} onPreferences={setPreferences} onJump={jump} onImage={setLightbox} onImport={(imported) => setMessages(imported)} onSticker={sendText} onClose={() => setToolsOpen(false)} />}
+    {!deleteSelection && <ChatComposer draft={draft} reply={replyTo ? byId.get(replyTo) : undefined} partnerName={partnerName} onDraft={setDraft} onSend={send} onImages={sendImages} onGif={sendGif} onQuick={sendText} onSticker={sendStickerChoice} onSchedule={openScheduleMessage} onGift={() => setGiftOpen(true)} onCancelReply={() => setReplyTo(undefined)} />}
+    {toolsOpen && <ChatToolsPanel messages={messages} partnerName={partnerName} preferences={preferences} onPreferences={setPreferences} onJump={jump} onImage={setLightbox} onImport={(imported) => setMessages(imported)} onSticker={sendStickerChoice} onClose={() => setToolsOpen(false)} />}
     {lightbox && <div className="lightbox" role="dialog" onClick={() => setLightbox(undefined)}><button aria-label="닫기"><X /></button><img src={lightbox} alt="확대된 채팅 사진" /></div>}
 
     {deleteConfirmOpen && <div className="chat-delete-backdrop" role="presentation" onMouseDown={() => !deleteBusy && setDeleteConfirmOpen(false)}>
