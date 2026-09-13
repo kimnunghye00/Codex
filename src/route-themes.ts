@@ -22,6 +22,33 @@ const themes: RouteTheme[] = [
   { id: 'neon-night', name: 'Neon Night', description: '딥 퍼플 · 네온 바이올렛 · 드림 블루 · 네온 핑크', colors: ['#170D2C', '#6F2DBD', '#243B6B', '#D130B0'] },
 ];
 
+type ThemePreviewPalette = {
+  primary: string;
+  primaryLight: string;
+  soft: string;
+  background: string;
+  surface: string;
+  surfaceElevated: string;
+  text: string;
+  muted: string;
+  border: string;
+  accent: string;
+  emotion: string;
+};
+
+const previewPalettes: Record<string, ThemePreviewPalette> = {
+  'sunset-route': { primary:'#3D405B', primaryLight:'#B8563F', soft:'#F4E8DE', background:'#FAF8F5', surface:'#FFFFFF', surfaceElevated:'#FFFFFF', text:'#34364C', muted:'#625D58', border:'#D9CFC4', accent:'#A84D38', emotion:'#B8563F' },
+  'midnight-walk': { primary:'#526A9B', primaryLight:'#8297C7', soft:'#27364E', background:'#101725', surface:'#1A2435', surfaceElevated:'#202C40', text:'#F8FAFC', muted:'#CBD5E1', border:'#43526A', accent:'#526A9B', emotion:'#E8D99A' },
+  'forest-trail': { primary:'#2F6B45', primaryLight:'#4F825B', soft:'#E3EDD8', background:'#F3F8ED', surface:'#FFFFFF', surfaceElevated:'#FFFFFF', text:'#294433', muted:'#55635A', border:'#C9D8BE', accent:'#2F6B45', emotion:'#3F774E' },
+  'spring-blossom': { primary:'#9F3159', primaryLight:'#BE4F73', soft:'#F8E4EA', background:'#FFF6F8', surface:'#FFFFFF', surfaceElevated:'#FFFFFF', text:'#5E3342', muted:'#765461', border:'#E9CBD4', accent:'#A43B61', emotion:'#A83A61' },
+  'ocean-drive': { primary:'#2F6F8F', primaryLight:'#3D829F', soft:'#E0F1F5', background:'#F2FAFC', surface:'#FFFFFF', surfaceElevated:'#FFFFFF', text:'#24556C', muted:'#4F7080', border:'#C3DEE5', accent:'#2F6F8F', emotion:'#2E7892' },
+  'lavender-fog': { primary:'#5E527A', primaryLight:'#7B69A1', soft:'#EEE7F5', background:'#F8F5FB', surface:'#FFFFFF', surfaceElevated:'#FFFFFF', text:'#4D4660', muted:'#696276', border:'#D7CDE2', accent:'#6F5A9C', emotion:'#705B91' },
+  'autumn-breeze': { primary:'#8A442F', primaryLight:'#B85C3F', soft:'#F7E3D3', background:'#FFF7EE', surface:'#FFFFFF', surfaceElevated:'#FFFFFF', text:'#60382D', muted:'#765349', border:'#E5C6B1', accent:'#A84C2D', emotion:'#A74B2C' },
+  'champagne-day': { primary:'#715C43', primaryLight:'#8A7356', soft:'#F4E9D2', background:'#FFFCF4', surface:'#FFFFFF', surfaceElevated:'#FFFFFF', text:'#51463B', muted:'#6D6257', border:'#DED2BE', accent:'#715C43', emotion:'#7A6544' },
+  'mono-track': { primary:'#303236', primaryLight:'#55595F', soft:'#ECEDEF', background:'#F6F6F6', surface:'#FFFFFF', surfaceElevated:'#FFFFFF', text:'#202124', muted:'#595D62', border:'#CFD1D4', accent:'#45484D', emotion:'#4E5257' },
+  'neon-night': { primary:'#6F2DBD', primaryLight:'#9B62D7', soft:'#2D1748', background:'#100A20', surface:'#1B1030', surfaceElevated:'#24143E', text:'#FBF7FF', muted:'#D8C7E8', border:'#57366F', accent:'#7D3CBF', emotion:'#C44AAE' },
+};
+
 const validTheme = (value: string | null) => themes.some((theme) => theme.id === value) ? value! : DEFAULT_THEME;
 const activeTheme = () => validTheme(localStorage.getItem(STORAGE_KEY));
 const themeById = (id: string) => themes.find((theme) => theme.id === id) ?? themes[0];
@@ -95,12 +122,20 @@ function previewTextColor(hex: string) {
 }
 
 function updatePreview(preview: HTMLElement, theme: RouteTheme) {
-  preview.style.setProperty('--preview-accent', theme.colors[0]);
-  preview.style.setProperty('--preview-soft', theme.colors[1]);
-  preview.style.setProperty('--preview-bg', theme.colors[2]);
-  preview.style.setProperty('--preview-primary', theme.colors[3]);
-  preview.style.setProperty('--preview-on-primary', previewTextColor(theme.colors[3]));
-  preview.style.setProperty('--preview-on-accent', previewTextColor(theme.colors[0]));
+  const palette = previewPalettes[theme.id] ?? previewPalettes[DEFAULT_THEME];
+  preview.style.setProperty('--preview-accent', palette.accent);
+  preview.style.setProperty('--preview-soft', palette.soft);
+  preview.style.setProperty('--preview-bg', palette.background);
+  preview.style.setProperty('--preview-primary', palette.primary);
+  preview.style.setProperty('--preview-primary-light', palette.primaryLight);
+  preview.style.setProperty('--preview-surface', palette.surface);
+  preview.style.setProperty('--preview-surface-elevated', palette.surfaceElevated);
+  preview.style.setProperty('--preview-text', palette.text);
+  preview.style.setProperty('--preview-muted', palette.muted);
+  preview.style.setProperty('--preview-border', palette.border);
+  preview.style.setProperty('--preview-emotion', palette.emotion);
+  preview.style.setProperty('--preview-on-primary', previewTextColor(palette.primary));
+  preview.style.setProperty('--preview-on-accent', previewTextColor(palette.accent));
 }
 
 function makePreview(theme: RouteTheme) {
@@ -111,17 +146,88 @@ function makePreview(theme: RouteTheme) {
       <button type="button" class="active" role="tab" aria-selected="true" data-route-preview-tab="home">홈</button>
       <button type="button" role="tab" aria-selected="false" tabindex="-1" data-route-preview-tab="chat">대화방</button>
     </div>
+
     <div class="route-theme-preview-stage">
       <div class="route-theme-preview-screen active" role="tabpanel" data-route-preview-screen="home">
-        <div class="route-theme-preview-phone route-theme-preview-home">
-          <div class="route-theme-preview-top"><strong>ROUTE.</strong><span>● ●</span></div>
-          <div class="route-theme-preview-hero"><small>OUR ROUTE</small><b>우리의 오늘</b><span>4가지 색이 앱 전체에 함께 적용돼요.</span></div>
-          <div class="route-theme-preview-row">
-            <div class="route-theme-preview-card"><small>우리의 시간</small><b>D+821</b></div>
-            <div class="route-theme-preview-action"><b>♥ 최근 추억</b></div>
+        <div class="route-theme-preview-phone route-theme-preview-home route-theme-preview-real-home">
+          <div class="route-theme-preview-home-topbar">
+            <strong>ROUTE.</strong>
+            <span><i></i><i></i></span>
+          </div>
+
+          <div class="route-theme-preview-home-grid">
+            <div class="route-theme-preview-map">
+              <div class="route-theme-preview-map-grid"></div>
+              <span class="route-theme-preview-map-road road-one"></span>
+              <span class="route-theme-preview-map-road road-two"></span>
+              <span class="route-theme-preview-map-river"></span>
+              <span class="route-theme-preview-map-label label-route">ROUTE</span>
+              <span class="route-theme-preview-map-label label-cafe">카페</span>
+              <span class="route-theme-preview-map-label label-park">공원</span>
+              <div class="route-theme-preview-location-card">
+                <span class="route-theme-preview-pin-dot">●</span>
+                <span><b>상대방 · 위치 공유</b><small>최근 위치를 확인해보세요</small></span>
+              </div>
+              <div class="route-theme-preview-map-person">
+                <span class="route-theme-preview-map-halo"></span>
+                <span class="route-theme-preview-map-avatar">상</span>
+                <b>▼</b>
+              </div>
+              <span class="route-theme-preview-locate">◎</span>
+            </div>
+
+            <aside class="route-theme-preview-home-side">
+              <section class="route-theme-preview-couple-card">
+                <div class="route-theme-preview-person me">
+                  <span class="route-theme-preview-person-avatar">나</span>
+                  <b>능희</b>
+                </div>
+                <svg viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true"><path d="M0 20 C22 20 29 6 50 6 C71 6 78 20 100 20"></path></svg>
+                <span class="route-theme-preview-heart">♥</span>
+                <div class="route-theme-preview-person partner">
+                  <span class="route-theme-preview-person-avatar">상</span>
+                  <b>상대방</b>
+                </div>
+                <div class="route-theme-preview-time">
+                  <small>우리의 시간</small>
+                  <strong>D+821</strong>
+                  <em>2024.06.15</em>
+                </div>
+              </section>
+
+              <section class="route-theme-preview-schedule">
+                <header><span>▣</span><b>우리 일정</b><small>전체보기 ›</small></header>
+                <div class="route-theme-preview-schedule-row">
+                  <span><b>오늘</b><small>19:00</small></span>
+                  <p><strong>저녁 데이트</strong><small>우리의 약속</small></p>
+                  <em>약속</em>
+                </div>
+              </section>
+
+              <section class="route-theme-preview-memory">
+                <header><span>▧</span><b>우리의 추억</b><small>전체보기 ›</small></header>
+                <div>
+                  <i class="tile-a"></i><i class="tile-b"></i><i class="tile-c"></i><i class="tile-d"></i>
+                </div>
+              </section>
+
+              <section class="route-theme-preview-recent-chat">
+                <header><span>●</span><b>최근 대화</b><small>전체보기 ›</small></header>
+                <div><span class="route-theme-preview-chat-avatar">상</span><p><b>상대방</b><small>오늘 저녁 같이 먹을래?</small></p></div>
+              </section>
+            </aside>
+          </div>
+
+          <div class="route-theme-preview-home-nav">
+            <span class="active"><i>⌂</i><b>홈</b></span>
+            <span><i>♡</i><b>추억</b></span>
+            <span><i>○</i><b>대화</b></span>
+            <span><i>⌖</i><b>지도</b></span>
+            <span><i>•••</i><b>더보기</b></span>
           </div>
         </div>
       </div>
+
       <div class="route-theme-preview-screen" role="tabpanel" data-route-preview-screen="chat" hidden>
         <div class="route-theme-preview-phone route-theme-preview-chat">
           <div class="route-theme-preview-chat-top">
