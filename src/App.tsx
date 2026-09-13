@@ -17,7 +17,7 @@ import {
   saveNotifications,
   type AppNotification,
 } from './utils/notifications';
-import { ChevronRight, Heart, Image, MapPin, MapPinned, MessageCircle, Plus } from 'lucide-react';
+import { ChevronRight, Heart, Image, MapPin, MapPinned, Plus } from 'lucide-react';
 import './home-simple.css';
 import './home-dashboard.css';
 import './home-couple-tools.css';
@@ -176,24 +176,6 @@ function formatShortDate(value?: string) {
   return value ? value.replaceAll('-', '.') : '기념일 설정 필요';
 }
 
-function chatPreview(message?: Message) {
-  if (!message) return '아직 대화가 없어요.';
-  if (message.type === 'image') return '사진을 보냈어요.';
-  if (message.type === 'gallery') return `사진 ${message.imageUrls?.length ?? 0}장을 보냈어요.`;
-  if (message.type === 'gif') return '움짤을 보냈어요.';
-  if (message.type === 'file') return `${message.attachmentName || '파일'}을 보냈어요.`;
-  if (message.type === 'contact') return `${message.contactName || '연락처'} 연락처를 보냈어요.`;
-  if (message.type === 'audio') return '음성 메시지를 보냈어요.';
-  if (message.type === 'call') {
-    const label = message.callKind === 'video' ? '영상통화' : '음성 통화';
-    if (message.callStatus === 'completed') return `${label} 기록`;
-    if (message.callStatus === 'rejected') return `받지 않은 ${label}`;
-    if (message.callStatus === 'cancelled') return `취소된 ${label}`;
-    return `${label} 연결 실패`;
-  }
-  return message.text || '메시지';
-}
-
 function App({ user, profile, onProfileChange }: AppProps) {
   const [connection, setConnection] = useState<RealCoupleConnection | null>(null);
   const [relationshipStartDate, setRelationshipStartDate] = useState<string>();
@@ -221,21 +203,12 @@ function App({ user, profile, onProfileChange }: AppProps) {
     return start ? Math.max(1, Math.floor((atMidnight().getTime() - start.getTime()) / DAY) + 1) : 0;
   }, [relationshipStartDate]);
   const anniversaries = useMemo(() => buildAnniversaries(profile, connection?.partnerProfile ?? null, relationshipStartDate), [connection?.partnerProfile, profile, relationshipStartDate]);
-  const latestPartnerMessage = useMemo(() => {
-    for (let index = messages.length - 1; index >= 0; index -= 1) {
-      if (messages[index].sender === 'partner') return messages[index];
-    }
-    return undefined;
-  }, [messages]);
-
   const openSettings = useCallback(() => setSettingsOpen(true), []);
   const navigateTab = useCallback((next: Tab) => {
     if (next === tab) return;
     tabHistory.current.push(next);
     setTab(next);
   }, [tab]);
-  const openChat = useCallback(() => navigateTab('chat'), [navigateTab]);
-
   const navigateMoreTarget = useCallback((target: MoreNavigationTarget) => {
     if (target.area === 'chat') {
       navigateTab('chat');
@@ -518,7 +491,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
 
   return <>
     <div className="app-shell"><main><Suspense fallback={<div className="page auth-loading" role="status" aria-live="polite"><div className="loading-mark" /><p>화면을 불러오는 중이에요</p></div>}>
-      {tab === 'home' && <HomePage uid={user.uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} memories={memories} latestPartnerMessage={latestPartnerMessage} onNavigate={navigateTab} onOpenChat={openChat} onOpenMemory={openMemory} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
+      {tab === 'home' && <HomePage uid={user.uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} memories={memories} onNavigate={navigateTab} onOpenMemory={openMemory} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'memories' && <MemoriesPage requestedTab={requestedHubTab} Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={(place) => { setLocationFocus(place); setRequestedLocationTab('map'); navigateTab('location'); }} sharedProfile={profile} sharedConnection={connection} sharedRelationshipStartDate={relationshipStartDate} />}
       {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} connection={connection} />}
       {tab === 'location' && <LocationPage requestedTab={requestedLocationTab} Header={AppHeader} connection={connection} focusPlace={locationFocus} onClearFocus={() => setLocationFocus(undefined)} onCreateMemory={(draft) => { setMemoryToOpen(undefined); setMemoryDraft(draft); setRequestedHubTab('album'); navigateTab('memories'); }} onActivity={(title, detail) => addActivity({ actor: 'me', kind: 'location', title, detail })} />}
@@ -535,7 +508,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
   </>;
 }
 
-const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connection, relationshipStartDate, coupleDay, memories, latestPartnerMessage, onNavigate, onOpenChat, onOpenMemory, onSettings, onNotifications, unreadCount }: { uid: string; profile: UserProfile; onProfileChange: (profile: UserProfile) => void; connection: RealCoupleConnection | null; relationshipStartDate?: string; coupleDay: number; memories: Memory[]; latestPartnerMessage?: Message; onNavigate: (tab: Tab) => void; onOpenChat: () => void; onOpenMemory: (id: number) => void; onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
+const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connection, relationshipStartDate, coupleDay, memories, onNavigate, onOpenMemory, onSettings, onNotifications, unreadCount }: { uid: string; profile: UserProfile; onProfileChange: (profile: UserProfile) => void; connection: RealCoupleConnection | null; relationshipStartDate?: string; coupleDay: number; memories: Memory[]; onNavigate: (tab: Tab) => void; onOpenMemory: (id: number) => void; onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
   const previewMemories = memories.slice(0, 4);
   const partnerProfile = connection?.partnerProfile ?? null;
   const partnerName = partnerProfile ? displayName(partnerProfile) : '상대방';
@@ -574,10 +547,6 @@ const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connect
           </div> : <button className="home-memory-empty" type="button" onClick={() => onNavigate('memories')}><Image size={22} /><span><b>첫 추억을 남겨보세요</b><small>함께한 사진과 이야기가 여기에 보여요.</small></span></button>}
         </section>
 
-        <button className="home-chat-card" type="button" onClick={onOpenChat}>
-          <span className="home-chat-head"><span><MessageCircle size={17} /><b>최근 대화</b></span><em>전체보기 <ChevronRight size={14} /></em></span>
-          <span className="home-chat-preview"><span className="home-chat-avatar">{partnerInitial}</span><span className="home-chat-copy"><b>{partnerName}</b><small>{chatPreview(latestPartnerMessage)}</small></span></span>
-        </button>
       </aside>
     </div>
   </div>;
