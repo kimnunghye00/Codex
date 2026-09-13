@@ -76,7 +76,7 @@ function mountBootstrapShell() {
   ].join(';');
 
   const brand = document.createElement('strong');
-  brand.textContent = 'ROUTE.';
+  brand.textContent = '단둘이';
   brand.style.cssText = 'font-size:26px;letter-spacing:-1px;font-weight:900';
 
   const message = document.createElement('span');
@@ -114,7 +114,7 @@ function mountBootstrapFailure() {
   ].join(';');
 
   const brand = document.createElement('strong');
-  brand.textContent = 'ROUTE.';
+  brand.textContent = '단둘이';
   brand.style.cssText = 'font-size:26px;letter-spacing:-1px;font-weight:900';
 
   const message = document.createElement('span');
@@ -164,7 +164,7 @@ function startDeferredRuntimeServices() {
   scheduleDeferredRuntimeWork(() => {
     void import('./pwa')
       .then(({ initializeRoutePwa }) => initializeRoutePwa())
-      .catch((error) => console.warn('[ROUTE deferred PWA]', error));
+      .catch((error) => console.warn('[DANDULI deferred PWA]', error));
 
     void Promise.all([
       import('./lib/persistentBackup'),
@@ -173,7 +173,7 @@ function startDeferredRuntimeServices() {
       await backup.preparePersistentBackup();
       efficientBackup.startEfficientPersistentBackup();
     }).catch((error) => {
-      console.warn('[ROUTE deferred durability]', error);
+      console.warn('[DANDULI deferred durability]', error);
     });
   });
 }
@@ -196,7 +196,7 @@ async function bootstrap() {
     await initializeRuntimeRecovery();
 
     const root = document.getElementById('root');
-    if (!root) throw new Error('ROUTE_ROOT_MISSING');
+    if (!root) throw new Error('DANDULI_ROOT_MISSING');
 
     createRoot(root).render(
       <StrictMode>
@@ -209,7 +209,7 @@ async function bootstrap() {
     await waitForFirstPaint();
     startDeferredRuntimeServices();
   } catch (error) {
-    console.error('[ROUTE bootstrap]', error);
+    console.error('[DANDULI bootstrap]', error);
     mountBootstrapFailure();
     await waitForFirstPaint();
   } finally {
