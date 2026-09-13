@@ -12,10 +12,11 @@ type UserChatState = {
 type CloudMessage = {
   id: number;
   authorUid: string;
-  type: 'text' | 'image' | 'gallery' | 'gif';
+  type: 'text' | 'image' | 'gallery' | 'gif' | 'sticker';
   text?: string;
   imageUrl?: string;
   imageUrls?: string[];
+  stickerId?: string;
   timestamp: string;
   createdAt?: unknown;
   read?: boolean;
@@ -69,6 +70,7 @@ function toMessage(snapshotDoc: { id: string; data: () => unknown }, currentUid:
     text: data.text,
     imageUrl: data.imageUrl,
     imageUrls: data.imageUrls,
+    stickerId: data.stickerId,
     timestamp: data.timestamp || new Date().toISOString(),
     read: Boolean(data.read),
     replyTo: data.replyTo,
@@ -91,6 +93,7 @@ function messageRenderSignature(message: Message) {
     text: message.text ?? '',
     imageUrl: message.imageUrl ?? '',
     imageUrls: message.imageUrls ?? [],
+    stickerId: message.stickerId ?? '',
     timestamp: message.timestamp ?? '',
     read: message.read ?? false,
     replyTo: message.replyTo ?? null,
@@ -306,6 +309,7 @@ export async function sendCoupleMessage(coupleId: string, currentUid: string, me
   if (message.text) payload.text = message.text;
   if (message.imageUrl) payload.imageUrl = message.imageUrl;
   if (message.imageUrls?.length) payload.imageUrls = message.imageUrls;
+  if (message.stickerId) payload.stickerId = message.stickerId;
   if (message.replyTo) payload.replyTo = message.replyTo;
   if (message.scheduledFor) payload.scheduledFor = message.scheduledFor;
   await setDoc(messageRef(coupleId, message.id), payload);
