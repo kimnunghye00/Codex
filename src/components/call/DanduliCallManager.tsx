@@ -492,12 +492,13 @@ export function DanduliCallManager({
   }, [connection?.coupleId, resetLocalSession]);
 
   const toggleMute = useCallback(() => {
-    const tracks = localStreamRef.current?.getAudioTracks() ?? [];
-    if (!tracks.length) return;
-    const nextMuted = !muted;
-    tracks.forEach((track) => { track.enabled = !nextMuted; });
-    setMuted(nextMuted);
-  }, [muted]);
+    setMuted((currentMuted) => {
+      const nextMuted = !currentMuted;
+      const tracks = localStreamRef.current?.getAudioTracks() ?? [];
+      tracks.forEach((track) => { track.enabled = !nextMuted; });
+      return nextMuted;
+    });
+  }, []);
 
   const toggleCamera = useCallback(() => {
     const tracks = localStreamRef.current?.getVideoTracks() ?? [];
@@ -517,6 +518,11 @@ export function DanduliCallManager({
     const timer = window.setInterval(update, 1000);
     return () => window.clearInterval(timer);
   }, [connectedAt]);
+
+  useEffect(() => {
+    const tracks = localStream?.getAudioTracks() ?? [];
+    tracks.forEach((track) => { track.enabled = !muted; });
+  }, [localStream, muted]);
 
   useEffect(() => {
     if (localVideoRef.current) localVideoRef.current.srcObject = localStream;
