@@ -53,8 +53,8 @@ test('couple connection session survives restart but expires safely', () => {
   assert.equal(coupleConnectSessionKey('uid-123'), 'route.coupleConnect.pending:uid-123');
 });
 
-test('unfinished calling cannot be exposed by release rendering', () => {
-  assert.equal(CALLING_ENABLED, false);
+test('completed calling is enabled for release rendering', () => {
+  assert.equal(CALLING_ENABLED, true);
 });
 
 test('typing expires even when the sender disconnects without a final update', () => {
