@@ -136,7 +136,7 @@ export function ChatToolsPanel({
       try {
         const data = JSON.parse(String(reader.result ?? '')) as { format?: string; messages?: Message[] };
         if (data.format !== 'ROUTE_CHAT_BACKUP' || !Array.isArray(data.messages)) throw new Error('invalid');
-        const valid = data.messages.filter((message) => typeof message.id === 'number' && (message.sender === 'me' || message.sender === 'partner') && (message.type === 'text' || message.type === 'image' || message.type === 'gallery' || message.type === 'gif' || message.type === 'sticker' || message.type === 'file' || message.type === 'contact' || message.type === 'audio'));
+        const valid = data.messages.filter((message) => typeof message.id === 'number' && (message.sender === 'me' || message.sender === 'partner') && (message.type === 'text' || message.type === 'image' || message.type === 'gallery' || message.type === 'gif' || message.type === 'sticker' || message.type === 'file' || message.type === 'contact' || message.type === 'audio' || message.type === 'call'));
         onImport(valid);
         setFeedback(`${valid.length}개의 대화를 불러왔어요.`);
       } catch {
