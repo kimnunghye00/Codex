@@ -370,11 +370,12 @@ export function DanduliCallManager({
       const stream = await acquireMedia(signal.kind);
       const peer = createPeer(signal.callId, 'callee');
       signalReadyRef.current = true;
-      stream.getTracks().forEach((track) => peer.addTrack(track, stream));
-      if (!stream.getAudioTracks().length) peer.addTransceiver('audio', { direction: 'recvonly' });
-      if (signal.kind === 'video' && !stream.getVideoTracks().length) peer.addTransceiver('video', { direction: 'recvonly' });
 
+      // Apply the caller's offer before adding local tracks so the browser can
+      // reuse the offer's media sections instead of accidentally creating extra
+      // m-lines on devices that are missing a microphone or camera.
       await peer.setRemoteDescription(signal.offer);
+      stream.getTracks().forEach((track) => peer.addTrack(track, stream));
       await applyRemoteCandidates(signal.callerCandidates);
       const answer = await peer.createAnswer();
       await peer.setLocalDescription(answer);
