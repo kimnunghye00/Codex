@@ -181,3 +181,12 @@
 :root[data-route-theme] .home-memory-head {border-color:var(--border)}
 :root[data-route-theme] :is(.home-memory-title-icon,.home-memory-empty) {background:var(--primary-soft);color:var(--accent-text)}
 :root[data-route-theme] .topbar {border-bottom:1px solid var(--border)}
+
+/* Overlay labels and empty states must follow the same palette as their text. */
+:root[data-route-theme] .home-location-status {background:var(--surface) !important;color:var(--text-primary) !important;border-color:var(--border)}
+:root[data-route-theme] .home-location-status :is(b,strong) {color:var(--text-primary) !important}
+:root[data-route-theme] .home-location-status small {color:var(--text-secondary) !important}
+:root[data-route-theme] .home-dashboard .home-schedule-empty {background:var(--control-bg) !important;color:var(--text-primary) !important}
+:root[data-route-theme] :is(.home-schedule-title-icon,.home-schedule-empty-icon) {background:var(--primary-soft) !important;color:var(--accent-text) !important}
+:root[data-route-theme] .home-chat-head > span {color:var(--text-primary) !important}
+:root[data-route-theme] :is(.home-memory-head > button,.home-schedule-head > button,.home-chat-head em) {color:var(--text-secondary) !important}
