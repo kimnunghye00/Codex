@@ -100,3 +100,15 @@
   background: transparent !important;
   box-shadow: none !important;
 }
+
+/* Final sticker surface guard: neither sender side nor theme may create
+ * a rectangle behind the transparent sticker art. */
+.chat-page .bubble-row .message-wrap > .sticker-message-button,
+.chat-page .bubble-row .message-wrap > .bubble.sticker-bubble {
+  background:transparent !important;
+  background-color:transparent !important;
+  background-image:none !important;
+  border:0 !important;
+  border-radius:0 !important;
+  box-shadow:none !important;
+}

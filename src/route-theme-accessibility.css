@@ -114,7 +114,7 @@
   .more-service-intro small,.more-hero-copy small,.section-head small,.title-block small,.overline,
   .route-theme-sheet-header small,.home-card-title,.home-time-block strong,.app-icon-picker small
 ) { color:var(--accent-text) !important; }
-:root[data-route-theme] :is(.primary,.fab,.mine .bubble,.route-theme-sheet-close,.emoticon-store article>button) {
+:root[data-route-theme] :is(.primary,.fab,.mine .bubble:not(.sticker-bubble),.route-theme-sheet-close,.emoticon-store article>button) {
   color:var(--on-primary) !important; background:var(--primary) !important;
 }
 :root[data-route-theme] .primary :is(span,b,strong,small,svg),
@@ -197,4 +197,18 @@
   background:var(--primary-soft) !important;
   color:var(--accent-text) !important;
   box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent-text) 14%,transparent);
+}
+
+/* Stickers are media, never themed chat bubbles. This escape hatch is kept
+ * here (the final theme layer) so no palette can paint a fill behind them. */
+:root[data-route-theme] .chat-page .bubble-row.mine .message-wrap > .sticker-message-button,
+:root[data-route-theme] .chat-page .bubble-row.mine .message-wrap > .bubble.sticker-bubble,
+:root[data-route-theme] .chat-page .bubble-row:not(.mine) .message-wrap > .sticker-message-button,
+:root[data-route-theme] .chat-page .bubble-row:not(.mine) .message-wrap > .bubble.sticker-bubble {
+  color:inherit !important;
+  background:transparent !important;
+  background-color:transparent !important;
+  background-image:none !important;
+  border:0 !important;
+  box-shadow:none !important;
 }
