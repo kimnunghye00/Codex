@@ -5,9 +5,11 @@
   height: 76px;
   aspect-ratio: 1;
   flex: 0 0 auto;
-  background-image: url('/danduli-stickers.webp');
+  background-color: transparent !important;
+  background-image: url('/danduli-stickers-v2.webp');
   background-repeat: no-repeat;
   background-size: 400% 400%;
+  image-rendering: auto;
   vertical-align: middle;
 }
 .composer-sticker-toggle.active { color: var(--primary) !important; background: var(--primary-soft) !important; }
@@ -28,8 +30,23 @@
   max-width: 100%; overflow: hidden; font-size: 9px; font-weight: 700; line-height: 1.2;
   text-overflow: ellipsis; white-space: nowrap;
 }
-.bubble.sticker-bubble { min-width: 0 !important; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; }
-.chat-sticker-art { width: 152px; height: 152px; filter: drop-shadow(0 5px 8px rgba(86,60,50,.08)); }
+.bubble.sticker-bubble {
+  min-width: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.bubble.sticker-bubble::before,
+.bubble.sticker-bubble::after {
+  display: none !important;
+}
+.chat-sticker-art {
+  width: 152px;
+  height: 152px;
+  background-color: transparent !important;
+  filter: drop-shadow(0 5px 8px rgba(86,60,50,.08));
+}
 .bubble-row.mine .chat-sticker-art { margin-left: auto; }
 .sticker-pack-preview .danduli-sticker { width: 44px; height: 44px; }
 .owned-sticker-preview .danduli-sticker { width: 62px; height: 62px; }

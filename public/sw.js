@@ -1,4 +1,4 @@
-const CACHE_NAME = 'route-web-v9-memory-recovery';
+const CACHE_NAME = 'danduli-web-v10-sticker-refresh';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.add('./')).catch(() => undefined));
@@ -33,8 +33,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  /* Hashed Vite assets are safe to cache, but prefer the network so freshly
-     deployed CSS/JS is visible immediately after a ROUTE update. */
   if (url.pathname.includes('/assets/')) {
     event.respondWith(
       fetch(request)
@@ -44,6 +42,12 @@ self.addEventListener('fetch', (event) => {
         })
         .catch(() => caches.match(request)),
     );
+    return;
+  }
+
+  // Public sticker/icon assets should never be served stale after a deploy.
+  if (url.pathname.includes('danduli-stickers')) {
+    event.respondWith(fetch(request, { cache: 'no-store' }));
     return;
   }
 
