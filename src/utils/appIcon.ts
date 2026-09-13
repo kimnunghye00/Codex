@@ -1,6 +1,6 @@
 export type RouteAppIconId = 'route' | 'heart' | 'pin-duo' | 'heart-chat' | 'our-route' | 'night' | 'cream' | 'minimal';
 
-const APP_ICON_IDS: RouteAppIconId[] = ['route', 'heart', 'pin-duo', 'heart-chat', 'our-route', 'night', 'cream', 'minimal'];
+const APP_ICON_IDS: RouteAppIconId[] = ['route', 'heart-chat'];
 
 function iconSvg(iconId: RouteAppIconId) {
   const common = 'xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"';
@@ -19,7 +19,8 @@ export function normalizeRouteAppIcon(value: string | null): RouteAppIconId {
 }
 
 export function updateRouteFavicon(iconId: RouteAppIconId) {
-  const href = `data:image/svg+xml,${encodeURIComponent(iconSvg(iconId))}`;
+  const asset = iconId === 'heart-chat' ? '/danduli-icon-chat.webp' : iconId === 'route' ? '/danduli-icon-heart.webp' : null;
+  const href = asset ?? `data:image/svg+xml,${encodeURIComponent(iconSvg(iconId))}`;
   let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
   if (!link) {
     link = document.createElement('link');

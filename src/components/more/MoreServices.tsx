@@ -1,4 +1,4 @@
-import { Heart, MapPinned, MessageCircle, Palette, ShoppingBag, Smartphone, Sparkles, Sticker, UserRound, X } from 'lucide-react';
+import { MessageCircle, Palette, ShoppingBag, Smartphone, Sparkles, Sticker, UserRound, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { auth } from '../../lib/firebaseAuth';
 import { normalizeRouteAppIcon, updateRouteFavicon, type RouteAppIconId } from '../../utils/appIcon';
@@ -29,14 +29,8 @@ type AppIconOption = {
 };
 
 const APP_ICONS: AppIconOption[] = [
-  { id: 'route', label: '단둘이 시그니처', className: '!bg-[#28314A] !text-[#FFF9F6]' },
-  { id: 'heart', label: '커플 하트', className: '!bg-[#FF7266] !text-[#FFF9F6]' },
-  { id: 'pin-duo', label: '핀 듀오', className: '!bg-[#F7F1E7] !text-[#3D405B]' },
-  { id: 'heart-chat', label: '하트 톡', className: '!bg-[#454866] !text-[#FFF9F6]' },
-  { id: 'our-route', label: '우리의 경로', className: '!bg-[#E8F1EC] !text-[#3D405B]' },
-  { id: 'night', label: '단둘이 나이트', className: '!bg-[#171A2A] !text-[#999CFF]' },
-  { id: 'cream', label: '단둘이 크림', className: '!bg-[#F4EBDD] !text-[#29324A]' },
-  { id: 'minimal', label: '단둘이 미니멀', className: '!bg-[#FCFCFA] !text-[#30354D]' },
+  { id: 'route', label: '하트 톡', className: 'danduli-image-icon' },
+  { id: 'heart-chat', label: '둘이 톡', className: 'danduli-image-icon' },
 ];
 
 const EMOTICON_PACKS = [
@@ -68,14 +62,8 @@ const PROFILE_STYLES: Array<{ id: RouteProfileStyle; label: string; description:
 ];
 
 function AppIconGlyph({ id }: { id: AppIconId }) {
-  if (id === 'heart') return <Heart size={25} fill="currentColor" strokeWidth={1.6} />;
-  if (id === 'pin-duo') return <span className="relative block h-8 w-9" aria-hidden="true"><MapPinned className="absolute left-0 top-0" size={23} strokeWidth={2.2} /><MapPinned className="absolute bottom-0 right-0 !text-[#E07A5F]" size={21} strokeWidth={2.2} /></span>;
-  if (id === 'heart-chat') return <span className="relative grid place-items-center" aria-hidden="true"><MessageCircle size={29} strokeWidth={1.8} /><Heart className="absolute !text-[#FF8075]" size={12} fill="currentColor" strokeWidth={1.5} /></span>;
-  if (id === 'our-route') return <span className="relative block h-8 w-9" aria-hidden="true"><span className="absolute left-1 top-5 h-0.5 w-7 -rotate-[24deg] rounded-full bg-current" /><span className="absolute left-0.5 top-5 size-2 rounded-full !bg-[#E07A5F]" /><span className="absolute right-0.5 top-1 size-2 rounded-full bg-current" /><Heart className="absolute bottom-0 right-2 !text-[#E07A5F]" size={11} fill="currentColor" /></span>;
-  if (id === 'night') return <span className="text-[30px] font-medium leading-none" aria-hidden="true">☾</span>;
-  if (id === 'cream') return <span className="grid size-9 place-items-center rounded-full border border-[#D8CBBB] bg-[#FFF9F1] text-[19px] font-black" aria-hidden="true">단</span>;
-  if (id === 'minimal') return <span className="relative text-[24px] font-black leading-none" aria-hidden="true">단<span className="absolute -right-2 -top-1 size-2 rounded-full bg-[#E07A5F]" /></span>;
-  return <span className="relative text-[24px] font-black leading-none" aria-hidden="true">단<span className="absolute -right-2 -top-1 size-2 rounded-full bg-[#FF786B]" /></span>;
+  const src = id === 'heart-chat' ? '/danduli-icon-chat.webp' : '/danduli-icon-heart.webp';
+  return <img src={src} alt="" className="danduli-app-icon-image" draggable={false} />;
 }
 
 function HeaderBar({ title, onClose }: { title: string; onClose: () => void }) {
@@ -164,7 +152,7 @@ export function MoreServices({
       <div className="more-section-title"><small>CUSTOMIZE</small><h2 id="route-more-customize-title">단둘이 꾸미기</h2><p>다른 탭과 겹치지 않는 꾸미기 기능만 모았어요.</p></div>
       <div className="more-customize-grid" aria-label="단둘이 꾸미기">
         <button type="button" onClick={() => openSheet('theme')}><span className="more-customize-icon theme"><Palette /></span><b>테마</b><small>앱 전체 색상</small></button>
-        <button type="button" onClick={() => openSheet('app-icon')}><span className="more-customize-icon icon"><Smartphone /></span><b>앱 아이콘</b><small>8가지 아이콘</small></button>
+        <button type="button" onClick={() => openSheet('app-icon')}><span className="more-customize-icon icon"><Smartphone /></span><b>앱 아이콘</b><small>2가지 아이콘</small></button>
         <button type="button" onClick={() => openSheet('emoticon')}><span className="more-customize-icon emoticon"><Sticker /></span><b>이모티콘</b><small>보관함 · 팩</small></button>
         <button type="button" onClick={() => openSheet('chat-style')}><span className="more-customize-icon chat"><MessageCircle /></span><b>채팅 꾸미기</b><small>배경 · 글자 크기</small></button>
         <button type="button" onClick={() => openSheet('profile-style')}><span className="more-customize-icon profile"><UserRound /></span><b>프로필 꾸미기</b><small>아바타 스타일</small></button>
@@ -180,7 +168,7 @@ export function MoreServices({
           {(['default','lavender','dark'] as ThemeId[]).map((item) => <button type="button" key={item} className={theme === item ? 'active' : ''} onClick={() => chooseTheme(item)}><i className={item} /><span><b>{item === 'default' ? '기본' : item === 'lavender' ? '라벤더' : '다크'}</b><small>{item === 'default' ? '네이비 + 코랄' : item === 'lavender' ? '부드러운 보라' : '어두운 화면'}</small></span></button>)}
         </div></>}
 
-        {sheet === 'app-icon' && <><HeaderBar title="앱 아이콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">8가지 단둘이 아이콘 중 원하는 스타일을 선택해요.</p><div className="app-icon-picker !grid !grid-cols-2 !gap-2.5 sm:!grid-cols-4">
+        {sheet === 'app-icon' && <><HeaderBar title="앱 아이콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">2가지 단둘이 아이콘 중 원하는 스타일을 선택해요.</p><div className="app-icon-picker !grid !grid-cols-2 !gap-2.5 sm:!grid-cols-2">
           {APP_ICONS.map((item) => <button data-icon-id={item.id} type="button" key={item.id} className={`${appIcon === item.id ? 'active' : ''} !min-w-0`} onClick={() => chooseIcon(item.id)}><span className={`more-app-icon-preview ${item.id} ${item.className} !grid place-items-center`}><AppIconGlyph id={item.id} /></span><b className="!w-full !truncate !text-center">{item.label}</b>{appIcon === item.id && <small>사용 중</small>}</button>)}
         </div></>}
 
