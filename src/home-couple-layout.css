@@ -420,3 +420,36 @@
     gap:8px;
   }
 }
+/* Mobile couple-day visibility fix ------------------------------------- */
+/* Do not change the home grid/card proportions here. Only make the D+ value
+ * render fully on narrow phones instead of clipping after "D+". */
+.home-couple-time-center strong{
+  display:block;
+  width:max-content;
+  max-width:none;
+  overflow:visible;
+  text-overflow:clip;
+  font-variant-numeric:tabular-nums;
+}
+
+@media (max-width:700px){
+  .home-couple-time-center{
+    overflow:visible;
+  }
+
+  .home-couple-time-center strong{
+    width:max-content;
+    max-width:calc(100% + 24px);
+    font-size:clamp(16px,4.6vw,21px);
+    letter-spacing:-.7px;
+    white-space:nowrap;
+  }
+}
+
+@media (max-width:390px){
+  .home-couple-time-center strong{
+    max-width:calc(100% + 30px);
+    font-size:16px;
+    letter-spacing:-.55px;
+  }
+}
