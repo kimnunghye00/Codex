@@ -1,4 +1,4 @@
-const CACHE_NAME = 'danduli-web-v22-mobile-couple-day';
+const CACHE_NAME = 'danduli-web-v23-mobile-home-whitespace';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.add('./')).catch(() => undefined));
