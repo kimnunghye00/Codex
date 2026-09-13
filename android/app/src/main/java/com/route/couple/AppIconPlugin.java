@@ -28,6 +28,8 @@ public class AppIconPlugin extends Plugin {
         ICON_ALIASES.put("night", "RouteNightIcon");
         ICON_ALIASES.put("cream", "RouteCreamIcon");
         ICON_ALIASES.put("minimal", "RouteMinimalIcon");
+        ICON_ALIASES.put("couple-love", "DanduliCoupleLoveIcon");
+        ICON_ALIASES.put("couple-date", "DanduliCoupleDateIcon");
     }
 
     private ComponentName componentFor(String alias) {
