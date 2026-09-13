@@ -1,4 +1,4 @@
-const CACHE_NAME = 'danduli-web-v15-home-anniversary';
+const CACHE_NAME = 'danduli-web-v16-home-anniversary-layout';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.add('./')).catch(() => undefined));
