@@ -1,6 +1,6 @@
-# ROUTE Android / iOS native setup
+# 단둘이 Android / iOS native setup
 
-ROUTE uses Capacitor so the existing React/Vite app can run as a native Android and iOS app.
+단둘이 uses Capacitor so the existing React/Vite app can run as a native Android and iOS app.
 
 ## First-time setup
 
@@ -46,9 +46,9 @@ npm run native:configure
 
 The app initializes native status bar, keyboard, splash screen, Android back button handling, and exposes native permission helpers in `src/lib/native.ts`.
 
-## NAVER Maps authentication in ROUTE
+## NAVER Maps authentication in 단둘이
 
-ROUTE uses NAVER Maps JavaScript Dynamic Map through one fixed Firebase Hosting origin instead of authenticating every Codespaces URL or Capacitor WebView origin separately.
+단둘이 uses NAVER Maps JavaScript Dynamic Map through one fixed Firebase Hosting origin instead of authenticating every Codespaces URL or Capacitor WebView origin separately.
 
 The fixed map host is:
 
@@ -58,7 +58,7 @@ https://meluni-f4e00.web.app/naver-map-host.html
 
 The NAVER Maps JavaScript SDK now uses the current `ncpKeyId` query parameter. The map host is the only page that loads the NAVER SDK, while Android, iOS, Codespaces, and desktop web communicate with that page through `postMessage`.
 
-In NAVER Cloud Platform > Application Services > Maps > Application, the application that owns ROUTE's Client ID must have **Dynamic Map** enabled and its **Web service URL** must match the fixed host domain. Register the host only, without a port or path:
+In NAVER Cloud Platform > Application Services > Maps > Application, the application that owns 단둘이's Client ID must have **Dynamic Map** enabled and its **Web service URL** must match the fixed host domain. Register the host only, without a port or path:
 
 ```text
 http://meluni-f4e00.web.app
@@ -66,13 +66,13 @@ http://meluni-f4e00.web.app
 
 NAVER Cloud treats HTTP and HTTPS as the same host for this setting. Do not register `/naver-map-host.html`, a Codespaces URL, a port number, or a changing preview URL.
 
-Because ROUTE is using the Web Dynamic Map SDK through the fixed host, adding each new GitHub Codespaces domain is not required. The Android package name remains:
+Because 단둘이 is using the Web Dynamic Map SDK through the fixed host, adding each new GitHub Codespaces domain is not required. The Android package name remains:
 
 ```text
 com.route.couple
 ```
 
-That package name is relevant if Mobile Dynamic Map/native NAVER SDK is added later, but the current ROUTE map renderer authenticates through the fixed web host above.
+That package name is relevant if Mobile Dynamic Map/native NAVER SDK is added later, but the current 단둘이 map renderer authenticates through the fixed web host above.
 
 If the map shows an authentication error, check these items in order:
 
@@ -84,13 +84,13 @@ If the map shows an authentication error, check these items in order:
 
 ## Location tracking behavior
 
-ROUTE uses the Capacitor Geolocation plugin on installed Android/iOS apps and browser geolocation on the web. Fine location is preferred, but Android approximate-location permission is accepted instead of being treated as a denial.
+단둘이 uses the Capacitor Geolocation plugin on installed Android/iOS apps and browser geolocation on the web. Fine location is preferred, but Android approximate-location permission is accepted instead of being treated as a denial.
 
-The current product records movement while ROUTE is actively running. A saved "location sharing on" preference does not turn the current JavaScript implementation into a production-grade background tracker by itself. Continuous background tracking should only be enabled after a dedicated native background-location service is implemented and store policies are reviewed.
+The current product records movement while 단둘이 is actively running. A saved "location sharing on" preference does not turn the current JavaScript implementation into a production-grade background tracker by itself. Continuous background tracking should only be enabled after a dedicated native background-location service is implemented and store policies are reviewed.
 
 ## Android alternate launcher icons
 
-Android launcher icon switching is implemented natively using activity aliases and `RouteAppIcon`. The More > App icon picker can switch among ROUTE default, heart, night, and cream icons on an installed APK. Some Android launchers may refresh the home-screen icon with a short delay.
+Android launcher icon switching is implemented natively using activity aliases and `RouteAppIcon`. The More > App icon picker can switch among 단둘이 default, heart, night, and cream icons on an installed APK. Some Android launchers may refresh the home-screen icon with a short delay.
 
 Final production artwork can replace the current drawable assets without changing the switching logic.
 
@@ -109,7 +109,7 @@ Some functions cannot be completed by source code alone and require platform acc
 
 ## Android test APK
 
-A GitHub Actions workflow is included at `.github/workflows/android-debug-apk.yml`. It builds ROUTE from the committed Android project and uploads `ROUTE-debug-apk` as an Actions artifact. The workflow uses concurrency so only the newest main-branch APK build continues when several fixes are pushed in succession.
+A GitHub Actions workflow is included at `.github/workflows/android-debug-apk.yml`. It builds 단둘이 from the committed Android project and uploads `단둘이-debug-apk` as an Actions artifact. The workflow uses concurrency so only the newest main-branch APK build continues when several fixes are pushed in succession.
 
 For a local debug APK after the Android project exists:
 
