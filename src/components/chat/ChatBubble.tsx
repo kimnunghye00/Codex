@@ -1,4 +1,4 @@
-import { Bookmark, Check, ChevronLeft, ChevronRight, CornerUpLeft, Download, Image as ImageIcon, RefreshCw, Trash2, X } from 'lucide-react';
+import { Bookmark, Check, ChevronLeft, ChevronRight, ContactRound, CornerUpLeft, Download, FileText, Image as ImageIcon, Mic, Phone, RefreshCw, Trash2, X } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import '../../route-chat-gallery-v21.css';
@@ -36,7 +36,24 @@ function replyLabel(message: Message) {
   if (message.type === 'gallery') return `사진 ${message.imageUrls?.length ?? 0}장`;
   if (message.type === 'gif') return '움짤';
   if (message.type === 'sticker') return '이모티콘';
+  if (message.type === 'file') return message.attachmentName || '파일';
+  if (message.type === 'contact') return message.contactName ? `연락처 · ${message.contactName}` : '연락처';
+  if (message.type === 'audio') return '음성 메시지';
   return message.text?.slice(0, 45);
+}
+
+function formatAttachmentSize(bytes?: number) {
+  if (!bytes || bytes <= 0) return '';
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))}KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)}MB`;
+}
+
+function formatAudioDuration(seconds?: number) {
+  const safe = Math.max(0, Math.round(seconds ?? 0));
+  const minutes = Math.floor(safe / 60);
+  const remain = String(safe % 60).padStart(2, '0');
+  return `${minutes}:${remain}`;
 }
 
 function retryableUrl(url: string, retry: number) {
@@ -275,6 +292,13 @@ function sameMessage(a?: Message, b?: Message) {
     && a.imageUrl === b.imageUrl
     && a.imageUrls === b.imageUrls
     && a.stickerId === b.stickerId
+    && a.attachmentUrl === b.attachmentUrl
+    && a.attachmentName === b.attachmentName
+    && a.attachmentSize === b.attachmentSize
+    && a.attachmentMime === b.attachmentMime
+    && a.audioDuration === b.audioDuration
+    && a.contactName === b.contactName
+    && a.contactPhone === b.contactPhone
     && a.timestamp === b.timestamp
     && a.read === b.read
     && a.replyTo === b.replyTo
@@ -306,9 +330,9 @@ function ChatBubbleView({ message, reply, partnerName, partnerInitial, active, h
         <div className="message-actions"><button onClick={onReply}><CornerUpLeft size={14} />답장</button><button onClick={onSave}>{message.saved ? <Bookmark size={14} fill="currentColor" /> : <Bookmark size={14} />} {saveLabel}</button><button className="message-delete-action" onClick={onDelete}><Trash2 size={14} />삭제</button></div>
       </div>}
       <div className="message-wrap">
-        <button type="button" className={message.type === 'sticker'
+        <div role="button" tabIndex={0} className={message.type === 'sticker'
             ? 'sticker-message-button'
-            : `bubble ${message.type === 'gallery' ? 'gallery-bubble' : ''} ${mediaBubble ? 'media-bubble' : ''}`} onClick={(event) => { event.stopPropagation(); if (selectionMode) onToggleSelect(); else onAction(); }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); if (selectionMode) onToggleSelect(); else onAction(); }}>
+            : `bubble ${message.type === 'gallery' ? 'gallery-bubble' : ''} ${mediaBubble ? 'media-bubble' : ''} ${message.type === 'file' || message.type === 'contact' || message.type === 'audio' ? 'utility-bubble' : ''}`} onClick={(event) => { event.stopPropagation(); if (selectionMode) onToggleSelect(); else onAction(); }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); if (selectionMode) onToggleSelect(); else onAction(); }} onKeyDown={(event) => { if (event.key !== 'Enter' && event.key !== ' ') return; event.preventDefault(); if (selectionMode) onToggleSelect(); else onAction(); }}>
           {reply && <span className="reply-preview" onClick={(event) => { event.stopPropagation(); onJump(reply.id); }}><b>{reply.sender === 'me' ? '나' : partnerName}</b>{reply.type !== 'text' ? <><ImageIcon size={12} /> {replyLabel(reply)}</> : replyLabel(reply)}</span>}
           {message.type === 'image' && message.imageUrl && <DeferredMediaImage className="chat-image" src={message.imageUrl} alt="채팅으로 보낸 사진" onClick={(event) => { event.stopPropagation(); onImage(message.imageUrl!); }} />}
           {message.type === 'gif' && message.imageUrl && <DeferredMediaImage className="chat-image chat-gif" src={message.imageUrl} alt="채팅으로 보낸 움짤" onClick={(event) => { event.stopPropagation(); onImage(message.imageUrl!); }} />}
@@ -317,8 +341,11 @@ function ChatBubbleView({ message, reply, partnerName, partnerInitial, active, h
             <span className="chat-gallery route-gallery-grid">{visibleGalleryUrls.map((url, index) => <span key={`${message.id}-${index}`} className="chat-gallery-item"><DeferredMediaImage src={url} alt={`묶음 사진 ${index + 1} / ${galleryUrls.length}`} onClick={(event) => { event.stopPropagation(); setGalleryIndex(index); }} />{index === visibleGalleryUrls.length - 1 && hiddenGalleryCount > 0 && <em>+{hiddenGalleryCount}</em>}</span>)}</span>
           </span>}
           {message.type === 'sticker' && <DanduliSticker id={message.stickerId} className="chat-sticker-art" />}
+          {message.type === 'file' && <span className="chat-attachment-card"><FileText /><span className="chat-attachment-copy"><b>{message.attachmentName || '파일'}</b><small>{formatAttachmentSize(message.attachmentSize)}{message.attachmentMime ? ` · ${message.attachmentMime}` : ''}</small></span>{message.attachmentUrl && <a href={message.attachmentUrl} target="_blank" rel="noreferrer" download={message.attachmentName} aria-label="파일 열기 또는 저장" onClick={(event) => event.stopPropagation()}><Download /></a>}</span>}
+          {message.type === 'contact' && <span className="chat-contact-card"><ContactRound /><span><b>{message.contactName || '연락처'}</b><small>{message.contactPhone || '전화번호 없음'}</small></span>{message.contactPhone && <a href={`tel:${message.contactPhone}`} aria-label={`${message.contactName || '연락처'}에게 전화하기`} onClick={(event) => event.stopPropagation()}><Phone /></a>}</span>}
+          {message.type === 'audio' && <span className="chat-audio-card"><Mic /><span><b>음성 메시지</b><small>{formatAudioDuration(message.audioDuration)}</small></span>{message.attachmentUrl && <audio controls preload="metadata" src={message.attachmentUrl} onClick={(event) => event.stopPropagation()} />}</span>}
           {message.type === 'text' && <span className="message-text">{message.text}</span>}
-        </button>
+        </div>
         {mediaBubble && message.imageUrl && <button type="button" className="chat-original-download" aria-label="원본 화질로 저장" onClick={(event) => { event.stopPropagation(); void downloadOriginalChatMedia(message.imageUrl!, 1); }}><Download size={13} /><span>원본</span></button>}
         <div className="message-meta">{message.saved && <Bookmark className="saved-mark" size={12} fill="currentColor" />}{message.scheduledFor && <span className="scheduled-mark">예약</span>}{galleryUrls.length > 1 && <span className="message-gallery-count">{galleryUrls.length}장</span>}<time>{messageTime(message.timestamp)}</time>{mine && <span>{message.read ? '읽음' : '전송됨'}</span>}</div>
         {!!message.reactions?.length && <div className="reaction-list">{Object.entries(message.reactions.reduce<Record<string, number>>((counts, reaction) => ({ ...counts, [reaction.emoji]: (counts[reaction.emoji] ?? 0) + 1 }), {})).map(([emoji, count]) => <button key={emoji} onClick={() => onReact(emoji)}>{emoji}{count > 1 && ` ${count}`}</button>)}</div>}
