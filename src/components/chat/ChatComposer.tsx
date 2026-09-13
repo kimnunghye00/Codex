@@ -1,7 +1,8 @@
-import { CalendarClock, Gift, ImagePlus, Plus, Send, X } from 'lucide-react';
+import { CalendarClock, Gift, ImagePlus, Plus, Send, Sticker as StickerIcon, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Message } from '../../types';
+import { DANDULI_STICKERS, DanduliSticker, stickerToken } from './DanduliSticker';
 
 const QUICK = ['기분 좋아 😊', '배고파 🍚', '심심해 🫠', '우울해 🥺', '놀아줘 ❤️'];
 const MAX_CHAT_PHOTO_SELECTION = 100;
@@ -12,10 +13,10 @@ type PendingPhoto = {
   previewUrl: string;
 };
 
-export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onImages, onGif, onQuick, onSchedule, onGift, onCancelReply }: {
+export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onImages, onGif, onQuick, onSticker, onSchedule, onGift, onCancelReply }: {
   draft: string; reply?: Message; partnerName: string; onDraft: (value: string) => void; onSend: () => void;
   onImages: (files: File[]) => Promise<void> | void; onGif: (file: File) => Promise<void> | void; onQuick: (text: string) => void;
-  onSchedule: () => void; onGift: () => void; onCancelReply: () => void;
+  onSticker: (sticker: string) => void; onSchedule: () => void; onGift: () => void; onCancelReply: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const gifRef = useRef<HTMLInputElement>(null);
@@ -23,6 +24,7 @@ export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onIma
   const pendingRef = useRef<PendingPhoto[]>([]);
   const [extras, setExtras] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
+  const [stickerOpen, setStickerOpen] = useState(false);
   const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
   const [photoSending, setPhotoSending] = useState(false);
 
@@ -106,8 +108,9 @@ export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onIma
 
   return <>
     <div className="composer-area">
-      {reply && <div className="composer-reply"><div><b>{reply.sender === 'partner' ? `${partnerName}에게 답장` : '내 메시지에 답장'}</b><span>{reply.type === 'image' || reply.type === 'gallery' || reply.type === 'gif' ? '미디어' : reply.text}</span></div><button onClick={onCancelReply} aria-label="답장 취소"><X size={17} /></button></div>}
-      {quickOpen && <div className="quick-contact-strip">{QUICK.map((item) => <button key={item} type="button" onClick={() => { onQuick(item); setQuickOpen(false); }}>{item}</button>)}</div>}
+      {reply && <div className="composer-reply"><div><b>{reply.sender === 'partner' ? `${partnerName}에게 답장` : '내 메시지에 답장'}</b><span>{reply.type === 'sticker' ? '이모티콘' : reply.type === 'image' || reply.type === 'gallery' || reply.type === 'gif' ? '미디어' : reply.text}</span></div><button onClick={onCancelReply} aria-label="답장 취소"><X size={17} /></button></div>}
+      {stickerOpen && <div className="composer-sticker-tray" aria-label="단둘이 이모티콘 16종">{DANDULI_STICKERS.map((item) => <button key={item.id} type="button" aria-label={`${item.label} 이모티콘 보내기`} onClick={() => { onSticker(stickerToken(item.id)); setStickerOpen(false); }}><DanduliSticker id={item.id} /><small>{item.label}</small></button>)}</div>}
+      {quickOpen && <div className="quick-contact-strip">{QUICK.map((item) => <button key={item} type="button" onClick={() => { onQuick(item); setQuickOpen(false); setStickerOpen(false); }}>{item}</button>)}</div>}
       {extras && <div className="composer-extra-row">
         <button type="button" onClick={() => fileRef.current?.click()}><ImagePlus size={18} /><span>사진</span></button>
         <button type="button" onClick={() => { setQuickOpen((value) => !value); }}><span className="extra-heart">♥</span><span>빠른 연락</span></button>
@@ -117,7 +120,8 @@ export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onIma
       <div className="composer">
         <input ref={fileRef} className="file-input" type="file" accept="image/*" multiple aria-label={`사진 선택, 최대 ${MAX_CHAT_PHOTO_SELECTION}장`} onChange={(event) => { addPendingPhotos(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
         <input ref={gifRef} className="file-input" type="file" accept="image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (file) void onGif(file); event.target.value = ''; }} />
-        <button type="button" onClick={() => setExtras((value) => !value)} aria-label="추가 기능"><Plus size={21} /></button>
+        <button type="button" onClick={() => { setExtras((value) => !value); setStickerOpen(false); }} aria-label="추가 기능"><Plus size={21} /></button>
+        <button type="button" className={`composer-sticker-toggle ${stickerOpen ? 'active' : ''}`} onClick={() => { setStickerOpen((value) => !value); setExtras(false); setQuickOpen(false); }} aria-label="이모티콘"><StickerIcon size={20} /></button>
         <textarea
           rows={1}
           value={draft}
