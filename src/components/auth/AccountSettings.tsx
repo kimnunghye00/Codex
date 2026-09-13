@@ -63,7 +63,7 @@ export function AccountSettings({ user, profile, onProfileChange, onClose }: {
   const syncProfile = (next: UserProfile) => {
     saveProfile(user.uid, next);
     onProfileChange(next);
-    void syncUserProfile(user.uid, next).catch((cause) => console.warn('[ROUTE profile cloud sync]', cause));
+    void syncUserProfile(user.uid, next).catch((cause) => console.warn('[DANDULI profile cloud sync]', cause));
   };
 
   const readPhoto = (file?: File) => {
@@ -109,7 +109,7 @@ export function AccountSettings({ user, profile, onProfileChange, onClose }: {
       await savePartnerNickname(realConnection.coupleId, realConnection.partnerUid, value);
       setPartnerNicknameFeedback(`${realConnection.partnerProfile?.name || '상대방'}님의 별명을 “${value}”로 저장했어요. 두 사람 화면에 함께 반영돼요.`);
     } catch (cause) {
-      console.error('[ROUTE partner nickname]', cause);
+      console.error('[DANDULI partner nickname]', cause);
       setPartnerNicknameFeedback('상대방 별명을 저장하지 못했어요.');
     } finally { setPartnerNicknameBusy(false); }
   };
@@ -122,7 +122,7 @@ export function AccountSettings({ user, profile, onProfileChange, onClose }: {
       setAiPartner(result.localPartner);
       setAiFeedback(result.cloudSynced ? 'AI 테스트 파트너가 연결됐어요. Firestore 동기화도 완료됐어요.' : 'AI 테스트 파트너는 연결됐어요.');
     } catch (cause) {
-      console.error('[ROUTE AI partner connect]', cause);
+      console.error('[DANDULI AI partner connect]', cause);
       setAiFeedback('AI 테스트 파트너 연결 중 문제가 생겼어요.');
     } finally { setAiBusy(false); }
   };
@@ -133,7 +133,7 @@ export function AccountSettings({ user, profile, onProfileChange, onClose }: {
     const next = setPartnerNickname(profile, chosen);
     syncProfile(next);
     setNickname(chosen);
-    setAiFeedback(`ROUTE가 "${chosen}"라고 별명을 지어줬어요.`);
+    setAiFeedback(`단둘이가 "${chosen}"라고 별명을 지어줬어요.`);
   };
 
   const nicknameSource = profile.nicknameSetBy === 'partner' ? '상대방이 지어준 별명' : profile.nicknameSetBy === 'self' ? '내가 바꾼 별명' : '아직 상대방이 지어준 별명이 없어요';
