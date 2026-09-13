@@ -1,4 +1,4 @@
-const CACHE_NAME = 'danduli-web-v13-chat-action-grid';
+const CACHE_NAME = 'danduli-web-v14-mute-icon-toggle';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.add('./')).catch(() => undefined));
