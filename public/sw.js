@@ -1,4 +1,4 @@
-const CACHE_NAME = 'danduli-web-v23-mobile-home-whitespace';
+const CACHE_NAME = 'danduli-web-v24-mobile-schedule-memory-gap';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.add('./')).catch(() => undefined));
