@@ -178,16 +178,8 @@
   backdrop-filter:blur(14px);
 }
 .danduli-call-controls button.active>svg{background:rgba(255,255,255,.30)}
-.danduli-call-controls button.muted{color:#fff}
 .danduli-call-controls button.muted>svg{
-  color:#111;
-  background:#fff;
-  box-shadow:0 0 0 3px rgba(255,255,255,.22);
-}
-.danduli-call-controls button.muted span{
-  color:#fff;
-  opacity:1;
-  font-weight:800;
+  background:rgba(255,255,255,.16);
 }
 .danduli-call-controls button.hangup>svg{background:#e5535d}
 .danduli-call-controls span{white-space:nowrap;opacity:.82}
