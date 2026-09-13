@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">ROUTE</string>
-    <string name="title_activity_main">ROUTE</string>
+    <string name="app_name">단둘이</string>
+    <string name="title_activity_main">단둘이</string>
     <string name="package_name">com.route.couple</string>
     <string name="custom_url_scheme">com.route.couple</string>
 </resources>
