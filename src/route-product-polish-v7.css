@@ -381,9 +381,76 @@
   background: var(--surface);
 }
 
+/* Use the same inset card treatment as the location-sharing panel. */
+.location-page .location-history {
+  padding: 16px;
+  border: 1px solid var(--route-panel-border);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--route-panel-shadow);
+}
+
+.location-page .location-section-head {
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.location-page .location-section-head small {
+  font-size: 9px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
 .location-page .location-section-head h2 {
-  font-size: 18px;
+  margin: 4px 0 0;
+  font-size: 16px;
+  line-height: 1.4;
   letter-spacing: -.035em;
+}
+
+.location-page .location-section-head > span {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  line-height: 1.4;
+  background: var(--route-panel-soft);
+}
+
+.location-page .location-history .location-empty,
+.location-page .location-history .location-list {
+  border: 0;
+  border-radius: 14px;
+  box-shadow: none;
+}
+
+.location-page .location-history .location-empty {
+  padding: 16px 12px;
+  background: var(--route-panel-soft);
+}
+
+.location-page .location-empty strong {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.location-page .location-empty p {
+  max-width: 240px;
+  margin: 6px auto 0;
+  font-size: 10px;
+  line-height: 1.6;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 899px) {
+  .location-page .location-history { padding: 10px 12px; }
+  .location-page .location-section-head { margin-bottom: 8px; }
+  .location-page .location-history .location-empty { padding: 8px; }
+  .location-page .location-empty strong { margin-top: 6px; }
+  .location-page .location-empty p { margin-top: 4px; }
 }
 
 .location-page .location-visit {
