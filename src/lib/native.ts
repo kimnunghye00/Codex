@@ -138,6 +138,14 @@ export async function initializeNativeApp() {
         return;
       }
 
+      // Keep the realtime couple socket alive while the call monitor is active.
+      // This lets an incoming Firestore call signal schedule a native
+      // notification while the app is backgrounded but still resident.
+      if (root.dataset.routeCallMonitor === '1') {
+        void setNativeFirestoreNetwork(true);
+        return;
+      }
+
       // Give foreground writes/backups a brief chance to finish, then stop
       // Firestore traffic. Firestore itself is loaded only if lifecycle work is
       // actually needed, keeping it out of the native bootstrap path as well.
