@@ -17,7 +17,7 @@ const initialUser = auth.currentUser;
 const initialProfile = initialUser ? loadProfile(initialUser.uid) : null;
 
 function RouteLoading() {
-  return <div className="app-shell auth-loading !mx-auto !grid !min-h-dvh !w-full !max-w-none place-items-center" role="status" aria-live="polite"><div className="wordmark"><strong>ROUTE.</strong></div><div className="loading-mark" /><p>ROUTE를 불러오는 중이에요</p></div>;
+  return <div className="app-shell auth-loading !mx-auto !grid !min-h-dvh !w-full !max-w-none place-items-center" role="status" aria-live="polite"><div className="wordmark"><strong>단둘이</strong></div><div className="loading-mark" /><p>단둘이를 불러오는 중이에요</p></div>;
 }
 
 export default function Root() {
