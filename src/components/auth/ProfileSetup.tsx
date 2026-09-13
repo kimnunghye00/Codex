@@ -56,7 +56,7 @@ export function ProfileSetup({ user, onComplete }: { user: User; onComplete: (pr
       completedAt: new Date().toISOString(),
     };
     saveProfile(user.uid, profile);
-    void syncUserProfile(user.uid, profile).catch((cause) => console.warn('[ROUTE profile cloud sync]', cause));
+    void syncUserProfile(user.uid, profile).catch((cause) => console.warn('[DANDULI profile cloud sync]', cause));
     onComplete(profile);
   };
 
@@ -74,7 +74,7 @@ export function ProfileSetup({ user, onComplete }: { user: User; onComplete: (pr
 
   return <div className="app-shell onboarding-shell">
     <header className="onboarding-header">
-      <div className="wordmark"><strong>ROUTE.</strong></div>
+      <div className="wordmark"><strong>단둘이</strong></div>
       <span>{step + 1} / 4</span>
     </header>
 
@@ -86,7 +86,7 @@ export function ProfileSetup({ user, onComplete }: { user: User; onComplete: (pr
       {step === 0 && <section>
         <p className="overline">PROFILE SETUP</p>
         <h1>어떻게 불러드릴까요?</h1>
-        <p className="onboarding-copy">ROUTE에서 사용할 이름을 입력해 주세요.</p>
+        <p className="onboarding-copy">단둘이에서 사용할 이름을 입력해 주세요.</p>
         <label>이름<input autoFocus type="text" maxLength={20} value={name} onChange={(e) => setName(e.target.value)} placeholder="이름을 입력하세요" /></label>
       </section>}
 
