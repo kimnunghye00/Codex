@@ -289,14 +289,14 @@
   .home-couple-time-center strong { font-size: 17px; }
 }
 /* Home summary vertical balance v2 -------------------------------------- */
-/* Keep two anniversary rows visible, make schedules compact, and give the
- * album preview the remaining space. The couple card stays unchanged. */
+/* Keep two anniversary rows visible, keep schedules compact, and give the
+ * memories preview the remaining space. The couple card stays unchanged. */
 .home-dashboard-side{
   grid-template-rows:
     clamp(180px,23vh,220px)
     clamp(158px,19vh,170px)
-    minmax(220px,1fr)
-    clamp(108px,13vh,124px);
+    clamp(108px,13vh,124px)
+    minmax(220px,1fr);
   gap:12px;
 }
 
@@ -315,8 +315,8 @@
     grid-template-rows:
       154px
       150px
-      minmax(130px,1fr)
-      96px;
+      96px
+      minmax(130px,1fr);
     gap:9px;
   }
 }
@@ -326,8 +326,8 @@
     grid-template-rows:
       156px
       164px
-      minmax(180px,1fr)
-      108px;
+      108px
+      minmax(180px,1fr);
     gap:9px;
   }
 
@@ -404,8 +404,8 @@
     grid-template-rows:
       148px
       150px
-      minmax(130px,1fr)
-      96px;
+      96px
+      minmax(130px,1fr);
     gap:8px;
   }
 }
@@ -415,8 +415,8 @@
     grid-template-rows:
       144px
       154px
-      minmax(160px,1fr)
-      100px;
+      100px
+      minmax(160px,1fr);
     gap:8px;
   }
 }
