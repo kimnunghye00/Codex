@@ -71,7 +71,7 @@ function mountBootstrapShell() {
     'padding:32px',
     'background:#fffaf8',
     'color:#3d405b',
-    'font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+    'font-family:"SUIT Variable","SUIT",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
     'text-align:center',
   ].join(';');
 
@@ -109,7 +109,7 @@ function mountBootstrapFailure() {
     'padding:32px',
     'background:#fffaf8',
     'color:#3d405b',
-    'font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+    'font-family:"SUIT Variable","SUIT",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
     'text-align:center',
   ].join(';');
 
