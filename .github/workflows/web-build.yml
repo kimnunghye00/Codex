@@ -1,4 +1,4 @@
-name: Build ROUTE Web
+name: Build 단둘이 Web
 
 on:
   workflow_dispatch:
@@ -36,6 +36,6 @@ jobs:
       - name: Upload web bundle
         uses: actions/upload-artifact@v4
         with:
-          name: ROUTE-web
+          name: DANDULI-web
           path: dist
           if-no-files-found: error
