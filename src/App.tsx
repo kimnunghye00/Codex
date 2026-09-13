@@ -259,7 +259,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
       );
     }).catch((cause) => {
       if (!disposed) {
-        console.warn('[ROUTE couple connection lazy load]', cause);
+        console.warn('[DANDULI couple connection lazy load]', cause);
         setConnection(null);
       }
     });
@@ -283,7 +283,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
         if (!disposed) setRelationshipStartDate(shared.relationshipStartDate);
       });
     }).catch((cause) => {
-      if (!disposed) console.warn('[ROUTE couple shared lazy load]', cause);
+      if (!disposed) console.warn('[DANDULI couple shared lazy load]', cause);
     });
     return () => {
       disposed = true;
@@ -327,7 +327,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
             if (!migrationBusy) {
               migrationBusy = true;
               void migrateLocalMemoriesToCouple(coupleId, user.uid, localOnly)
-                .catch((cause) => console.error('[ROUTE couple memories migration]', cause))
+                .catch((cause) => console.error('[DANDULI couple memories migration]', cause))
                 .finally(() => { migrationBusy = false; });
             }
             return;
@@ -346,10 +346,10 @@ function App({ user, profile, onProfileChange }: AppProps) {
         }
         setMemories(next);
       }, (cause) => {
-        if (!disposed) console.error('[ROUTE couple memories subscribe]', cause);
+        if (!disposed) console.error('[DANDULI couple memories subscribe]', cause);
       });
     }).catch((cause) => {
-      if (!disposed) console.warn('[ROUTE couple memories lazy load]', cause);
+      if (!disposed) console.warn('[DANDULI couple memories lazy load]', cause);
     });
 
     return () => {
@@ -386,11 +386,11 @@ function App({ user, profile, onProfileChange }: AppProps) {
       ...removed.map((memory) => deleteCoupleMemory(coupleId, memory.id)),
     ])).then((results) => {
       if (results.some((result) => result.status === 'rejected')) {
-        console.error('[ROUTE couple memories sync] 일부 추억을 동기화하지 못했어요.', results);
+        console.error('[DANDULI couple memories sync] 일부 추억을 동기화하지 못했어요.', results);
         coupleMemoriesReadyRef.current = false;
       }
     }).catch((cause) => {
-      console.error('[ROUTE couple memories lazy sync]', cause);
+      console.error('[DANDULI couple memories lazy sync]', cause);
       coupleMemoriesReadyRef.current = false;
     });
   }, [connection?.coupleId, memories, user.uid]);
@@ -524,7 +524,7 @@ const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connect
     <div className="home-dashboard-grid">
       <button className="home-map-card" type="button" aria-label="우리의 지도 열기" onClick={() => onNavigate('location')}>
         <div className="home-map-grid-lines" /><span className="home-map-road road-a" /><span className="home-map-road road-b" /><span className="home-map-river" />
-        <span className="home-map-place place-office">ROUTE</span><span className="home-map-place place-cafe">카페</span><span className="home-map-place place-park">공원</span>
+        <span className="home-map-place place-office">단둘이</span><span className="home-map-place place-cafe">카페</span><span className="home-map-place place-park">공원</span>
         <div className="home-location-status"><MapPin size={16} /><span><b>{connection ? `${partnerName} · 위치 공유` : '상대방 연결 전'}</b><small>{connection ? '최근 위치를 확인해보세요' : '설정에서 상대방을 연결해 주세요'}</small></span></div>
         <div className="home-map-person"><span className="home-map-halo" /><span className="home-map-avatar">{partnerInitial}</span><MapPin size={25} fill="currentColor" /></div>
         <div className="home-map-locate"><MapPinned size={20} /></div>
