@@ -37,6 +37,8 @@ const requiredFiles = [
   'src/components/navigation/BottomNav.tsx',
   'src/components/more/MoreServices.tsx',
   'src/components/chat/ChatPage.tsx',
+  'src/components/call/DanduliCallManager.tsx',
+  'src/lib/coupleCall.ts',
   'src/components/memories/MemoriesPage.tsx',
   'src/components/memories/MemoryMedia.tsx',
   'src/components/location/LocationPage.tsx',
@@ -68,6 +70,8 @@ const coupleConnect = read('src/components/couple/CoupleConnect.tsx');
 const homeTools = read('src/components/home/CoupleHomeTools.tsx');
 const coupleSession = read('src/utils/coupleConnectSession.ts');
 const releaseFlags = read('src/config/releaseFlags.ts');
+const callManager = read('src/components/call/DanduliCallManager.tsx');
+const coupleCall = read('src/lib/coupleCall.ts');
 const messageId = read('src/utils/messageId.ts');
 const header = read('src/components/navigation/AppHeader.tsx');
 const bottomNav = read('src/components/navigation/BottomNav.tsx');
@@ -118,7 +122,9 @@ check('chat realtime subscription is present', chat.includes('subscribeCoupleMes
 check('chat media upload path is present', chat.includes('uploadChatMedia'));
 check('chat composer remains mounted', chat.includes('<ChatComposer'));
 check('chat uses collision-resistant message ids', chat.includes('createMessageId') && messageId.includes('cryptoApi?.getRandomValues'));
-check('unfinished call controls are render-gated', releaseFlags.includes('CALLING_ENABLED = false') && chat.includes('CALLING_ENABLED &&'));
+check('voice/video call controls are enabled', releaseFlags.includes('CALLING_ENABLED = true') && chat.includes('danduli-call-request'));
+check('call manager is app-wide', app.includes('<DanduliCallManager') && callManager.includes('subscribeCoupleCall'));
+check('call signaling is couple-scoped', coupleCall.includes("doc(db, 'couples', coupleId)") && coupleCall.includes('activeCall'));
 check('chat room CSS is feature-loaded only', chatStyles.includes('route-chat-room-v26.css') && !app.includes("import './route-chat-room-v26.css'"));
 
 check('memories exposes album tab', memories.includes("album: '앨범'"));
