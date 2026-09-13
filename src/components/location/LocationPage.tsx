@@ -48,19 +48,37 @@ function normalizePlace(value: string) {
   return value.trim().toLocaleLowerCase('ko-KR').replace(/\s+/g, '');
 }
 
+function safeDate(value?: string) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function timeText(value?: string) {
   if (!value) return '현재';
-  return new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit' }).format(new Date(value));
+  const date = safeDate(value);
+  if (!date) return '시간 미상';
+  try {
+    return new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit' }).format(date);
+  } catch {
+    return '시간 미상';
+  }
 }
 
 function dayText(value: string) {
-  return new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }).format(new Date(value));
+  const date = safeDate(value);
+  if (!date) return '날짜 미상';
+  try {
+    return new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }).format(date);
+  } catch {
+    return '날짜 미상';
+  }
 }
 
 function locationErrorMessage(error: RouteLocationError) {
   const code = String(error.code ?? '');
   if (code === '1' || code === 'OS-PLUG-GLOC-0003' || code.includes('PERMISSION')) {
-    return { permissionDenied: true, message: '위치 권한이 거부됐어요. 휴대폰의 ROUTE 앱 권한에서 위치를 허용해 주세요.' };
+    return { permissionDenied: true, message: '위치 권한이 거부됐어요. 휴대폰의 단둘이 앱 권한에서 위치를 허용해 주세요.' };
   }
   if (code === 'OS-PLUG-GLOC-0007' || code === 'OS-PLUG-GLOC-0017') {
     return { permissionDenied: false, message: '휴대폰의 위치 서비스가 꺼져 있어요. GPS/위치를 켠 뒤 다시 추적해 주세요.' };
@@ -359,7 +377,7 @@ export function LocationPage({ requestedTab, Header, connection, focusPlace, onC
       const nextSharing = saveLocationSharing(uid, true);
       setSharing(nextSharing.enabled);
       setTracking(true);
-      setStatus('위치 공유가 시작됐어요. ROUTE를 사용하는 동안 이동 변화를 확인해요.');
+      setStatus('위치 공유가 시작됐어요. 단둘이를 사용하는 동안 이동 변화를 확인해요.');
       onActivity?.('위치 공유를 시작했어요');
     } catch (cause) {
       const code = cause instanceof Error ? cause.message : '';
@@ -368,7 +386,7 @@ export function LocationPage({ requestedTab, Header, connection, focusPlace, onC
       setSharing(false);
       setTracking(false);
       setStatus(permissionDenied
-        ? '위치 권한이 허용되지 않았어요. 휴대폰의 ROUTE 앱 권한에서 위치를 허용해 주세요.'
+        ? '위치 권한이 허용되지 않았어요. 휴대폰의 단둘이 앱 권한에서 위치를 허용해 주세요.'
         : '위치 추적을 시작하지 못했어요. 위치 서비스가 켜져 있는지 확인해 주세요.');
     } finally {
       watchStartingRef.current = false;
@@ -436,7 +454,7 @@ export function LocationPage({ requestedTab, Header, connection, focusPlace, onC
         key={mapAttempt}
         ref={mapFrame}
         className="location-real-map route-map-frame"
-        title="ROUTE 네이버 지도"
+        title="단둘이 네이버 지도"
         src={`${ROUTE_MAP_HOST}?v=5&attempt=${mapAttempt}`}
         onLoad={() => {
           setMapStatus('네이버 지도 인증을 확인하는 중이에요…');
@@ -459,7 +477,7 @@ export function LocationPage({ requestedTab, Header, connection, focusPlace, onC
       <section className={`location-share-card ${sharing ? 'active' : ''}`}>
         <div className="location-share-head"><span><LocateFixed size={21} /></span><div><strong>{sharing ? '내 위치 공유 중' : '내 위치 공유 꺼짐'}</strong><small>{tracking ? status : status}</small></div></div>
         <div className="location-actions">{!sharing ? <button className="primary" type="button" onClick={() => void startWatching()}><Navigation size={16} />위치 공유 시작</button> : <>{!tracking && <button className="primary" type="button" onClick={() => void startWatching()}><LocateFixed size={16} />다시 추적</button>}<button className="location-stop" type="button" onClick={disableSharing}><PauseCircle size={16} />공유 끄기</button></>}</div>
-        <p className="location-privacy"><ShieldCheck size={14} /> ROUTE를 사용하는 동안 기록된 방문 위치만 연결된 상대방과 공유돼요.</p>
+        <p className="location-privacy"><ShieldCheck size={14} /> 단둘이를 사용하는 동안 기록된 방문 위치만 연결된 상대방과 공유돼요.</p>
       </section>
       <section className="location-history">
         <div className="location-section-head"><div><small>TIMELINE</small><h2>최근 다녀온 곳</h2></div><span>{visits.length}곳</span></div>
