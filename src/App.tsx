@@ -4,6 +4,7 @@ import type { LocationTabId } from './components/location/LocationPage';
 import type { MoreNavigationTarget } from './components/more/MoreServices';
 import { AppHeader as SharedAppHeader } from './components/navigation/AppHeader';
 import { BottomNav, type AppTab } from './components/navigation/BottomNav';
+import { DanduliCallManager } from './components/call/DanduliCallManager';
 import type { RealCoupleConnection } from './lib/coupleConnection';
 import type { User } from 'firebase/auth';
 import type { Memory, MemoryDraft, Message } from './types';
@@ -507,6 +508,8 @@ function App({ user, profile, onProfileChange }: AppProps) {
       {tab === 'anniversary' && <AnniversaryPage connected={Boolean(connection)} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} onSaveStartDate={saveStartDate} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'more' && <MorePage onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} onNavigate={navigateMoreTarget} />}
     </Suspense></main><BottomNav tab={tab} onNavigate={navigateTab} /></div>
+
+    <DanduliCallManager currentUid={user.uid} connection={connection} partnerName={connection?.partnerProfile ? displayName(connection.partnerProfile) : '상대방'} />
 
     <Suspense fallback={null}>
       {settingsOpen && <AccountSettings user={user} profile={profile} onProfileChange={onProfileChange} onClose={() => setSettingsOpen(false)} />}
