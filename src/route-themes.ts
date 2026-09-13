@@ -201,7 +201,7 @@ function applyTheme(id: string) {
   localStorage.setItem(STORAGE_KEY, next);
 
   // The old three-theme system uses data-meluni-theme. Keep it neutral so its dark/
-  // lavender rules can never overwrite the current ROUTE palette.
+  // lavender rules can never overwrite the current 단둘이 palette.
   document.documentElement.dataset.meluniTheme = 'default';
 }
 
@@ -284,7 +284,7 @@ function makePreview(theme: RouteTheme) {
       <div class="route-theme-preview-screen active" role="tabpanel" data-route-preview-screen="home">
         <div class="route-theme-preview-phone route-theme-preview-home route-theme-preview-real-home">
           <div class="route-theme-preview-home-topbar">
-            <strong>ROUTE.</strong>
+            <strong>단둘이</strong>
             <span><i></i><i></i></span>
           </div>
 
@@ -294,7 +294,7 @@ function makePreview(theme: RouteTheme) {
               <span class="route-theme-preview-map-road road-one"></span>
               <span class="route-theme-preview-map-road road-two"></span>
               <span class="route-theme-preview-map-river"></span>
-              <span class="route-theme-preview-map-label label-route">ROUTE</span>
+              <span class="route-theme-preview-map-label label-route">단둘이</span>
               <span class="route-theme-preview-map-label label-cafe">카페</span>
               <span class="route-theme-preview-map-label label-park">공원</span>
               <div class="route-theme-preview-location-card">
@@ -426,7 +426,7 @@ function openThemeSheet() {
   const header = document.createElement('div');
   header.className = 'route-theme-sheet-header';
   const heading = document.createElement('div');
-  heading.innerHTML = '<small>ROUTE THEME</small><h2>테마 선택</h2><p>홈과 대화방에서 우리에게 어울리는 분위기를 골라보세요.</p>';
+  heading.innerHTML = '<small>단둘이 THEME</small><h2>테마 선택</h2><p>홈과 대화방에서 우리에게 어울리는 분위기를 골라보세요.</p>';
   const close = document.createElement('button');
   close.type = 'button';
   close.className = 'route-theme-sheet-close';
