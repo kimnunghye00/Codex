@@ -1,6 +1,6 @@
 appId: com.route.couple
-productName: ROUTE
-copyright: Copyright © ROUTE
+productName: 단둘이
+copyright: Copyright © 단둘이
 
 asar: true
 
@@ -27,7 +27,7 @@ win:
       arch:
         - x64
   icon: build/icons/route.ico
-  artifactName: ROUTE-Setup-${version}-${arch}.${ext}
+  artifactName: DANDULI-Setup-${version}-${arch}.${ext}
 
 nsis:
   oneClick: false
@@ -35,6 +35,6 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: ROUTE
+  shortcutName: 단둘이
   runAfterFinish: true
   deleteAppDataOnUninstall: false
