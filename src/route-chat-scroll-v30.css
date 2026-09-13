@@ -4,11 +4,11 @@
 .chat-page .composer .composer-gif-shortcut{width:40px!important;height:40px!important;min-width:40px!important;min-height:40px!important;flex:0 0 40px!important;display:grid!important;place-items:center!important;border:0!important;border-radius:50%!important;color:var(--primary)!important;background:color-mix(in srgb,var(--primary-soft) 78%,var(--surface) 22%)!important}
 
 
-/* DANDULI action grid v33 - compact chat action menu */
+/* DANDULI action grid v34 - compact 8-action menu */
 .chat-page .composer-extra-row{
   width:min(760px,calc(100% - 20px))!important;
   display:grid!important;
-  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
   gap:6px!important;
   margin:5px auto 6px!important;
   padding:7px!important;
@@ -19,37 +19,119 @@
 }
 .chat-page .composer-extra-row button{
   min-width:0!important;
-  min-height:62px!important;
+  min-height:58px!important;
   display:flex!important;
   flex-direction:column!important;
   align-items:center!important;
   justify-content:center!important;
-  gap:4px!important;
-  padding:7px 6px 6px!important;
+  gap:3px!important;
+  padding:6px 3px 5px!important;
   border:1px solid color-mix(in srgb,var(--primary) 7%,var(--border))!important;
-  border-radius:13px!important;
+  border-radius:12px!important;
   background:color-mix(in srgb,var(--primary) 5%,var(--surface))!important;
   color:var(--text-primary)!important;
-  font-size:10px!important;
+  font-size:9px!important;
   font-weight:700!important;
+  line-height:1.15!important;
   letter-spacing:-.02em!important;
+  text-align:center!important;
+  white-space:normal!important;
+}
+.chat-page .composer-extra-row button span:last-child{
+  max-width:100%;
+  overflow-wrap:anywhere;
 }
 .chat-page .composer-extra-row button:active{
   transform:scale(.98);
   background:color-mix(in srgb,var(--primary) 10%,var(--surface))!important;
 }
 .chat-page .composer-extra-row svg{
-  width:24px!important;
-  height:24px!important;
+  width:22px!important;
+  height:22px!important;
+  flex:0 0 22px!important;
   color:color-mix(in srgb,var(--text-primary) 76%,var(--primary) 24%)!important;
 }
 .chat-page .composer-extra-row .extra-heart{
   display:grid!important;
   place-items:center!important;
-  height:24px!important;
+  height:22px!important;
   color:color-mix(in srgb,var(--text-primary) 76%,var(--primary) 24%)!important;
-  font-size:29px!important;
-  line-height:24px!important;
+  font-size:27px!important;
+  line-height:22px!important;
+}
+.chat-page .composer-extra-row .voice-recording{
+  color:#d94b57!important;
+  border-color:color-mix(in srgb,#d94b57 32%,var(--border))!important;
+  background:color-mix(in srgb,#d94b57 9%,var(--surface))!important;
+}
+.chat-page .composer-extra-row .voice-recording svg{color:#d94b57!important}
+
+.chat-page .utility-bubble{
+  width:min(310px,78vw)!important;
+  max-width:min(310px,78vw)!important;
+  padding:10px 11px!important;
+  white-space:normal!important;
+}
+.chat-attachment-card,
+.chat-contact-card,
+.chat-audio-card{
+  width:100%;
+  display:flex;
+  align-items:center;
+  gap:9px;
+  min-width:0;
+}
+.chat-attachment-card>svg,
+.chat-contact-card>svg,
+.chat-audio-card>svg{
+  width:22px;
+  height:22px;
+  flex:0 0 22px;
+  opacity:.9;
+}
+.chat-attachment-copy,
+.chat-contact-card>span,
+.chat-audio-card>span{
+  min-width:0;
+  flex:1;
+  display:grid;
+  gap:2px;
+}
+.chat-attachment-card b,
+.chat-contact-card b,
+.chat-audio-card b{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:11px;
+}
+.chat-attachment-card small,
+.chat-contact-card small,
+.chat-audio-card small{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:8px;
+  opacity:.72;
+}
+.chat-attachment-card>a,
+.chat-contact-card>a{
+  width:34px;
+  height:34px;
+  flex:0 0 34px;
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  color:inherit;
+  background:color-mix(in srgb,currentColor 10%,transparent);
+}
+.chat-attachment-card>a svg,
+.chat-contact-card>a svg{width:17px;height:17px}
+.chat-audio-card audio{
+  width:150px;
+  max-width:46vw;
+  height:34px;
+  flex:0 1 150px;
 }
 @media(max-width:480px){
   .chat-page .composer-extra-row{
@@ -60,12 +142,13 @@
     border-radius:16px!important;
   }
   .chat-page .composer-extra-row button{
-    min-height:56px!important;
+    min-height:54px!important;
     gap:3px!important;
-    padding:6px 4px 5px!important;
-    border-radius:12px!important;
-    font-size:9px!important;
+    padding:5px 2px 4px!important;
+    border-radius:11px!important;
+    font-size:8px!important;
   }
-  .chat-page .composer-extra-row svg{width:22px!important;height:22px!important}
-  .chat-page .composer-extra-row .extra-heart{height:22px!important;font-size:27px!important;line-height:22px!important}
+  .chat-page .composer-extra-row svg{width:20px!important;height:20px!important;flex-basis:20px!important}
+  .chat-page .composer-extra-row .extra-heart{height:20px!important;font-size:25px!important;line-height:20px!important}
+  .chat-audio-card audio{width:126px;max-width:40vw}
 }
