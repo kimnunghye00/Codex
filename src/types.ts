@@ -5,7 +5,7 @@ export type Reaction = { emoji: string; by: Sender };
 export type Message = {
   id: number;
   sender: Sender;
-  type: 'text' | 'image' | 'gallery' | 'gif' | 'sticker' | 'file' | 'contact' | 'audio';
+  type: 'text' | 'image' | 'gallery' | 'gif' | 'sticker' | 'file' | 'contact' | 'audio' | 'call';
   text?: string;
   imageUrl?: string;
   imageUrls?: string[];
@@ -17,6 +17,10 @@ export type Message = {
   audioDuration?: number;
   contactName?: string;
   contactPhone?: string;
+  callId?: string;
+  callKind?: 'voice' | 'video';
+  callStatus?: 'completed' | 'rejected' | 'cancelled' | 'failed';
+  callDuration?: number;
   timestamp: string;
   read: boolean;
   replyTo?: number;
