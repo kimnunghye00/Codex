@@ -29,14 +29,14 @@ type AppIconOption = {
 };
 
 const APP_ICONS: AppIconOption[] = [
-  { id: 'route', label: 'ROUTE 시그니처', className: '!bg-[#28314A] !text-[#FFF9F6]' },
+  { id: 'route', label: '단둘이 시그니처', className: '!bg-[#28314A] !text-[#FFF9F6]' },
   { id: 'heart', label: '커플 하트', className: '!bg-[#FF7266] !text-[#FFF9F6]' },
   { id: 'pin-duo', label: '핀 듀오', className: '!bg-[#F7F1E7] !text-[#3D405B]' },
   { id: 'heart-chat', label: '하트 톡', className: '!bg-[#454866] !text-[#FFF9F6]' },
   { id: 'our-route', label: '우리의 경로', className: '!bg-[#E8F1EC] !text-[#3D405B]' },
-  { id: 'night', label: 'ROUTE 나이트', className: '!bg-[#171A2A] !text-[#999CFF]' },
-  { id: 'cream', label: 'ROUTE 크림', className: '!bg-[#F4EBDD] !text-[#29324A]' },
-  { id: 'minimal', label: 'ROUTE 미니멀', className: '!bg-[#FCFCFA] !text-[#30354D]' },
+  { id: 'night', label: '단둘이 나이트', className: '!bg-[#171A2A] !text-[#999CFF]' },
+  { id: 'cream', label: '단둘이 크림', className: '!bg-[#F4EBDD] !text-[#29324A]' },
+  { id: 'minimal', label: '단둘이 미니멀', className: '!bg-[#FCFCFA] !text-[#30354D]' },
 ];
 
 const EMOTICON_PACKS = [
@@ -47,7 +47,7 @@ const EMOTICON_PACKS = [
 ];
 
 const CHAT_BACKGROUNDS: Array<{ id: ChatBackground; label: string }> = [
-  { id: 'route', label: 'ROUTE' },
+  { id: 'route', label: '단둘이' },
   { id: 'cream', label: '크림' },
   { id: 'rose', label: '로즈' },
   { id: 'sage', label: '세이지' },
@@ -74,8 +74,8 @@ function AppIconGlyph({ id }: { id: AppIconId }) {
   if (id === 'our-route') return <span className="relative block h-8 w-9" aria-hidden="true"><span className="absolute left-1 top-5 h-0.5 w-7 -rotate-[24deg] rounded-full bg-current" /><span className="absolute left-0.5 top-5 size-2 rounded-full !bg-[#E07A5F]" /><span className="absolute right-0.5 top-1 size-2 rounded-full bg-current" /><Heart className="absolute bottom-0 right-2 !text-[#E07A5F]" size={11} fill="currentColor" /></span>;
   if (id === 'night') return <span className="text-[30px] font-medium leading-none" aria-hidden="true">☾</span>;
   if (id === 'cream') return <span className="grid size-9 place-items-center rounded-full border border-[#D8CBBB] bg-[#FFF9F1] text-[19px] font-black" aria-hidden="true">R</span>;
-  if (id === 'minimal') return <span className="relative text-[24px] font-black leading-none" aria-hidden="true">R<span className="absolute -right-2 -top-1 size-2 rounded-full bg-[#E07A5F]" /></span>;
-  return <span className="relative text-[24px] font-black leading-none" aria-hidden="true">R<span className="absolute -right-2 -top-1 size-2 rounded-full bg-[#FF786B]" /></span>;
+  if (id === 'minimal') return <span className="relative text-[24px] font-black leading-none" aria-hidden="true">단<span className="absolute -right-2 -top-1 size-2 rounded-full bg-[#E07A5F]" /></span>;
+  return <span className="relative text-[24px] font-black leading-none" aria-hidden="true">단<span className="absolute -right-2 -top-1 size-2 rounded-full bg-[#FF786B]" /></span>;
 }
 
 function HeaderBar({ title, onClose }: { title: string; onClose: () => void }) {
@@ -156,23 +156,23 @@ export function MoreServices({
 
   return <div className="route-more-services">
     <section className="more-service-intro">
-      <div><small>ROUTE CUSTOM</small><h1>더보기</h1><p>ROUTE를 우리 취향에 맞게 꾸미고 확장해요.</p></div>
+      <div><small>단둘이 CUSTOM</small><h1>더보기</h1><p>단둘이를 우리 취향에 맞게 꾸미고 확장해요.</p></div>
       <span className={`more-app-icon-preview ${appIcon} ${activeIcon.className} !grid place-items-center`} aria-label={`현재 앱 아이콘 ${activeIcon.label}`}><AppIconGlyph id={appIcon} /></span>
     </section>
 
     <section className="more-feature-section more-customize-section" aria-labelledby="route-more-customize-title">
-      <div className="more-section-title"><small>CUSTOMIZE</small><h2 id="route-more-customize-title">ROUTE 꾸미기</h2><p>다른 탭과 겹치지 않는 꾸미기 기능만 모았어요.</p></div>
-      <div className="more-customize-grid" aria-label="ROUTE 꾸미기">
+      <div className="more-section-title"><small>CUSTOMIZE</small><h2 id="route-more-customize-title">단둘이 꾸미기</h2><p>다른 탭과 겹치지 않는 꾸미기 기능만 모았어요.</p></div>
+      <div className="more-customize-grid" aria-label="단둘이 꾸미기">
         <button type="button" onClick={() => openSheet('theme')}><span className="more-customize-icon theme"><Palette /></span><b>테마</b><small>앱 전체 색상</small></button>
         <button type="button" onClick={() => openSheet('app-icon')}><span className="more-customize-icon icon"><Smartphone /></span><b>앱 아이콘</b><small>8가지 아이콘</small></button>
         <button type="button" onClick={() => openSheet('emoticon')}><span className="more-customize-icon emoticon"><Sticker /></span><b>이모티콘</b><small>보관함 · 팩</small></button>
         <button type="button" onClick={() => openSheet('chat-style')}><span className="more-customize-icon chat"><MessageCircle /></span><b>채팅 꾸미기</b><small>배경 · 글자 크기</small></button>
         <button type="button" onClick={() => openSheet('profile-style')}><span className="more-customize-icon profile"><UserRound /></span><b>프로필 꾸미기</b><small>아바타 스타일</small></button>
-        <button type="button" onClick={() => openSheet('store')}><span className="more-customize-icon store"><ShoppingBag /></span><b>ROUTE 스토어</b><small>꾸미기 모아보기</small></button>
+        <button type="button" onClick={() => openSheet('store')}><span className="more-customize-icon store"><ShoppingBag /></span><b>단둘이 스토어</b><small>꾸미기 모아보기</small></button>
       </div>
     </section>
 
-    <section className="more-couple-strip"><span>♥</span><div><b>우리 둘의 ROUTE</b><small>둘만의 취향으로 ROUTE를 완성해보세요.</small></div></section>
+    <section className="more-couple-strip"><span>♥</span><div><b>우리 둘만의 단둘이</b><small>둘만의 취향으로 단둘이를 완성해보세요.</small></div></section>
 
     {sheet && <div className="more-sheet-backdrop" role="dialog" aria-modal="true" onMouseDown={(event) => { if (event.target === event.currentTarget) setSheet(null); }}>
       <section className="more-sheet">
@@ -180,11 +180,11 @@ export function MoreServices({
           {(['default','lavender','dark'] as ThemeId[]).map((item) => <button type="button" key={item} className={theme === item ? 'active' : ''} onClick={() => chooseTheme(item)}><i className={item} /><span><b>{item === 'default' ? '기본' : item === 'lavender' ? '라벤더' : '다크'}</b><small>{item === 'default' ? '네이비 + 코랄' : item === 'lavender' ? '부드러운 보라' : '어두운 화면'}</small></span></button>)}
         </div></>}
 
-        {sheet === 'app-icon' && <><HeaderBar title="앱 아이콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">8가지 ROUTE 아이콘 중 원하는 스타일을 선택해요.</p><div className="app-icon-picker !grid !grid-cols-2 !gap-2.5 sm:!grid-cols-4">
+        {sheet === 'app-icon' && <><HeaderBar title="앱 아이콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">8가지 단둘이 아이콘 중 원하는 스타일을 선택해요.</p><div className="app-icon-picker !grid !grid-cols-2 !gap-2.5 sm:!grid-cols-4">
           {APP_ICONS.map((item) => <button data-icon-id={item.id} type="button" key={item.id} className={`${appIcon === item.id ? 'active' : ''} !min-w-0`} onClick={() => chooseIcon(item.id)}><span className={`more-app-icon-preview ${item.id} ${item.className} !grid place-items-center`}><AppIconGlyph id={item.id} /></span><b className="!w-full !truncate !text-center">{item.label}</b>{appIcon === item.id && <small>사용 중</small>}</button>)}
         </div></>}
 
-        {sheet === 'emoticon' && <><HeaderBar title="이모티콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">대화에서 사용할 ROUTE 이모티콘을 모아보세요.</p><div className="emoticon-store">
+        {sheet === 'emoticon' && <><HeaderBar title="이모티콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">대화에서 사용할 단둘이 이모티콘을 모아보세요.</p><div className="emoticon-store">
           {EMOTICON_PACKS.map((pack) => <article key={pack.id}><div className="emoticon-preview">{pack.preview.map((emoji) => <span key={emoji}>{emoji}</span>)}</div><div className="emoticon-copy"><b>{pack.name}</b><small>{pack.price}</small></div><button type="button" disabled={owned.includes(pack.id)} onClick={() => addPack(pack.id, pack.price)}>{owned.includes(pack.id) ? '보유 중' : pack.price === '무료' ? '받기' : '구매하기'}</button></article>)}
         </div></>}
 
@@ -197,7 +197,7 @@ export function MoreServices({
           {PROFILE_STYLES.map((item) => <button type="button" key={item.id} className={profileStyle === item.id ? 'active' : ''} onClick={() => chooseProfileStyle(item.id)}><span className={`more-profile-style-preview ${item.id}`}><UserRound /></span><span><b>{item.label}</b><small>{item.description}</small></span></button>)}
         </div></>}
 
-        {sheet === 'store' && <><HeaderBar title="ROUTE 스토어" onClose={() => setSheet(null)} /><p className="more-sheet-description">ROUTE의 꾸미기 콘텐츠를 한곳에서 둘러봐요.</p><div className="more-store-hub">
+        {sheet === 'store' && <><HeaderBar title="단둘이 스토어" onClose={() => setSheet(null)} /><p className="more-sheet-description">단둘이의 꾸미기 콘텐츠를 한곳에서 둘러봐요.</p><div className="more-store-hub">
           <button type="button" onClick={() => openSheet('emoticon')}><Sticker /><span><b>이모티콘 팩</b><small>대화에서 쓰는 감정 표현</small></span><em>보기</em></button>
           <button type="button" onClick={() => openSheet('app-icon')}><Smartphone /><span><b>앱 아이콘</b><small>홈 화면을 우리 스타일로</small></span><em>보기</em></button>
           <button type="button" onClick={() => openSheet('theme')}><Sparkles /><span><b>테마 컬렉션</b><small>앱 전체 분위기 바꾸기</small></span><em>보기</em></button>
