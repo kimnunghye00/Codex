@@ -17,7 +17,7 @@ export type ChatPreferences = {
 type StickerPack = { id: string; name: string; description: string; stickers: string[]; priceLabel: string };
 
 export const STICKER_PACKS: StickerPack[] = [
-  { id: 'route-hearts', name: 'ROUTE 하트', description: '커플 대화에 잘 어울리는 기본 팩', stickers: ['🫶', '❤️', '💕', '💗', '💖', '💘'], priceLabel: '기본' },
+  { id: 'route-hearts', name: '단둘이 하트', description: '커플 대화에 잘 어울리는 기본 팩', stickers: ['🫶', '❤️', '💕', '💗', '💖', '💘'], priceLabel: '기본' },
   { id: 'daily-mood', name: '오늘의 기분', description: '매일 쓰기 좋은 표정 모음', stickers: ['🥰', '😊', '🥹', '😴', '😤', '🤭'], priceLabel: '무료' },
   { id: 'tiny-love', name: '쪼꼬미 러브', description: '짧게 마음을 전하는 팩', stickers: ['🐰💗', '🐻🫶', '🐶💕', '🐱💖', '🐹❤️', '🐥💘'], priceLabel: '무료' },
 ];
@@ -67,7 +67,7 @@ function exportMessages(messages: Message[], partnerName: string) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `ROUTE-chat-${new Date().toISOString().slice(0, 10)}.json`;
+  link.download = `DANDULI-chat-${new Date().toISOString().slice(0, 10)}.json`;
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -136,7 +136,7 @@ export function ChatToolsPanel({
         onImport(valid);
         setFeedback(`${valid.length}개의 대화를 불러왔어요.`);
       } catch {
-        setFeedback('ROUTE에서 내보낸 올바른 대화 백업 파일이 아니에요.');
+        setFeedback('단둘이에서 내보낸 올바른 대화 백업 파일이 아니에요.');
       }
     };
     reader.readAsText(file);
