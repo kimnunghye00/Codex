@@ -28,6 +28,13 @@ const ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
   { urls: 'stun:stun2.l.google.com:19302' },
+  // Shared OpenRelay fallback for development/testing. Production should move
+  // to a dedicated TURN credential, but this gives mobile/LTE and strict NAT
+  // networks a relay path instead of relying on STUN-only direct connectivity.
+  { urls: 'stun:openrelay.metered.ca:80' },
+  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
 ];
 const DISCONNECT_GRACE_MS = 8_000;
 
@@ -92,6 +99,26 @@ function canFallbackFromMediaError(cause: unknown) {
     || name === 'DevicesNotFoundError'
     || name === 'OverconstrainedError'
     || name === 'ConstraintNotSatisfiedError';
+}
+
+function waitForIceGathering(peer: RTCPeerConnection, timeoutMs = 5000) {
+  if (peer.iceGatheringState === 'complete') return Promise.resolve();
+
+  return new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      peer.removeEventListener('icegatheringstatechange', onState);
+      window.clearTimeout(timer);
+      resolve();
+    };
+    const onState = () => {
+      if (peer.iceGatheringState === 'complete') finish();
+    };
+    const timer = window.setTimeout(finish, timeoutMs);
+    peer.addEventListener('icegatheringstatechange', onState);
+  });
 }
 
 function formatDuration(seconds: number) {
@@ -215,7 +242,13 @@ export function DanduliCallManager({
   const createPeer = useCallback((callId: string, role: CallRole) => {
     peerRef.current?.close();
     if (typeof RTCPeerConnection === 'undefined') throw new Error('webrtc-not-supported');
-    const peer = new RTCPeerConnection({ iceServers: ICE_SERVERS, iceCandidatePoolSize: 8 });
+    const peer = new RTCPeerConnection({
+      iceServers: ICE_SERVERS,
+      iceCandidatePoolSize: 8,
+      iceTransportPolicy: 'all',
+      bundlePolicy: 'max-bundle',
+      rtcpMuxPolicy: 'require',
+    });
     peerRef.current = peer;
     activeCallIdRef.current = callId;
     roleRef.current = role;
@@ -276,7 +309,7 @@ export function DanduliCallManager({
         if (coupleId && activeCallIdRef.current === callId) {
           void finishCoupleCall(coupleId, callId, 'failed', 'webrtc-failed');
         }
-        finishAndCloseLater('통화 연결에 실패했어요.');
+        finishAndCloseLater('상대방과 음성·영상 경로를 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
       }
     };
 
@@ -347,7 +380,15 @@ export function DanduliCallManager({
 
       const offer = await peer.createOffer();
       await peer.setLocalDescription(offer);
-      await startCoupleCall(connection.coupleId, callId, currentUid, connection.partnerUid, kind, offer);
+
+      // Do not publish the offer until ICE gathering has had a chance to put
+      // host/STUN/TURN candidates directly into the SDP. The previous version
+      // published immediately and depended entirely on many Firestore candidate
+      // writes; if even a few of those raced or were delayed, both phones could
+      // ring successfully but the actual media path still failed.
+      await waitForIceGathering(peer);
+      const gatheredOffer = peer.localDescription ?? offer;
+      await startCoupleCall(connection.coupleId, callId, currentUid, connection.partnerUid, kind, gatheredOffer);
       signalReadyRef.current = true;
       await flushLocalCandidates();
     } catch (cause) {
@@ -379,7 +420,13 @@ export function DanduliCallManager({
       await applyRemoteCandidates(signal.callerCandidates);
       const answer = await peer.createAnswer();
       await peer.setLocalDescription(answer);
-      await answerCoupleCall(connection.coupleId, signal.callId, currentUid, answer);
+
+      // As with the caller, wait briefly so the answer SDP already contains
+      // usable ICE candidates. This makes call setup deterministic even when
+      // trickle-candidate writes are delayed on mobile networks.
+      await waitForIceGathering(peer);
+      const gatheredAnswer = peer.localDescription ?? answer;
+      await answerCoupleCall(connection.coupleId, signal.callId, currentUid, gatheredAnswer);
       await flushLocalCandidates();
     } catch (cause) {
       console.error('[DANDULI accept call]', cause);
