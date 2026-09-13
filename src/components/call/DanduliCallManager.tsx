@@ -655,7 +655,7 @@ export function DanduliCallManager({
       {showVideo && session.phase !== 'connected' && <div className="danduli-call-video-status">{message || (session.phase === 'calling' ? '응답을 기다리고 있어요' : '영상통화를 연결하고 있어요')}</div>}
 
       <div className="danduli-call-controls">
-        <button type="button" className={muted ? 'active' : ''} onClick={toggleMute} aria-label={muted ? '마이크 켜기' : '마이크 끄기'}>{muted ? <MicOff /> : <Mic />}<span>{muted ? '음소거 해제' : '음소거'}</span></button>
+        <button type="button" className={muted ? 'active muted' : ''} onClick={toggleMute} aria-label={muted ? '음소거 해제' : '음소거'} aria-pressed={muted}>{muted ? <MicOff /> : <Mic />}<span>{muted ? '음소거됨' : '음소거'}</span></button>
         {showVideo && <button type="button" className={cameraOff ? 'active' : ''} onClick={toggleCamera} aria-label={cameraOff ? '카메라 켜기' : '카메라 끄기'}>{cameraOff ? <VideoOff /> : <Video />}<span>{cameraOff ? '카메라 켜기' : '카메라'}</span></button>}
         <button type="button" className="hangup" onClick={hangUp} aria-label="통화 종료"><PhoneOff /><span>종료</span></button>
       </div>
