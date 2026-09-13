@@ -1,0 +1,204 @@
+import { doc, onSnapshot, runTransaction } from 'firebase/firestore';
+import { db } from './firebase';
+
+export type CoupleCallKind = 'voice' | 'video';
+export type CoupleCallStatus = 'ringing' | 'active' | 'rejected' | 'ended' | 'failed';
+
+export type StoredIceCandidate = {
+  candidate: string;
+  sdpMid: string | null;
+  sdpMLineIndex: number | null;
+  usernameFragment: string | null;
+};
+
+export type StoredSessionDescription = {
+  type: 'offer' | 'answer';
+  sdp: string;
+};
+
+export type CoupleCallSignal = {
+  callId: string;
+  kind: CoupleCallKind;
+  status: CoupleCallStatus;
+  callerUid: string;
+  calleeUid: string;
+  offer: StoredSessionDescription;
+  answer?: StoredSessionDescription;
+  callerCandidates: StoredIceCandidate[];
+  calleeCandidates: StoredIceCandidate[];
+  createdAtMs: number;
+  acceptedAtMs?: number;
+  endedAtMs?: number;
+  endReason?: string;
+};
+
+const STALE_CALL_MS = 2 * 60 * 1000;
+
+function coupleRef(coupleId: string) {
+  return doc(db, 'couples', coupleId);
+}
+
+function cleanDescription(description: RTCSessionDescriptionInit): StoredSessionDescription {
+  if (!description.sdp || (description.type !== 'offer' && description.type !== 'answer')) {
+    throw new Error('invalid-session-description');
+  }
+  return { type: description.type, sdp: description.sdp };
+}
+
+export function serializeIceCandidate(candidate: RTCIceCandidate | RTCIceCandidateInit): StoredIceCandidate {
+  const json = 'toJSON' in candidate && typeof candidate.toJSON === 'function'
+    ? candidate.toJSON()
+    : candidate;
+  return {
+    candidate: String(json.candidate ?? ''),
+    sdpMid: json.sdpMid ?? null,
+    sdpMLineIndex: json.sdpMLineIndex ?? null,
+    usernameFragment: json.usernameFragment ?? null,
+  };
+}
+
+function normalizeSignal(value: unknown): CoupleCallSignal | null {
+  if (!value || typeof value !== 'object') return null;
+  const data = value as Partial<CoupleCallSignal>;
+  if (!data.callId || !data.callerUid || !data.calleeUid || !data.kind || !data.status || !data.offer?.sdp) return null;
+  return {
+    callId: String(data.callId),
+    kind: data.kind === 'video' ? 'video' : 'voice',
+    status: data.status,
+    callerUid: String(data.callerUid),
+    calleeUid: String(data.calleeUid),
+    offer: { type: 'offer', sdp: String(data.offer.sdp) },
+    answer: data.answer?.sdp ? { type: 'answer', sdp: String(data.answer.sdp) } : undefined,
+    callerCandidates: Array.isArray(data.callerCandidates) ? data.callerCandidates : [],
+    calleeCandidates: Array.isArray(data.calleeCandidates) ? data.calleeCandidates : [],
+    createdAtMs: Number(data.createdAtMs ?? 0),
+    acceptedAtMs: data.acceptedAtMs ? Number(data.acceptedAtMs) : undefined,
+    endedAtMs: data.endedAtMs ? Number(data.endedAtMs) : undefined,
+    endReason: data.endReason ? String(data.endReason) : undefined,
+  };
+}
+
+export function subscribeCoupleCall(
+  coupleId: string,
+  onChange: (signal: CoupleCallSignal | null) => void,
+  onError: (error: unknown) => void = () => undefined,
+) {
+  return onSnapshot(coupleRef(coupleId), (snapshot) => {
+    const signal = normalizeSignal(snapshot.data()?.activeCall);
+    onChange(signal);
+  }, onError);
+}
+
+export async function startCoupleCall(
+  coupleId: string,
+  callId: string,
+  callerUid: string,
+  calleeUid: string,
+  kind: CoupleCallKind,
+  offer: RTCSessionDescriptionInit,
+) {
+  const ref = coupleRef(coupleId);
+  const cleanOffer = cleanDescription(offer);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) throw new Error('couple-not-found');
+
+    const existing = normalizeSignal(snapshot.data()?.activeCall);
+    const existingBusy = existing
+      && (existing.status === 'ringing' || existing.status === 'active')
+      && Date.now() - existing.createdAtMs < STALE_CALL_MS;
+    if (existingBusy) throw new Error('call-busy');
+
+    const next: CoupleCallSignal = {
+      callId,
+      kind,
+      status: 'ringing',
+      callerUid,
+      calleeUid,
+      offer: cleanOffer,
+      callerCandidates: [],
+      calleeCandidates: [],
+      createdAtMs: Date.now(),
+    };
+    transaction.update(ref, { activeCall: next });
+  });
+}
+
+export async function answerCoupleCall(
+  coupleId: string,
+  callId: string,
+  calleeUid: string,
+  answer: RTCSessionDescriptionInit,
+) {
+  const ref = coupleRef(coupleId);
+  const cleanAnswer = cleanDescription(answer);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) throw new Error('couple-not-found');
+    const current = normalizeSignal(snapshot.data()?.activeCall);
+    if (!current || current.callId !== callId || current.calleeUid !== calleeUid) throw new Error('call-expired');
+    if (current.status !== 'ringing' && current.status !== 'active') throw new Error('call-not-ringing');
+
+    transaction.update(ref, {
+      activeCall: {
+        ...current,
+        status: 'active',
+        answer: cleanAnswer,
+        acceptedAtMs: Date.now(),
+      } satisfies CoupleCallSignal,
+    });
+  });
+}
+
+export async function appendCoupleCallCandidate(
+  coupleId: string,
+  callId: string,
+  side: 'caller' | 'callee',
+  candidate: RTCIceCandidate | RTCIceCandidateInit,
+) {
+  const serialized = serializeIceCandidate(candidate);
+  if (!serialized.candidate) return;
+
+  const ref = coupleRef(coupleId);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) return;
+    const current = normalizeSignal(snapshot.data()?.activeCall);
+    if (!current || current.callId !== callId) return;
+    if (current.status !== 'ringing' && current.status !== 'active') return;
+
+    const key = side === 'caller' ? 'callerCandidates' : 'calleeCandidates';
+    const existing = current[key];
+    if (existing.some((item) => item.candidate === serialized.candidate)) return;
+
+    transaction.update(ref, {
+      activeCall: {
+        ...current,
+        [key]: [...existing, serialized],
+      },
+    });
+  });
+}
+
+export async function finishCoupleCall(
+  coupleId: string,
+  callId: string,
+  status: Extract<CoupleCallStatus, 'rejected' | 'ended' | 'failed'>,
+  reason: string,
+) {
+  const ref = coupleRef(coupleId);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) return;
+    const current = normalizeSignal(snapshot.data()?.activeCall);
+    if (!current || current.callId !== callId) return;
+    transaction.update(ref, {
+      activeCall: {
+        ...current,
+        status,
+        endedAtMs: Date.now(),
+        endReason: reason,
+      } satisfies CoupleCallSignal,
+    });
+  });
+}
