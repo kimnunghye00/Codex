@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, Check, Download, Image as ImageIcon, PackageOpen, Palette, RotateCcw, Search, Settings2, ShoppingBag, SlidersHorizontal, Type, Upload, X } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import type { Message } from '../../types';
+import { DANDULI_STICKERS, DanduliSticker, stickerIdFromToken, stickerToken } from './DanduliSticker';
 
 export type ChatBackground = 'route' | 'cream' | 'rose' | 'sage' | 'midnight';
 export type ChatFontSize = 'small' | 'medium' | 'large' | 'xlarge';
@@ -17,6 +18,7 @@ export type ChatPreferences = {
 type StickerPack = { id: string; name: string; description: string; stickers: string[]; priceLabel: string };
 
 export const STICKER_PACKS: StickerPack[] = [
+  { id: 'danduli-couple', name: '단둘이 커플', description: '고양이와 토끼 커플의 16가지 마음 표현', stickers: DANDULI_STICKERS.map((sticker) => stickerToken(sticker.id)), priceLabel: '기본' },
   { id: 'route-hearts', name: '단둘이 하트', description: '커플 대화에 잘 어울리는 기본 팩', stickers: ['🫶', '❤️', '💕', '💗', '💖', '💘'], priceLabel: '기본' },
   { id: 'daily-mood', name: '오늘의 기분', description: '매일 쓰기 좋은 표정 모음', stickers: ['🥰', '😊', '🥹', '😴', '😤', '🤭'], priceLabel: '무료' },
   { id: 'tiny-love', name: '쪼꼬미 러브', description: '짧게 마음을 전하는 팩', stickers: ['🐰💗', '🐻🫶', '🐶💕', '🐱💖', '🐹❤️', '🐥💘'], priceLabel: '무료' },
@@ -30,7 +32,7 @@ export function defaultChatPreferences(): ChatPreferences {
     fontSize: 'medium',
     mediaQuality: 'high',
     stickerPackOrder: STICKER_PACKS.map((pack) => pack.id),
-    ownedStickerPacks: ['route-hearts'],
+    ownedStickerPacks: ['danduli-couple', 'route-hearts'],
   };
 }
 
@@ -44,7 +46,7 @@ export function loadChatPreferences(uid: string): ChatPreferences {
       ...fallback,
       ...parsed,
       stickerPackOrder: Array.isArray(parsed.stickerPackOrder) ? parsed.stickerPackOrder : fallback.stickerPackOrder,
-      ownedStickerPacks: Array.isArray(parsed.ownedStickerPacks) ? parsed.ownedStickerPacks : fallback.ownedStickerPacks,
+      ownedStickerPacks: Array.isArray(parsed.ownedStickerPacks) ? Array.from(new Set([...fallback.ownedStickerPacks, ...parsed.ownedStickerPacks])) : fallback.ownedStickerPacks,
     };
   } catch {
     return fallback;
@@ -120,7 +122,7 @@ export function ChatToolsPanel({
     update({ stickerPackOrder: order });
   };
   const restorePacks = () => {
-    const restored = Array.from(new Set([...preferences.ownedStickerPacks, 'route-hearts']));
+    const restored = Array.from(new Set([...preferences.ownedStickerPacks, 'danduli-couple', 'route-hearts']));
     update({ ownedStickerPacks: restored });
     setFeedback('이 기기에 저장된 이모티콘 이용 정보를 복원했어요.');
   };
@@ -132,7 +134,7 @@ export function ChatToolsPanel({
       try {
         const data = JSON.parse(String(reader.result ?? '')) as { format?: string; messages?: Message[] };
         if (data.format !== 'ROUTE_CHAT_BACKUP' || !Array.isArray(data.messages)) throw new Error('invalid');
-        const valid = data.messages.filter((message) => typeof message.id === 'number' && (message.sender === 'me' || message.sender === 'partner') && (message.type === 'text' || message.type === 'image'));
+        const valid = data.messages.filter((message) => typeof message.id === 'number' && (message.sender === 'me' || message.sender === 'partner') && (message.type === 'text' || message.type === 'image' || message.type === 'gallery' || message.type === 'gif' || message.type === 'sticker'));
         onImport(valid);
         setFeedback(`${valid.length}개의 대화를 불러왔어요.`);
       } catch {
@@ -168,7 +170,7 @@ export function ChatToolsPanel({
 
       {section === 'store' && <div className="chat-tool-section"><div className="sticker-store-list">{STICKER_PACKS.map((pack) => {
         const owned = preferences.ownedStickerPacks.includes(pack.id);
-        return <article key={pack.id}><div className="sticker-pack-preview">{pack.stickers.slice(0, 4).map((sticker) => <span key={sticker}>{sticker}</span>)}</div><div className="sticker-pack-copy"><b>{pack.name}</b><small>{pack.description}</small></div><button type="button" disabled={owned} onClick={() => ownPack(pack.id)}>{owned ? <><Check size={14} />사용 중</> : pack.priceLabel === '무료' ? '받기' : pack.priceLabel}</button></article>;
+        return <article key={pack.id}><div className="sticker-pack-preview">{pack.stickers.slice(0, 4).map((sticker) => { const danduliId = stickerIdFromToken(sticker); return danduliId ? <DanduliSticker key={sticker} id={danduliId} /> : <span key={sticker}>{sticker}</span>; })}</div><div className="sticker-pack-copy"><b>{pack.name}</b><small>{pack.description}</small></div><button type="button" disabled={owned} onClick={() => ownPack(pack.id)}>{owned ? <><Check size={14} />사용 중</> : pack.priceLabel === '무료' ? '받기' : pack.priceLabel}</button></article>;
       })}</div><p className="chat-store-note">현재 웹 테스트 버전에서는 무료 팩과 기본 팩을 사용할 수 있어요. 실제 유료 결제·스토어 구매 복원은 모바일 앱 결제 연동 단계에서 연결됩니다.</p></div>}
 
       {section === 'settings' && <div className="chat-tool-section settings-stack">
@@ -179,7 +181,7 @@ export function ChatToolsPanel({
         <button className="chat-setting-link" type="button" onClick={() => setSection('stickers')}><span><ShoppingBag size={18} /><b>이모티콘 설정</b></span><span>순서 변경 · 구매 복원 ›</span></button>
       </div>}
 
-      {section === 'stickers' && <div className="chat-tool-section"><div className="sticker-manage-list">{orderedPacks.map((pack, index) => <article key={pack.id}><div><b>{pack.name}</b><small>{preferences.ownedStickerPacks.includes(pack.id) ? '사용 가능' : '스토어에서 받기 필요'}</small></div><div><button type="button" disabled={index === 0} onClick={() => movePack(pack.id, -1)} aria-label="위로"><ArrowUp /></button><button type="button" disabled={index === orderedPacks.length - 1} onClick={() => movePack(pack.id, 1)} aria-label="아래로"><ArrowDown /></button></div></article>)}</div><button className="restore-stickers" type="button" onClick={restorePacks}><RotateCcw size={16} />이모티콘 구매 복원</button><div className="owned-sticker-preview">{orderedPacks.filter((pack) => preferences.ownedStickerPacks.includes(pack.id)).flatMap((pack) => pack.stickers).map((sticker, index) => <button type="button" key={`${sticker}-${index}`} onClick={() => { onSticker(sticker); onClose(); }}>{sticker}</button>)}</div></div>}
+      {section === 'stickers' && <div className="chat-tool-section"><div className="sticker-manage-list">{orderedPacks.map((pack, index) => <article key={pack.id}><div><b>{pack.name}</b><small>{preferences.ownedStickerPacks.includes(pack.id) ? '사용 가능' : '스토어에서 받기 필요'}</small></div><div><button type="button" disabled={index === 0} onClick={() => movePack(pack.id, -1)} aria-label="위로"><ArrowUp /></button><button type="button" disabled={index === orderedPacks.length - 1} onClick={() => movePack(pack.id, 1)} aria-label="아래로"><ArrowDown /></button></div></article>)}</div><button className="restore-stickers" type="button" onClick={restorePacks}><RotateCcw size={16} />이모티콘 구매 복원</button><div className="owned-sticker-preview">{orderedPacks.filter((pack) => preferences.ownedStickerPacks.includes(pack.id)).flatMap((pack) => pack.stickers).map((sticker, index) => { const danduliId = stickerIdFromToken(sticker); return <button type="button" className={danduliId ? 'danduli-sticker-button' : ''} key={`${sticker}-${index}`} onClick={() => { onSticker(sticker); onClose(); }}>{danduliId ? <DanduliSticker id={danduliId} /> : sticker}</button>; })}</div></div>}
 
       {feedback && <p className="chat-tools-feedback">{feedback}</p>}
     </section>
