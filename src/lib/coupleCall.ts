@@ -152,6 +152,31 @@ export async function answerCoupleCall(
   });
 }
 
+export async function refreshCoupleCallDescription(
+  coupleId: string,
+  callId: string,
+  side: 'caller' | 'callee',
+  description: RTCSessionDescriptionInit,
+) {
+  const ref = coupleRef(coupleId);
+  const clean = cleanDescription(description);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) return;
+    const current = normalizeSignal(snapshot.data()?.activeCall);
+    if (!current || current.callId !== callId) return;
+    if (current.status !== 'ringing' && current.status !== 'active') return;
+
+    if (side === 'caller' && clean.type === 'offer') {
+      transaction.update(ref, { activeCall: { ...current, offer: clean } satisfies CoupleCallSignal });
+      return;
+    }
+    if (side === 'callee' && clean.type === 'answer') {
+      transaction.update(ref, { activeCall: { ...current, answer: clean } satisfies CoupleCallSignal });
+    }
+  });
+}
+
 export async function appendCoupleCallCandidate(
   coupleId: string,
   callId: string,
