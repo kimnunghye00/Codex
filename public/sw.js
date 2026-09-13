@@ -1,4 +1,4 @@
-const CACHE_NAME = 'danduli-web-v17-anniversary-unified';
+const CACHE_NAME = 'danduli-web-v18-home-card-balance';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.add('./')).catch(() => undefined));
