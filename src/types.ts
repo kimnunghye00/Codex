@@ -5,10 +5,11 @@ export type Reaction = { emoji: string; by: Sender };
 export type Message = {
   id: number;
   sender: Sender;
-  type: 'text' | 'image' | 'gallery' | 'gif';
+  type: 'text' | 'image' | 'gallery' | 'gif' | 'sticker';
   text?: string;
   imageUrl?: string;
   imageUrls?: string[];
+  stickerId?: string;
   timestamp: string;
   read: boolean;
   replyTo?: number;
