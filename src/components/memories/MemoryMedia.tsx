@@ -133,19 +133,21 @@ export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 
   const retryTimer = useRef<number | undefined>(undefined);
   const deferredAnchor = useRef<HTMLSpanElement>(null);
   const sourceRef = useRef(src);
+  const requestGeneration = useRef(0);
   const storageResolutionStarted = useRef(false);
   const legacyRecoveryAttempted = useRef(false);
   const displayUrl = candidates[candidateIndex] ?? '';
 
   const resolveDurableCandidates = () => {
     const source = src;
+    const generation = requestGeneration.current;
     if (!source || storageResolutionStarted.current || storageCandidates(source).length === 0) return false;
     storageResolutionStarted.current = true;
     setRetrying(true);
 
     const rawCandidates = sourceCandidates(source);
     void Promise.all(rawCandidates.map(resolveStorageReference)).then((resolved) => {
-      if (sourceRef.current !== source) return;
+      if (sourceRef.current !== source || requestGeneration.current !== generation) return;
       const durableCandidates = Array.from(new Set(resolved.filter(Boolean)));
       setCandidates(durableCandidates);
       setCandidateIndex(0);
@@ -158,12 +160,13 @@ export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 
 
   const startLegacyRecovery = () => {
     const source = src;
+    const generation = requestGeneration.current;
     if (!source || legacyRecoveryAttempted.current) return false;
     legacyRecoveryAttempted.current = true;
     setRetrying(true);
 
     void resolveLegacyBackup(source).then((legacy) => {
-      if (sourceRef.current !== source) return;
+      if (sourceRef.current !== source || requestGeneration.current !== generation) return;
       setRetrying(false);
       if (!legacy.url) {
         setFailed(true);
@@ -179,7 +182,14 @@ export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 
   };
 
   useEffect(() => {
+    requestGeneration.current += 1;
     sourceRef.current = src;
+    let observer: IntersectionObserver | undefined;
+    const cleanup = () => {
+      requestGeneration.current += 1;
+      observer?.disconnect();
+      if (retryTimer.current) window.clearTimeout(retryTimer.current);
+    };
     if (retryTimer.current) window.clearTimeout(retryTimer.current);
     const initial = immediateCandidates(src);
     setCandidates(initial);
@@ -192,38 +202,36 @@ export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 
     storageResolutionStarted.current = false;
     legacyRecoveryAttempted.current = false;
 
-    if (!src) return;
+    if (!src) return cleanup;
     const activateMedia = () => {
       setMediaReady(true);
       if (storageCandidates(src).length > 0) resolveDurableCandidates();
     };
     if (loading === 'eager') {
       activateMedia();
-      return;
+      return cleanup;
     }
 
     const target = deferredAnchor.current;
     if (!target || typeof IntersectionObserver === 'undefined') {
       activateMedia();
-      return;
+      return cleanup;
     }
 
-    const observer = new IntersectionObserver(([entry]) => {
+    observer = new IntersectionObserver(([entry]) => {
       if (!entry.isIntersecting) return;
-      observer.disconnect();
+      observer?.disconnect();
       activateMedia();
     }, { rootMargin: MEMORY_MEDIA_PREFETCH_MARGIN, threshold: 0.01 });
     observer.observe(target);
 
-    return () => {
-      observer.disconnect();
-      if (retryTimer.current) window.clearTimeout(retryTimer.current);
-    };
+    return cleanup;
   }, [src, loading]);
 
   const retryNow = (event: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>) => {
     event.preventDefault();
     event.stopPropagation();
+    requestGeneration.current += 1;
     if (retryTimer.current) window.clearTimeout(retryTimer.current);
     storageResolutionStarted.current = false;
     legacyRecoveryAttempted.current = false;
