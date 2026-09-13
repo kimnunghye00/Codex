@@ -232,7 +232,7 @@ function openSettingsHub() {
       settingRow('😊', '이모티콘', '보유 이모티콘과 순서 관리', () => navigateMoreAndOpen('이모티콘')),
     ]),
     section('화면 및 꾸미기', [
-      settingRow('🎨', '테마', '10가지 4색 조합과 앱 미리보기', () => navigateMoreAndOpen('테마')),
+      settingRow('🎨', '테마', '10가지 4색 조합과 홈·대화 미리보기', () => navigateMoreAndOpen('테마')),
       settingRow('📱', '앱 아이콘', '홈 화면 ROUTE 아이콘 변경', () => navigateMoreAndOpen('앱 아이콘')),
       toggleRow('🌙', '시스템 다크 모드 연동', '기기의 다크/라이트 모드에 자동으로 맞춤', SYSTEM_DARK_KEY, isSystemDarkEnabled(), setSystemDarkEnabled),
     ]),
