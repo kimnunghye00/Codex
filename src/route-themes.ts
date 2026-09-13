@@ -2,7 +2,6 @@ type RouteTheme = {
   id: string;
   name: string;
   description: string;
-  colors: [string, string, string, string];
   isDefault?: boolean;
 };
 
@@ -10,16 +9,16 @@ const STORAGE_KEY = 'route-theme-v2';
 const DEFAULT_THEME = 'sunset-route';
 
 const themes: RouteTheme[] = [
-  { id: 'sunset-route', name: 'Sunset Route', description: '테라코타 · 웜 샌드 · 크림 · 딥 브릭', colors: ['#E07A5F', '#F4F1DE', '#FAF8F5', '#3D405B'], isDefault: true },
-  { id: 'midnight-walk', name: 'Midnight Walk', description: '미드나잇 · 다크 블루 · 문라이트 · 나이트', colors: ['#0E2755', '#4B5F86', '#FAF8E5', '#1E2338'] },
-  { id: 'forest-trail', name: 'Forest Trail', description: '포레스트 · 그린 · 크림 · 딥 그린', colors: ['#2F6B45', '#6B9B57', '#AFBF95', '#35513A'] },
-  { id: 'spring-blossom', name: 'Spring Blossom', description: '봄꽃 핑크 4단 조합', colors: ['#D95F82', '#ED8FA8', '#F2B6C7', '#F8DDE6'] },
-  { id: 'ocean-drive', name: 'Ocean Drive', description: '오션 블루 · 터키석 · 화이트 · 딥 블루', colors: ['#3F8EC6', '#43AEC4', '#CBE8EE', '#2F6F8F'] },
-  { id: 'lavender-fog', name: 'Lavender Fog', description: '라벤더 · 퍼플 · 브라이트 포그 · 딥 브릭', colors: ['#9E8FC5', '#A788BB', '#E7DDF0', '#3D405B'] },
-  { id: 'autumn-breeze', name: 'Autumn Breeze', description: '테라코타 · 샌드 · 크림 · 딥 브릭', colors: ['#E07A5F', '#E89B47', '#F4F1DE', '#914A36'] },
-  { id: 'champagne-day', name: 'Champagne Day', description: '웜 샌드 · 샴페인 · 크림 · 웜 화이트', colors: ['#E4CDA7', '#D9B75D', '#FAF8F5', '#EADCCB'] },
-  { id: 'mono-track', name: 'Mono Track', description: '화이트 · 그레이 · 차콜 · 블랙', colors: ['#EFEFEF', '#909398', '#606368', '#000000'] },
-  { id: 'neon-night', name: 'Neon Night', description: '딥 퍼플 · 네온 바이올렛 · 드림 블루 · 네온 핑크', colors: ['#170D2C', '#6F2DBD', '#243B6B', '#D130B0'] },
+  { id: 'sunset-route', name: '선셋 로즈', description: '크림 배경에 차분한 로즈 포인트', isDefault: true },
+  { id: 'midnight-walk', name: '문라이트', description: '깊은 남색과 은은한 달빛 블루' },
+  { id: 'forest-trail', name: '세이지 가든', description: '맑은 아이보리와 편안한 세이지' },
+  { id: 'spring-blossom', name: '블러시 핑크', description: '부드러운 핑크와 말린 장미빛' },
+  { id: 'ocean-drive', name: '미스트 블루', description: '안개 낀 하늘빛과 차분한 블루' },
+  { id: 'lavender-fog', name: '라벤더 밀크', description: '우윳빛 배경과 은은한 라벤더' },
+  { id: 'autumn-breeze', name: '피치 테라코타', description: '포근한 피치와 흙빛 브라운' },
+  { id: 'champagne-day', name: '바닐라 라떼', description: '바닐라 크림과 따뜻한 모카' },
+  { id: 'mono-track', name: '소프트 그레이', description: '깔끔한 화이트와 부드러운 차콜' },
+  { id: 'neon-night', name: '플럼 나이트', description: '차분한 밤보라와 은은한 모브' },
 ];
 
 type ThemePreviewPalette = {
@@ -34,19 +33,150 @@ type ThemePreviewPalette = {
   border: string;
   accent: string;
   emotion: string;
+  accentText: string;
 };
 
 const previewPalettes: Record<string, ThemePreviewPalette> = {
-  'sunset-route': { primary:'#3D405B', primaryLight:'#B8563F', soft:'#F4E8DE', background:'#FAF8F5', surface:'#FFFFFF', surfaceElevated:'#FFFFFF', text:'#34364C', muted:'#625D58', border:'#D9CFC4', accent:'#A84D38', emotion:'#B8563F' },
-  'midnight-walk': { primary:'#526A9B', primaryLight:'#8297C7', soft:'#27364E', background:'#101725', surface:'#1A2435', surfaceElevated:'#202C40', text:'#F8FAFC', muted:'#CBD5E1', border:'#43526A', accent:'#526A9B', emotion:'#E8D99A' },
-  'forest-trail': { primary:'#2F6B45', primaryLight:'#4F825B', soft:'#E3EDD8', background:'#F3F8ED', surface:'#FFFFFF', surfaceElevated:'#FFFFFF', text:'#294433', muted:'#55635A', border:'#C9D8BE', accent:'#2F6B45', emotion:'#3F774E' },
-  'spring-blossom': { primary:'#9F3159', primaryLight:'#BE4F73', soft:'#F8E4EA', background:'#FFF6F8', surface:'#FFFFFF', surfaceElevated:'#FFFFFF', text:'#5E3342', muted:'#765461', border:'#E9CBD4', accent:'#A43B61', emotion:'#A83A61' },
-  'ocean-drive': { primary:'#2F6F8F', primaryLight:'#3D829F', soft:'#E0F1F5', background:'#F2FAFC', surface:'#FFFFFF', surfaceElevated:'#FFFFFF', text:'#24556C', muted:'#4F7080', border:'#C3DEE5', accent:'#2F6F8F', emotion:'#2E7892' },
-  'lavender-fog': { primary:'#5E527A', primaryLight:'#7B69A1', soft:'#EEE7F5', background:'#F8F5FB', surface:'#FFFFFF', surfaceElevated:'#FFFFFF', text:'#4D4660', muted:'#696276', border:'#D7CDE2', accent:'#6F5A9C', emotion:'#705B91' },
-  'autumn-breeze': { primary:'#8A442F', primaryLight:'#B85C3F', soft:'#F7E3D3', background:'#FFF7EE', surface:'#FFFFFF', surfaceElevated:'#FFFFFF', text:'#60382D', muted:'#765349', border:'#E5C6B1', accent:'#A84C2D', emotion:'#A74B2C' },
-  'champagne-day': { primary:'#715C43', primaryLight:'#8A7356', soft:'#F4E9D2', background:'#FFFCF4', surface:'#FFFFFF', surfaceElevated:'#FFFFFF', text:'#51463B', muted:'#6D6257', border:'#DED2BE', accent:'#715C43', emotion:'#7A6544' },
-  'mono-track': { primary:'#303236', primaryLight:'#55595F', soft:'#ECEDEF', background:'#F6F6F6', surface:'#FFFFFF', surfaceElevated:'#FFFFFF', text:'#202124', muted:'#595D62', border:'#CFD1D4', accent:'#45484D', emotion:'#4E5257' },
-  'neon-night': { primary:'#6F2DBD', primaryLight:'#9B62D7', soft:'#2D1748', background:'#100A20', surface:'#1B1030', surfaceElevated:'#24143E', text:'#FBF7FF', muted:'#D8C7E8', border:'#57366F', accent:'#7D3CBF', emotion:'#C44AAE' },
+  "sunset-route": {
+    "primary": "#66515B",
+    "primaryLight": "#A65365",
+    "soft": "#F3E6E8",
+    "background": "#FAF7F6",
+    "surface": "#FFFFFF",
+    "surfaceElevated": "#FFFFFF",
+    "text": "#39333A",
+    "muted": "#70636B",
+    "border": "#E6DCDF",
+    "accent": "#A65365",
+    "emotion": "#A65365",
+    "accentText": "#A65365"
+  },
+  "midnight-walk": {
+    "primary": "#526A90",
+    "primaryLight": "#526A90",
+    "soft": "#29364B",
+    "background": "#171E2B",
+    "surface": "#202A3A",
+    "surfaceElevated": "#202A3A",
+    "text": "#EDF1F7",
+    "muted": "#B7C2D2",
+    "border": "#3D4A60",
+    "accent": "#526A90",
+    "emotion": "#B9CAE8",
+    "accentText": "#B9CAE8"
+  },
+  "forest-trail": {
+    "primary": "#46695C",
+    "primaryLight": "#46695C",
+    "soft": "#E6EEE8",
+    "background": "#F6F8F5",
+    "surface": "#FFFFFF",
+    "surfaceElevated": "#FFFFFF",
+    "text": "#303D36",
+    "muted": "#5D6C63",
+    "border": "#D8E2DA",
+    "accent": "#46695C",
+    "emotion": "#46695C",
+    "accentText": "#46695C"
+  },
+  "spring-blossom": {
+    "primary": "#95556C",
+    "primaryLight": "#A04D68",
+    "soft": "#F6E6EC",
+    "background": "#FCF7F9",
+    "surface": "#FFFFFF",
+    "surfaceElevated": "#FFFFFF",
+    "text": "#44343C",
+    "muted": "#79616C",
+    "border": "#EADBE2",
+    "accent": "#A04D68",
+    "emotion": "#95556C",
+    "accentText": "#95556C"
+  },
+  "ocean-drive": {
+    "primary": "#466B80",
+    "primaryLight": "#466B80",
+    "soft": "#E5EEF3",
+    "background": "#F5F8FA",
+    "surface": "#FFFFFF",
+    "surfaceElevated": "#FFFFFF",
+    "text": "#303D46",
+    "muted": "#5B6C78",
+    "border": "#D9E3E9",
+    "accent": "#466B80",
+    "emotion": "#466B80",
+    "accentText": "#466B80"
+  },
+  "lavender-fog": {
+    "primary": "#75608B",
+    "primaryLight": "#75608B",
+    "soft": "#EEE7F4",
+    "background": "#F9F7FB",
+    "surface": "#FFFFFF",
+    "surfaceElevated": "#FFFFFF",
+    "text": "#3D3548",
+    "muted": "#6E6179",
+    "border": "#E3DCEB",
+    "accent": "#75608B",
+    "emotion": "#75608B",
+    "accentText": "#75608B"
+  },
+  "autumn-breeze": {
+    "primary": "#91614C",
+    "primaryLight": "#A05B43",
+    "soft": "#F5E8DF",
+    "background": "#FBF7F3",
+    "surface": "#FFFFFF",
+    "surfaceElevated": "#FFFFFF",
+    "text": "#45382F",
+    "muted": "#74655B",
+    "border": "#E8DED5",
+    "accent": "#A05B43",
+    "emotion": "#91614C",
+    "accentText": "#91614C"
+  },
+  "champagne-day": {
+    "primary": "#79654D",
+    "primaryLight": "#79654D",
+    "soft": "#F0EADF",
+    "background": "#FAF9F5",
+    "surface": "#FFFFFF",
+    "surfaceElevated": "#FFFFFF",
+    "text": "#403A32",
+    "muted": "#6D665A",
+    "border": "#E3DFD4",
+    "accent": "#79654D",
+    "emotion": "#79654D",
+    "accentText": "#79654D"
+  },
+  "mono-track": {
+    "primary": "#555B65",
+    "primaryLight": "#555B65",
+    "soft": "#EAECEF",
+    "background": "#F7F8F9",
+    "surface": "#FFFFFF",
+    "surfaceElevated": "#FFFFFF",
+    "text": "#30343B",
+    "muted": "#636973",
+    "border": "#DDE1E6",
+    "accent": "#555B65",
+    "emotion": "#555B65",
+    "accentText": "#555B65"
+  },
+  "neon-night": {
+    "primary": "#79608F",
+    "primaryLight": "#79608F",
+    "soft": "#3B2E47",
+    "background": "#211C28",
+    "surface": "#2B2434",
+    "surfaceElevated": "#2B2434",
+    "text": "#F4EEF8",
+    "muted": "#C7BCCE",
+    "border": "#514459",
+    "accent": "#79608F",
+    "emotion": "#D5BBE5",
+    "accentText": "#D5BBE5"
+  }
 };
 
 const validTheme = (value: string | null) => themes.some((theme) => theme.id === value) ? value! : DEFAULT_THEME;
@@ -80,12 +210,14 @@ function makeThemeButton(theme: RouteTheme, selectedId: string, onSelect: (id: s
   button.type = 'button';
   button.className = `route-theme-option${theme.id === selectedId ? ' active' : ''}`;
   button.dataset.routeThemeOption = theme.id;
-  button.style.setProperty('--option-primary', theme.colors[3]);
-  button.style.setProperty('--option-accent', theme.colors[0]);
+  const palette = previewPalettes[theme.id];
+  button.setAttribute('aria-pressed', String(theme.id === selectedId));
+  button.style.setProperty('--option-primary', palette.accentText);
+  button.style.setProperty('--option-accent', palette.accent);
 
   const swatch = document.createElement('span');
   swatch.className = 'route-theme-swatch four-color';
-  theme.colors.forEach((color) => {
+  [palette.accent, palette.soft, palette.background, palette.primary].forEach((color) => {
     const chip = document.createElement('i');
     chip.style.background = color;
     swatch.appendChild(chip);
@@ -124,6 +256,7 @@ function previewTextColor(hex: string) {
 function updatePreview(preview: HTMLElement, theme: RouteTheme) {
   const palette = previewPalettes[theme.id] ?? previewPalettes[DEFAULT_THEME];
   preview.style.setProperty('--preview-accent', palette.accent);
+  preview.style.setProperty('--preview-accent-text', palette.accentText);
   preview.style.setProperty('--preview-soft', palette.soft);
   preview.style.setProperty('--preview-bg', palette.background);
   preview.style.setProperty('--preview-primary', palette.primary);
@@ -293,7 +426,7 @@ function openThemeSheet() {
   const header = document.createElement('div');
   header.className = 'route-theme-sheet-header';
   const heading = document.createElement('div');
-  heading.innerHTML = '<small>ROUTE THEME</small><h2>테마 선택</h2><p>홈과 대화방 미리보기를 확인하고 4색 조합을 비교하세요.</p>';
+  heading.innerHTML = '<small>ROUTE THEME</small><h2>테마 선택</h2><p>홈과 대화방에서 우리에게 어울리는 분위기를 골라보세요.</p>';
   const close = document.createElement('button');
   close.type = 'button';
   close.className = 'route-theme-sheet-close';
@@ -306,7 +439,7 @@ function openThemeSheet() {
   const refresh = () => {
     const selected = themeById(pendingId);
     updatePreview(preview, selected);
-    options.querySelectorAll<HTMLButtonElement>('[data-route-theme-option]').forEach((button) => button.classList.toggle('active', button.dataset.routeThemeOption === pendingId));
+    options.querySelectorAll<HTMLButtonElement>('[data-route-theme-option]').forEach((button) => { const selected = button.dataset.routeThemeOption === pendingId; button.classList.toggle('active', selected); button.setAttribute('aria-pressed', String(selected)); });
   };
   options.append(...themes.map((theme) => makeThemeButton(theme, pendingId, (id) => { pendingId = id; refresh(); })));
   const note = document.createElement('p');
