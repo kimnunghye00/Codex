@@ -1,4 +1,4 @@
-name: Pin ROUTE dependency versions
+name: Pin 단둘이 dependency versions
 
 on:
   push:
@@ -35,7 +35,7 @@ jobs:
       - name: Verify deterministic install
         run: npm ci
 
-      - name: Run ROUTE stability suite
+      - name: Run 단둘이 stability suite
         run: npm run stability
 
       - name: Commit pinned manifests
