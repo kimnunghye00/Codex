@@ -12,7 +12,7 @@ type UserChatState = {
 type CloudMessage = {
   id: number;
   authorUid: string;
-  type: 'text' | 'image' | 'gallery' | 'gif' | 'sticker' | 'file' | 'contact' | 'audio';
+  type: 'text' | 'image' | 'gallery' | 'gif' | 'sticker' | 'file' | 'contact' | 'audio' | 'call';
   text?: string;
   imageUrl?: string;
   imageUrls?: string[];
@@ -24,6 +24,10 @@ type CloudMessage = {
   audioDuration?: number;
   contactName?: string;
   contactPhone?: string;
+  callId?: string;
+  callKind?: 'voice' | 'video';
+  callStatus?: 'completed' | 'rejected' | 'cancelled' | 'failed';
+  callDuration?: number;
   timestamp: string;
   createdAt?: unknown;
   read?: boolean;
@@ -85,6 +89,10 @@ function toMessage(snapshotDoc: { id: string; data: () => unknown }, currentUid:
     audioDuration: data.audioDuration,
     contactName: data.contactName,
     contactPhone: data.contactPhone,
+    callId: data.callId,
+    callKind: data.callKind,
+    callStatus: data.callStatus,
+    callDuration: data.callDuration,
     timestamp: data.timestamp || new Date().toISOString(),
     read: Boolean(data.read),
     replyTo: data.replyTo,
@@ -115,6 +123,10 @@ function messageRenderSignature(message: Message) {
     audioDuration: message.audioDuration ?? 0,
     contactName: message.contactName ?? '',
     contactPhone: message.contactPhone ?? '',
+    callId: message.callId ?? '',
+    callKind: message.callKind ?? '',
+    callStatus: message.callStatus ?? '',
+    callDuration: message.callDuration ?? 0,
     timestamp: message.timestamp ?? '',
     read: message.read ?? false,
     replyTo: message.replyTo ?? null,
@@ -338,6 +350,10 @@ export async function sendCoupleMessage(coupleId: string, currentUid: string, me
   if (typeof message.audioDuration === 'number') payload.audioDuration = message.audioDuration;
   if (message.contactName) payload.contactName = message.contactName;
   if (message.contactPhone) payload.contactPhone = message.contactPhone;
+  if (message.callId) payload.callId = message.callId;
+  if (message.callKind) payload.callKind = message.callKind;
+  if (message.callStatus) payload.callStatus = message.callStatus;
+  if (typeof message.callDuration === 'number') payload.callDuration = message.callDuration;
   if (message.replyTo) payload.replyTo = message.replyTo;
   if (message.scheduledFor) payload.scheduledFor = message.scheduledFor;
   await setDoc(messageRef(coupleId, message.id), payload);
