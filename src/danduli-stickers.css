@@ -57,3 +57,46 @@
   .composer-sticker-tray .danduli-sticker { width: 64px; height: 64px; }
   .chat-sticker-art { width: 136px; height: 136px; }
 }
+
+
+/* Sticker messages are intentionally NOT chat bubbles.
+ * Keep this selector independent from .bubble so theme rules such as
+ * .mine .bubble can never paint the couple-chat background behind stickers. */
+.chat-page .sticker-message-button {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  display: block !important;
+  width: fit-content !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  outline: 0 !important;
+  color: inherit !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font: inherit !important;
+  line-height: 1 !important;
+  text-align: left !important;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.chat-page .sticker-message-button::before,
+.chat-page .sticker-message-button::after {
+  content: none !important;
+  display: none !important;
+  background: transparent !important;
+}
+.chat-page .bubble-row.mine .sticker-message-button {
+  margin-left: auto !important;
+  background: transparent !important;
+}
+.chat-page .sticker-message-button:hover,
+.chat-page .sticker-message-button:focus,
+.chat-page .sticker-message-button:active {
+  background: transparent !important;
+  box-shadow: none !important;
+}
