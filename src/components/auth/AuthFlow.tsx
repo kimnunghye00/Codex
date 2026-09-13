@@ -34,7 +34,7 @@ const normalizeKoreanPhone = (value: string) => {
 };
 
 // Firebase Auth does not provide a phone-number + password credential.
-// ROUTE keeps this generated address strictly as an internal credential key so
+// 단둘이는 이 생성 주소를 기존 계정 호환을 위한 내부 인증 키로만 사용합니다.
 // users can sign in with their verified phone number and password. It is never
 // accepted from the UI, displayed to users, or used as a contact email.
 const phoneLoginEmail = (phone: string) => {
@@ -87,7 +87,7 @@ const messageFor = (error: unknown) => {
 };
 
 export function Wordmark() {
-  return <div className="wordmark"><strong>ROUTE.</strong></div>;
+  return <div className="wordmark"><strong>단둘이</strong></div>;
 }
 
 export function AuthFlow() {
@@ -168,7 +168,7 @@ export function AuthFlow() {
       changeMode('signup-code');
       setNotice('인증번호 6자리를 문자로 보냈어요.');
     } catch (cause) {
-      console.error('[ROUTE signup SMS]', cause);
+      console.error('[DANDULI signup SMS]', cause);
       destroyVerifier();
       setError(messageFor(cause));
     } finally {
@@ -232,7 +232,7 @@ export function AuthFlow() {
       changeMode('reset-code');
       setNotice('인증번호 6자리를 문자로 보냈어요.');
     } catch (cause) {
-      console.error('[ROUTE password recovery SMS]', cause);
+      console.error('[DANDULI password recovery SMS]', cause);
       destroyVerifier();
       setError(messageFor(cause));
     } finally {
