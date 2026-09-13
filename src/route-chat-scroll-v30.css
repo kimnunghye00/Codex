@@ -4,68 +4,68 @@
 .chat-page .composer .composer-gif-shortcut{width:40px!important;height:40px!important;min-width:40px!important;min-height:40px!important;flex:0 0 40px!important;display:grid!important;place-items:center!important;border:0!important;border-radius:50%!important;color:var(--primary)!important;background:color-mix(in srgb,var(--primary-soft) 78%,var(--surface) 22%)!important}
 
 
-/* DANDULI action grid v32 */
+/* DANDULI action grid v33 - compact chat action menu */
 .chat-page .composer-extra-row{
   width:min(760px,calc(100% - 20px))!important;
   display:grid!important;
   grid-template-columns:repeat(2,minmax(0,1fr))!important;
-  gap:10px!important;
-  margin:10px auto 8px!important;
-  padding:14px!important;
+  gap:6px!important;
+  margin:5px auto 6px!important;
+  padding:7px!important;
   border:1px solid color-mix(in srgb,var(--primary) 10%,var(--border))!important;
-  border-radius:24px!important;
-  background:color-mix(in srgb,var(--primary) 9%,var(--surface))!important;
-  box-shadow:0 10px 28px color-mix(in srgb,var(--primary) 8%,transparent)!important;
+  border-radius:18px!important;
+  background:color-mix(in srgb,var(--primary) 7%,var(--surface))!important;
+  box-shadow:0 6px 18px color-mix(in srgb,var(--primary) 6%,transparent)!important;
 }
 .chat-page .composer-extra-row button{
   min-width:0!important;
-  min-height:96px!important;
+  min-height:62px!important;
   display:flex!important;
   flex-direction:column!important;
   align-items:center!important;
   justify-content:center!important;
-  gap:9px!important;
-  padding:14px 8px 12px!important;
+  gap:4px!important;
+  padding:7px 6px 6px!important;
   border:1px solid color-mix(in srgb,var(--primary) 7%,var(--border))!important;
-  border-radius:18px!important;
-  background:color-mix(in srgb,var(--primary) 6%,var(--surface))!important;
+  border-radius:13px!important;
+  background:color-mix(in srgb,var(--primary) 5%,var(--surface))!important;
   color:var(--text-primary)!important;
-  font-size:13px!important;
+  font-size:10px!important;
   font-weight:700!important;
   letter-spacing:-.02em!important;
 }
 .chat-page .composer-extra-row button:active{
-  transform:scale(.975);
-  background:color-mix(in srgb,var(--primary) 11%,var(--surface))!important;
+  transform:scale(.98);
+  background:color-mix(in srgb,var(--primary) 10%,var(--surface))!important;
 }
 .chat-page .composer-extra-row svg{
-  width:36px!important;
-  height:36px!important;
+  width:24px!important;
+  height:24px!important;
   color:color-mix(in srgb,var(--text-primary) 76%,var(--primary) 24%)!important;
 }
 .chat-page .composer-extra-row .extra-heart{
   display:grid!important;
   place-items:center!important;
-  height:36px!important;
+  height:24px!important;
   color:color-mix(in srgb,var(--text-primary) 76%,var(--primary) 24%)!important;
-  font-size:42px!important;
-  line-height:36px!important;
+  font-size:29px!important;
+  line-height:24px!important;
 }
 @media(max-width:480px){
   .chat-page .composer-extra-row{
-    width:calc(100% - 16px)!important;
-    gap:8px!important;
-    margin:8px auto 6px!important;
-    padding:11px!important;
-    border-radius:21px!important;
+    width:calc(100% - 14px)!important;
+    gap:5px!important;
+    margin:4px auto 5px!important;
+    padding:6px!important;
+    border-radius:16px!important;
   }
   .chat-page .composer-extra-row button{
-    min-height:82px!important;
-    gap:7px!important;
-    padding:11px 6px 10px!important;
-    border-radius:16px!important;
-    font-size:12px!important;
+    min-height:56px!important;
+    gap:3px!important;
+    padding:6px 4px 5px!important;
+    border-radius:12px!important;
+    font-size:9px!important;
   }
-  .chat-page .composer-extra-row svg{width:32px!important;height:32px!important}
-  .chat-page .composer-extra-row .extra-heart{height:32px!important;font-size:37px!important;line-height:32px!important}
+  .chat-page .composer-extra-row svg{width:22px!important;height:22px!important}
+  .chat-page .composer-extra-row .extra-heart{height:22px!important;font-size:27px!important;line-height:22px!important}
 }
