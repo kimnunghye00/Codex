@@ -104,6 +104,8 @@ const coupleSession = read('src/utils/coupleConnectSession.ts');
 const chat = read('src/components/chat/ChatPage.tsx');
 const messageId = read('src/utils/messageId.ts');
 const releaseFlags = read('src/config/releaseFlags.ts');
+const coupleCall = read('src/lib/coupleCall.ts');
+const callManager = read('src/components/call/DanduliCallManager.tsx');
 const runtimeTests = read('tests/route-runtime.test.ts');
 const appIconNative = read('src/app-icon-native.ts');
 const native = read('src/lib/native.ts');
@@ -138,7 +140,9 @@ check('recovery no longer self-installs on import', !recovery.includes('installR
 
 check('message ids use secure random words', messageId.includes('cryptoApi?.getRandomValues') && messageId.includes('messageIdFromRandomWords'));
 check('chat no longer uses timestamp-only message ids', chat.includes('createMessageId') && !chat.includes('Date.now() * 1000'));
-check('unfinished calls are render-gated', releaseFlags.includes('CALLING_ENABLED = false') && chat.includes('CALLING_ENABLED &&'));
+check('voice/video calls are release-enabled', releaseFlags.includes('CALLING_ENABLED = true') && chat.includes('danduli-call-request'));
+check('calls use realtime couple signaling', coupleCall.includes('subscribeCoupleCall') && coupleCall.includes('startCoupleCall') && coupleCall.includes('appendCoupleCallCandidate'));
+check('call manager owns WebRTC media', callManager.includes('RTCPeerConnection') && callManager.includes('getUserMedia') && callManager.includes('acceptIncoming'));
 
 check('runtime tests execute production helpers',
   runtimeTests.includes("../src/utils/messageId.ts")
