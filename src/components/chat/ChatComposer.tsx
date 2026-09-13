@@ -1,4 +1,4 @@
-import { CalendarClock, Gift, ImagePlus, Plus, Send, Sticker as StickerIcon, X } from 'lucide-react';
+import { CalendarClock, Gift, ImagePlus, Plus, Send, SmilePlus, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Message } from '../../types';
@@ -121,7 +121,7 @@ export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onIma
         <input ref={fileRef} className="file-input" type="file" accept="image/*" multiple aria-label={`사진 선택, 최대 ${MAX_CHAT_PHOTO_SELECTION}장`} onChange={(event) => { addPendingPhotos(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
         <input ref={gifRef} className="file-input" type="file" accept="image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (file) void onGif(file); event.target.value = ''; }} />
         <button type="button" onClick={() => { setExtras((value) => !value); setStickerOpen(false); }} aria-label="추가 기능"><Plus size={21} /></button>
-        <button type="button" className={`composer-sticker-toggle ${stickerOpen ? 'active' : ''}`} onClick={() => { setStickerOpen((value) => !value); setExtras(false); setQuickOpen(false); }} aria-label="이모티콘"><StickerIcon size={20} /></button>
+        <button type="button" className={`composer-sticker-toggle ${stickerOpen ? 'active' : ''}`} onClick={() => { setStickerOpen((value) => !value); setExtras(false); setQuickOpen(false); }} aria-label="이모티콘"><SmilePlus size={21} strokeWidth={2.1} /></button>
         <textarea
           rows={1}
           value={draft}
