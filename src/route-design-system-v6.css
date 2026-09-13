@@ -1,4 +1,4 @@
-/* ROUTE design system v6
+/* 단둘이 design system v6
  * Final visual rules for spacing, surfaces, controls and the home dashboard.
  * Loaded last so feature-specific legacy CSS cannot silently override the product language.
  */
@@ -98,7 +98,7 @@ button:not(:disabled) {
   background: var(--route-primary-soft);
 }
 
-/* Home: ROUTE's main product identity ------------------------------------ */
+/* Home: 단둘이 main product identity ------------------------------------ */
 .home-dashboard {
   --home-card-radius: var(--route-radius-xl);
   --home-card-border: var(--route-border-soft);
@@ -174,7 +174,7 @@ button:not(:disabled) {
 }
 
 .home-dashboard .home-map-card::before {
-  content: 'OUR ROUTE  ·  TOGETHER' !important;
+  content: '단 하나의  ·  둘만의 이야기' !important;
   left: 20px !important;
   bottom: 20px !important;
   padding: 6px 10px !important;
@@ -234,7 +234,7 @@ button:not(:disabled) {
 }
 
 .home-dashboard .home-card-title span::before {
-  content: 'ROUTE  /  ' !important;
+  content: '단둘이  /  ' !important;
   font-weight: 800;
 }
 
