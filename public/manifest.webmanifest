@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "ROUTE - 우리 둘만의 공간",
-  "short_name": "ROUTE",
-  "description": "우리 둘의 채팅, 추억, 일정, 위치를 함께 기록하는 ROUTE",
+  "name": "단둘이 - 단 하나의, 둘만의 이야기",
+  "short_name": "단둘이",
+  "description": "우리 둘의 채팅, 추억, 일정, 위치를 함께 기록하는 커플 앱 단둘이",
   "lang": "ko-KR",
   "start_url": "/",
   "scope": "/",
