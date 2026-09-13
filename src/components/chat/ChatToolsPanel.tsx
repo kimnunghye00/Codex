@@ -84,6 +84,7 @@ export function ChatToolsPanel({
   onImport,
   onSticker,
   onClose,
+  initialSection = 'menu',
 }: {
   messages: Message[];
   partnerName: string;
@@ -94,8 +95,9 @@ export function ChatToolsPanel({
   onImport: (messages: Message[]) => void;
   onSticker: (sticker: string) => void;
   onClose: () => void;
+  initialSection?: 'menu' | 'search' | 'media' | 'store' | 'settings' | 'stickers';
 }) {
-  const [section, setSection] = useState<'menu' | 'search' | 'media' | 'store' | 'settings' | 'stickers'>('menu');
+  const [section, setSection] = useState<'menu' | 'search' | 'media' | 'store' | 'settings' | 'stickers'>(initialSection);
   const [query, setQuery] = useState('');
   const [feedback, setFeedback] = useState('');
   const importRef = useRef<HTMLInputElement>(null);
@@ -134,7 +136,7 @@ export function ChatToolsPanel({
       try {
         const data = JSON.parse(String(reader.result ?? '')) as { format?: string; messages?: Message[] };
         if (data.format !== 'ROUTE_CHAT_BACKUP' || !Array.isArray(data.messages)) throw new Error('invalid');
-        const valid = data.messages.filter((message) => typeof message.id === 'number' && (message.sender === 'me' || message.sender === 'partner') && (message.type === 'text' || message.type === 'image' || message.type === 'gallery' || message.type === 'gif' || message.type === 'sticker'));
+        const valid = data.messages.filter((message) => typeof message.id === 'number' && (message.sender === 'me' || message.sender === 'partner') && (message.type === 'text' || message.type === 'image' || message.type === 'gallery' || message.type === 'gif' || message.type === 'sticker' || message.type === 'file' || message.type === 'contact' || message.type === 'audio'));
         onImport(valid);
         setFeedback(`${valid.length}개의 대화를 불러왔어요.`);
       } catch {
