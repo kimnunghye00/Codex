@@ -24,7 +24,7 @@ jobs:
       - name: Install app dependencies
         run: npm ci
 
-      - name: Verify ROUTE web app build
+      - name: Verify DANDULI web app build
         run: npm run build
 
       - name: Verify Electron main syntax
@@ -34,32 +34,32 @@ jobs:
         shell: pwsh
         run: npm install --no-save --package-lock=false electron@latest electron-builder@latest
 
-      - name: Build ROUTE Windows installer
+      - name: Build DANDULI Windows installer
         shell: pwsh
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npx electron-builder --win nsis --x64 --config electron-builder.yml --publish never
 
-      - name: Verify bundled ROUTE UI
+      - name: Verify bundled DANDULI UI
         shell: pwsh
         run: |
           $index = 'release/windows/win-unpacked/resources/dist/index.html'
-          if (-not (Test-Path $index)) { throw 'Bundled ROUTE UI was not included in the Windows app.' }
+          if (-not (Test-Path $index)) { throw 'Bundled DANDULI UI was not included in the Windows app.' }
           $assets = Get-ChildItem -Path 'release/windows/win-unpacked/resources/dist/assets' -File -ErrorAction SilentlyContinue
-          if (-not $assets -or $assets.Count -lt 1) { throw 'Bundled ROUTE UI assets were not included in the Windows app.' }
+          if (-not $assets -or $assets.Count -lt 1) { throw 'Bundled DANDULI UI assets were not included in the Windows app.' }
           Write-Host "Bundled UI verified: $index / $($assets.Count) assets"
 
       - name: Verify installer
         shell: pwsh
         run: |
           $files = Get-ChildItem -Path release/windows -Filter '*.exe' -File
-          if ($files.Count -lt 1) { throw 'ROUTE Windows installer was not generated.' }
+          if ($files.Count -lt 1) { throw 'DANDULI Windows installer was not generated.' }
           $files | ForEach-Object { Write-Host "Generated: $($_.FullName) ($($_.Length) bytes)" }
 
-      - name: Upload ROUTE Windows installer
+      - name: Upload DANDULI Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: ROUTE-Windows-Setup
+          name: DANDULI-Windows-Setup
           path: release/windows/*.exe
           if-no-files-found: error
           retention-days: 30
