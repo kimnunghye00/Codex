@@ -270,3 +270,38 @@ export async function uploadChatMedia(
     throw cause;
   }
 }
+
+
+function safeAttachmentExtension(file: File) {
+  const fromName = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
+  if (fromName && fromName.length <= 10) return fromName;
+  if (file.type.startsWith('audio/')) return file.type.includes('webm') ? 'webm' : file.type.includes('mpeg') ? 'mp3' : 'audio';
+  return 'bin';
+}
+
+export async function uploadChatAttachment(
+  coupleId: string,
+  ownerUid: string,
+  messageId: number,
+  file: File,
+  kind: 'file' | 'audio',
+) {
+  const extension = safeAttachmentExtension(file);
+  const path = `couples/${coupleId}/chatMedia/${ownerUid}/${messageId}/${kind}-001.${extension}`;
+  const storageRef = ref(storage, path);
+  await uploadBytes(storageRef, file, {
+    contentType: file.type || 'application/octet-stream',
+    cacheControl: 'private,max-age=3600',
+    customMetadata: {
+      coupleId,
+      ownerUid,
+      messageId: String(messageId),
+      variant: kind,
+      originalName: file.name,
+    },
+  });
+  return {
+    url: await getDownloadURL(storageRef),
+    path,
+  };
+}
