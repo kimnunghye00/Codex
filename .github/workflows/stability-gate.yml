@@ -1,4 +1,4 @@
-name: ROUTE Stability Gate
+name: 단둘이 Stability Gate
 
 on:
   push:
@@ -73,4 +73,4 @@ jobs:
           grep -q '"storage"' firebase.json
           grep -q "backups" firestore.rules
           grep -q "backupMedia" storage.rules
-          echo "ROUTE critical static checks passed."
+          echo "단둘이 critical static checks passed."
