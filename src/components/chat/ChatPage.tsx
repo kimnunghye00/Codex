@@ -14,6 +14,7 @@ import type { Message } from '../../types';
 import { localDateKey, messageDateLabel } from '../../utils/dates';
 import { isChatMediaMessage, loadChatMemoryMessageIds, toggleChatMessageMemory } from '../../utils/featureFlow';
 import { createMessageId } from '../../utils/messageId';
+import { typingTimeRemaining } from '../../utils/typingStatus';
 import { ChatBubble } from './ChatBubble';
 import { ChatComposer } from './ChatComposer';
 import { ChatToolsPanel, loadChatPreferences, saveChatPreferences, type ChatPreferences } from './ChatToolsPanel';
@@ -346,11 +347,26 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     });
   }, [connection?.coupleId]);
   useEffect(() => {
-    if (!connection?.coupleId || !connection.partnerUid) { setPartnerTyping(false); return; }
-    return onSnapshot(doc(db, 'couples', connection.coupleId, 'typing', connection.partnerUid), (snapshot) => {
-      const data = snapshot.data() as { typing?: boolean; updatedAt?: number } | undefined;
-      setPartnerTyping(Boolean(data?.typing && data.updatedAt && Date.now() - data.updatedAt < 8000));
+    setPartnerTyping(false);
+    if (!connection?.coupleId || !connection.partnerUid) return;
+    let expiryTimer: number | undefined;
+    const clearExpiry = () => {
+      if (expiryTimer !== undefined) window.clearTimeout(expiryTimer);
+      expiryTimer = undefined;
+    };
+    const unsubscribe = onSnapshot(doc(db, 'couples', connection.coupleId, 'typing', connection.partnerUid), (snapshot) => {
+      clearExpiry();
+      const remaining = typingTimeRemaining(snapshot.data());
+      setPartnerTyping(remaining > 0);
+      if (remaining > 0) expiryTimer = window.setTimeout(() => setPartnerTyping(false), remaining);
+    }, () => {
+      clearExpiry();
+      setPartnerTyping(false);
     });
+    return () => {
+      unsubscribe();
+      clearExpiry();
+    };
   }, [connection?.coupleId, connection?.partnerUid]);
   useEffect(() => {
     if (!connection?.coupleId || !currentUid) return;

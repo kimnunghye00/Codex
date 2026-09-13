@@ -18,6 +18,47 @@ function load<T>(key: string, fallback: T): T {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function cachedMessages(): Message[] {
+  const stored = load<unknown>(MESSAGE_KEY, []);
+  if (!Array.isArray(stored)) return [];
+  return stored.filter((item): item is Message => isRecord(item)
+    && Number.isSafeInteger(item.id) && typeof item.timestamp === 'string'
+    && (item.sender === 'me' || item.sender === 'partner')
+    && ['text', 'image', 'gallery', 'gif'].includes(String(item.type)))
+    .map((item) => ({
+      ...item,
+      text: typeof item.text === 'string' ? item.text : undefined,
+      imageUrl: typeof item.imageUrl === 'string' ? item.imageUrl : undefined,
+      imageUrls: item.imageUrls === undefined ? undefined : stringList(item.imageUrls),
+      reactions: Array.isArray(item.reactions) ? item.reactions.filter((reaction) => isRecord(reaction)
+        && typeof reaction.emoji === 'string' && (reaction.by === 'me' || reaction.by === 'partner')) : undefined,
+    }));
+}
+
+function cachedMemories(): Memory[] {
+  const stored = load<unknown>(MEMORY_KEY, []);
+  if (!Array.isArray(stored)) return [];
+  return stored.filter((item) => isRecord(item) && Number.isSafeInteger(item.id))
+    .map((item) => ({
+      ...item,
+      title: typeof item.title === 'string' ? item.title : '',
+      date: typeof item.date === 'string' ? item.date : '',
+      description: typeof item.description === 'string' ? item.description : '',
+      images: stringList(item.images),
+      videos: item.videos === undefined ? undefined : stringList(item.videos),
+      tags: item.tags === undefined ? undefined : stringList(item.tags),
+      createdBy: item.createdBy === 'partner' ? 'partner' : 'me',
+    } as Memory));
+}
+
 function save<T>(key: string, value: T) {
   try {
     const next = JSON.stringify(value);
@@ -76,11 +117,13 @@ function recentMemoryCache(memories: Memory[]) {
   // Firestore's couple-scoped memories collection is the durable source of
   // truth (see subscribeCoupleMemories in App.tsx); this cache only needs to
   // cover the fast first paint before that listener resolves.
-  return sanitizeMemoriesForStorage(memories).slice(0, MEMORY_CACHE_LIMIT);
+  return sanitizeMemoriesForStorage(memories.slice(0, MEMORY_CACHE_LIMIT));
 }
 
 export function loadDeletedMemories(): MemoryDeletionMap {
-  return load<MemoryDeletionMap>(MEMORY_DELETED_KEY, {});
+  const stored = load<unknown>(MEMORY_DELETED_KEY, {});
+  if (!isRecord(stored)) return {};
+  return Object.fromEntries(Object.entries(stored).filter(([, value]) => typeof value === 'string')) as MemoryDeletionMap;
 }
 
 export function saveDeletedMemories(value: MemoryDeletionMap) {
@@ -120,10 +163,10 @@ function reconcileDeletionMap(previous: Memory[], next: Memory[]) {
 
 // Real-couple testing starts with a clean slate. Old MELUNI/SAI demo keys are intentionally ignored.
 export const loadMessages = (_fallback: Message[]) => {
-  const stored = load<Message[]>(MESSAGE_KEY, []);
+  const stored = cachedMessages();
   const recent = recentChatCache(stored);
   // Migrate away both old base64 galleries and oversized chat-history caches.
-  if (recent.length !== stored.length) save(MESSAGE_KEY, recent);
+  save(MESSAGE_KEY, recent);
   return recent;
 };
 export const saveMessages = (messages: Message[]) => {
@@ -134,15 +177,15 @@ export const saveMessages = (messages: Message[]) => {
 };
 export const loadMemories = (_fallback: Memory[]) => {
   const deleted = loadDeletedMemories();
-  const stored = load<Memory[]>(MEMORY_KEY, []);
+  const stored = cachedMemories();
   const cleaned = recentMemoryCache(stored);
   // Rewrite immediately so an old cache saved before this fix (which could
   // hold embedded base64 photos with no size cap) never gets read again.
-  if (JSON.stringify(cleaned) !== JSON.stringify(stored)) save(MEMORY_KEY, cleaned);
+  save(MEMORY_KEY, cleaned);
   return cleaned.filter((memory) => !deleted[String(memory.id)]);
 };
 export const saveMemories = (memories: Memory[]) => {
-  const previous = load<Memory[]>(MEMORY_KEY, []);
+  const previous = cachedMemories();
   const deletionsChanged = reconcileDeletionMap(previous, memories);
   const memoriesChanged = save(MEMORY_KEY, recentMemoryCache(memories));
   if (memoriesChanged || deletionsChanged) {
