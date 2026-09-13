@@ -533,3 +533,41 @@
     margin-top: 10px;
   }
 }
+/* Mobile home whitespace compacting ------------------------------------ */
+/* Reduce only the outer mobile whitespace. Card/grid proportions stay
+ * exactly as defined in home-couple-layout.css. */
+@media (max-width:700px){
+  .home-dashboard.page{
+    padding-left:6px;
+    padding-right:6px;
+  }
+
+  .home-dashboard > .topbar{
+    width:calc(100% + 12px)!important;
+    margin-left:-6px!important;
+    margin-right:-6px!important;
+    padding-left:max(16px,env(safe-area-inset-left))!important;
+    padding-right:max(16px,env(safe-area-inset-right))!important;
+  }
+
+  .home-dashboard-grid{
+    margin-top:7px;
+  }
+}
+
+@media (max-width:390px){
+  .home-dashboard.page{
+    padding-left:5px;
+    padding-right:5px;
+  }
+
+  .home-dashboard > .topbar{
+    width:calc(100% + 10px)!important;
+    margin-left:-5px!important;
+    margin-right:-5px!important;
+  }
+
+  .home-dashboard-grid{
+    margin-top:6px;
+  }
+}
