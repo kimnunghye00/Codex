@@ -1,4 +1,4 @@
-/* ROUTE home polish v5
+/* 단둘이 home polish v5
  * Goal: make the dashboard feel like one product instead of a stack of cards.
  * The visual language is built around a route line, two waypoints and one heart node.
  */
@@ -31,7 +31,7 @@
   transform: scale(.988);
 }
 
-/* Couple profile = two people connected by one ROUTE line. */
+/* Couple profile = two people connected by one couple line. */
 .home-dashboard .home-couple-profile-card {
   position: relative;
   isolation: isolate;
@@ -88,7 +88,7 @@
 }
 
 .home-dashboard .home-map-card::before {
-  content: 'OUR ROUTE';
+  content: '우리 둘';
   position: absolute;
   z-index: 6;
   left: 18px;
@@ -173,7 +173,7 @@
 }
 
 .home-dashboard .home-card-title span::before {
-  content: 'ROUTE · ';
+  content: '단둘이 · ';
   color: var(--primary);
   font-size: .78em;
   letter-spacing: .04em;
