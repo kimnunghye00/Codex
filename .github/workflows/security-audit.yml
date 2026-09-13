@@ -1,4 +1,4 @@
-name: ROUTE Dependency Security Audit
+name: 단둘이 Dependency Security Audit
 
 on:
   workflow_dispatch:
