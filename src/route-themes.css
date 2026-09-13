@@ -1,15 +1,5 @@
 /* ROUTE palette themes supplied for the mobile app */
-:root,:root[data-route-theme='sunset-route']{--primary:#3D405B;--primary-light:#E07A5F;--primary-soft:#F4F1DE;--background:#FAF8F5;--surface:#FFFFFF;--text-primary:#3D405B;--text-secondary:#756F6A;--border:#E8DED1;--emotion:#E07A5F;--route-accent:#E07A5F;--route-accent-soft:#F4F1DE}
-:root[data-route-theme='midnight-walk']{--primary:#0E2755;--primary-light:#66779B;--primary-soft:#283852;--background:#111827;--surface:#1B2436;--text-primary:#FAF8F5;--text-secondary:#B8C0D1;--border:#36455B;--emotion:#F4F1DE;--route-accent:#66779B;--route-accent-soft:#283852;color-scheme:dark}
-:root[data-route-theme='forest-trail']{--primary:#2F6B45;--primary-light:#6B9B57;--primary-soft:#DCE9C7;--background:#F3F8ED;--surface:#FFFFFF;--text-primary:#294433;--text-secondary:#6D786F;--border:#D7E2CC;--emotion:#6B9B57;--route-accent:#6B9B57;--route-accent-soft:#DCE9C7}
-:root[data-route-theme='spring-blossom']{--primary:#C94F76;--primary-light:#ED6F8C;--primary-soft:#F9DDE5;--background:#FFF5F8;--surface:#FFFFFF;--text-primary:#623746;--text-secondary:#957481;--border:#F1D5DE;--emotion:#ED6F8C;--route-accent:#ED6F8C;--route-accent-soft:#F9DDE5}
-:root[data-route-theme='ocean-drive']{--primary:#2F6F8F;--primary-light:#4EA3CE;--primary-soft:#D8F0F5;--background:#F2FAFC;--surface:#FFFFFF;--text-primary:#24556C;--text-secondary:#6B8795;--border:#CEE5EA;--emotion:#43AEC4;--route-accent:#43AEC4;--route-accent-soft:#D8F0F5}
-:root[data-route-theme='lavender-fog']{--primary:#3D405B;--primary-light:#9D8BC3;--primary-soft:#E9DDF3;--background:#F8F5FB;--surface:#FFFFFF;--text-primary:#4D4660;--text-secondary:#857D90;--border:#DED5E8;--emotion:#A788BB;--route-accent:#A788BB;--route-accent-soft:#E9DDF3}
-:root[data-route-theme='autumn-breeze']{--primary:#914A36;--primary-light:#E07A5F;--primary-soft:#F6D3B0;--background:#FFF7EE;--surface:#FFFFFF;--text-primary:#60382D;--text-secondary:#8D7167;--border:#EBCFBB;--emotion:#E68634;--route-accent:#E68634;--route-accent-soft:#F6D3B0}
-:root[data-route-theme='champagne-day']{--primary:#8A7256;--primary-light:#D9C29E;--primary-soft:#F4E7C2;--background:#FFFCF4;--surface:#FFFFFF;--text-primary:#5E5143;--text-secondary:#8D8275;--border:#E8DDCA;--emotion:#D9B75D;--route-accent:#D9B75D;--route-accent-soft:#F4E7C2}
-:root[data-route-theme='mono-track']{--primary:#303236;--primary-light:#6D7075;--primary-soft:#ECEDEF;--background:#F6F6F6;--surface:#FFFFFF;--text-primary:#202124;--text-secondary:#777A7E;--border:#D9DADC;--emotion:#606368;--route-accent:#606368;--route-accent-soft:#ECEDEF}
-:root[data-route-theme='neon-night']{--primary:#170D2C;--primary-light:#8D2BC2;--primary-soft:#2C1747;--background:#100A20;--surface:#1B1030;--text-primary:#F7F1FF;--text-secondary:#BDA9D0;--border:#462764;--emotion:#D130B0;--route-accent:#D130B0;--route-accent-soft:#2C1747;color-scheme:dark}
-
+/* Semantic palettes are defined in route-theme-accessibility.css. */
 :root[data-route-theme] body,:root[data-route-theme] .app-shell{background:var(--background);color:var(--text-primary)}
 :root[data-route-theme] .topbar{border-bottom:3px solid var(--route-accent)}
 :root[data-route-theme] .wordmark strong{color:var(--primary)}
@@ -87,3 +77,13 @@
 
 @media(max-width:420px){.route-theme-preview-home-grid{grid-template-columns:minmax(0,1.5fr) minmax(114px,.95fr);gap:5px}.route-theme-preview-real-home{min-height:274px}.route-theme-preview-home-side{grid-template-rows:78px 51px minmax(67px,1fr) 45px}}
 @media(max-width:380px){.route-theme-sheet-options{grid-template-columns:1fr}}
+
+/* Quiet, consistent theme chooser chrome; swatches use the actual palette. */
+.route-theme-preview{border:1px solid var(--preview-border);box-shadow:none}
+.route-theme-option{border:1px solid var(--border);padding:12px;box-shadow:none}
+.route-theme-option.active{border:1px solid var(--option-primary);box-shadow:inset 0 0 0 1px var(--option-primary)}
+.route-theme-title-row b{font-size:12px;line-height:1.5}
+.route-theme-copy small{font-size:10px;line-height:1.5;margin-top:4px}
+.route-theme-sheet-header p,.route-theme-sheet-note{font-size:11px;line-height:1.6}
+.route-theme-option:focus-visible{outline:2px solid var(--accent-text);outline-offset:3px}
+.route-theme-preview-home-nav .active{color:var(--preview-accent-text)}
