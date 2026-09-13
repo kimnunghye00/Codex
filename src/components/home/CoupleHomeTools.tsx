@@ -93,10 +93,7 @@ function romanticAnniversaries(startValue?: string): RomanticAnniversary[] {
   if (!start) return [];
 
   const milestones: RomanticAnniversary[] = [];
-  for (let day = 100; day <= 1000; day += 100) {
-    milestones.push({ id: `day-${day}`, title: `${day}일`, date: dayMilestoneDate(start, day), dayNumber: day });
-  }
-  for (let day = 2000; day <= 10000; day += 1000) {
+  for (let day = 100; day <= 10000; day += 100) {
     milestones.push({ id: `day-${day}`, title: `${day}일`, date: dayMilestoneDate(start, day), dayNumber: day });
   }
   for (let year = 1; year <= 50; year += 1) {
