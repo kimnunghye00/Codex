@@ -155,3 +155,43 @@
   .chat-page .composer-extra-row .extra-heart{height:20px!important;font-size:25px!important;line-height:20px!important}
   .chat-audio-card audio{width:126px;max-width:40vw}
 }
+
+
+/* Call history cards */
+.chat-call-record-card{
+  width:100%;
+  display:flex;
+  align-items:center;
+  gap:9px;
+  min-width:0;
+}
+.chat-call-record-icon{
+  width:36px;
+  height:36px;
+  flex:0 0 36px;
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  color:inherit;
+  background:color-mix(in srgb,currentColor 11%,transparent);
+}
+.chat-call-record-icon svg{width:18px;height:18px}
+.chat-call-record-copy{
+  min-width:0;
+  flex:1;
+  display:grid;
+  gap:2px;
+}
+.chat-call-record-copy b{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:11px;
+}
+.chat-call-record-copy small{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:8px;
+  opacity:.72;
+}
