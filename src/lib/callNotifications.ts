@@ -61,7 +61,6 @@ export async function showIncomingCallNotification(callId: string, partnerName: 
     const notification = new Notification(copy.title, {
       body: copy.body,
       tag: `danduli-call-${callId}`,
-      renotify: true,
       requireInteraction: true,
     });
     notification.onclick = () => {
