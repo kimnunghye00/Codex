@@ -1,8 +1,9 @@
 /* DANDULI cat + bunny sticker pack */
 .danduli-sticker {
   display: inline-block;
-  width: 72px;
-  height: 87px;
+  width: 76px;
+  height: 76px;
+  aspect-ratio: 1;
   flex: 0 0 auto;
   background-image: url('/danduli-stickers.webp');
   background-repeat: no-repeat;
@@ -12,30 +13,30 @@
 .composer-sticker-toggle.active { color: var(--primary) !important; background: var(--primary-soft) !important; }
 .composer-sticker-tray {
   display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;
-  max-height: min(40dvh, 390px); overflow-y: auto; overscroll-behavior: contain;
+  max-height: min(44dvh, 410px); overflow-y: auto; overscroll-behavior: contain;
   padding: 10px 8px 8px; border-top: 1px solid var(--border); background: var(--surface);
   scrollbar-width: none;
 }
 .composer-sticker-tray::-webkit-scrollbar { display: none; }
 .composer-sticker-tray > button {
-  min-width: 0; min-height: 108px; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 3px; padding: 4px 2px; border: 0; border-radius: 13px; color: var(--text-secondary); background: transparent;
+  min-width: 0; min-height: 100px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; padding: 6px 2px; border: 0; border-radius: 13px; color: var(--text-secondary); background: transparent;
 }
 .composer-sticker-tray > button:active { background: var(--primary-soft); transform: scale(.97); }
-.composer-sticker-tray .danduli-sticker { width: 64px; height: 77px; }
+.composer-sticker-tray .danduli-sticker { width: 72px; height: 72px; }
 .composer-sticker-tray small {
-  max-width: 100%; overflow: hidden; font-size: 8px; font-weight: 700; line-height: 1.2;
+  max-width: 100%; overflow: hidden; font-size: 9px; font-weight: 700; line-height: 1.2;
   text-overflow: ellipsis; white-space: nowrap;
 }
 .bubble.sticker-bubble { min-width: 0 !important; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; }
-.chat-sticker-art { width: 132px; height: 159px; filter: drop-shadow(0 5px 8px rgba(86,60,50,.08)); }
+.chat-sticker-art { width: 152px; height: 152px; filter: drop-shadow(0 5px 8px rgba(86,60,50,.08)); }
 .bubble-row.mine .chat-sticker-art { margin-left: auto; }
-.sticker-pack-preview .danduli-sticker { width: 38px; height: 46px; }
-.owned-sticker-preview .danduli-sticker { width: 58px; height: 70px; }
-.owned-sticker-preview > button.danduli-sticker-button { width: 70px; min-width: 70px; height: 82px; padding: 4px; overflow: hidden; }
+.sticker-pack-preview .danduli-sticker { width: 44px; height: 44px; }
+.owned-sticker-preview .danduli-sticker { width: 62px; height: 62px; }
+.owned-sticker-preview > button.danduli-sticker-button { width: 72px; min-width: 72px; height: 72px; padding: 4px; overflow: hidden; }
 @media (max-width: 390px) {
   .composer-sticker-tray { gap: 3px; padding-inline: 5px; }
-  .composer-sticker-tray > button { min-height: 99px; }
-  .composer-sticker-tray .danduli-sticker { width: 58px; height: 70px; }
-  .chat-sticker-art { width: 118px; height: 142px; }
+  .composer-sticker-tray > button { min-height: 92px; }
+  .composer-sticker-tray .danduli-sticker { width: 64px; height: 64px; }
+  .chat-sticker-art { width: 136px; height: 136px; }
 }
