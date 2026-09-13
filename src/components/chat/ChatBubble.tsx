@@ -56,6 +56,56 @@ function formatAudioDuration(seconds?: number) {
   return `${minutes}:${remain}`;
 }
 
+async function downloadAttachment(url: string, name: string, mime?: string) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`attachment-${response.status}`);
+    const bytes = await response.arrayBuffer();
+    const blobUrl = URL.createObjectURL(new Blob([bytes], { type: mime || 'application/octet-stream' }));
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = name || 'attachment';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+  } catch {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+}
+
+function VoiceAttachment({ url, mime }: { url: string; mime?: string }) {
+  const [playbackUrl, setPlaybackUrl] = useState(url);
+
+  useEffect(() => {
+    if (!url || url.startsWith('blob:') || url.startsWith('data:')) {
+      setPlaybackUrl(url);
+      return;
+    }
+    let cancelled = false;
+    let objectUrl = '';
+    void fetch(url)
+      .then((response) => {
+        if (!response.ok) throw new Error(`voice-${response.status}`);
+        return response.arrayBuffer();
+      })
+      .then((bytes) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(new Blob([bytes], { type: mime || 'audio/webm' }));
+        setPlaybackUrl(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setPlaybackUrl(url);
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [url, mime]);
+
+  return <audio controls preload="metadata" src={playbackUrl} onClick={(event) => event.stopPropagation()} />;
+}
+
 function retryableUrl(url: string, retry: number) {
   if (!retry) return url;
   return `${url}${url.includes('?') ? '&' : '?'}route-preview-retry=${retry}`;
@@ -341,9 +391,9 @@ function ChatBubbleView({ message, reply, partnerName, partnerInitial, active, h
             <span className="chat-gallery route-gallery-grid">{visibleGalleryUrls.map((url, index) => <span key={`${message.id}-${index}`} className="chat-gallery-item"><DeferredMediaImage src={url} alt={`묶음 사진 ${index + 1} / ${galleryUrls.length}`} onClick={(event) => { event.stopPropagation(); setGalleryIndex(index); }} />{index === visibleGalleryUrls.length - 1 && hiddenGalleryCount > 0 && <em>+{hiddenGalleryCount}</em>}</span>)}</span>
           </span>}
           {message.type === 'sticker' && <DanduliSticker id={message.stickerId} className="chat-sticker-art" />}
-          {message.type === 'file' && <span className="chat-attachment-card"><FileText /><span className="chat-attachment-copy"><b>{message.attachmentName || '파일'}</b><small>{formatAttachmentSize(message.attachmentSize)}{message.attachmentMime ? ` · ${message.attachmentMime}` : ''}</small></span>{message.attachmentUrl && <a href={message.attachmentUrl} target="_blank" rel="noreferrer" download={message.attachmentName} aria-label="파일 열기 또는 저장" onClick={(event) => event.stopPropagation()}><Download /></a>}</span>}
+          {message.type === 'file' && <span className="chat-attachment-card"><FileText /><span className="chat-attachment-copy"><b>{message.attachmentName || '파일'}</b><small>{formatAttachmentSize(message.attachmentSize)}{message.attachmentMime ? ` · ${message.attachmentMime}` : ''}</small></span>{message.attachmentUrl && <button type="button" className="chat-attachment-download" aria-label="파일 저장" onClick={(event) => { event.stopPropagation(); void downloadAttachment(message.attachmentUrl!, message.attachmentName || 'attachment', message.attachmentMime); }}><Download /></button>}</span>}
           {message.type === 'contact' && <span className="chat-contact-card"><ContactRound /><span><b>{message.contactName || '연락처'}</b><small>{message.contactPhone || '전화번호 없음'}</small></span>{message.contactPhone && <a href={`tel:${message.contactPhone}`} aria-label={`${message.contactName || '연락처'}에게 전화하기`} onClick={(event) => event.stopPropagation()}><Phone /></a>}</span>}
-          {message.type === 'audio' && <span className="chat-audio-card"><Mic /><span><b>음성 메시지</b><small>{formatAudioDuration(message.audioDuration)}</small></span>{message.attachmentUrl && <audio controls preload="metadata" src={message.attachmentUrl} onClick={(event) => event.stopPropagation()} />}</span>}
+          {message.type === 'audio' && <span className="chat-audio-card"><Mic /><span><b>음성 메시지</b><small>{formatAudioDuration(message.audioDuration)}</small></span>{message.attachmentUrl && <VoiceAttachment url={message.attachmentUrl} mime={message.attachmentMime} />}</span>}
           {message.type === 'text' && <span className="message-text">{message.text}</span>}
         </div>
         {mediaBubble && message.imageUrl && <button type="button" className="chat-original-download" aria-label="원본 화질로 저장" onClick={(event) => { event.stopPropagation(); void downloadOriginalChatMedia(message.imageUrl!, 1); }}><Download size={13} /><span>원본</span></button>}
