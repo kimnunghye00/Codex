@@ -35,7 +35,7 @@ async function syncNativeIconState() {
     const result = await RouteAppIcon.getIcon();
     notifyIcon(result.icon);
   } catch (cause) {
-    console.warn('[ROUTE app icon state]', cause);
+    console.warn('[DANDULI app icon state]', cause);
   }
 }
 
@@ -62,10 +62,10 @@ if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
     void RouteAppIcon.setIcon({ icon })
       .then((result) => {
         notifyIcon(result.icon);
-        updateNotice('핸드폰 홈 화면의 ROUTE 아이콘을 변경했어요. 런처에 따라 반영에 몇 초 걸릴 수 있어요.');
+        updateNotice('핸드폰 홈 화면의 단둘이 아이콘을 변경했어요. 런처에 따라 반영에 몇 초 걸릴 수 있어요.');
       })
       .catch((cause) => {
-        console.error('[ROUTE app icon]', cause);
+        console.error('[DANDULI app icon]', cause);
         updateNotice('앱 아이콘 변경에 실패했어요. 잠시 뒤 다시 선택해 주세요.');
         void syncNativeIconState();
       })
