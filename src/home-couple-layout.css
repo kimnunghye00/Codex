@@ -288,3 +288,135 @@
   .home-couple-heart-node { width: 24px; height: 24px; }
   .home-couple-time-center strong { font-size: 17px; }
 }
+/* Home summary vertical balance v2 -------------------------------------- */
+/* Keep two anniversary rows visible, make schedules compact, and give the
+ * album preview the remaining space. The couple card stays unchanged. */
+.home-dashboard-side{
+  grid-template-rows:
+    clamp(180px,23vh,220px)
+    clamp(158px,19vh,170px)
+    clamp(108px,13vh,124px)
+    minmax(220px,1fr);
+  gap:12px;
+}
+
+.home-dashboard-side .home-romantic-anniversary-card{
+  height:100%;
+  min-height:0;
+}
+
+.home-dashboard-side .home-memory-card{
+  min-height:0;
+  height:100%;
+}
+
+@media (max-height:720px){
+  .home-dashboard-side{
+    grid-template-rows:
+      154px
+      150px
+      96px
+      minmax(130px,1fr);
+    gap:9px;
+  }
+}
+
+@media (max-width:700px){
+  .home-dashboard-side{
+    grid-template-rows:
+      156px
+      164px
+      108px
+      minmax(180px,1fr);
+    gap:9px;
+  }
+
+  .home-dashboard-side .home-romantic-anniversary-card{
+    padding:9px 10px 10px;
+    border-radius:18px;
+  }
+
+  .home-dashboard-side .home-romantic-anniversary-head{
+    grid-template-columns:28px minmax(0,1fr) auto;
+    gap:6px;
+    padding-bottom:6px;
+  }
+
+  .home-dashboard-side .home-romantic-anniversary-icon{
+    width:28px;
+    height:28px;
+    border-radius:9px;
+  }
+
+  .home-dashboard-side .home-romantic-anniversary-title b{font-size:8px}
+  .home-dashboard-side .home-romantic-anniversary-title small{font-size:6px}
+  .home-dashboard-side .home-romantic-anniversary-more{font-size:6px;padding-left:2px}
+  .home-dashboard-side .home-romantic-anniversary-list{gap:5px;margin-top:6px}
+
+  .home-dashboard-side .home-romantic-anniversary-row{
+    grid-template-columns:66px minmax(0,1fr) 14px;
+    gap:7px;
+    min-height:0;
+    padding:6px 7px;
+    border-radius:11px;
+  }
+
+  .home-dashboard-side .home-romantic-anniversary-badge{
+    padding:4px 6px;
+    border-radius:8px;
+  }
+
+  .home-dashboard-side .home-romantic-anniversary-badge b,
+  .home-dashboard-side .home-romantic-anniversary-copy small{font-size:6px}
+  .home-dashboard-side .home-romantic-anniversary-badge small{font-size:5px}
+  .home-dashboard-side .home-romantic-anniversary-copy strong{font-size:7px}
+
+  .home-dashboard-side .home-schedule-card{
+    padding:6px 7px;
+  }
+
+  .home-dashboard-side .home-schedule-head{
+    grid-template-columns:25px minmax(0,1fr) auto;
+    gap:5px;
+    padding-bottom:4px;
+  }
+
+  .home-dashboard-side .home-schedule-title-icon{
+    width:25px;
+    height:25px;
+  }
+
+  .home-dashboard-side .home-schedule-list{margin-top:5px}
+  .home-dashboard-side .home-schedule-empty{
+    height:40px;
+    grid-template-columns:26px minmax(0,1fr);
+    gap:6px;
+    padding:4px 5px;
+  }
+  .home-dashboard-side .home-schedule-empty-icon{
+    width:26px;
+    height:26px;
+  }
+}
+
+@media (max-width:700px) and (max-height:720px){
+  .home-dashboard-side{
+    grid-template-rows:
+      148px
+      150px
+      96px
+      minmax(130px,1fr);
+    gap:8px;
+  }
+}
+
+@media (max-width:390px){
+  .home-dashboard-side{
+    grid-template-rows:
+      144px
+      154px
+      100px
+      minmax(160px,1fr);
+    gap:8px;
+  }
+}
