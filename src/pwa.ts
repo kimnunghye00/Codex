@@ -36,7 +36,7 @@ async function clearDevelopmentServiceWorkers() {
     const registrations = await navigator.serviceWorker.getRegistrations();
     await Promise.all(registrations.map((registration) => registration.unregister()));
   } catch (error) {
-    console.warn('[ROUTE PWA] development service worker cleanup failed', error);
+    console.warn('[DANDULI PWA] development service worker cleanup failed', error);
   }
 }
 
@@ -46,7 +46,7 @@ export function initializeRoutePwa() {
   // Vite/Codespaces development already has its own live-reload pipeline.
   // A previously registered PWA service worker can keep serving stale app shells
   // or interfere with HMR, which may look like the page is endlessly refreshing.
-  // Never keep a ROUTE service worker active while running `npm run dev`.
+  // Never keep a 단둘이 service worker active while running `npm run dev`.
   if (import.meta.env.DEV) {
     void clearDevelopmentServiceWorkers();
     return;
@@ -67,7 +67,7 @@ export function initializeRoutePwa() {
     window.addEventListener('load', () => {
       const base = import.meta.env.BASE_URL || '/';
       void navigator.serviceWorker.register(`${base}sw.js`, { scope: base }).catch((error) => {
-        console.warn('[ROUTE PWA] service worker registration failed', error);
+        console.warn('[DANDULI PWA] service worker registration failed', error);
       });
     }, { once: true });
   }
