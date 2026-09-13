@@ -56,7 +56,7 @@ export class AppCrashBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('[ROUTE UI crash]', error, info);
+    console.error('[DANDULI UI crash]', error, info);
     saveDiagnostic(error, info);
     const crashCount = recordCrash();
     this.setState({ crashCount });
@@ -90,8 +90,8 @@ export class AppCrashBoundary extends Component<Props, State> {
       return (
         <main className="route-crash-screen" role="alert">
           <section className="route-crash-card">
-            <div className="route-crash-mark">R</div>
-            <small>ROUTE RECOVERY</small>
+            <div className="route-crash-mark">단</div>
+            <small>단둘이 RECOVERY</small>
             <h1>{repeated ? '앱을 안전하게 다시 시작할게요' : '화면을 다시 불러올게요'}</h1>
             <p>{repeated
               ? '같은 화면 오류가 반복되어 현재 데이터를 지우지 않고 앱 화면만 새로 시작하는 것이 안전해요.'
@@ -124,6 +124,6 @@ export function installGlobalCrashDiagnostics() {
     const reason = event.reason;
     const error = reason instanceof Error ? reason : new Error(typeof reason === 'string' ? reason : 'Unhandled promise rejection');
     saveDiagnostic(error);
-    console.error('[ROUTE unhandled promise rejection]', reason);
+    console.error('[DANDULI unhandled promise rejection]', reason);
   });
 }
