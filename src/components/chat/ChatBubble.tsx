@@ -1,4 +1,4 @@
-import { Bookmark, Check, ChevronLeft, ChevronRight, ContactRound, CornerUpLeft, Download, FileText, Image as ImageIcon, Mic, Phone, RefreshCw, Trash2, X } from 'lucide-react';
+import { Bookmark, Check, ChevronLeft, ChevronRight, ContactRound, CornerUpLeft, Download, FileText, Image as ImageIcon, Mic, Phone, PhoneCall, RefreshCw, Trash2, Video, X } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import '../../route-chat-gallery-v21.css';
@@ -39,7 +39,28 @@ function replyLabel(message: Message) {
   if (message.type === 'file') return message.attachmentName || '파일';
   if (message.type === 'contact') return message.contactName ? `연락처 · ${message.contactName}` : '연락처';
   if (message.type === 'audio') return '음성 메시지';
+  if (message.type === 'call') return message.callKind === 'video' ? '영상통화 기록' : '음성 통화 기록';
   return message.text?.slice(0, 45);
+}
+
+function callRecordCopy(message: Message) {
+  const kind = message.callKind === 'video' ? '영상통화' : '음성 통화';
+  if (message.callStatus === 'completed') {
+    return { title: kind, detail: `통화 시간 ${formatAudioDuration(message.callDuration)}` };
+  }
+  if (message.callStatus === 'rejected') {
+    return {
+      title: message.sender === 'me' ? `응답하지 않은 ${kind}` : `받지 않은 ${kind}`,
+      detail: '통화가 연결되지 않았어요',
+    };
+  }
+  if (message.callStatus === 'cancelled') {
+    return {
+      title: message.sender === 'me' ? `취소한 ${kind}` : `취소된 ${kind}`,
+      detail: '연결 전에 종료됐어요',
+    };
+  }
+  return { title: `연결되지 않은 ${kind}`, detail: '통화 연결에 실패했어요' };
 }
 
 function formatAttachmentSize(bytes?: number) {
@@ -349,6 +370,10 @@ function sameMessage(a?: Message, b?: Message) {
     && a.audioDuration === b.audioDuration
     && a.contactName === b.contactName
     && a.contactPhone === b.contactPhone
+    && a.callId === b.callId
+    && a.callKind === b.callKind
+    && a.callStatus === b.callStatus
+    && a.callDuration === b.callDuration
     && a.timestamp === b.timestamp
     && a.read === b.read
     && a.replyTo === b.replyTo
@@ -382,7 +407,7 @@ function ChatBubbleView({ message, reply, partnerName, partnerInitial, active, h
       <div className="message-wrap">
         <div role="button" tabIndex={0} className={message.type === 'sticker'
             ? 'sticker-message-button'
-            : `bubble ${message.type === 'gallery' ? 'gallery-bubble' : ''} ${mediaBubble ? 'media-bubble' : ''} ${message.type === 'file' || message.type === 'contact' || message.type === 'audio' ? 'utility-bubble' : ''}`} onClick={(event) => { event.stopPropagation(); if (selectionMode) onToggleSelect(); else onAction(); }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); if (selectionMode) onToggleSelect(); else onAction(); }} onKeyDown={(event) => { if (event.key !== 'Enter' && event.key !== ' ') return; event.preventDefault(); if (selectionMode) onToggleSelect(); else onAction(); }}>
+            : `bubble ${message.type === 'gallery' ? 'gallery-bubble' : ''} ${mediaBubble ? 'media-bubble' : ''} ${message.type === 'file' || message.type === 'contact' || message.type === 'audio' || message.type === 'call' ? 'utility-bubble' : ''}`} onClick={(event) => { event.stopPropagation(); if (selectionMode) onToggleSelect(); else onAction(); }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); if (selectionMode) onToggleSelect(); else onAction(); }} onKeyDown={(event) => { if (event.key !== 'Enter' && event.key !== ' ') return; event.preventDefault(); if (selectionMode) onToggleSelect(); else onAction(); }}>
           {reply && <span className="reply-preview" onClick={(event) => { event.stopPropagation(); onJump(reply.id); }}><b>{reply.sender === 'me' ? '나' : partnerName}</b>{reply.type !== 'text' ? <><ImageIcon size={12} /> {replyLabel(reply)}</> : replyLabel(reply)}</span>}
           {message.type === 'image' && message.imageUrl && <DeferredMediaImage className="chat-image" src={message.imageUrl} alt="채팅으로 보낸 사진" onClick={(event) => { event.stopPropagation(); onImage(message.imageUrl!); }} />}
           {message.type === 'gif' && message.imageUrl && <DeferredMediaImage className="chat-image chat-gif" src={message.imageUrl} alt="채팅으로 보낸 움짤" onClick={(event) => { event.stopPropagation(); onImage(message.imageUrl!); }} />}
@@ -394,6 +419,7 @@ function ChatBubbleView({ message, reply, partnerName, partnerInitial, active, h
           {message.type === 'file' && <span className="chat-attachment-card"><FileText /><span className="chat-attachment-copy"><b>{message.attachmentName || '파일'}</b><small>{formatAttachmentSize(message.attachmentSize)}{message.attachmentMime ? ` · ${message.attachmentMime}` : ''}</small></span>{message.attachmentUrl && <button type="button" className="chat-attachment-download" aria-label="파일 저장" onClick={(event) => { event.stopPropagation(); void downloadAttachment(message.attachmentUrl!, message.attachmentName || 'attachment', message.attachmentMime); }}><Download /></button>}</span>}
           {message.type === 'contact' && <span className="chat-contact-card"><ContactRound /><span><b>{message.contactName || '연락처'}</b><small>{message.contactPhone || '전화번호 없음'}</small></span>{message.contactPhone && <a href={`tel:${message.contactPhone}`} aria-label={`${message.contactName || '연락처'}에게 전화하기`} onClick={(event) => event.stopPropagation()}><Phone /></a>}</span>}
           {message.type === 'audio' && <span className="chat-audio-card"><Mic /><span><b>음성 메시지</b><small>{formatAudioDuration(message.audioDuration)}</small></span>{message.attachmentUrl && <VoiceAttachment url={message.attachmentUrl} mime={message.attachmentMime} />}</span>}
+          {message.type === 'call' && (() => { const copy = callRecordCopy(message); return <span className="chat-call-record-card"><span className="chat-call-record-icon">{message.callKind === 'video' ? <Video /> : <PhoneCall />}</span><span className="chat-call-record-copy"><b>{copy.title}</b><small>{copy.detail}</small></span></span>; })()}
           {message.type === 'text' && <span className="message-text">{message.text}</span>}
         </div>
         {mediaBubble && message.imageUrl && <button type="button" className="chat-original-download" aria-label="원본 화질로 저장" onClick={(event) => { event.stopPropagation(); void downloadOriginalChatMedia(message.imageUrl!, 1); }}><Download size={13} /><span>원본</span></button>}
