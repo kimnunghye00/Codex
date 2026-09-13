@@ -109,7 +109,7 @@ export function ChatComposer({ draft, reply, partnerName, onDraft, onSend, onIma
   return <>
     <div className="composer-area">
       {reply && <div className="composer-reply"><div><b>{reply.sender === 'partner' ? `${partnerName}에게 답장` : '내 메시지에 답장'}</b><span>{reply.type === 'sticker' ? '이모티콘' : reply.type === 'image' || reply.type === 'gallery' || reply.type === 'gif' ? '미디어' : reply.text}</span></div><button onClick={onCancelReply} aria-label="답장 취소"><X size={17} /></button></div>}
-      {stickerOpen && <div className="composer-sticker-tray" aria-label="단둘이 이모티콘 16종">{DANDULI_STICKERS.map((item) => <button key={item.id} type="button" aria-label={`${item.label} 이모티콘 보내기`} onClick={() => { onSticker(stickerToken(item.id)); setStickerOpen(false); }}><DanduliSticker id={item.id} /><small>{item.label}</small></button>)}</div>}
+      {stickerOpen && <div className="composer-sticker-tray" aria-label="단둘이 이모티콘 16종">{DANDULI_STICKERS.map((item) => <button key={item.id} type="button" aria-label={`${item.label} 이모티콘 보내기`} onClick={() => { onSticker(stickerToken(item.id)); setStickerOpen(false); }}><DanduliSticker id={item.id} /></button>)}</div>}
       {quickOpen && <div className="quick-contact-strip">{QUICK.map((item) => <button key={item} type="button" onClick={() => { onQuick(item); setQuickOpen(false); setStickerOpen(false); }}>{item}</button>)}</div>}
       {extras && <div className="composer-extra-row">
         <button type="button" onClick={() => fileRef.current?.click()}><ImagePlus size={18} /><span>사진</span></button>
