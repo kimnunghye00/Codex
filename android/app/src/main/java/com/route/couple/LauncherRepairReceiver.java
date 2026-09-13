@@ -20,7 +20,9 @@ public class LauncherRepairReceiver extends BroadcastReceiver {
             "RouteOurRouteIcon",
             "RouteNightIcon",
             "RouteCreamIcon",
-            "RouteMinimalIcon"
+            "RouteMinimalIcon",
+            "DanduliCoupleLoveIcon",
+            "DanduliCoupleDateIcon"
     };
 
     @Override
