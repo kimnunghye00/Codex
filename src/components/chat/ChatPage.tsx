@@ -102,7 +102,7 @@ function estimateChatRowHeight(row: ChatRow) {
   if (row.message.type === 'image' || row.message.type === 'gif') return base + 260;
   if (row.message.type === 'gallery') return base + 300;
   if (row.message.type === 'sticker') return base + 205;
-  if (row.message.type === 'file' || row.message.type === 'contact' || row.message.type === 'audio') return base + 94;
+  if (row.message.type === 'file' || row.message.type === 'contact' || row.message.type === 'audio' || row.message.type === 'call') return base + 94;
   return base + 68;
 }
 
