@@ -439,13 +439,20 @@ export function DanduliCallManager({
       const answer = await peer.createAnswer();
       await peer.setLocalDescription(answer);
 
-      // As with the caller, wait briefly so the answer SDP already contains
-      // usable ICE candidates. This makes call setup deterministic even when
-      // trickle-candidate writes are delayed on mobile networks.
-      await waitForIceGathering(peer);
-      const gatheredAnswer = peer.localDescription ?? answer;
-      await answerCoupleCall(connection.coupleId, signal.callId, currentUid, gatheredAnswer);
-      await flushLocalCandidates();
+      await answerCoupleCall(connection.coupleId, signal.callId, currentUid, peer.localDescription ?? answer);
+      void flushLocalCandidates();
+
+      void waitForIceGathering(peer).then(async () => {
+        if (activeCallIdRef.current !== signal.callId) return;
+        const gatheredAnswer = peer.localDescription;
+        if (!gatheredAnswer) return;
+        try {
+          await refreshCoupleCallDescription(connection.coupleId, signal.callId, 'callee', gatheredAnswer);
+          await flushLocalCandidates();
+        } catch (cause) {
+          console.warn('[DANDULI call answer refresh]', cause);
+        }
+      });
     } catch (cause) {
       console.error('[DANDULI accept call]', cause);
       void finishCoupleCall(connection.coupleId, signal.callId, 'failed', 'accept-failed');
