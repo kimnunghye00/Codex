@@ -453,3 +453,17 @@
     letter-spacing:-.55px;
   }
 }
+/* Mobile schedule-memory spacing fix ---------------------------------- */
+/* Reduce only the visual gap between '우리 일정' and '우리의 추억' on phones.
+ * Grid row sizes and every existing home-card proportion remain unchanged. */
+@media (max-width:700px){
+  .home-dashboard-side .home-memory-card{
+    transform:translateY(-4px);
+  }
+}
+
+@media (max-width:390px){
+  .home-dashboard-side .home-memory-card{
+    transform:translateY(-3px);
+  }
+}
