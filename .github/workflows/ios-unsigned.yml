@@ -24,7 +24,7 @@ jobs:
       - name: Install app dependencies
         run: npm ci
 
-      - name: Build ROUTE web app
+      - name: Build 단둘이 web app
         run: npm run build
 
       - name: Create and sync iOS project
@@ -37,7 +37,7 @@ jobs:
           npm run native:configure
           test -d ios/App/App.xcodeproj
 
-      - name: Apply latest ROUTE iOS icon
+      - name: Apply latest 단둘이 iOS icon
         shell: bash
         run: |
           set -euo pipefail
@@ -90,12 +90,12 @@ jobs:
           mkdir -p release/ios-package/Payload
           cp -R "$APP_PATH" release/ios-package/Payload/App.app
           cd release/ios-package
-          /usr/bin/zip -qry "ROUTE-iOS-${VERSION}-unsigned.ipa" Payload
+          /usr/bin/zip -qry "DANDULI-iOS-${VERSION}-unsigned.ipa" Payload
 
-      - name: Upload ROUTE iOS build
+      - name: Upload 단둘이 iOS build
         uses: actions/upload-artifact@v4
         with:
-          name: ROUTE-iOS-Build
-          path: release/ios-package/ROUTE-iOS-*-unsigned.ipa
+          name: DANDULI-iOS-Build
+          path: release/ios-package/DANDULI-iOS-*-unsigned.ipa
           if-no-files-found: error
           retention-days: 30
