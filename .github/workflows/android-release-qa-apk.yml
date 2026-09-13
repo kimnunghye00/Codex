@@ -28,7 +28,7 @@ jobs:
           java-version: '21'
           cache: gradle
 
-      - name: Prepare fixed ROUTE test signing key
+      - name: Prepare fixed DANDULI test signing key
         shell: bash
         run: |
           set -euo pipefail
@@ -36,7 +36,7 @@ jobs:
           base64 --decode android/route-test-debug.keystore.b64 > android/signing/route-test-debug.keystore
           EXPECTED="40F608CE3D3DD13773271E6D61B2EB1C513904636AECD662D78B882C7A006A5A"
           ACTUAL="$(keytool -list -v -keystore android/signing/route-test-debug.keystore -storepass android -alias androiddebugkey | awk '/SHA256:/{print $2; exit}' | tr -d ':')"
-          echo "ROUTE test signing certificate SHA-256: ${ACTUAL}"
+          echo "DANDULI test signing certificate SHA-256: ${ACTUAL}"
           test "${ACTUAL}" = "${EXPECTED}"
 
       - name: Restore Firebase Android config
@@ -68,7 +68,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run full ROUTE stability suite
+      - name: Run full DANDULI stability suite
         run: npm run stability
 
       - name: Configure native permissions
@@ -102,23 +102,23 @@ jobs:
           VERSION_CODE="$(printf '%s\n' "${BADGING}" | sed -n "s/.*versionCode='\([0-9][0-9]*\)'.*/\1/p")"
           test -n "${VERSION_CODE}"
           test "${VERSION_CODE}" -gt 1000000
-          echo "ROUTE QA APK versionCode: ${VERSION_CODE}"
+          echo "DANDULI QA APK versionCode: ${VERSION_CODE}"
 
       - name: Write QA build summary
         shell: bash
         run: |
-          echo '### ROUTE Android Release QA APK' >> "$GITHUB_STEP_SUMMARY"
+          echo '### 단둘이 Android Release QA APK' >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
           echo '- Source: current main branch' >> "$GITHUB_STEP_SUMMARY"
           echo '- Stability suite: passed before native build' >> "$GITHUB_STEP_SUMMARY"
           echo '- Package: com.route.couple' >> "$GITHUB_STEP_SUMMARY"
           echo '- Uses monotonic Android versionCode for update installs' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Artifact: ROUTE-release-qa-apk' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Artifact: DANDULI-release-qa-apk' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload QA APK
         uses: actions/upload-artifact@v4
         with:
-          name: ROUTE-release-qa-apk
+          name: DANDULI-release-qa-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 5
