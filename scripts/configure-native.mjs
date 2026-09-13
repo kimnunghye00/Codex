@@ -17,7 +17,7 @@ const androidManifest = 'android/app/src/main/AndroidManifest.xml';
 if (fs.existsSync(androidManifest)) {
   let xml = fs.readFileSync(androidManifest, 'utf8');
 
-  // ROUTE currently records location only while the app is actively running.
+  // 단둘이는 현재 location only while the app is actively running.
   // Do not request background-location, foreground-location-service, or broad
   // media-library permissions until a native feature genuinely requires them.
   [
@@ -49,7 +49,7 @@ if (fs.existsSync(iosPlist)) {
     ['NSCameraUsageDescription', '사진과 영상통화를 위해 카메라를 사용합니다.'],
     ['NSMicrophoneUsageDescription', '음성 메시지와 통화를 위해 마이크를 사용합니다.'],
     ['NSPhotoLibraryUsageDescription', '앨범과 채팅에서 사진과 영상을 선택하기 위해 사진 보관함을 사용합니다.'],
-    ['NSPhotoLibraryAddUsageDescription', 'ROUTE의 사진과 영상을 기기에 저장하기 위해 사용합니다.'],
+    ['NSPhotoLibraryAddUsageDescription', '단둘이의 사진과 영상을 기기에 저장하기 위해 사용합니다.'],
     ['NSLocationWhenInUseUsageDescription', '지도와 발자취에서 현재 위치를 기록하고 공유하기 위해 사용합니다.'],
   ];
   for (const [key, value] of entries) {
@@ -59,7 +59,7 @@ if (fs.existsSync(iosPlist)) {
 
   // The current app has no native background-location service. If an older local
   // project was configured by a previous script, remove the Always-location text
-  // so a future iOS build does not imply background tracking that ROUTE lacks.
+  // so a future iOS build does not imply background tracking that 단둘이 lacks.
   plist = plist.replace(/\s*<key>NSLocationAlwaysAndWhenInUseUsageDescription<\/key>\s*<string>[^<]*<\/string>/g, '');
   fs.writeFileSync(iosPlist, plist);
   console.log('Configured iOS foreground usage descriptions.');
