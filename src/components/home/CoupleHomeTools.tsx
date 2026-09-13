@@ -60,6 +60,68 @@ const appointmentKey = (uid: string) => `route-date-plans:${uid}`;
 const todayKey = () => new Date().toISOString().slice(0, 10);
 const CLOUD_ACK_WAIT_MS = 1200;
 const SCHEDULE_SUBSCRIBE_DELAY_MS = 450;
+const DAY_MS = 86_400_000;
+
+type RomanticAnniversary = {
+  id: string;
+  title: string;
+  date: Date;
+  dayNumber?: number;
+};
+
+function localDate(value: string) {
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return null;
+  const date = new Date(year, month - 1, day);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function dayMilestoneDate(start: Date, dayNumber: number) {
+  const date = new Date(start);
+  date.setDate(date.getDate() + dayNumber - 1);
+  return date;
+}
+
+function yearMilestoneDate(start: Date, yearNumber: number) {
+  const date = new Date(start);
+  date.setFullYear(date.getFullYear() + yearNumber);
+  return date;
+}
+
+function romanticAnniversaries(startValue?: string): RomanticAnniversary[] {
+  const start = startValue ? localDate(startValue) : null;
+  if (!start) return [];
+
+  const milestones: RomanticAnniversary[] = [];
+  for (let day = 100; day <= 1000; day += 100) {
+    milestones.push({ id: `day-${day}`, title: `${day}일`, date: dayMilestoneDate(start, day), dayNumber: day });
+  }
+  for (let day = 2000; day <= 10000; day += 1000) {
+    milestones.push({ id: `day-${day}`, title: `${day}일`, date: dayMilestoneDate(start, day), dayNumber: day });
+  }
+  for (let year = 1; year <= 50; year += 1) {
+    milestones.push({ id: `year-${year}`, title: `${year}주년`, date: yearMilestoneDate(start, year) });
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return milestones
+    .filter((item) => item.date.getTime() >= today.getTime())
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+}
+
+function anniversaryDateLabel(date: Date) {
+  return `${date.getMonth() + 1}월 ${date.getDate()}일`;
+}
+
+function anniversaryCountdown(date: Date) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(date);
+  target.setHours(0, 0, 0, 0);
+  const days = Math.max(0, Math.round((target.getTime() - today.getTime()) / DAY_MS));
+  return days === 0 ? '오늘' : `D-${days}`;
+}
 
 function loadLocal(uid: string): Schedule[] {
   try { return JSON.parse(localStorage.getItem(localKey(uid)) || '[]') as Schedule[]; }
@@ -311,6 +373,7 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
   }, [legacyPromises, localSchedules, remoteSchedules]);
 
   const upcoming = useMemo(() => schedules.filter((item) => item.date >= todayKey()).slice(0, 3), [schedules]);
+  const upcomingAnniversaries = useMemo(() => romanticAnniversaries(relationshipStartDate).slice(0, 2), [relationshipStartDate]);
   const partner = connection?.partnerProfile ?? null;
   const partnerName = partner ? displayName(partner) : '상대방';
   const partnerRealName = partner?.name?.trim() || '상대방';
@@ -516,6 +579,28 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
           <span>{relationshipStartDate ? '사귀는 날' : '우리의 시작일'}</span>
         </button>
       </section>
+
+      <button className="home-romantic-anniversary-card" type="button" onClick={onOpenAnniversary} aria-label="다가오는 연인 기념일 보기">
+        <header className="home-romantic-anniversary-head">
+          <span className="home-romantic-anniversary-icon" aria-hidden="true"><Heart size={16} fill="currentColor" /></span>
+          <span className="home-romantic-anniversary-title">
+            <b>다가오는 기념일</b>
+            <small>우리 둘이 함께한 날만 보여드려요.</small>
+          </span>
+          <span className="home-romantic-anniversary-more">전체보기 <ChevronRight size={14} /></span>
+        </header>
+
+        {relationshipStartDate && upcomingAnniversaries.length ? <span className="home-romantic-anniversary-list">
+          {upcomingAnniversaries.map((item) => <span className="home-romantic-anniversary-row" key={item.id}>
+            <span className="home-romantic-anniversary-badge"><b>{item.title}</b><small>{anniversaryCountdown(item.date)}</small></span>
+            <span className="home-romantic-anniversary-copy"><strong>{item.title} 기념일</strong><small>{anniversaryDateLabel(item.date)}</small></span>
+            <Heart size={14} fill="currentColor" aria-hidden="true" />
+          </span>)}
+        </span> : <span className="home-romantic-anniversary-empty">
+          <Heart size={17} aria-hidden="true" />
+          <span><b>우리의 시작일을 설정해 주세요</b><small>100일, 1주년 같은 둘만의 기념일을 보여드릴게요.</small></span>
+        </span>}
+      </button>
 
       <section className="home-schedule-card" aria-label="우리 일정">
         <header className="home-schedule-head">
