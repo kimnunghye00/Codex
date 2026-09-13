@@ -7,6 +7,7 @@ import {
   answerCoupleCall,
   appendCoupleCallCandidate,
   finishCoupleCall,
+  refreshCoupleCallDescription,
   startCoupleCall,
   subscribeCoupleCall,
   type CoupleCallKind,
