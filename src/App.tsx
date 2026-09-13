@@ -180,6 +180,9 @@ function chatPreview(message?: Message) {
   if (message.type === 'image') return '사진을 보냈어요.';
   if (message.type === 'gallery') return `사진 ${message.imageUrls?.length ?? 0}장을 보냈어요.`;
   if (message.type === 'gif') return '움짤을 보냈어요.';
+  if (message.type === 'file') return `${message.attachmentName || '파일'}을 보냈어요.`;
+  if (message.type === 'contact') return `${message.contactName || '연락처'} 연락처를 보냈어요.`;
+  if (message.type === 'audio') return '음성 메시지를 보냈어요.';
   return message.text || '메시지';
 }
 
