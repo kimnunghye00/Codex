@@ -1,4 +1,4 @@
-import { Bot, CalendarClock, Gift, Heart, MonitorUp, MoreHorizontal, Phone, Trash2, Video, X } from 'lucide-react';
+import { Bot, CalendarClock, ContactRound, Gift, Heart, MonitorUp, MoreHorizontal, Phone, Trash2, Video, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { collection, doc, limit, onSnapshot, orderBy, query, setDoc, where } from 'firebase/firestore';
@@ -8,7 +8,7 @@ import { auth, db } from '../../lib/firebase';
 import { AI_TEST_PARTNER_NAME, loadLocalAiPartner } from '../../lib/coupleData';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
 import { clearCoupleChatForMe, deleteCoupleMessageForEveryone, hideCoupleMessageForMe, sendCoupleMessage, subscribeCoupleMessages, toggleCoupleMessageReaction } from '../../lib/chatRealtime';
-import { deleteUploadedChatMedia, uploadChatMedia } from '../../lib/chatMedia';
+import { deleteUploadedChatMedia, uploadChatAttachment, uploadChatMedia } from '../../lib/chatMedia';
 import { migrateLoadedLegacyChatMedia, releaseLegacyChatMediaRoom } from '../../lib/chatMediaMigration';
 import type { Message } from '../../types';
 import { localDateKey, messageDateLabel } from '../../utils/dates';
@@ -32,6 +32,7 @@ type ChatRow =
 const MAX_SOURCE_IMAGE_BYTES = 25 * 1024 * 1024;
 const MAX_ORIGINAL_IMAGE_BYTES = 9 * 1024 * 1024;
 const MAX_GIF_BYTES = 9 * 1024 * 1024;
+const MAX_CHAT_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 const MAX_CHAT_PHOTOS = 100;
 const CHAT_MEDIA_BATCH_SIZE = 4;
 const MAX_SCHEDULE_SLEEP_MS = 60 * 60 * 1000;
@@ -101,6 +102,7 @@ function estimateChatRowHeight(row: ChatRow) {
   if (row.message.type === 'image' || row.message.type === 'gif') return base + 260;
   if (row.message.type === 'gallery') return base + 300;
   if (row.message.type === 'sticker') return base + 205;
+  if (row.message.type === 'file' || row.message.type === 'contact' || row.message.type === 'audio') return base + 94;
   return base + 68;
 }
 
@@ -182,6 +184,9 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [savedMediaIds, setSavedMediaIds] = useState<Set<number>>(() => loadChatMemoryMessageIds());
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [toolsInitialSection, setToolsInitialSection] = useState<'menu' | 'store'>('menu');
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contactForm, setContactForm] = useState({ name: '', phone: '' });
   const [preferences, setPreferences] = useState(() => loadChatPreferences(currentUid || 'guest'));
   const [schedules, setSchedules] = useState<ChatSchedule[]>([]);
   const [scheduleOpen, setScheduleOpen] = useState(false);
@@ -620,6 +625,109 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     }
   };
 
+  const sendAttachment = async (file: File, kind: 'file' | 'audio', durationSeconds?: number) => {
+    if (!currentUid) return;
+    if (file.size > MAX_CHAT_ATTACHMENT_BYTES) {
+      setSyncError('파일과 음성 메시지는 25MB 이하만 전송할 수 있어요.');
+      return;
+    }
+
+    const messageId = createMessageId();
+    let uploadedPath = '';
+    try {
+      setSyncError('');
+      showFlowNotice(kind === 'audio' ? '음성 메시지를 전송하고 있어요.' : '파일을 전송하고 있어요.');
+      let attachmentUrl: string;
+      if (connection) {
+        const uploaded = await uploadChatAttachment(connection.coupleId, currentUid, messageId, file, kind);
+        attachmentUrl = uploaded.url;
+        uploadedPath = uploaded.path;
+      } else {
+        attachmentUrl = URL.createObjectURL(file);
+      }
+
+      const message: Message = {
+        id: messageId,
+        sender: 'me',
+        type: kind,
+        attachmentUrl,
+        attachmentName: file.name,
+        attachmentSize: file.size,
+        attachmentMime: file.type || 'application/octet-stream',
+        audioDuration: kind === 'audio' ? durationSeconds : undefined,
+        timestamp: new Date().toISOString(),
+        read: usingAiPartner,
+        replyTo,
+      };
+
+      if (connection) await sendCoupleMessage(connection.coupleId, currentUid, message);
+      forceBottomRef.current = true;
+      appendIfMissing(message);
+      setReplyTo(undefined);
+      showFlowNotice(kind === 'audio' ? '음성 메시지를 전송했어요.' : '파일을 전송했어요.');
+    } catch (cause) {
+      if (uploadedPath) await deleteUploadedChatMedia([uploadedPath]);
+      console.error('[DANDULI chat attachment]', cause);
+      setSyncError(kind === 'audio' ? '음성 메시지를 전송하지 못했어요. 다시 시도해 주세요.' : '파일을 전송하지 못했어요. 다시 시도해 주세요.');
+    }
+  };
+
+  const sendContact = (name: string, phone: string) => {
+    const cleanName = name.trim();
+    const cleanPhone = phone.trim();
+    if (!currentUid || !cleanName || !cleanPhone) return;
+    forceBottomRef.current = true;
+    const message: Message = {
+      id: createMessageId(),
+      sender: 'me',
+      type: 'contact',
+      contactName: cleanName,
+      contactPhone: cleanPhone,
+      timestamp: new Date().toISOString(),
+      read: usingAiPartner,
+      replyTo,
+    };
+    deliver(message);
+    setReplyTo(undefined);
+    setContactForm({ name: '', phone: '' });
+    setContactOpen(false);
+    showFlowNotice('연락처를 전송했어요.');
+  };
+
+  const openContactPicker = async () => {
+    type ContactPickerResult = { name?: string[]; tel?: string[] };
+    type ContactCapableNavigator = Navigator & {
+      contacts?: { select: (properties: string[], options: { multiple: boolean }) => Promise<ContactPickerResult[]> };
+    };
+    const picker = (navigator as ContactCapableNavigator).contacts;
+    if (picker?.select) {
+      try {
+        const selected = await picker.select(['name', 'tel'], { multiple: false });
+        const contact = selected[0];
+        const name = contact?.name?.[0]?.trim() || '';
+        const phone = contact?.tel?.[0]?.trim() || '';
+        if (name && phone) {
+          sendContact(name, phone);
+          return;
+        }
+      } catch (cause) {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+      }
+    }
+    setContactForm({ name: '', phone: '' });
+    setContactOpen(true);
+  };
+
+  const openStickerStore = () => {
+    setToolsInitialSection('store');
+    setToolsOpen(true);
+  };
+
+  const openChatMenu = () => {
+    setToolsInitialSection('menu');
+    setToolsOpen(true);
+  };
+
   const openScheduleMessage = () => {
     const defaults = currentScheduleDefaults();
     setScheduleForm((current) => ({
@@ -795,7 +903,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
         <button type="button" className="chat-delete-toolbar-trash" aria-label="선택 메시지 삭제" disabled={!deleteSelection.size || deleteBusy} onClick={() => setDeleteConfirmOpen(true)}><Trash2 size={21} /></button>
       </div>
       : <Header title="대화" />}
-    <div className="chat-profile"><div className="avatar large">{usingAiPartner ? <Bot size={22} /> : partnerInitial}</div><div><b>{partnerName}</b><span className={aiTyping || partnerTyping ? 'chat-status typing' : 'chat-status'}><i /> {aiTyping || partnerTyping ? '입력 중...' : connection ? '실시간 연결됨' : usingAiPartner ? 'AI 테스트 파트너 · 연결됨' : '상대방 연결 대기'}</span></div><div className="chat-call-actions">{CALLING_ENABLED && <><button aria-label="음성 통화" onClick={() => void startMedia('voice')}><Phone size={17} /></button><button aria-label="영상 통화" onClick={() => void startMedia('video')}><Video size={17} /></button><button aria-label="화면 공유" onClick={() => void startMedia('screen')}><MonitorUp size={17} /></button></>}<button aria-label="대화 메뉴" onClick={() => setToolsOpen(true)}><MoreHorizontal /></button></div></div>
+    <div className="chat-profile"><div className="avatar large">{usingAiPartner ? <Bot size={22} /> : partnerInitial}</div><div><b>{partnerName}</b><span className={aiTyping || partnerTyping ? 'chat-status typing' : 'chat-status'}><i /> {aiTyping || partnerTyping ? '입력 중...' : connection ? '실시간 연결됨' : usingAiPartner ? 'AI 테스트 파트너 · 연결됨' : '상대방 연결 대기'}</span></div><div className="chat-call-actions">{CALLING_ENABLED && <><button aria-label="음성 통화" onClick={() => void startMedia('voice')}><Phone size={17} /></button><button aria-label="영상 통화" onClick={() => void startMedia('video')}><Video size={17} /></button><button aria-label="화면 공유" onClick={() => void startMedia('screen')}><MonitorUp size={17} /></button></>}<button aria-label="대화 메뉴" onClick={openChatMenu}><MoreHorizontal /></button></div></div>
     {nearestSchedule && <div className="chat-next-schedule"><CalendarClock size={16} /><div><small>가장 가까운 일정</small><b>{nearestSchedule.title}</b><span>{nearestSchedule.date.replaceAll('-', '.')} · {nearestSchedule.startTime}</span></div></div>}
     {syncError && <p className="chat-sync-error" role="alert">{syncError}</p>}
     {flowNotice && <p className="chat-flow-notice" role="status">{flowNotice}</p>}
@@ -820,8 +928,8 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
       })() : row.kind === 'typing-ai' ? <TypingIndicator ai initial={partnerInitial} /> : <TypingIndicator ai={false} initial={partnerInitial} heart />}</div>;
     })}</div><div ref={bottomRef} /></div>
     {scheduledDrafts.length > 0 && !deleteSelection && <div className="scheduled-strip"><CalendarClock size={14} /><span>예약 메시지 {scheduledDrafts.length}개</span><small>앱 실행 중 자동 전송</small></div>}
-    {!deleteSelection && <ChatComposer draft={draft} reply={replyTo ? byId.get(replyTo) : undefined} partnerName={partnerName} onDraft={setDraft} onSend={send} onImages={sendImages} onGif={sendGif} onQuick={sendText} onSticker={sendStickerChoice} onSchedule={openScheduleMessage} onGift={() => setGiftOpen(true)} onCancelReply={() => setReplyTo(undefined)} />}
-    {toolsOpen && <ChatToolsPanel messages={messages} partnerName={partnerName} preferences={preferences} onPreferences={setPreferences} onJump={jump} onImage={setLightbox} onImport={(imported) => setMessages(imported)} onSticker={sendStickerChoice} onClose={() => setToolsOpen(false)} />}
+    {!deleteSelection && <ChatComposer draft={draft} reply={replyTo ? byId.get(replyTo) : undefined} partnerName={partnerName} onDraft={setDraft} onSend={send} onImages={sendImages} onGif={sendGif} onQuick={sendText} onSticker={sendStickerChoice} onSchedule={openScheduleMessage} onGift={() => setGiftOpen(true)} onFile={(file) => sendAttachment(file, 'file')} onContact={() => void openContactPicker()} onVoice={(file, duration) => sendAttachment(file, 'audio', duration)} onVoiceError={setSyncError} onStickerStore={openStickerStore} onCancelReply={() => setReplyTo(undefined)} />}
+    {toolsOpen && <ChatToolsPanel key={toolsInitialSection} initialSection={toolsInitialSection} messages={messages} partnerName={partnerName} preferences={preferences} onPreferences={setPreferences} onJump={jump} onImage={setLightbox} onImport={(imported) => setMessages(imported)} onSticker={sendStickerChoice} onClose={() => setToolsOpen(false)} />}
     {lightbox && <div className="lightbox" role="dialog" onClick={() => setLightbox(undefined)}><button aria-label="닫기"><X /></button><img src={lightbox} alt="확대된 채팅 사진" /></div>}
 
     {deleteConfirmOpen && <div className="chat-delete-backdrop" role="presentation" onMouseDown={() => !deleteBusy && setDeleteConfirmOpen(false)}>
@@ -837,6 +945,8 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     </div>}
 
     {scheduleOpen && <div className="chat-extra-backdrop" onMouseDown={() => { setScheduleOpen(false); setScheduleError(''); }}><section className="chat-extra-modal" onMouseDown={(event) => event.stopPropagation()}><button className="chat-extra-close" onClick={() => { setScheduleOpen(false); setScheduleError(''); }}><X /></button><CalendarClock className="modal-accent-icon" /><h2>예약 메시지</h2><p>현재 버전에서는 단둘이가 실행 중일 때 예약 시간이 되면 자동으로 보내요.</p><label>메시지<textarea value={scheduleForm.text} onChange={(event) => { setScheduleForm({ ...scheduleForm, text: event.target.value }); setScheduleError(''); }} placeholder="나중에 전할 말을 적어주세요" /></label><div className="chat-schedule-datetime"><label>보낼 날짜<input type="text" inputMode="numeric" autoComplete="off" maxLength={10} value={scheduleForm.date} onChange={(event) => { setScheduleForm({ ...scheduleForm, date: formatScheduleDateInput(event.target.value) }); setScheduleError(''); }} placeholder="YYYY-MM-DD" aria-label="예약 메시지 보낼 날짜" /></label><label>보낼 시간<input type="time" value={scheduleForm.time} onChange={(event) => { setScheduleForm({ ...scheduleForm, time: event.target.value }); setScheduleError(''); }} aria-label="예약 메시지 보낼 시간" /></label></div>{scheduleError && <p className="chat-schedule-error" role="alert">{scheduleError}</p>}<button className="primary" disabled={!scheduleForm.text.trim() || scheduleForm.date.length !== 10 || !scheduleForm.time} onClick={reserveMessage}>예약하기</button></section></div>}
+
+    {contactOpen && <div className="chat-extra-backdrop" onMouseDown={() => setContactOpen(false)}><section className="chat-extra-modal contact-modal" onMouseDown={(event) => event.stopPropagation()}><button className="chat-extra-close" onClick={() => setContactOpen(false)}><X /></button><ContactRound className="modal-accent-icon" /><h2>연락처 보내기</h2><p>기기 연락처 선택을 지원하지 않는 환경에서는 이름과 전화번호를 직접 입력할 수 있어요.</p><label>이름<input value={contactForm.name} onChange={(event) => setContactForm({ ...contactForm, name: event.target.value })} placeholder="이름" autoComplete="name" /></label><label>전화번호<input value={contactForm.phone} onChange={(event) => setContactForm({ ...contactForm, phone: event.target.value })} placeholder="010-0000-0000" inputMode="tel" autoComplete="tel" /></label><button className="primary" disabled={!contactForm.name.trim() || !contactForm.phone.trim()} onClick={() => sendContact(contactForm.name, contactForm.phone)}>연락처 보내기</button></section></div>}
 
     {giftOpen && <div className="chat-extra-backdrop" onMouseDown={() => setGiftOpen(false)}><section className="chat-extra-modal gift-modal" onMouseDown={(event) => event.stopPropagation()}><button className="chat-extra-close" onClick={() => setGiftOpen(false)}><X /></button><Gift className="modal-accent-icon" /><h2>선물하기</h2><p>생일이나 기념일에 바로 선물 메시지를 보낼 수 있어요. 결제 연결은 다음 단계에서 추가할 수 있어요.</p><div className="gift-options">{['🎂 생일 선물', '💐 기념일 선물', '☕ 커피 선물', '🍰 달콤한 선물'].map((gift) => <button key={gift} onClick={() => { sendText(`🎁 ${gift}을(를) 보내고 싶어요 ❤️`); setGiftOpen(false); }}>{gift}</button>)}</div><button className="gift-ai" disabled>AI 선물 추천 · 준비 중</button></section></div>}
 
