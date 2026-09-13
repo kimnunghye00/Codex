@@ -1,4 +1,4 @@
-import { doc, onSnapshot, runTransaction } from 'firebase/firestore';
+import { doc, onSnapshot, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 
 export type CoupleCallKind = 'voice' | 'video';
@@ -30,6 +30,7 @@ export type CoupleCallSignal = {
   acceptedAtMs?: number;
   endedAtMs?: number;
   endReason?: string;
+  callLogMessageId?: number;
 };
 
 const STALE_CALL_MS = 2 * 60 * 1000;
@@ -75,6 +76,7 @@ function normalizeSignal(value: unknown): CoupleCallSignal | null {
     acceptedAtMs: data.acceptedAtMs ? Number(data.acceptedAtMs) : undefined,
     endedAtMs: data.endedAtMs ? Number(data.endedAtMs) : undefined,
     endReason: data.endReason ? String(data.endReason) : undefined,
+    callLogMessageId: Number.isSafeInteger(data.callLogMessageId) ? Number(data.callLogMessageId) : undefined,
   };
 }
 
@@ -180,6 +182,21 @@ export async function appendCoupleCallCandidate(
   });
 }
 
+function callLogId(callId: string, endedAtMs: number) {
+  let hash = 23;
+  for (let index = 0; index < callId.length; index += 1) hash = ((hash * 33) + callId.charCodeAt(index)) >>> 0;
+  return Math.min(Number.MAX_SAFE_INTEGER, endedAtMs * 1000 + (hash % 1000));
+}
+
+function callRecordStatus(
+  status: Extract<CoupleCallStatus, 'rejected' | 'ended' | 'failed'>,
+  acceptedAtMs?: number,
+): 'completed' | 'rejected' | 'cancelled' | 'failed' {
+  if (status === 'rejected') return 'rejected';
+  if (status === 'failed') return 'failed';
+  return acceptedAtMs ? 'completed' : 'cancelled';
+}
+
 export async function finishCoupleCall(
   coupleId: string,
   callId: string,
@@ -192,13 +209,39 @@ export async function finishCoupleCall(
     if (!snapshot.exists()) return;
     const current = normalizeSignal(snapshot.data()?.activeCall);
     if (!current || current.callId !== callId) return;
+
+    // A terminal update may race from both phones. The first transaction owns
+    // the call-log record; later attempts see callLogMessageId and leave it alone.
+    if (current.callLogMessageId) return;
+
+    const endedAtMs = Date.now();
+    const messageId = callLogId(callId, endedAtMs);
+    const recordStatus = callRecordStatus(status, current.acceptedAtMs);
+    const duration = current.acceptedAtMs
+      ? Math.max(0, Math.round((endedAtMs - current.acceptedAtMs) / 1000))
+      : 0;
+
     transaction.update(ref, {
       activeCall: {
         ...current,
         status,
-        endedAtMs: Date.now(),
+        endedAtMs,
         endReason: reason,
+        callLogMessageId: messageId,
       } satisfies CoupleCallSignal,
+    });
+
+    transaction.set(doc(db, 'couples', coupleId, 'messages', String(messageId)), {
+      id: messageId,
+      authorUid: current.callerUid,
+      type: 'call',
+      callId,
+      callKind: current.kind,
+      callStatus: recordStatus,
+      callDuration: duration,
+      timestamp: new Date(endedAtMs).toISOString(),
+      createdAt: serverTimestamp(),
+      read: false,
     });
   });
 }
