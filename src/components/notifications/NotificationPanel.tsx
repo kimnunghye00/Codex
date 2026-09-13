@@ -1,4 +1,4 @@
-import { Bell, CheckCheck, MessageCircle, Heart, Image, UserRound, X } from 'lucide-react';
+import { Bell, CheckCheck, MessageCircle, Heart, Image, PhoneCall, UserRound, X } from 'lucide-react';
 import type { AppNotification } from '../../utils/notifications';
 
 const iconFor = (kind: AppNotification['kind']) => {
@@ -6,6 +6,7 @@ const iconFor = (kind: AppNotification['kind']) => {
   if (kind === 'memory') return <Image size={17} />;
   if (kind === 'profile') return <UserRound size={17} />;
   if (kind === 'couple') return <Heart size={17} />;
+  if (kind === 'call') return <PhoneCall size={17} />;
   return <Bell size={17} />;
 };
 
@@ -26,10 +27,10 @@ export function NotificationPanel({ items, onClose, onReadAll, onClear }: {
   onReadAll: () => void;
   onClear: () => void;
 }) {
-  return <div className="notification-backdrop" role="dialog" aria-modal="true" aria-label="MELUNI 알림">
+  return <div className="notification-backdrop" role="dialog" aria-modal="true" aria-label="단둘이 알림">
     <section className="notification-panel">
       <header>
-        <div><small>ACTIVITY</small><h2>알림</h2><p>두 사람이 MELUNI에서 한 활동만 보여줘요. 휴대폰 알림은 보내지 않아요.</p></div>
+        <div><small>ACTIVITY</small><h2>알림</h2><p>두 사람이 단둘이에서 한 활동과 수신 통화를 보여줘요.</p></div>
         <button className="notification-close" onClick={onClose} aria-label="닫기"><X /></button>
       </header>
       <div className="notification-actions">
@@ -40,7 +41,7 @@ export function NotificationPanel({ items, onClose, onReadAll, onClear }: {
         {!items.length && <div className="notification-empty"><Bell size={24} /><strong>아직 알림이 없어요</strong><span>채팅, 프로필, 추억 등의 활동이 여기에 쌓여요.</span></div>}
         {items.map((item) => <article key={item.id} className={item.read ? '' : 'unread'}>
           <span className={`notification-icon ${item.actor}`}>{iconFor(item.kind)}</span>
-          <div><div><strong>{item.title}</strong><time>{timeLabel(item.createdAt)}</time></div>{item.detail && <p>{item.detail}</p>}<small>{item.actor === 'me' ? '나' : item.actor === 'partner' ? '상대방' : 'MELUNI'}</small></div>
+          <div><div><strong>{item.title}</strong><time>{timeLabel(item.createdAt)}</time></div>{item.detail && <p>{item.detail}</p>}<small>{item.actor === 'me' ? '나' : item.actor === 'partner' ? '상대방' : '단둘이'}</small></div>
         </article>)}
       </div>
     </section>
