@@ -1,4 +1,4 @@
-name: Deploy ROUTE Web
+name: Deploy 단둘이 Web
 
 on:
   workflow_dispatch:
@@ -72,7 +72,7 @@ jobs:
           grep -q '"storage"' firebase.json
           grep -q "backups" firestore.rules
           grep -q "backupMedia" storage.rules
-          echo "ROUTE web checks passed."
+          echo "단둘이 web checks passed."
 
       - name: Prepare recommended Firebase ADC credentials
         if: ${{ env.FIREBASE_SERVICE_ACCOUNT_JSON != '' }}
@@ -88,7 +88,7 @@ jobs:
         if: ${{ env.FIREBASE_SERVICE_ACCOUNT_JSON == '' && env.FIREBASE_TOKEN == '' }}
         shell: bash
         run: |
-          echo '::error::ROUTE web build passed, but Firebase deployment credentials are missing. Publishing is blocked so an old hosted screen cannot be mistaken for the latest main branch.'
+          echo '::error::단둘이 web build passed, but Firebase deployment credentials are missing. Publishing is blocked so an old hosted screen cannot be mistaken for the latest main branch.'
           echo '### Firebase deployment blocked' >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
           echo 'Configure **ROUTE_FIREBASE_SERVICE_ACCOUNT** (recommended) or **ROUTE_FIREBASE_TOKEN**, then rerun this workflow.' >> "$GITHUB_STEP_SUMMARY"
