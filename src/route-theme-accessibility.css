@@ -190,3 +190,11 @@
 :root[data-route-theme] :is(.home-schedule-title-icon,.home-schedule-empty-icon) {background:var(--primary-soft) !important;color:var(--accent-text) !important}
 :root[data-route-theme] .home-chat-head > span {color:var(--text-primary) !important}
 :root[data-route-theme] :is(.home-memory-head > button,.home-schedule-head > button,.home-chat-head em) {color:var(--text-secondary) !important}
+
+
+/* Dark customization tiles use theme surfaces instead of fixed pastel fills. */
+:root:is([data-route-theme='midnight-walk'],[data-route-theme='neon-night']) .more-customize-icon {
+  background:var(--primary-soft) !important;
+  color:var(--accent-text) !important;
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent-text) 14%,transparent);
+}
