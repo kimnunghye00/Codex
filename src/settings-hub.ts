@@ -217,7 +217,7 @@ function openSettingsHub() {
       settingRow('🔐', '비밀번호 변경', '현재 비밀번호 확인 후 새 비밀번호 설정', openPasswordChange),
     ]),
     section('알림', [
-      settingRow('🔔', '알림 및 최근 활동', 'ROUTE 알림 확인과 읽음 관리', () => {
+      settingRow('🔔', '알림 및 최근 활동', '단둘이 알림 확인과 읽음 관리', () => {
         closeHub();
         bypassSettingsHub = true;
         document.querySelector<HTMLButtonElement>('.header-actions .notification-button')?.click();
@@ -233,19 +233,19 @@ function openSettingsHub() {
     ]),
     section('화면 및 꾸미기', [
       settingRow('🎨', '테마', '10가지 4색 조합과 홈·대화 미리보기', () => navigateMoreAndOpen('테마')),
-      settingRow('📱', '앱 아이콘', '홈 화면 ROUTE 아이콘 변경', () => navigateMoreAndOpen('앱 아이콘')),
+      settingRow('📱', '앱 아이콘', '홈 화면 단둘이 아이콘 변경', () => navigateMoreAndOpen('앱 아이콘')),
       toggleRow('🌙', '시스템 다크 모드 연동', '기기의 다크/라이트 모드에 자동으로 맞춤', SYSTEM_DARK_KEY, isSystemDarkEnabled(), setSystemDarkEnabled),
     ]),
     section('개인 / 보안', [
-      toggleRow('🔒', '앱 잠금', 'ROUTE 실행 시 잠금 사용', 'route-setting-app-lock', false),
+      toggleRow('🔒', '앱 잠금', '단둘이 실행 시 잠금 사용', 'route-setting-app-lock', false),
       settingRow('📍', '위치 및 발자취', '위치 공유와 발자취 설정 확인', () => {
         closeHub();
         clickByText('.bottom-nav button', '위치');
       }),
     ]),
     section('앱 정보', [
-      settingRow('ⓘ', 'ROUTE 정보', 'Android, iOS, Windows, Web에서 같은 ROUTE 사용', () => alert('ROUTE 멀티플랫폼 테스트 버전\nAndroid는 APK, iOS는 iOS 빌드, Windows는 EXE 설치 파일로 업데이트할 수 있어요.')),
-      settingRow('❓', '도움말', '자주 묻는 질문과 문제 해결', () => alert('문제가 생기면 오류 화면과 함께 알려주세요. ROUTE 기능별로 확인할 수 있어요.')),
+      settingRow('ⓘ', '단둘이 정보', 'Android, iOS, Windows, Web에서 같은 단둘이 사용', () => alert('단둘이 멀티플랫폼 테스트 버전\nAndroid는 APK, iOS는 iOS 빌드, Windows는 EXE 설치 파일로 업데이트할 수 있어요.')),
+      settingRow('❓', '도움말', '자주 묻는 질문과 문제 해결', () => alert('문제가 생기면 오류 화면과 함께 알려주세요. 단둘이 기능별로 확인할 수 있어요.')),
     ]),
   );
 
