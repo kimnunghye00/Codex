@@ -1,4 +1,4 @@
-const CACHE_NAME = 'danduli-web-v21-schedule-memory-reswap';
+const CACHE_NAME = 'danduli-web-v22-mobile-couple-day';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.add('./')).catch(() => undefined));
