@@ -25,19 +25,76 @@ const visitsKey = (uid: string) => `meluni-location-visits:${uid}`;
 const sharingKey = (uid: string) => `meluni-location-sharing:${uid}`;
 const MAX_VISITS = 300;
 
+function normalizeLocationDateValue(value: unknown): string | undefined {
+  if (typeof value === 'string' || typeof value === 'number') {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+  }
+
+  if (value && typeof value === 'object') {
+    const candidate = value as { seconds?: unknown; _seconds?: unknown; toDate?: () => Date };
+    try {
+      if (typeof candidate.toDate === 'function') {
+        const date = candidate.toDate();
+        return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+      }
+    } catch {}
+
+    const seconds = Number(candidate.seconds ?? candidate._seconds);
+    if (Number.isFinite(seconds)) {
+      const date = new Date(seconds * 1000);
+      return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+    }
+  }
+
+  return undefined;
+}
+
+export function normalizeLocationVisit(value: unknown, fallbackId = ''): LocationVisit | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Partial<LocationVisit> & { arrivedAt?: unknown; leftAt?: unknown };
+  const latitude = Number(raw.latitude);
+  const longitude = Number(raw.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
+
+  const arrivedAt = normalizeLocationDateValue(raw.arrivedAt);
+  if (!arrivedAt) return null;
+  const leftAt = normalizeLocationDateValue(raw.leftAt);
+  const accuracyValue = Number(raw.accuracy);
+
+  return {
+    id: typeof raw.id === 'string' && raw.id.trim() ? raw.id : fallbackId || 'location-' + arrivedAt,
+    latitude,
+    longitude,
+    accuracy: Number.isFinite(accuracyValue) && accuracyValue >= 0 ? accuracyValue : 0,
+    placeName: typeof raw.placeName === 'string' && raw.placeName.trim() ? raw.placeName.trim() : undefined,
+    arrivedAt,
+    leftAt,
+  };
+}
+
 export function loadLocationVisits(uid: string): LocationVisit[] {
   try {
     const raw = localStorage.getItem(visitsKey(uid));
     if (!raw) return [];
-    const parsed = JSON.parse(raw) as LocationVisit[];
-    return Array.isArray(parsed) ? parsed.slice(0, MAX_VISITS) : [];
+    const parsed = JSON.parse(raw) as unknown[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .slice(0, MAX_VISITS)
+      .map((visit, index) => normalizeLocationVisit(visit, 'legacy-location-' + index))
+      .filter((visit): visit is LocationVisit => Boolean(visit));
   } catch {
     return [];
   }
 }
 
 export function saveLocationVisits(uid: string, visits: LocationVisit[]) {
-  localStorage.setItem(visitsKey(uid), JSON.stringify(visits.slice(0, MAX_VISITS)));
+  const safeVisits = visits
+    .map((visit, index) => normalizeLocationVisit(visit, 'location-' + index))
+    .filter((visit): visit is LocationVisit => Boolean(visit))
+    .slice(0, MAX_VISITS);
+  localStorage.setItem(visitsKey(uid), JSON.stringify(safeVisits));
   signalPersistentStateChange();
 }
 
