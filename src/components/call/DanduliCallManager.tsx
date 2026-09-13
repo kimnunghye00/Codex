@@ -1,6 +1,8 @@
 import { Mic, MicOff, PhoneCall, PhoneOff, Video, VideoOff } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
+import { clearIncomingCallNotification, prepareIncomingCallNotifications, showIncomingCallNotification } from '../../lib/callNotifications';
+import { isNativePlatform } from '../../lib/native';
 import {
   answerCoupleCall,
   appendCoupleCallCandidate,
@@ -142,10 +144,12 @@ export function DanduliCallManager({
   currentUid,
   connection,
   partnerName,
+  onIncomingCall,
 }: {
   currentUid: string;
   connection: RealCoupleConnection | null;
   partnerName: string;
+  onIncomingCall?: (kind: CoupleCallKind) => void;
 }) {
   const [incoming, setIncoming] = useState<CoupleCallSignal | null>(null);
   const [session, setSession] = useState<ActiveSession | null>(null);
@@ -170,6 +174,7 @@ export function DanduliCallManager({
   const disconnectTimerRef = useRef<number | undefined>(undefined);
   const closeTimerRef = useRef<number | undefined>(undefined);
   const latestSignalRef = useRef<CoupleCallSignal | null>(null);
+  const notifiedCallIdRef = useRef('');
 
   const stopStreams = useCallback(() => {
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
@@ -361,6 +366,10 @@ export function DanduliCallManager({
   }, []);
 
   const startOutgoingCall = useCallback(async (kind: CoupleCallKind) => {
+    // This click is a user gesture, so web browsers are allowed to ask for
+    // notification permission here. Native permission is prepared on connect.
+    void prepareIncomingCallNotifications();
+
     if (!connection?.coupleId || !connection.partnerUid || !currentUid) {
       setMessage('상대방과 연결된 뒤 통화할 수 있어요.');
       return;
@@ -404,6 +413,9 @@ export function DanduliCallManager({
     const signal = incoming;
     if (!signal || !connection?.coupleId || signal.calleeUid !== currentUid) return;
 
+    void clearIncomingCallNotification(signal.callId);
+    notifiedCallIdRef.current = '';
+
     try {
       setMessage('');
       setIncoming(null);
@@ -441,6 +453,8 @@ export function DanduliCallManager({
     if (!incoming || !connection?.coupleId) return;
     const callId = incoming.callId;
     setIncoming(null);
+    notifiedCallIdRef.current = '';
+    void clearIncomingCallNotification(callId);
     void finishCoupleCall(connection.coupleId, callId, 'rejected', 'declined');
   }, [connection?.coupleId, incoming]);
 
@@ -488,6 +502,20 @@ export function DanduliCallManager({
   }, [remoteStream, session?.kind, session?.phase]);
 
   useEffect(() => {
+    const root = document.documentElement;
+    if (connection?.coupleId) {
+      root.dataset.routeCallMonitor = '1';
+      if (isNativePlatform()) void prepareIncomingCallNotifications();
+    } else {
+      delete root.dataset.routeCallMonitor;
+    }
+
+    return () => {
+      delete root.dataset.routeCallMonitor;
+    };
+  }, [connection?.coupleId]);
+
+  useEffect(() => {
     const listener = (event: Event) => {
       const detail = (event as CustomEvent<{ kind?: CoupleCallKind }>).detail;
       if (detail?.kind !== 'voice' && detail?.kind !== 'video') return;
@@ -516,7 +544,16 @@ export function DanduliCallManager({
       if (!activeCallId) {
         if (signal.status === 'ringing' && signal.calleeUid === currentUid) {
           setIncoming(signal);
+          if (notifiedCallIdRef.current !== signal.callId) {
+            notifiedCallIdRef.current = signal.callId;
+            void showIncomingCallNotification(signal.callId, partnerName, signal.kind);
+            onIncomingCall?.(signal.kind);
+          }
         } else {
+          if (notifiedCallIdRef.current) {
+            void clearIncomingCallNotification(notifiedCallIdRef.current);
+            notifiedCallIdRef.current = '';
+          }
           setIncoming(null);
         }
         return;
@@ -524,6 +561,10 @@ export function DanduliCallManager({
 
       if (signal.callId !== activeCallId) return;
       if (signal.status === 'rejected' || signal.status === 'ended' || signal.status === 'failed') {
+        if (notifiedCallIdRef.current === signal.callId) {
+          void clearIncomingCallNotification(signal.callId);
+          notifiedCallIdRef.current = '';
+        }
         finishAndCloseLater(endMessage(signal));
         return;
       }
@@ -549,11 +590,12 @@ export function DanduliCallManager({
       console.warn('[DANDULI call subscription]', cause);
       setMessage('통화 신호를 불러오지 못했어요.');
     });
-  }, [applyRemoteCandidates, connection?.coupleId, currentUid, finishAndCloseLater, resetLocalSession]);
+  }, [applyRemoteCandidates, connection?.coupleId, currentUid, finishAndCloseLater, onIncomingCall, partnerName, resetLocalSession]);
 
   useEffect(() => () => {
     if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current);
     if (disconnectTimerRef.current) window.clearTimeout(disconnectTimerRef.current);
+    if (notifiedCallIdRef.current) void clearIncomingCallNotification(notifiedCallIdRef.current);
     peerRef.current?.close();
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
     remoteStreamRef.current?.getTracks().forEach((track) => track.stop());
