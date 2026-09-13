@@ -68,7 +68,7 @@ function aiReplyFor(text: string) {
   const value = text.trim();
   const lower = value.toLowerCase();
   if (!value) return '응, 듣고 있어.';
-  if (/안녕|하이|hello|hi/.test(lower)) return '안녕! 이제 ROUTE 안에서도 대화 테스트를 할 수 있어 😊';
+  if (/안녕|하이|hello|hi/.test(lower)) return '안녕! 이제 단둘이 안에서도 대화 테스트를 할 수 있어 😊';
   if (/별명/.test(value)) return '별명 기능도 같이 확인해보자.';
   if (/오류|에러|버그|안돼|안 돼|문제/.test(value)) return '어디에서 문제가 생겼는지 알려줘.';
   if (/테스트/.test(value)) return '좋아. 메시지 전송부터 확인해보자.';
@@ -312,7 +312,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   useEffect(() => {
     if (!connection || !currentUid) return;
     setSyncError('');
-    return subscribeCoupleMessages(connection.coupleId, currentUid, setMessages, (cause) => { console.error('[ROUTE realtime chat]', cause); setSyncError('실시간 대화를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.'); });
+    return subscribeCoupleMessages(connection.coupleId, currentUid, setMessages, (cause) => { console.error('[DANDULI realtime chat]', cause); setSyncError('실시간 대화를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.'); });
   }, [connection?.coupleId, currentUid, setMessages]);
   useEffect(() => {
     if (!connection?.coupleId || !currentUid) return;
@@ -564,7 +564,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
       showFlowNotice(urls.length === 1 ? '사진을 전송했어요.' : `사진 ${urls.length}장을 전송했어요.`);
     } catch (cause) {
       if (uploadedPaths.length) await deleteUploadedChatMedia(uploadedPaths);
-      console.error('[ROUTE chat photo]', cause);
+      console.error('[DANDULI chat photo]', cause);
       setSyncError(mediaErrorMessage(cause, 'photo'));
     } finally {
       mediaSendingRef.current = false;
@@ -600,7 +600,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
       showFlowNotice('움짤을 전송했어요.');
     } catch (cause) {
       if (uploadedPaths.length) await deleteUploadedChatMedia(uploadedPaths);
-      console.error('[ROUTE chat gif]', cause);
+      console.error('[DANDULI chat gif]', cause);
       setSyncError(mediaErrorMessage(cause, 'gif'));
     }
   };
@@ -645,7 +645,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
   const react = (id: number, emoji: string) => {
     setMessages((items) => items.map((message) => message.id !== id ? message : { ...message, reactions: message.reactions?.some((reaction) => reaction.by === 'me' && reaction.emoji === emoji) ? message.reactions.filter((reaction) => !(reaction.by === 'me' && reaction.emoji === emoji)) : [...(message.reactions ?? []).filter((reaction) => reaction.by !== 'me'), { emoji, by: 'me' }] }));
     if (connection && currentUid) void toggleCoupleMessageReaction(connection.coupleId, id, currentUid, emoji).catch((cause) => {
-      console.error('[ROUTE chat reaction]', cause);
+      console.error('[DANDULI chat reaction]', cause);
       setSyncError('메시지 반응을 동기화하지 못했어요.');
     });
   };
@@ -750,7 +750,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
       setLightbox(undefined);
       showFlowNotice('모든 대화를 삭제했어요.');
     } catch (cause) {
-      console.error('[ROUTE clear chat]', cause);
+      console.error('[DANDULI clear chat]', cause);
       setSyncError('모든 대화를 삭제하지 못했어요. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.');
     } finally {
       setDeleteBusy(false);
@@ -821,7 +821,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
       </section>
     </div>}
 
-    {scheduleOpen && <div className="chat-extra-backdrop" onMouseDown={() => { setScheduleOpen(false); setScheduleError(''); }}><section className="chat-extra-modal" onMouseDown={(event) => event.stopPropagation()}><button className="chat-extra-close" onClick={() => { setScheduleOpen(false); setScheduleError(''); }}><X /></button><CalendarClock className="modal-accent-icon" /><h2>예약 메시지</h2><p>현재 버전에서는 ROUTE가 실행 중일 때 예약 시간이 되면 자동으로 보내요.</p><label>메시지<textarea value={scheduleForm.text} onChange={(event) => { setScheduleForm({ ...scheduleForm, text: event.target.value }); setScheduleError(''); }} placeholder="나중에 전할 말을 적어주세요" /></label><div className="chat-schedule-datetime"><label>보낼 날짜<input type="text" inputMode="numeric" autoComplete="off" maxLength={10} value={scheduleForm.date} onChange={(event) => { setScheduleForm({ ...scheduleForm, date: formatScheduleDateInput(event.target.value) }); setScheduleError(''); }} placeholder="YYYY-MM-DD" aria-label="예약 메시지 보낼 날짜" /></label><label>보낼 시간<input type="time" value={scheduleForm.time} onChange={(event) => { setScheduleForm({ ...scheduleForm, time: event.target.value }); setScheduleError(''); }} aria-label="예약 메시지 보낼 시간" /></label></div>{scheduleError && <p className="chat-schedule-error" role="alert">{scheduleError}</p>}<button className="primary" disabled={!scheduleForm.text.trim() || scheduleForm.date.length !== 10 || !scheduleForm.time} onClick={reserveMessage}>예약하기</button></section></div>}
+    {scheduleOpen && <div className="chat-extra-backdrop" onMouseDown={() => { setScheduleOpen(false); setScheduleError(''); }}><section className="chat-extra-modal" onMouseDown={(event) => event.stopPropagation()}><button className="chat-extra-close" onClick={() => { setScheduleOpen(false); setScheduleError(''); }}><X /></button><CalendarClock className="modal-accent-icon" /><h2>예약 메시지</h2><p>현재 버전에서는 단둘이가 실행 중일 때 예약 시간이 되면 자동으로 보내요.</p><label>메시지<textarea value={scheduleForm.text} onChange={(event) => { setScheduleForm({ ...scheduleForm, text: event.target.value }); setScheduleError(''); }} placeholder="나중에 전할 말을 적어주세요" /></label><div className="chat-schedule-datetime"><label>보낼 날짜<input type="text" inputMode="numeric" autoComplete="off" maxLength={10} value={scheduleForm.date} onChange={(event) => { setScheduleForm({ ...scheduleForm, date: formatScheduleDateInput(event.target.value) }); setScheduleError(''); }} placeholder="YYYY-MM-DD" aria-label="예약 메시지 보낼 날짜" /></label><label>보낼 시간<input type="time" value={scheduleForm.time} onChange={(event) => { setScheduleForm({ ...scheduleForm, time: event.target.value }); setScheduleError(''); }} aria-label="예약 메시지 보낼 시간" /></label></div>{scheduleError && <p className="chat-schedule-error" role="alert">{scheduleError}</p>}<button className="primary" disabled={!scheduleForm.text.trim() || scheduleForm.date.length !== 10 || !scheduleForm.time} onClick={reserveMessage}>예약하기</button></section></div>}
 
     {giftOpen && <div className="chat-extra-backdrop" onMouseDown={() => setGiftOpen(false)}><section className="chat-extra-modal gift-modal" onMouseDown={(event) => event.stopPropagation()}><button className="chat-extra-close" onClick={() => setGiftOpen(false)}><X /></button><Gift className="modal-accent-icon" /><h2>선물하기</h2><p>생일이나 기념일에 바로 선물 메시지를 보낼 수 있어요. 결제 연결은 다음 단계에서 추가할 수 있어요.</p><div className="gift-options">{['🎂 생일 선물', '💐 기념일 선물', '☕ 커피 선물', '🍰 달콤한 선물'].map((gift) => <button key={gift} onClick={() => { sendText(`🎁 ${gift}을(를) 보내고 싶어요 ❤️`); setGiftOpen(false); }}>{gift}</button>)}</div><button className="gift-ai" disabled>AI 선물 추천 · 준비 중</button></section></div>}
 
