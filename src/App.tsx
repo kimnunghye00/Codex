@@ -184,6 +184,13 @@ function chatPreview(message?: Message) {
   if (message.type === 'file') return `${message.attachmentName || '파일'}을 보냈어요.`;
   if (message.type === 'contact') return `${message.contactName || '연락처'} 연락처를 보냈어요.`;
   if (message.type === 'audio') return '음성 메시지를 보냈어요.';
+  if (message.type === 'call') {
+    const label = message.callKind === 'video' ? '영상통화' : '음성 통화';
+    if (message.callStatus === 'completed') return `${label} 기록`;
+    if (message.callStatus === 'rejected') return `받지 않은 ${label}`;
+    if (message.callStatus === 'cancelled') return `취소된 ${label}`;
+    return `${label} 연결 실패`;
+  }
   return message.text || '메시지';
 }
 
@@ -250,6 +257,16 @@ function App({ user, profile, onProfileChange }: AppProps) {
       return next;
     });
   }, [user.uid]);
+
+  const addIncomingCallActivity = useCallback((kind: 'voice' | 'video') => {
+    const callerName = connection?.partnerProfile ? displayName(connection.partnerProfile) : '상대방';
+    addActivity({
+      actor: 'partner',
+      kind: 'call',
+      title: kind === 'video' ? `${callerName}님의 영상통화` : `${callerName}님의 전화`,
+      detail: kind === 'video' ? '영상통화가 왔어요.' : '전화가 왔어요.',
+    });
+  }, [addActivity, connection?.partnerProfile]);
 
   useEffect(() => {
     let disposed = false;
@@ -509,7 +526,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
       {tab === 'more' && <MorePage onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} onNavigate={navigateMoreTarget} />}
     </Suspense></main><BottomNav tab={tab} onNavigate={navigateTab} /></div>
 
-    <DanduliCallManager currentUid={user.uid} connection={connection} partnerName={connection?.partnerProfile ? displayName(connection.partnerProfile) : '상대방'} />
+    <DanduliCallManager currentUid={user.uid} connection={connection} partnerName={connection?.partnerProfile ? displayName(connection.partnerProfile) : '상대방'} onIncomingCall={addIncomingCallActivity} />
 
     <Suspense fallback={null}>
       {settingsOpen && <AccountSettings user={user} profile={profile} onProfileChange={onProfileChange} onClose={() => setSettingsOpen(false)} />}
