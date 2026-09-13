@@ -1,4 +1,4 @@
-const CACHE_NAME = 'danduli-web-v11-transparent-stickers';
+const CACHE_NAME = 'danduli-web-v12-clean-sticker-cells';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.add('./')).catch(() => undefined));
