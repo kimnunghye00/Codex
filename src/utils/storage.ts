@@ -32,12 +32,24 @@ function cachedMessages(): Message[] {
   return stored.filter((item): item is Message => isRecord(item)
     && Number.isSafeInteger(item.id) && typeof item.timestamp === 'string'
     && (item.sender === 'me' || item.sender === 'partner')
-    && ['text', 'image', 'gallery', 'gif'].includes(String(item.type)))
+    && ['text', 'image', 'gallery', 'gif', 'sticker', 'file', 'contact', 'audio', 'call'].includes(String(item.type)))
     .map((item) => ({
       ...item,
       text: typeof item.text === 'string' ? item.text : undefined,
       imageUrl: typeof item.imageUrl === 'string' ? item.imageUrl : undefined,
       imageUrls: item.imageUrls === undefined ? undefined : stringList(item.imageUrls),
+      stickerId: typeof item.stickerId === 'string' ? item.stickerId : undefined,
+      attachmentUrl: typeof item.attachmentUrl === 'string' ? item.attachmentUrl : undefined,
+      attachmentName: typeof item.attachmentName === 'string' ? item.attachmentName : undefined,
+      attachmentSize: typeof item.attachmentSize === 'number' ? item.attachmentSize : undefined,
+      attachmentMime: typeof item.attachmentMime === 'string' ? item.attachmentMime : undefined,
+      audioDuration: typeof item.audioDuration === 'number' ? item.audioDuration : undefined,
+      contactName: typeof item.contactName === 'string' ? item.contactName : undefined,
+      contactPhone: typeof item.contactPhone === 'string' ? item.contactPhone : undefined,
+      callId: typeof item.callId === 'string' ? item.callId : undefined,
+      callKind: item.callKind === 'video' ? 'video' : item.callKind === 'voice' ? 'voice' : undefined,
+      callStatus: item.callStatus === 'completed' || item.callStatus === 'rejected' || item.callStatus === 'cancelled' || item.callStatus === 'failed' ? item.callStatus : undefined,
+      callDuration: typeof item.callDuration === 'number' ? item.callDuration : undefined,
       reactions: Array.isArray(item.reactions) ? item.reactions.filter((reaction) => isRecord(reaction)
         && typeof reaction.emoji === 'string' && (reaction.by === 'me' || reaction.by === 'partner')) : undefined,
     }));
