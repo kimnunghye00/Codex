@@ -295,8 +295,8 @@
   grid-template-rows:
     clamp(180px,23vh,220px)
     clamp(158px,19vh,170px)
-    clamp(108px,13vh,124px)
-    minmax(220px,1fr);
+    minmax(220px,1fr)
+    clamp(108px,13vh,124px);
   gap:12px;
 }
 
@@ -315,8 +315,8 @@
     grid-template-rows:
       154px
       150px
-      96px
-      minmax(130px,1fr);
+      minmax(130px,1fr)
+      96px;
     gap:9px;
   }
 }
@@ -326,8 +326,8 @@
     grid-template-rows:
       156px
       164px
-      108px
-      minmax(180px,1fr);
+      minmax(180px,1fr)
+      108px;
     gap:9px;
   }
 
@@ -404,8 +404,8 @@
     grid-template-rows:
       148px
       150px
-      96px
-      minmax(130px,1fr);
+      minmax(130px,1fr)
+      96px;
     gap:8px;
   }
 }
@@ -415,8 +415,8 @@
     grid-template-rows:
       144px
       154px
-      100px
-      minmax(160px,1fr);
+      minmax(160px,1fr)
+      100px;
     gap:8px;
   }
 }
