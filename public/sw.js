@@ -1,4 +1,4 @@
-const CACHE_NAME = 'danduli-web-v19-schedule-memory-swap';
+const CACHE_NAME = 'danduli-web-v20-100day-milestones';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.add('./')).catch(() => undefined));
