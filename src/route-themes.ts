@@ -84,17 +84,88 @@ function makeThemeButton(theme: RouteTheme, selectedId: string, onSelect: (id: s
   return button;
 }
 
+function previewTextColor(hex: string) {
+  const value = hex.replace('#', '');
+  if (!/^[0-9a-f]{6}$/i.test(value)) return '#FFFFFF';
+  const red = Number.parseInt(value.slice(0, 2), 16);
+  const green = Number.parseInt(value.slice(2, 4), 16);
+  const blue = Number.parseInt(value.slice(4, 6), 16);
+  const brightness = (red * 299 + green * 587 + blue * 114) / 1000;
+  return brightness > 160 ? '#263044' : '#FFFFFF';
+}
+
 function updatePreview(preview: HTMLElement, theme: RouteTheme) {
   preview.style.setProperty('--preview-accent', theme.colors[0]);
   preview.style.setProperty('--preview-soft', theme.colors[1]);
   preview.style.setProperty('--preview-bg', theme.colors[2]);
   preview.style.setProperty('--preview-primary', theme.colors[3]);
+  preview.style.setProperty('--preview-on-primary', previewTextColor(theme.colors[3]));
+  preview.style.setProperty('--preview-on-accent', previewTextColor(theme.colors[0]));
 }
 
 function makePreview(theme: RouteTheme) {
   const preview = document.createElement('div');
   preview.className = 'route-theme-preview';
-  preview.innerHTML = '<div class="route-theme-preview-phone"><div class="route-theme-preview-top"><strong>ROUTE.</strong><span>● ●</span></div><div class="route-theme-preview-hero"><small>OUR ROUTE</small><b>우리의 오늘</b><span>4가지 색이 앱 전체에 함께 적용돼요.</span></div><div class="route-theme-preview-row"><div class="route-theme-preview-card"><small>우리의 시간</small><b>D+821</b></div><div class="route-theme-preview-action"><b>♥ 최근 추억</b></div></div></div>';
+  preview.innerHTML = `
+    <div class="route-theme-preview-tabs" role="tablist" aria-label="테마 미리보기 화면">
+      <button type="button" class="active" role="tab" aria-selected="true" data-route-preview-tab="home">홈</button>
+      <button type="button" role="tab" aria-selected="false" tabindex="-1" data-route-preview-tab="chat">대화방</button>
+    </div>
+    <div class="route-theme-preview-stage">
+      <div class="route-theme-preview-screen active" role="tabpanel" data-route-preview-screen="home">
+        <div class="route-theme-preview-phone route-theme-preview-home">
+          <div class="route-theme-preview-top"><strong>ROUTE.</strong><span>● ●</span></div>
+          <div class="route-theme-preview-hero"><small>OUR ROUTE</small><b>우리의 오늘</b><span>4가지 색이 앱 전체에 함께 적용돼요.</span></div>
+          <div class="route-theme-preview-row">
+            <div class="route-theme-preview-card"><small>우리의 시간</small><b>D+821</b></div>
+            <div class="route-theme-preview-action"><b>♥ 최근 추억</b></div>
+          </div>
+        </div>
+      </div>
+      <div class="route-theme-preview-screen" role="tabpanel" data-route-preview-screen="chat" hidden>
+        <div class="route-theme-preview-phone route-theme-preview-chat">
+          <div class="route-theme-preview-chat-top">
+            <span class="route-theme-preview-avatar">♥</span>
+            <span class="route-theme-preview-chat-copy"><b>우리 대화</b><small>함께한 지 821일</small></span>
+            <span class="route-theme-preview-chat-actions">♡ ⋯</span>
+          </div>
+          <div class="route-theme-preview-chat-pin"><span>📅</span><b>이번 주 토요일 · 데이트</b></div>
+          <div class="route-theme-preview-chat-body">
+            <div class="route-theme-preview-message received">
+              <span class="route-theme-preview-mini-avatar">♥</span>
+              <div><small>상대방</small><p>오늘 저녁 같이 먹을래?</p></div>
+            </div>
+            <div class="route-theme-preview-message mine">
+              <div><p>좋아! 끝나고 연락할게 ♥</p><small>오후 6:42</small></div>
+            </div>
+          </div>
+          <div class="route-theme-preview-composer"><span>＋</span><em>메시지 보내기</em><b>GIF</b></div>
+        </div>
+      </div>
+    </div>`;
+
+  const selectScreen = (screen: 'home' | 'chat') => {
+    preview.querySelectorAll<HTMLButtonElement>('[data-route-preview-tab]').forEach((button) => {
+      const active = button.dataset.routePreviewTab === screen;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-selected', String(active));
+      button.tabIndex = active ? 0 : -1;
+    });
+    preview.querySelectorAll<HTMLElement>('[data-route-preview-screen]').forEach((panel) => {
+      const active = panel.dataset.routePreviewScreen === screen;
+      panel.classList.toggle('active', active);
+      panel.hidden = !active;
+    });
+  };
+
+  preview.querySelectorAll<HTMLButtonElement>('[data-route-preview-tab]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const screen = button.dataset.routePreviewTab;
+      if (screen !== 'home' && screen !== 'chat') return;
+      selectScreen(screen);
+    });
+  });
+
   updatePreview(preview, theme);
   return preview;
 }
@@ -116,7 +187,7 @@ function openThemeSheet() {
   const header = document.createElement('div');
   header.className = 'route-theme-sheet-header';
   const heading = document.createElement('div');
-  heading.innerHTML = '<small>ROUTE THEME</small><h2>테마 선택</h2><p>각 테마의 4색 조합을 확인하고 미리보기로 비교하세요.</p>';
+  heading.innerHTML = '<small>ROUTE THEME</small><h2>테마 선택</h2><p>홈과 대화방 미리보기를 확인하고 4색 조합을 비교하세요.</p>';
   const close = document.createElement('button');
   close.type = 'button';
   close.className = 'route-theme-sheet-close';
