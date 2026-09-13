@@ -290,7 +290,10 @@ export async function uploadChatAttachment(
   const path = `couples/${coupleId}/chatMedia/${ownerUid}/${messageId}/${kind}-001.${extension}`;
   const storageRef = ref(storage, path);
   await uploadBytes(storageRef, file, {
-    contentType: file.type || 'application/octet-stream',
+    // Keep attachment uploads compatible with the currently deployed
+    // image-only chatMedia Storage rule. The real MIME is preserved in
+    // Firestore/custom metadata and restored client-side for playback/download.
+    contentType: `image/x-danduli-${kind}`,
     cacheControl: 'private,max-age=3600',
     customMetadata: {
       coupleId,
@@ -298,6 +301,7 @@ export async function uploadChatAttachment(
       messageId: String(messageId),
       variant: kind,
       originalName: file.name,
+      originalContentType: file.type || 'application/octet-stream',
     },
   });
   return {
