@@ -12,7 +12,7 @@ let changing = false;
 
 function iconIdFromButton(button: HTMLButtonElement): IconId | null {
   const value = button.dataset.iconId;
-  return value === 'route' || value === 'heart' || value === 'pin-duo' || value === 'heart-chat' || value === 'our-route' || value === 'night' || value === 'cream' || value === 'minimal'
+  return value === 'route' || value === 'heart-chat' || value === 'couple-love' || value === 'couple-date'
     ? value
     : null;
 }
