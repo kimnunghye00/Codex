@@ -115,6 +115,7 @@
   opacity:.72;
 }
 .chat-attachment-card>a,
+.chat-attachment-card>button,
 .chat-contact-card>a{
   width:34px;
   height:34px;
@@ -126,7 +127,9 @@
   background:color-mix(in srgb,currentColor 10%,transparent);
 }
 .chat-attachment-card>a svg,
+.chat-attachment-card>button svg,
 .chat-contact-card>a svg{width:17px;height:17px}
+.chat-attachment-card>button{border:0}
 .chat-audio-card audio{
   width:150px;
   max-width:46vw;
