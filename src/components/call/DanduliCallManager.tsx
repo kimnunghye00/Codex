@@ -27,12 +27,71 @@ const CALL_REQUEST_EVENT = 'danduli-call-request';
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
 ];
 const DISCONNECT_GRACE_MS = 8_000;
 
 function makeCallId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
   return `call-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function callErrorCode(cause: unknown) {
+  if (cause && typeof cause === 'object' && 'code' in cause) return String((cause as { code?: unknown }).code ?? '');
+  return '';
+}
+
+function callErrorName(cause: unknown) {
+  if (cause instanceof DOMException) return cause.name;
+  if (cause instanceof Error) return cause.name;
+  return '';
+}
+
+function callErrorMessage(cause: unknown, kind: CoupleCallKind) {
+  const code = callErrorCode(cause);
+  const name = callErrorName(cause);
+  const message = cause instanceof Error ? cause.message : String(cause ?? '');
+
+  if (message === 'call-busy') return '상대방이 이미 통화 중이에요.';
+  if (message === 'media-not-supported' || message === 'webrtc-not-supported') {
+    return '현재 브라우저 또는 앱 환경에서 실시간 통화를 지원하지 않아요. 앱이나 최신 브라우저에서 다시 시도해 주세요.';
+  }
+  if (name === 'NotAllowedError' || name === 'SecurityError' || code.includes('permission-denied')) {
+    return kind === 'video'
+      ? '영상통화를 위해 마이크와 카메라 권한을 허용해 주세요.'
+      : '전화를 위해 마이크 권한을 허용해 주세요.';
+  }
+  if (name === 'NotReadableError' || name === 'TrackStartError') {
+    return '마이크나 카메라를 다른 앱이 사용 중이에요. 다른 앱의 통화를 종료한 뒤 다시 시도해 주세요.';
+  }
+  if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+    return kind === 'video'
+      ? '사용할 수 있는 마이크나 카메라를 찾지 못했어요.'
+      : '사용할 수 있는 마이크를 찾지 못했어요.';
+  }
+  if (name === 'OverconstrainedError' || name === 'ConstraintNotSatisfiedError') {
+    return '이 기기의 마이크/카메라 설정으로 통화를 시작하지 못했어요. 기본 장치로 다시 시도해 주세요.';
+  }
+  if (
+    navigator.onLine === false
+    || code.includes('unavailable')
+    || code.includes('deadline-exceeded')
+    || code.includes('network-request-failed')
+  ) {
+    return '인터넷 연결이 끊겨 통화를 시작하지 못했어요. 연결을 확인한 뒤 다시 시도해 주세요.';
+  }
+  if (code.includes('failed-precondition')) {
+    return '통화 연결 상태를 준비하지 못했어요. 잠시 후 다시 시도해 주세요.';
+  }
+  return '통화를 시작하지 못했어요. 마이크/카메라 권한과 상대방 연결 상태를 확인해 주세요.';
+}
+
+function canFallbackFromMediaError(cause: unknown) {
+  const name = callErrorName(cause);
+  return name === 'NotFoundError'
+    || name === 'DevicesNotFoundError'
+    || name === 'OverconstrainedError'
+    || name === 'ConstraintNotSatisfiedError';
 }
 
 function formatDuration(seconds: number) {
@@ -155,7 +214,8 @@ export function DanduliCallManager({
 
   const createPeer = useCallback((callId: string, role: CallRole) => {
     peerRef.current?.close();
-    const peer = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    if (typeof RTCPeerConnection === 'undefined') throw new Error('webrtc-not-supported');
+    const peer = new RTCPeerConnection({ iceServers: ICE_SERVERS, iceCandidatePoolSize: 8 });
     peerRef.current = peer;
     activeCallIdRef.current = callId;
     roleRef.current = role;
@@ -225,14 +285,45 @@ export function DanduliCallManager({
 
   const acquireMedia = useCallback(async (kind: CoupleCallKind) => {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('media-not-supported');
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: kind === 'video' ? { facingMode: 'user' } : false,
-    });
+
+    localStreamRef.current?.getTracks().forEach((track) => track.stop());
+
+    let stream: MediaStream;
+    if (kind === 'voice') {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      } catch (cause) {
+        if (!canFallbackFromMediaError(cause)) throw cause;
+        // A desktop without a microphone can still receive the partner's audio.
+        // Do not misreport that hardware condition as an internet outage.
+        stream = new MediaStream();
+      }
+    } else {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: { facingMode: 'user' },
+        });
+      } catch (firstCause) {
+        if (!canFallbackFromMediaError(firstCause)) throw firstCause;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        } catch (audioCause) {
+          if (!canFallbackFromMediaError(audioCause)) throw audioCause;
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: true });
+          } catch (videoCause) {
+            if (!canFallbackFromMediaError(videoCause)) throw videoCause;
+            stream = new MediaStream();
+          }
+        }
+      }
+    }
+
     localStreamRef.current = stream;
     setLocalStream(stream);
     setMuted(false);
-    setCameraOff(false);
+    setCameraOff(kind === 'video' && stream.getVideoTracks().length === 0);
     return stream;
   }, []);
 
@@ -251,6 +342,8 @@ export function DanduliCallManager({
       const stream = await acquireMedia(kind);
       const peer = createPeer(callId, 'caller');
       stream.getTracks().forEach((track) => peer.addTrack(track, stream));
+      if (!stream.getAudioTracks().length) peer.addTransceiver('audio', { direction: 'recvonly' });
+      if (kind === 'video' && !stream.getVideoTracks().length) peer.addTransceiver('video', { direction: 'recvonly' });
 
       const offer = await peer.createOffer();
       await peer.setLocalDescription(offer);
@@ -259,11 +352,7 @@ export function DanduliCallManager({
       await flushLocalCandidates();
     } catch (cause) {
       console.error('[DANDULI outgoing call]', cause);
-      const text = cause instanceof Error && cause.message === 'call-busy'
-        ? '상대방이 이미 통화 중이에요.'
-        : cause instanceof DOMException && (cause.name === 'NotAllowedError' || cause.name === 'SecurityError')
-          ? '통화를 위해 마이크와 카메라 권한을 허용해 주세요.'
-          : '통화를 시작하지 못했어요. 네트워크 연결을 확인해 주세요.';
+      const text = callErrorMessage(cause, kind);
       resetLocalSession(true);
       setMessage(text);
       window.setTimeout(() => setMessage(''), 2400);
@@ -282,6 +371,8 @@ export function DanduliCallManager({
       const peer = createPeer(signal.callId, 'callee');
       signalReadyRef.current = true;
       stream.getTracks().forEach((track) => peer.addTrack(track, stream));
+      if (!stream.getAudioTracks().length) peer.addTransceiver('audio', { direction: 'recvonly' });
+      if (signal.kind === 'video' && !stream.getVideoTracks().length) peer.addTransceiver('video', { direction: 'recvonly' });
 
       await peer.setRemoteDescription(signal.offer);
       await applyRemoteCandidates(signal.callerCandidates);
@@ -293,9 +384,7 @@ export function DanduliCallManager({
       console.error('[DANDULI accept call]', cause);
       void finishCoupleCall(connection.coupleId, signal.callId, 'failed', 'accept-failed');
       resetLocalSession(true);
-      setMessage(cause instanceof DOMException && (cause.name === 'NotAllowedError' || cause.name === 'SecurityError')
-        ? '통화를 위해 마이크와 카메라 권한을 허용해 주세요.'
-        : '통화에 연결하지 못했어요.');
+      setMessage(callErrorMessage(cause, signal.kind));
       window.setTimeout(() => setMessage(''), 2400);
     }
   }, [acquireMedia, applyRemoteCandidates, connection?.coupleId, createPeer, currentUid, flushLocalCandidates, incoming, resetLocalSession]);
