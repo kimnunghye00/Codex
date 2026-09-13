@@ -31,6 +31,8 @@ type AppIconOption = {
 const APP_ICONS: AppIconOption[] = [
   { id: 'route', label: '하트 톡', className: 'danduli-image-icon' },
   { id: 'heart-chat', label: '둘이 톡', className: 'danduli-image-icon' },
+  { id: 'couple-love', label: '꼬옥 커플', className: 'danduli-image-icon' },
+  { id: 'couple-date', label: '데이트 커플', className: 'danduli-image-icon' },
 ];
 
 const EMOTICON_PACKS = [
@@ -62,7 +64,13 @@ const PROFILE_STYLES: Array<{ id: RouteProfileStyle; label: string; description:
 ];
 
 function AppIconGlyph({ id }: { id: AppIconId }) {
-  const src = id === 'heart-chat' ? '/danduli-icon-chat.webp' : '/danduli-icon-heart.webp';
+  const src = id === 'heart-chat'
+    ? '/danduli-icon-chat.webp'
+    : id === 'couple-love'
+      ? '/danduli-character-love.webp'
+      : id === 'couple-date'
+        ? '/danduli-character-date.webp'
+        : '/danduli-icon-heart.webp';
   return <img src={src} alt="" className="danduli-app-icon-image" draggable={false} />;
 }
 
@@ -152,7 +160,7 @@ export function MoreServices({
       <div className="more-section-title"><small>CUSTOMIZE</small><h2 id="route-more-customize-title">단둘이 꾸미기</h2><p>다른 탭과 겹치지 않는 꾸미기 기능만 모았어요.</p></div>
       <div className="more-customize-grid" aria-label="단둘이 꾸미기">
         <button type="button" onClick={() => openSheet('theme')}><span className="more-customize-icon theme"><Palette /></span><b>테마</b><small>앱 전체 색상</small></button>
-        <button type="button" onClick={() => openSheet('app-icon')}><span className="more-customize-icon icon"><Smartphone /></span><b>앱 아이콘</b><small>2가지 아이콘</small></button>
+        <button type="button" onClick={() => openSheet('app-icon')}><span className="more-customize-icon icon"><Smartphone /></span><b>앱 아이콘</b><small>4가지 아이콘</small></button>
         <button type="button" onClick={() => openSheet('emoticon')}><span className="more-customize-icon emoticon"><Sticker /></span><b>이모티콘</b><small>보관함 · 팩</small></button>
         <button type="button" onClick={() => openSheet('chat-style')}><span className="more-customize-icon chat"><MessageCircle /></span><b>채팅 꾸미기</b><small>배경 · 글자 크기</small></button>
         <button type="button" onClick={() => openSheet('profile-style')}><span className="more-customize-icon profile"><UserRound /></span><b>프로필 꾸미기</b><small>아바타 스타일</small></button>
@@ -168,7 +176,7 @@ export function MoreServices({
           {(['default','lavender','dark'] as ThemeId[]).map((item) => <button type="button" key={item} className={theme === item ? 'active' : ''} onClick={() => chooseTheme(item)}><i className={item} /><span><b>{item === 'default' ? '기본' : item === 'lavender' ? '라벤더' : '다크'}</b><small>{item === 'default' ? '네이비 + 코랄' : item === 'lavender' ? '부드러운 보라' : '어두운 화면'}</small></span></button>)}
         </div></>}
 
-        {sheet === 'app-icon' && <><HeaderBar title="앱 아이콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">2가지 단둘이 아이콘 중 원하는 스타일을 선택해요.</p><div className="app-icon-picker !grid !grid-cols-2 !gap-2.5 sm:!grid-cols-2">
+        {sheet === 'app-icon' && <><HeaderBar title="앱 아이콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">4가지 단둘이 아이콘 중 원하는 스타일을 선택해요.</p><div className="app-icon-picker !grid !grid-cols-2 !gap-2.5 sm:!grid-cols-2">
           {APP_ICONS.map((item) => <button data-icon-id={item.id} type="button" key={item.id} className={`${appIcon === item.id ? 'active' : ''} !min-w-0`} onClick={() => chooseIcon(item.id)}><span className={`more-app-icon-preview ${item.id} ${item.className} !grid place-items-center`}><AppIconGlyph id={item.id} /></span><b className="!w-full !truncate !text-center">{item.label}</b>{appIcon === item.id && <small>사용 중</small>}</button>)}
         </div></>}
 
