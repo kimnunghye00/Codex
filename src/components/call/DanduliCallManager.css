@@ -1,0 +1,190 @@
+.danduli-call-layer{
+  position:fixed;
+  z-index:5000;
+  inset:0;
+  width:100%;
+  height:100dvh;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  color:#fff;
+  background:
+    radial-gradient(circle at 50% 28%,color-mix(in srgb,var(--primary) 30%,transparent),transparent 35%),
+    linear-gradient(160deg,#24202a 0%,#17151c 55%,#100f14 100%);
+  animation:danduli-call-in .18s ease-out;
+}
+.danduli-call-layer.video-call{background:#09090b}
+@keyframes danduli-call-in{from{opacity:.3;transform:scale(1.01)}to{opacity:1;transform:scale(1)}}
+.danduli-call-toast{
+  position:fixed;
+  z-index:5100;
+  left:50%;
+  bottom:calc(96px + env(safe-area-inset-bottom));
+  max-width:min(90vw,360px);
+  padding:10px 14px;
+  border-radius:999px;
+  color:var(--text-primary);
+  background:color-mix(in srgb,var(--surface) 96%,var(--primary) 4%);
+  box-shadow:0 14px 40px rgba(15,15,20,.18);
+  transform:translateX(-50%);
+  font-size:11px;
+  font-weight:700;
+  text-align:center;
+}
+.danduli-call-top{
+  position:absolute;
+  z-index:4;
+  top:0;
+  left:0;
+  width:100%;
+  display:grid;
+  justify-items:center;
+  gap:3px;
+  padding:calc(18px + env(safe-area-inset-top)) 18px 12px;
+  text-shadow:0 2px 10px rgba(0,0,0,.35);
+  pointer-events:none;
+}
+.danduli-call-top strong{font-size:20px;letter-spacing:-.04em}
+.danduli-call-top small{font-size:10px;opacity:.78}
+.danduli-call-voice-card{
+  width:min(92vw,390px);
+  display:grid;
+  justify-items:center;
+  gap:8px;
+  padding:32px 24px 26px;
+}
+.danduli-call-avatar{
+  width:88px;
+  height:88px;
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  color:#fff;
+  background:linear-gradient(145deg,var(--primary-light),var(--primary));
+  box-shadow:0 16px 45px color-mix(in srgb,var(--primary) 34%,transparent);
+  font-size:31px;
+  font-weight:900;
+}
+.danduli-call-avatar.large{width:110px;height:110px;font-size:38px}
+.danduli-call-voice-card small{margin-top:14px;font-size:11px;opacity:.75}
+.danduli-call-voice-card h2{margin:0;font-size:28px;letter-spacing:-.05em}
+.danduli-call-voice-card p{margin:0;font-size:11px;opacity:.62}
+.danduli-call-incoming-actions{
+  width:220px;
+  display:flex;
+  justify-content:space-between;
+  margin-top:34px;
+}
+.danduli-call-incoming-actions button,
+.danduli-call-controls button{
+  display:grid;
+  place-items:center;
+  border:0;
+  color:#fff;
+}
+.danduli-call-incoming-actions button{
+  width:66px;
+  height:66px;
+  border-radius:50%;
+}
+.danduli-call-incoming-actions svg{width:26px;height:26px}
+.danduli-call-incoming-actions .reject{background:#e5535d}
+.danduli-call-incoming-actions .accept{background:#39b86b}
+.danduli-call-action-labels{
+  width:220px;
+  display:flex;
+  justify-content:space-between;
+  padding:0 16px;
+  font-size:10px;
+  opacity:.72;
+}
+.danduli-call-voice-center{
+  display:grid;
+  justify-items:center;
+  gap:9px;
+  margin-top:-26px;
+}
+.danduli-call-voice-center h2{margin:12px 0 0;font-size:27px;letter-spacing:-.05em}
+.danduli-call-voice-center p{margin:0;font-size:11px;opacity:.7}
+.danduli-call-remote-video{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  background:#0a0a0c;
+}
+.danduli-call-local-video{
+  position:absolute;
+  z-index:4;
+  top:calc(72px + env(safe-area-inset-top));
+  right:14px;
+  width:min(30vw,140px);
+  aspect-ratio:3/4;
+  object-fit:cover;
+  border:1px solid rgba(255,255,255,.22);
+  border-radius:18px;
+  background:#25252b;
+  box-shadow:0 10px 34px rgba(0,0,0,.24);
+  transform:scaleX(-1);
+}
+.danduli-call-local-video.camera-off{opacity:.18}
+.danduli-call-audio-sink{
+  position:absolute;
+  width:1px;
+  height:1px;
+  opacity:0;
+  pointer-events:none;
+}
+.danduli-call-video-status{
+  position:absolute;
+  z-index:3;
+  left:50%;
+  top:50%;
+  padding:8px 13px;
+  border-radius:999px;
+  background:rgba(0,0,0,.42);
+  backdrop-filter:blur(12px);
+  transform:translate(-50%,-50%);
+  font-size:11px;
+}
+.danduli-call-controls{
+  position:absolute;
+  z-index:5;
+  left:50%;
+  bottom:calc(24px + env(safe-area-inset-bottom));
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+  gap:18px;
+  transform:translateX(-50%);
+}
+.danduli-call-controls button{
+  width:66px;
+  min-width:66px;
+  gap:5px;
+  padding:0;
+  background:transparent;
+  font-size:9px;
+}
+.danduli-call-controls button>svg{
+  width:56px;
+  height:56px;
+  padding:16px;
+  border-radius:50%;
+  background:rgba(255,255,255,.16);
+  backdrop-filter:blur(14px);
+}
+.danduli-call-controls button.active>svg{background:rgba(255,255,255,.30)}
+.danduli-call-controls button.hangup>svg{background:#e5535d}
+.danduli-call-controls span{white-space:nowrap;opacity:.82}
+@media(max-width:480px){
+  .danduli-call-avatar{width:82px;height:82px;font-size:29px}
+  .danduli-call-avatar.large{width:102px;height:102px;font-size:35px}
+  .danduli-call-local-video{top:calc(68px + env(safe-area-inset-top));right:10px;width:31vw;border-radius:15px}
+  .danduli-call-controls{gap:13px;bottom:calc(18px + env(safe-area-inset-bottom))}
+  .danduli-call-controls button{width:60px;min-width:60px}
+  .danduli-call-controls button>svg{width:52px;height:52px;padding:15px}
+}
