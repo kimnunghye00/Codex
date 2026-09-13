@@ -27,7 +27,7 @@ jobs:
           java-version: '21'
           cache: gradle
 
-      - name: Prepare fixed ROUTE test signing key
+      - name: Prepare fixed DANDULI test signing key
         shell: bash
         run: |
           set -euo pipefail
@@ -35,7 +35,7 @@ jobs:
           base64 --decode android/route-test-debug.keystore.b64 > android/signing/route-test-debug.keystore
           EXPECTED="40F608CE3D3DD13773271E6D61B2EB1C513904636AECD662D78B882C7A006A5A"
           ACTUAL="$(keytool -list -v -keystore android/signing/route-test-debug.keystore -storepass android -alias androiddebugkey | awk '/SHA256:/{print $2; exit}' | tr -d ':')"
-          echo "ROUTE test signing certificate SHA-256: ${ACTUAL}"
+          echo "DANDULI test signing certificate SHA-256: ${ACTUAL}"
           test "${ACTUAL}" = "${EXPECTED}"
 
       - name: Restore Firebase Android config
@@ -109,6 +109,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ROUTE-debug-apk
+          name: DANDULI-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
