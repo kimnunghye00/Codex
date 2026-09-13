@@ -7,6 +7,7 @@ import { chatMediaPreviewUrl, downloadOriginalChatMedia, hasOptimizedChatPreview
 import type { Message } from '../../types';
 import { messageTime } from '../../utils/dates';
 import { ReactionPicker } from './ReactionPicker';
+import { DanduliSticker } from './DanduliSticker';
 
 const MAX_INLINE_GALLERY_ITEMS = 4;
 const SWIPE_THRESHOLD = 42;
@@ -34,6 +35,7 @@ function replyLabel(message: Message) {
   if (message.type === 'image') return '사진';
   if (message.type === 'gallery') return `사진 ${message.imageUrls?.length ?? 0}장`;
   if (message.type === 'gif') return '움짤';
+  if (message.type === 'sticker') return '이모티콘';
   return message.text?.slice(0, 45);
 }
 
@@ -272,6 +274,7 @@ function sameMessage(a?: Message, b?: Message) {
     && a.text === b.text
     && a.imageUrl === b.imageUrl
     && a.imageUrls === b.imageUrls
+    && a.stickerId === b.stickerId
     && a.timestamp === b.timestamp
     && a.read === b.read
     && a.replyTo === b.replyTo
@@ -292,7 +295,7 @@ function ChatBubbleView({ message, reply, partnerName, partnerInitial, active, h
     ? message.saved ? '추억에서 제거' : '추억에 저장'
     : message.saved ? '저장 취소' : '메시지 저장';
 
-  const mediaRow = message.type === 'image' || message.type === 'gif' || message.type === 'gallery';
+  const mediaRow = message.type === 'image' || message.type === 'gif' || message.type === 'gallery' || message.type === 'sticker';
 
   return <>
     <div id={`message-${message.id}`} className={`bubble-row ${mine ? 'mine' : ''} ${highlighted ? 'highlighted' : ''} ${mediaRow ? 'bubble-row-media' : ''} ${active && !selectionMode ? 'chat-actions-open' : ''} ${selectionMode ? 'chat-selectable-row' : ''} ${selected ? 'chat-selected-row' : ''}`}>
@@ -303,7 +306,7 @@ function ChatBubbleView({ message, reply, partnerName, partnerInitial, active, h
         <div className="message-actions"><button onClick={onReply}><CornerUpLeft size={14} />답장</button><button onClick={onSave}>{message.saved ? <Bookmark size={14} fill="currentColor" /> : <Bookmark size={14} />} {saveLabel}</button><button className="message-delete-action" onClick={onDelete}><Trash2 size={14} />삭제</button></div>
       </div>}
       <div className="message-wrap">
-        <button type="button" className={`bubble ${message.type === 'gallery' ? 'gallery-bubble' : ''} ${mediaBubble ? 'media-bubble' : ''}`} onClick={(event) => { event.stopPropagation(); if (selectionMode) onToggleSelect(); else onAction(); }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); if (selectionMode) onToggleSelect(); else onAction(); }}>
+        <button type="button" className={`bubble ${message.type === 'gallery' ? 'gallery-bubble' : ''} ${mediaBubble ? 'media-bubble' : ''} ${message.type === 'sticker' ? 'sticker-bubble' : ''}`} onClick={(event) => { event.stopPropagation(); if (selectionMode) onToggleSelect(); else onAction(); }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); if (selectionMode) onToggleSelect(); else onAction(); }}>
           {reply && <span className="reply-preview" onClick={(event) => { event.stopPropagation(); onJump(reply.id); }}><b>{reply.sender === 'me' ? '나' : partnerName}</b>{reply.type !== 'text' ? <><ImageIcon size={12} /> {replyLabel(reply)}</> : replyLabel(reply)}</span>}
           {message.type === 'image' && message.imageUrl && <DeferredMediaImage className="chat-image" src={message.imageUrl} alt="채팅으로 보낸 사진" onClick={(event) => { event.stopPropagation(); onImage(message.imageUrl!); }} />}
           {message.type === 'gif' && message.imageUrl && <DeferredMediaImage className="chat-image chat-gif" src={message.imageUrl} alt="채팅으로 보낸 움짤" onClick={(event) => { event.stopPropagation(); onImage(message.imageUrl!); }} />}
@@ -311,6 +314,7 @@ function ChatBubbleView({ message, reply, partnerName, partnerInitial, active, h
             <span className="chat-gallery-total">사진 {galleryUrls.length}장</span>
             <span className="chat-gallery route-gallery-grid">{visibleGalleryUrls.map((url, index) => <span key={`${message.id}-${index}`} className="chat-gallery-item"><DeferredMediaImage src={url} alt={`묶음 사진 ${index + 1} / ${galleryUrls.length}`} onClick={(event) => { event.stopPropagation(); setGalleryIndex(index); }} />{index === visibleGalleryUrls.length - 1 && hiddenGalleryCount > 0 && <em>+{hiddenGalleryCount}</em>}</span>)}</span>
           </span>}
+          {message.type === 'sticker' && <DanduliSticker id={message.stickerId} className="chat-sticker-art" />}
           {message.type === 'text' && <span className="message-text">{message.text}</span>}
         </button>
         {mediaBubble && message.imageUrl && <button type="button" className="chat-original-download" aria-label="원본 화질로 저장" onClick={(event) => { event.stopPropagation(); void downloadOriginalChatMedia(message.imageUrl!, 1); }}><Download size={13} /><span>원본</span></button>}
