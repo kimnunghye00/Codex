@@ -391,16 +391,21 @@ export function DanduliCallManager({
       const offer = await peer.createOffer();
       await peer.setLocalDescription(offer);
 
-      // Do not publish the offer until ICE gathering has had a chance to put
-      // host/STUN/TURN candidates directly into the SDP. The previous version
-      // published immediately and depended entirely on many Firestore candidate
-      // writes; if even a few of those raced or were delayed, both phones could
-      // ring successfully but the actual media path still failed.
-      await waitForIceGathering(peer);
-      const gatheredOffer = peer.localDescription ?? offer;
-      await startCoupleCall(connection.coupleId, callId, currentUid, connection.partnerUid, kind, gatheredOffer);
+      await startCoupleCall(connection.coupleId, callId, currentUid, connection.partnerUid, kind, peer.localDescription ?? offer);
       signalReadyRef.current = true;
-      await flushLocalCandidates();
+      void flushLocalCandidates();
+
+      void waitForIceGathering(peer).then(async () => {
+        if (activeCallIdRef.current !== callId) return;
+        const gatheredOffer = peer.localDescription;
+        if (!gatheredOffer) return;
+        try {
+          await refreshCoupleCallDescription(connection.coupleId, callId, 'caller', gatheredOffer);
+          await flushLocalCandidates();
+        } catch (cause) {
+          console.warn('[DANDULI call offer refresh]', cause);
+        }
+      });
     } catch (cause) {
       console.error('[DANDULI outgoing call]', cause);
       const text = callErrorMessage(cause, kind);
