@@ -1,4 +1,4 @@
-const CACHE_NAME = 'danduli-web-v24-mobile-schedule-memory-gap';
+const CACHE_NAME = 'danduli-web-v25-call-video-upgrade';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.add('./')).catch(() => undefined));
