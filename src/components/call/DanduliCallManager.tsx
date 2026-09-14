@@ -5,9 +5,11 @@ import { clearIncomingCallNotification, prepareIncomingCallNotifications, showIn
 import { isNativePlatform } from '../../lib/native';
 import {
   answerCoupleCall,
+  answerCoupleCallVideoUpgrade,
   appendCoupleCallCandidate,
   finishCoupleCall,
   refreshCoupleCallDescription,
+  requestCoupleCallVideoUpgrade,
   startCoupleCall,
   subscribeCoupleCall,
   type CoupleCallKind,
@@ -157,6 +159,7 @@ export function DanduliCallManager({
   const [message, setMessage] = useState('');
   const [muted, setMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
+  const [switchingToVideo, setSwitchingToVideo] = useState(false);
   const [connectedAt, setConnectedAt] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -176,6 +179,8 @@ export function DanduliCallManager({
   const closeTimerRef = useRef<number | undefined>(undefined);
   const latestSignalRef = useRef<CoupleCallSignal | null>(null);
   const notifiedCallIdRef = useRef('');
+  const handledUpgradeVersionRef = useRef(0);
+  const processingUpgradeVersionRef = useRef(0);
 
   const stopStreams = useCallback(() => {
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
@@ -201,6 +206,9 @@ export function DanduliCallManager({
     setIncoming(null);
     setMuted(false);
     setCameraOff(false);
+    setSwitchingToVideo(false);
+    handledUpgradeVersionRef.current = 0;
+    processingUpgradeVersionRef.current = 0;
     setConnectedAt(null);
     setElapsedSeconds(0);
     if (!preserveMessage) setMessage('');
@@ -366,6 +374,37 @@ export function DanduliCallManager({
     return stream;
   }, []);
 
+  const ensureLocalVideoTrack = useCallback(async () => {
+    if (!navigator.mediaDevices?.getUserMedia) throw new Error('media-not-supported');
+
+    const current = localStreamRef.current ?? new MediaStream();
+    const existing = current.getVideoTracks().find((track) => track.readyState === 'live');
+    if (existing) return existing;
+
+    const cameraStream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { facingMode: 'user' },
+    });
+    const track = cameraStream.getVideoTracks()[0];
+    if (!track) throw new Error('camera-not-found');
+
+    current.addTrack(track);
+    localStreamRef.current = current;
+    setLocalStream(new MediaStream(current.getTracks()));
+    setCameraOff(false);
+    return track;
+  }, []);
+
+  const attachVideoTrack = useCallback((peer: RTCPeerConnection, track: MediaStreamTrack) => {
+    const stream = localStreamRef.current ?? new MediaStream([track]);
+    const sender = peer.getSenders().find((item) => item.track?.kind === 'video');
+    if (sender) {
+      void sender.replaceTrack(track);
+      return;
+    }
+    peer.addTrack(track, stream);
+  }, []);
+
   const startOutgoingCall = useCallback(async (kind: CoupleCallKind) => {
     // This click is a user gesture, so web browsers are allowed to ask for
     // notification permission here. Native permission is prepared on connect.
@@ -494,6 +533,56 @@ export function DanduliCallManager({
     setCameraOff(nextOff);
   }, [cameraOff]);
 
+  const switchVoiceCallToVideo = useCallback(async () => {
+    const currentSession = session;
+    const coupleId = connection?.coupleId;
+    const peer = peerRef.current;
+    const role = roleRef.current;
+    if (
+      !currentSession
+      || currentSession.kind !== 'voice'
+      || currentSession.phase !== 'connected'
+      || !coupleId
+      || !peer
+      || !role
+      || switchingToVideo
+    ) return;
+
+    setSwitchingToVideo(true);
+    setMessage('영상통화로 전환하고 있어요…');
+
+    try {
+      const track = await ensureLocalVideoTrack();
+      attachVideoTrack(peer, track);
+
+      const offer = await peer.createOffer();
+      await peer.setLocalDescription(offer);
+      await requestCoupleCallVideoUpgrade(
+        coupleId,
+        currentSession.callId,
+        role,
+        peer.localDescription ?? offer,
+      );
+
+      setSession((current) => current && current.callId === currentSession.callId
+        ? { ...current, kind: 'video' }
+        : current);
+      setMessage('');
+    } catch (cause) {
+      console.error('[DANDULI call video upgrade]', cause);
+      const name = callErrorName(cause);
+      setSwitchingToVideo(false);
+      if (name === 'NotAllowedError' || name === 'SecurityError') {
+        setMessage('영상통화로 전환하려면 카메라 권한을 허용해 주세요.');
+      } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+        setMessage('사용할 수 있는 카메라를 찾지 못했어요.');
+      } else {
+        setMessage('영상통화로 전환하지 못했어요. 잠시 후 다시 시도해 주세요.');
+      }
+      window.setTimeout(() => setMessage(''), 2200);
+    }
+  }, [attachVideoTrack, connection?.coupleId, ensureLocalVideoTrack, session, switchingToVideo]);
+
   useEffect(() => {
     if (!connectedAt) {
       setElapsedSeconds(0);
@@ -594,6 +683,64 @@ export function DanduliCallManager({
         if (role === 'caller' && signal.answer?.sdp && !peer.remoteDescription) {
           await peer.setRemoteDescription(signal.answer);
         }
+
+        const upgrade = signal.upgrade;
+        const actionableUpgrade = upgrade
+          && upgrade.version > handledUpgradeVersionRef.current
+          && processingUpgradeVersionRef.current !== upgrade.version
+          && (
+            (upgrade.requestedBy !== role && !upgrade.answer)
+            || (upgrade.requestedBy === role && Boolean(upgrade.answer))
+          );
+
+        if (actionableUpgrade && upgrade) {
+          processingUpgradeVersionRef.current = upgrade.version;
+          try {
+            if (upgrade.requestedBy !== role && !upgrade.answer) {
+              setSwitchingToVideo(true);
+              setMessage('영상통화로 전환하고 있어요…');
+              await peer.setRemoteDescription(upgrade.offer);
+
+              try {
+                const track = await ensureLocalVideoTrack();
+                attachVideoTrack(peer, track);
+              } catch (cameraCause) {
+                console.warn('[DANDULI call upgrade camera unavailable]', cameraCause);
+                setCameraOff(true);
+              }
+
+              const answer = await peer.createAnswer();
+              await peer.setLocalDescription(answer);
+              await answerCoupleCallVideoUpgrade(
+                coupleId,
+                signal.callId,
+                role,
+                upgrade.version,
+                peer.localDescription ?? answer,
+              );
+
+              handledUpgradeVersionRef.current = upgrade.version;
+              setSession((current) => current && current.callId === signal.callId
+                ? { ...current, kind: 'video' }
+                : current);
+              setSwitchingToVideo(false);
+              setMessage('');
+            } else if (upgrade.requestedBy === role && upgrade.answer) {
+              await peer.setRemoteDescription(upgrade.answer);
+              handledUpgradeVersionRef.current = upgrade.version;
+              setSession((current) => current && current.callId === signal.callId
+                ? { ...current, kind: 'video' }
+                : current);
+              setSwitchingToVideo(false);
+              setMessage('');
+            }
+          } finally {
+            if (processingUpgradeVersionRef.current === upgrade.version) {
+              processingUpgradeVersionRef.current = 0;
+            }
+          }
+        }
+
         await applyRemoteCandidates(remoteCandidateList(signal, role));
         if (signal.status === 'active') {
           setSession((current) => current && current.callId === signal.callId && current.phase !== 'connected'
@@ -601,13 +748,15 @@ export function DanduliCallManager({
             : current);
         }
       })().catch((cause) => {
+        processingUpgradeVersionRef.current = 0;
+        setSwitchingToVideo(false);
         console.warn('[DANDULI call signal apply]', cause);
       });
     }, (cause) => {
       console.warn('[DANDULI call subscription]', cause);
       setMessage('통화 신호를 불러오지 못했어요.');
     });
-  }, [applyRemoteCandidates, connection?.coupleId, currentUid, finishAndCloseLater, onIncomingCall, partnerName, resetLocalSession]);
+  }, [applyRemoteCandidates, attachVideoTrack, connection?.coupleId, currentUid, ensureLocalVideoTrack, finishAndCloseLater, onIncomingCall, partnerName, resetLocalSession]);
 
   useEffect(() => () => {
     if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current);
@@ -656,7 +805,7 @@ export function DanduliCallManager({
         <p>{message || (session.phase === 'connected' ? formatDuration(elapsedSeconds) : session.phase === 'calling' ? '응답을 기다리고 있어요' : '연결하고 있어요')}</p>
       </div>}
 
-      {showVideo && session.phase !== 'connected' && <div className="danduli-call-video-status">{message || (session.phase === 'calling' ? '응답을 기다리고 있어요' : '영상통화를 연결하고 있어요')}</div>}
+      {showVideo && (session.phase !== 'connected' || switchingToVideo) && <div className="danduli-call-video-status">{switchingToVideo ? '영상통화로 전환하고 있어요…' : message || (session.phase === 'calling' ? '응답을 기다리고 있어요' : '영상통화를 연결하고 있어요')}</div>}
 
       <div className="danduli-call-controls">
         {muted ? (
@@ -670,6 +819,7 @@ export function DanduliCallManager({
             <span>음소거</span>
           </button>
         )}
+        {!showVideo && <button type="button" className="video-upgrade" onClick={() => void switchVoiceCallToVideo()} disabled={session.phase !== 'connected' || switchingToVideo} aria-label="영상통화로 전환"><Video /><span>{switchingToVideo ? '전환 중' : '영상 전환'}</span></button>}
         {showVideo && <button type="button" className={cameraOff ? 'active' : ''} onClick={toggleCamera} aria-label={cameraOff ? '카메라 켜기' : '카메라 끄기'}>{cameraOff ? <VideoOff /> : <Video />}<span>{cameraOff ? '카메라 켜기' : '카메라'}</span></button>}
         <button type="button" className="hangup" onClick={hangUp} aria-label="통화 종료"><PhoneOff /><span>종료</span></button>
       </div>
