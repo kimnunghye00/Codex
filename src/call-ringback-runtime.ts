@@ -1,3 +1,4 @@
+import './call-ice-runtime';
 import { startOutgoingRingback, stopOutgoingRingback } from './lib/callRingback';
 
 const CALL_REQUEST_EVENT = 'danduli-call-request';
