@@ -1,0 +1,63 @@
+name: Roll back 단둘이 Web
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_ref:
+        description: '복구할 main 커밋 SHA'
+        required: true
+        type: string
+      confirmation:
+        description: 'ROLLBACK 입력'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: route-web-deploy-main
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.ROUTE_FIREBASE_SERVICE_ACCOUNT }}
+      VITE_APP_RELEASE: rollback-${{ inputs.target_ref }}
+    steps:
+      - name: Require explicit rollback confirmation
+        run: test '${{ inputs.confirmation }}' = 'ROLLBACK'
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.target_ref }}
+      - name: Verify target belongs to main history
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=200
+          git merge-base --is-ancestor HEAD origin/main
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: npm ci
+      - name: Build rollback target
+        run: npm run build
+      - name: Prepare Firebase credentials
+        run: |
+          set -euo pipefail
+          test -n "${FIREBASE_SERVICE_ACCOUNT_JSON}"
+          ADC_FILE="$RUNNER_TEMP/danduli-rollback-service-account.json"
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$ADC_FILE"
+          chmod 600 "$ADC_FILE"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$ADC_FILE" >> "$GITHUB_ENV"
+      - name: Restore Hosting while preserving current security rules
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@15.29.0 deploy --only hosting --project meluni-f4e00 --non-interactive

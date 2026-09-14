@@ -131,6 +131,24 @@ test('unrelated and signed-out clients cannot read or write private couple data'
   await assertFails(updateDoc(doc(outsider.db, 'users', 'eve'), { coupleId, partnerUid: 'alice' }));
 });
 
+test('operational errors accept only a private, rate-limited client shape', async () => {
+  const alice = as('alice');
+  const errorRef = doc(alice.db, 'operationalErrors', 'error-1');
+  await assertSucceeds(setDoc(errorRef, {
+    uid: 'alice', area: 'call', message: 'connection timeout', name: 'Error',
+    platform: 'web', online: true, release: 'test-release', createdAt: serverTimestamp(),
+  }));
+  await assertFails(getDocFromServer(errorRef));
+  await assertFails(setDoc(doc(alice.db, 'operationalErrors', 'forged'), {
+    uid: 'bob', area: 'call', message: 'forged', name: 'Error',
+    platform: 'web', online: true, release: 'test-release', createdAt: serverTimestamp(),
+  }));
+  await assertFails(setDoc(doc(alice.db, 'operationalErrors', 'overshared'), {
+    uid: 'alice', area: 'call', message: 'safe', name: 'Error', platform: 'web',
+    online: true, release: 'test-release', phone: '01012345678', createdAt: serverTimestamp(),
+  }));
+});
+
 test('forged couple creation and expired invitation request/finalization are denied', async () => {
   await signup('alice'); await signup('bob');
   as('alice');

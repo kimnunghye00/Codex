@@ -1,0 +1,45 @@
+name: Monitor 단둘이 Production
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: danduli-production-monitor
+  cancel-in-progress: true
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.ROUTE_FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Check Hosting and operational error rate
+        id: monitor
+        continue-on-error: true
+        run: node scripts/monitor-production.mjs
+      - name: Open one deduplicated incident
+        if: steps.monitor.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MONITOR_SUMMARY: ${{ steps.monitor.outputs.summary }}
+        run: |
+          set -euo pipefail
+          TITLE='[운영 알림] 단둘이 오류율 또는 서비스 상태 확인 필요'
+          EXISTING="$(gh issue list --state open --search "${TITLE} in:title" --json number --jq '.[0].number // empty')"
+          if [[ -n "${EXISTING}" ]]; then
+            gh issue comment "${EXISTING}" --body "$(date -u +'%Y-%m-%dT%H:%M:%SZ') ${MONITOR_SUMMARY:-monitor failed}"
+          else
+            gh issue create --title "${TITLE}" --label bug --body "자동 운영 점검이 실패했습니다. GitHub Actions 실행 로그와 Firebase operationalErrors를 확인하세요.\n\n${MONITOR_SUMMARY:-monitor failed}"
+          fi
+          exit 1

@@ -84,6 +84,15 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug --stacktrace
 
+      - name: Verify Android SMS entry, Korean IME, Back and denied permissions
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: cd android && ./gradlew connectedDebugAndroidTest --stacktrace
+
       - name: Verify APK signing identity, package and update version
         shell: bash
         run: |
@@ -113,6 +122,7 @@ jobs:
           echo '- Stability suite: passed before native build' >> "$GITHUB_STEP_SUMMARY"
           echo '- Package: com.route.couple' >> "$GITHUB_STEP_SUMMARY"
           echo '- Uses monotonic Android versionCode for update installs' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Android emulator: SMS entry, Korean composition, hardware Back and denied permissions passed' >> "$GITHUB_STEP_SUMMARY"
           echo '- Artifact: DANDULI-release-qa-apk' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload QA APK

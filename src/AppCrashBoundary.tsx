@@ -43,6 +43,9 @@ function saveDiagnostic(error: Error, info?: ErrorInfo) {
       online: navigator.onLine,
     };
     sessionStorage.setItem('route-last-ui-error', JSON.stringify(payload));
+    void import('./lib/operationalDiagnostics')
+      .then(({ reportOperationalError }) => reportOperationalError(info ? 'ui' : 'promise', error))
+      .catch(() => undefined);
   } catch {
     // Diagnostics must never become another source of crashes.
   }

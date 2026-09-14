@@ -193,6 +193,25 @@ service cloud.firestore {
         && (resource.data.status != 'accepted' || !containsMember(request.auth.uid, resource.data.coupleId));
     }
 
+    match /operationalErrors/{errorId} {
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.area in ['bootstrap', 'ui', 'promise', 'call', 'sync']
+        && request.resource.data.message is string
+        && request.resource.data.message.size() <= 240
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 60
+        && request.resource.data.platform in ['web', 'android']
+        && request.resource.data.online is bool
+        && request.resource.data.release is string
+        && request.resource.data.release.size() <= 80
+        && request.resource.data.keys().hasOnly([
+          'uid', 'area', 'message', 'name', 'platform', 'online', 'release', 'createdAt'
+        ]);
+      allow read, update, delete: if false;
+    }
+
     match /couples/{coupleId} {
       allow create: if signedIn()
         && request.resource.data.testMode == false

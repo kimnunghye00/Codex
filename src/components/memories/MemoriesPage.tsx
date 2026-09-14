@@ -21,6 +21,7 @@ type DatePlan = { id: number; title: string; date: string; time: string; locatio
 type AnniversaryItem = { title: string; date: string; icon: string; special?: boolean };
 
 const DEFAULT_TABS: HubTabId[] = ['album', 'anniversary', 'record', 'tier', 'schedule', 'date'];
+const MEMORY_RENDER_PAGE = 30;
 const TAB_LABEL: Record<HubTabId, string> = { album: '앨범', anniversary: '기념일', record: '기록', tier: '티어', schedule: '일정', date: '약속' };
 
 function normalizeTabOrder(value: unknown): HubTabId[] {
@@ -130,6 +131,7 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
   const draggingTabRef = useRef<HubTabId | null>(null);
   const [draggingTab, setDraggingTab] = useState<HubTabId | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
+  const [visibleMemoryCount, setVisibleMemoryCount] = useState(MEMORY_RENDER_PAGE);
   const [selected, setSelected] = useState<number | undefined>(initialMemoryId);
   const [editing, setEditing] = useState<Memory | null>();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
@@ -197,6 +199,8 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
     () => memories.filter((memory) => filter === 'all' || filter === 'favorite' && memory.favorite || memory.date.startsWith(filter)),
     [filter, memories],
   );
+  const renderedMemories = useMemo(() => shown.slice(0, visibleMemoryCount), [shown, visibleMemoryCount]);
+  useEffect(() => setVisibleMemoryCount(MEMORY_RENDER_PAGE), [filter]);
   const selectedMemory = useMemo(() => memories.find((memory) => memory.id === selected), [memories, selected]);
   const openMemory = useCallback((id: number) => setSelected(id), []);
   const update = (memory: Memory) => setMemories((items) => items.some((item) => item.id === memory.id) ? items.map((item) => item.id === memory.id ? memory : item) : [memory, ...items]);
@@ -661,7 +665,8 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
     {activeTab === 'album' && <>
       {sameDayMemories.length > 0 && <section className="last-year-card"><div><Sparkles size={16} /><span><b>작년 우리</b><small>같은 날짜의 추억을 다시 만나보세요</small></span></div><button onClick={() => setSelected(sameDayMemories[0].id)}>바로 보기 <ChevronRight size={15} /></button></section>}
       <div className="memory-filters"><button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>전체</button><button className={filter === 'favorite' ? 'active' : ''} onClick={() => setFilter('favorite')}>즐겨찾기</button>{years.map((year) => <button key={year} className={filter === year ? 'active' : ''} onClick={() => setFilter(year)}>{year}</button>)}</div>
-      <div className="memory-list">{shown.map((memory) => <MemoryCard key={memory.id} memory={memory} onOpen={openMemory} />)}{!shown.length && <div className="memory-empty">아직 남긴 추억이 없어요.</div>}</div>
+      <div className="memory-list">{renderedMemories.map((memory) => <MemoryCard key={memory.id} memory={memory} onOpen={openMemory} />)}{!shown.length && <div className="memory-empty">아직 남긴 추억이 없어요.</div>}</div>
+      {renderedMemories.length < shown.length && <button type="button" className="memory-load-more" onClick={() => setVisibleMemoryCount((count) => Math.min(shown.length, count + MEMORY_RENDER_PAGE))}>이전 추억 더 보기 ({shown.length - renderedMemories.length})</button>}
       <button className="fab" onClick={() => { onClearInitialDraft(); setEditing(null); }}><Plus size={18} />추억 추가</button>
       {editing !== undefined && <MemoryForm memory={editing ?? undefined} draft={editing === null ? initialDraft : undefined} onClose={() => { setEditing(undefined); if (initialDraft) onClearInitialDraft(); }} onSave={(memory) => { update(memory); setEditing(undefined); onClearInitialDraft(); setSelected(memory.id); }} />}
     </>}
