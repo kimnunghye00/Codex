@@ -181,6 +181,9 @@
 .danduli-call-controls button.muted>svg{
   background:rgba(255,255,255,.16);
 }
+.danduli-call-controls button.video-upgrade>svg{background:rgba(255,255,255,.22)}
+.danduli-call-controls button.video-upgrade:not(:disabled):active>svg{background:rgba(255,255,255,.32)}
+.danduli-call-controls button:disabled{opacity:.48;cursor:default}
 .danduli-call-controls button.hangup>svg{background:#e5535d}
 .danduli-call-controls span{white-space:nowrap;opacity:.82}
 @media(max-width:480px){
