@@ -20,15 +20,125 @@ service cloud.firestore {
       return signedIn()
         && exists(/databases/$(database)/documents/users/$(uid))
         && currentUser().data.coupleId != null
-        && get(/databases/$(database)/documents/users/$(uid)).data.coupleId == currentUser().data.coupleId
         && memberOf(currentUser().data.coupleId)
+        && (get(/databases/$(database)/documents/users/$(uid)).data.get('coupleId', '') == currentUser().data.coupleId
+          || verifiedInvite(currentUser().data.coupleId))
         && uid in get(/databases/$(database)/documents/couples/$(currentUser().data.coupleId)).data.memberUids;
     }
 
+    function verifiedInvite(coupleId) {
+      let pair = get(/databases/$(database)/documents/couples/$(coupleId)).data;
+      let code = pair.get('inviteCode', '');
+      return code != '' && matchingInvite(code, coupleId, pair.memberUids);
+    }
+
+    function matchingInvite(code, coupleId, members) {
+      let invite = get(/databases/$(database)/documents/coupleInvites/$(code)).data;
+      return invite.status == 'accepted' && invite.coupleId == coupleId
+        && members == [invite.ownerUid, invite.joinerUid];
+    }
+
+    // Membership is granted only by a mutually accepted invite. User profile
+    // pointers are references, never an independent source of authorization.
+    function hasLiveCouple(uid) {
+      let user = get(/databases/$(database)/documents/users/$(uid)).data;
+      return containsMember(uid, user.get('coupleId', ''))
+        || reservedMembership(uid, user.get('pendingInviteCode', ''));
+    }
+
+    function containsMember(uid, id) {
+      return id != ''
+        && exists(/databases/$(database)/documents/couples/$(id))
+        && uid in get(/databases/$(database)/documents/couples/$(id)).data.memberUids;
+    }
+
+    function reservedMembership(uid, code) {
+      return code != '' && exists(/databases/$(database)/documents/coupleInvites/$(code))
+        && get(/databases/$(database)/documents/coupleInvites/$(code)).data.status == 'accepted'
+        && containsMember(uid, get(/databases/$(database)/documents/coupleInvites/$(code)).data.coupleId);
+    }
+
+    function pendingInviteUpdate(uid) {
+      let code = request.resource.data.get('pendingInviteCode', '');
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['pendingInviteCode'])
+        || (!hasLiveCouple(uid) && code != ''
+          && getAfter(/databases/$(database)/documents/coupleInvites/$(code)).data.status == 'requested'
+          && getAfter(/databases/$(database)/documents/coupleInvites/$(code)).data.joinerUid == uid);
+    }
+
+    function validUserPair(uid) {
+      let id = request.resource.data.get('coupleId', '');
+      let partner = request.resource.data.get('partnerUid', '');
+      let pair = getAfter(/databases/$(database)/documents/couples/$(id)).data;
+      return id != '' && partner != uid
+        && pair.memberUids.size() == 2
+        && uid in pair.memberUids && partner in pair.memberUids;
+    }
+
+    function userPairUpdate(uid) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      let oldId = resource.data.get('coupleId', '');
+      return !changed.hasAny(['coupleId', 'partnerUid'])
+        || (request.resource.data.get('coupleId', '') == ''
+          && request.resource.data.get('partnerUid', '') == ''
+          && (oldId == '' || !(uid in getAfter(/databases/$(database)/documents/couples/$(oldId)).data.memberUids)))
+        || (request.resource.data.get('coupleId', '') != '' && validUserPair(uid));
+    }
+
+    function acceptedCreation(coupleId) {
+      let code = request.resource.data.inviteCode;
+      let before = get(/databases/$(database)/documents/coupleInvites/$(code)).data;
+      let after = getAfter(/databases/$(database)/documents/coupleInvites/$(code)).data;
+      return before.status == 'requested'
+        && before.ownerUid == request.auth.uid
+        && before.expiresAt > request.time.toMillis()
+        && !hasLiveCouple(before.ownerUid) && !hasLiveCouple(before.joinerUid)
+        && get(/databases/$(database)/documents/users/$(before.joinerUid)).data.pendingInviteCode == code
+        && after.status == 'accepted' && after.coupleId == coupleId
+        && request.resource.data.memberUids == [before.ownerUid, before.joinerUid]
+        && getAfter(/databases/$(database)/documents/users/$(before.ownerUid)).data.coupleId == coupleId;
+    }
+
+    function disconnectOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'memberUids', 'status', 'disconnectedBy', 'disconnectedAt', 'updatedAt'
+        ])
+        && request.resource.data.memberUids == []
+        && request.resource.data.status == 'disconnected'
+        && request.resource.data.disconnectedBy == request.auth.uid
+        && request.resource.data.disconnectedAt == request.time
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('coupleId', '') == '';
+    }
+
+    function onlyOwnReaction(items) {
+      return items.size() <= 2
+        && (items.size() == 0 || items[0].uid == request.auth.uid)
+        && (items.size() < 2 || items[1].uid == request.auth.uid);
+    }
+
+    function messageMetadataUpdate() {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      let before = resource.data.get('reactions', []);
+      let after = request.resource.data.get('reactions', []);
+      let oldHidden = resource.data.get('hiddenFor', []).toSet();
+      let newHidden = request.resource.data.get('hiddenFor', []).toSet();
+      return changed.hasOnly(['reactions', 'hiddenFor', 'read', 'lastSavedBy'])
+        && (!changed.hasAny(['reactions']) || (after.size() <= 2
+          && onlyOwnReaction(after.removeAll(before)) && onlyOwnReaction(before.removeAll(after))))
+        && (!changed.hasAny(['hiddenFor']) || (
+          newHidden.difference(oldHidden).hasOnly([request.auth.uid])
+          && oldHidden.difference(newHidden).hasOnly([request.auth.uid])))
+        && (!changed.hasAny(['read']) || (resource.data.authorUid != request.auth.uid && request.resource.data.read == true))
+        && (!changed.hasAny(['lastSavedBy']) || request.resource.data.lastSavedBy == request.auth.uid);
+    }
+
     match /users/{uid} {
-      allow create: if signedIn() && request.auth.uid == uid;
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.get('coupleId', '') == ''
+        && request.resource.data.get('pendingInviteCode', '') == ''
+        && request.resource.data.get('partnerUid', '') == '';
       allow read: if signedIn() && (request.auth.uid == uid || sharesCoupleWith(uid));
-      allow update: if signedIn() && request.auth.uid == uid;
+      allow update: if signedIn() && request.auth.uid == uid && userPairUpdate(uid) && pendingInviteUpdate(uid);
       allow delete: if false;
 
       match /backups/{backupId} {
@@ -42,7 +152,12 @@ service cloud.firestore {
 
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid
-        && request.resource.data.status == 'open';
+        && request.resource.data.status == 'open'
+        && request.resource.data.code == code
+        && !hasLiveCouple(request.auth.uid)
+        && request.resource.data.expiresAt > request.time.toMillis()
+        && request.resource.data.expiresAt <= request.time.toMillis() + 7 * 24 * 60 * 60 * 1000 + 5 * 60 * 1000
+        && request.resource.data.keys().hasOnly(['code', 'ownerUid', 'ownerName', 'status', 'expiresAt', 'createdAt']);
 
       allow update: if signedIn() && (
         (
@@ -54,6 +169,10 @@ service cloud.firestore {
           && request.resource.data.expiresAt == resource.data.expiresAt
           && request.resource.data.joinerUid == request.auth.uid
           && request.auth.uid != resource.data.ownerUid
+          && resource.data.expiresAt > request.time.toMillis()
+          && !hasLiveCouple(request.auth.uid) && !hasLiveCouple(resource.data.ownerUid)
+          && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.pendingInviteCode == code
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'joinerUid', 'joinerName', 'requestedAt'])
         )
         ||
         (
@@ -63,10 +182,15 @@ service cloud.firestore {
           && request.resource.data.ownerUid == resource.data.ownerUid
           && request.resource.data.joinerUid == resource.data.joinerUid
           && request.resource.data.coupleId != null
+          && resource.data.expiresAt > request.time.toMillis()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'coupleId', 'acceptedAt'])
+          && getAfter(/databases/$(database)/documents/couples/$(request.resource.data.coupleId)).data.inviteCode == code
+          && getAfter(/databases/$(database)/documents/couples/$(request.resource.data.coupleId)).data.memberUids == [resource.data.ownerUid, resource.data.joinerUid]
         )
       );
 
-      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid
+        && (resource.data.status != 'accepted' || !containsMember(request.auth.uid, resource.data.coupleId));
     }
 
     match /couples/{coupleId} {
@@ -74,16 +198,37 @@ service cloud.firestore {
         && request.resource.data.testMode == false
         && request.resource.data.memberUids.size() == 2
         && request.auth.uid == request.resource.data.createdBy
-        && request.auth.uid in request.resource.data.memberUids;
+        && request.auth.uid in request.resource.data.memberUids
+        && request.resource.data.id == coupleId
+        && acceptedCreation(coupleId);
       allow read: if memberOf(coupleId);
       allow update: if memberOf(coupleId)
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-          'id', 'memberUids', 'members', 'createdBy', 'testMode', 'createdAt'
-        ]);
+        && (disconnectOnly() || !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'id', 'memberUids', 'members', 'createdBy', 'testMode', 'createdAt', 'inviteCode',
+          'status', 'disconnectedBy', 'disconnectedAt'
+        ]));
       allow delete: if false;
 
       match /messages/{messageId} {
-        allow read, create, update, delete: if memberOf(coupleId);
+        allow read: if memberOf(coupleId);
+        allow create: if memberOf(coupleId)
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.read == false
+          && request.resource.data.get('hiddenFor', []) == []
+          && request.resource.data.get('reactions', []) == []
+          && (request.resource.data.authorUid == request.auth.uid
+            || (request.resource.data.type == 'call'
+              && request.resource.data.keys().hasOnly(['id', 'authorUid', 'type', 'callId', 'callKind', 'callStatus', 'callDuration', 'timestamp', 'createdAt', 'read'])
+              && request.resource.data.authorUid == get(/databases/$(database)/documents/couples/$(coupleId)).data.activeCall.callerUid
+              && request.resource.data.callId == get(/databases/$(database)/documents/couples/$(coupleId)).data.activeCall.callId
+              && request.resource.data.id == getAfter(/databases/$(database)/documents/couples/$(coupleId)).data.activeCall.callLogMessageId));
+        allow update: if memberOf(coupleId) && (messageMetadataUpdate()
+          || (resource.data.authorUid == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['imageUrl', 'imageUrls'])));
+        allow delete: if memberOf(coupleId) && resource.data.authorUid == request.auth.uid
+          && resource.data.createdAt is timestamp
+          && request.time >= resource.data.createdAt
+          && request.time < resource.data.createdAt + duration.value(10, 'm');
       }
 
       match /typing/{uid} {

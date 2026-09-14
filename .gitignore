@@ -6,3 +6,6 @@ dist
 vite.config.js
 vite.config.d.ts
 .firebase/
+
+*-debug.log
+*-debug.*.log

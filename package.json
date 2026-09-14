@@ -20,7 +20,8 @@
     "native:add:ios": "npx cap add ios",
     "native:configure": "node scripts/configure-native.mjs",
     "android:open": "npx cap open android",
-    "ios:open": "npx cap open ios"
+    "ios:open": "npx cap open ios",
+    "test:security": "firebase emulators:exec --only auth,firestore,storage --project demo-danduli-security \"vitest run --config vitest.security.config.ts\""
   },
   "dependencies": {
     "@capacitor/android": "8.5.1",
@@ -50,15 +51,18 @@
   "devDependencies": {
     "@capacitor/cli": "8.5.1",
     "@eslint/js": "10.0.1",
+    "@firebase/rules-unit-testing": "5.0.1",
     "@tailwindcss/vite": "4.3.3",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
     "eslint": "10.9.1",
     "eslint-plugin-react-hooks": "7.1.1",
     "eslint-plugin-react-refresh": "0.5.5",
+    "firebase-tools": "14.27.0",
     "globals": "17.11.0",
     "tailwindcss": "4.3.3",
-    "typescript-eslint": "8.68.0"
+    "typescript-eslint": "8.68.0",
+    "vitest": "4.1.0"
   },
   "engines": {
     "node": ">=22.13.0"

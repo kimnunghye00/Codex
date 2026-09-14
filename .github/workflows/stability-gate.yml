@@ -26,8 +26,17 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Setup Java for Firebase emulators
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - name: Install dependencies
         run: npm ci
+
+      - name: Verify Firebase permissions and two-account flow
+        run: npm run test:security
 
       - name: Production build
         run: npm run build

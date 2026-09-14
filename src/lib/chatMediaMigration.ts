@@ -72,6 +72,9 @@ function candidates(state: RoomState) {
   const result: Candidate[] = [];
   for (let messageIndex = state.messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
     const message = state.messages[messageIndex];
+    // Only the sender can replace persisted media references. The recipient
+    // must never rewrite their partner's message while optimizing previews.
+    if (message.sender !== 'me') continue;
     if (message.type === 'image' && migratable(message.imageUrl)) {
       result.push({ message, url: message.imageUrl!, index: 0 });
     }
