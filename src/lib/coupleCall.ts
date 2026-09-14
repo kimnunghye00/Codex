@@ -16,6 +16,13 @@ export type StoredSessionDescription = {
   sdp: string;
 };
 
+export type CoupleCallUpgradeSignal = {
+  version: number;
+  requestedBy: 'caller' | 'callee';
+  offer: StoredSessionDescription;
+  answer?: StoredSessionDescription;
+};
+
 export type CoupleCallSignal = {
   callId: string;
   kind: CoupleCallKind;
@@ -24,6 +31,7 @@ export type CoupleCallSignal = {
   calleeUid: string;
   offer: StoredSessionDescription;
   answer?: StoredSessionDescription;
+  upgrade?: CoupleCallUpgradeSignal;
   callerCandidates: StoredIceCandidate[];
   calleeCandidates: StoredIceCandidate[];
   createdAtMs: number;
@@ -70,6 +78,18 @@ function normalizeSignal(value: unknown): CoupleCallSignal | null {
     calleeUid: String(data.calleeUid),
     offer: { type: 'offer', sdp: String(data.offer.sdp) },
     answer: data.answer?.sdp ? { type: 'answer', sdp: String(data.answer.sdp) } : undefined,
+    upgrade: (() => {
+      const raw = data.upgrade as Partial<CoupleCallUpgradeSignal> | undefined;
+      if (!raw?.offer?.sdp || (raw.requestedBy !== 'caller' && raw.requestedBy !== 'callee')) return undefined;
+      const version = Number(raw.version ?? 0);
+      if (!Number.isFinite(version) || version <= 0) return undefined;
+      return {
+        version,
+        requestedBy: raw.requestedBy,
+        offer: { type: 'offer', sdp: String(raw.offer.sdp) },
+        answer: raw.answer?.sdp ? { type: 'answer', sdp: String(raw.answer.sdp) } : undefined,
+      } satisfies CoupleCallUpgradeSignal;
+    })(),
     callerCandidates: Array.isArray(data.callerCandidates) ? data.callerCandidates : [],
     calleeCandidates: Array.isArray(data.calleeCandidates) ? data.calleeCandidates : [],
     createdAtMs: Number(data.createdAtMs ?? 0),
@@ -174,6 +194,72 @@ export async function refreshCoupleCallDescription(
     if (side === 'callee' && clean.type === 'answer') {
       transaction.update(ref, { activeCall: { ...current, answer: clean } satisfies CoupleCallSignal });
     }
+  });
+}
+
+export async function requestCoupleCallVideoUpgrade(
+  coupleId: string,
+  callId: string,
+  side: 'caller' | 'callee',
+  offer: RTCSessionDescriptionInit,
+) {
+  const ref = coupleRef(coupleId);
+  const cleanOffer = cleanDescription(offer);
+  if (cleanOffer.type !== 'offer') throw new Error('invalid-upgrade-offer');
+
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) throw new Error('couple-not-found');
+    const current = normalizeSignal(snapshot.data()?.activeCall);
+    if (!current || current.callId !== callId || current.status !== 'active') throw new Error('call-expired');
+
+    if (current.upgrade && !current.upgrade.answer) throw new Error('upgrade-busy');
+    const version = (current.upgrade?.version ?? 0) + 1;
+
+    transaction.update(ref, {
+      activeCall: {
+        ...current,
+        kind: 'video',
+        upgrade: {
+          version,
+          requestedBy: side,
+          offer: cleanOffer,
+        },
+      } satisfies CoupleCallSignal,
+    });
+  });
+}
+
+export async function answerCoupleCallVideoUpgrade(
+  coupleId: string,
+  callId: string,
+  side: 'caller' | 'callee',
+  version: number,
+  answer: RTCSessionDescriptionInit,
+) {
+  const ref = coupleRef(coupleId);
+  const cleanAnswer = cleanDescription(answer);
+  if (cleanAnswer.type !== 'answer') throw new Error('invalid-upgrade-answer');
+
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) throw new Error('couple-not-found');
+    const current = normalizeSignal(snapshot.data()?.activeCall);
+    if (!current || current.callId !== callId || current.status !== 'active') throw new Error('call-expired');
+
+    const upgrade = current.upgrade;
+    if (!upgrade || upgrade.version !== version || upgrade.requestedBy === side) throw new Error('upgrade-expired');
+
+    transaction.update(ref, {
+      activeCall: {
+        ...current,
+        kind: 'video',
+        upgrade: {
+          ...upgrade,
+          answer: cleanAnswer,
+        },
+      } satisfies CoupleCallSignal,
+    });
   });
 }
 
