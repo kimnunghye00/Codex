@@ -386,8 +386,15 @@ export async function setCoupleMessageReactions(
 ) {
   const cloudReactions: CloudReaction[] = (reactions ?? [])
     .filter((reaction) => reaction.by === 'me')
+    .slice(0, 1)
     .map((reaction) => ({ emoji: reaction.emoji, uid: currentUid }));
-  await updateDoc(messageRef(coupleId, messageId), { reactions: cloudReactions });
+  const ref = messageRef(coupleId, messageId);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) return;
+    const existing = (snapshot.data() as CloudMessage).reactions ?? [];
+    transaction.update(ref, { reactions: [...existing.filter((reaction) => reaction.uid !== currentUid), ...cloudReactions] });
+  });
 }
 
 export async function setCoupleMessageSaved(coupleId: string, messageId: number, currentUid: string, saved: boolean) {
@@ -447,7 +454,7 @@ export async function deleteCoupleMessageForEveryone(
     const data = snapshot.data() as CloudMessage;
     if (data.authorUid !== currentUid) throw new Error('message-not-owned');
 
-    const sentAt = Date.parse(data.timestamp);
+    const sentAt = (data.createdAt as { toMillis?: () => number } | undefined)?.toMillis?.() ?? Number.NaN;
     if (!Number.isFinite(sentAt) || Date.now() - sentAt >= DELETE_FOR_EVERYONE_WINDOW_MS) {
       throw new Error('delete-window-expired');
     }

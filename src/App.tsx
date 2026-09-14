@@ -1,4 +1,5 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { transitionCoupleCache } from './utils/coupleCacheIsolation';
 import type { HubTabId } from './components/memories/MemoriesPage';
 import type { LocationTabId } from './components/location/LocationPage';
 import type { MoreNavigationTarget } from './components/more/MoreServices';
@@ -248,7 +249,22 @@ function App({ user, profile, onProfileChange }: AppProps) {
       if (disposed) return;
       unsubscribe = subscribeRealCoupleConnection(
         user.uid,
-        setConnection,
+        (next) => {
+          if (disposed) return;
+          if (transitionCoupleCache(user.uid, next?.coupleId ?? null)) {
+            previousMessages.current = [];
+            previousMemories.current = [];
+            memoriesRef.current = [];
+            syncedCoupleMemoriesRef.current = [];
+            coupleMemoriesReadyRef.current = false;
+            setMessages([]);
+            setMemories([]);
+            setMemoryDraft(undefined);
+            setMemoryToOpen(undefined);
+            setLocationFocus(undefined);
+          }
+          setConnection(next);
+        },
         () => setConnection(null),
       );
     }).catch((cause) => {

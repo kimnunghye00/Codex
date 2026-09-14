@@ -32,7 +32,8 @@ function normalizeCode(code: string) {
 function makeCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let value = 'ROUTE-';
-  for (let i = 0; i < 6; i += 1) value += chars[Math.floor(Math.random() * chars.length)];
+  const random = crypto.getRandomValues(new Uint8Array(6));
+  for (const byte of random) value += chars[byte % chars.length];
   return value;
 }
 
@@ -124,10 +125,19 @@ export async function getRealCoupleConnection(uid: string): Promise<RealCoupleCo
   const expectedPartnerUid = String(userData?.partnerUid ?? '');
   if (!coupleId || !expectedPartnerUid || isTestCouple(coupleId)) return null;
 
-  const [coupleSnap, partnerSnap] = await Promise.all([
-    getDoc(doc(db, 'couples', coupleId)),
-    getDoc(doc(db, 'users', expectedPartnerUid)),
-  ]);
+  let coupleSnap;
+  let partnerSnap;
+  try {
+    [coupleSnap, partnerSnap] = await Promise.all([
+      getDoc(doc(db, 'couples', coupleId)),
+      getDoc(doc(db, 'users', expectedPartnerUid)),
+    ]);
+  } catch (cause) {
+    // The other partner may have revoked membership. Their stale user pointer
+    // must not prevent a fresh connection or keep the old session alive.
+    if ((cause as { code?: string }).code === 'permission-denied') return null;
+    throw cause;
+  }
   if (!coupleSnap.exists() || !partnerSnap.exists()) return null;
   return connectionFromData(uid, coupleId, expectedPartnerUid, coupleSnap.data(), partnerSnap.data());
 }
@@ -191,19 +201,28 @@ export function subscribeRealCoupleConnection(
       onChange(connectionFromData(uid, coupleId, partnerUid, coupleData, partnerData));
     };
 
+    const revoked = (error: unknown) => {
+      if (currentGeneration !== generation) return;
+      if ((error as { code?: string }).code === 'permission-denied') {
+        clearNested();
+        onChange(null);
+      }
+      onError(error);
+    };
+
     unsubscribeCouple = onSnapshot(doc(db, 'couples', coupleId), (snapshot) => {
       if (currentGeneration !== generation) return;
       coupleReady = true;
       coupleData = snapshot.exists() ? snapshot.data() : null;
       emit();
-    }, onError);
+    }, revoked);
 
     unsubscribePartner = onSnapshot(doc(db, 'users', partnerUid), (snapshot) => {
       if (currentGeneration !== generation) return;
       partnerReady = true;
       partnerData = snapshot.exists() ? snapshot.data() : null;
       emit();
-    }, onError);
+    }, revoked);
   }, onError);
 
   return () => {
@@ -295,6 +314,12 @@ export async function connectWithInviteCode(uid: string, displayName: string, ra
       joinerName: displayName,
       requestedAt: serverTimestamp(),
     });
+    // Reserve the selected invitation atomically. The rules use this to stop
+    // two owners from finalizing different invitations for the same joiner.
+    transaction.set(doc(db, 'users', uid), {
+      pendingInviteCode: code,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
     return { code, ownerUid, ownerName: String(invite.ownerName ?? '상대방') };
   });
 }
@@ -322,6 +347,7 @@ export async function finalizeInviteAsOwner(uid: string, ownerName: string, rawC
       };
     }
     if (invite.status !== 'requested') return null;
+    if (Number(invite.expiresAt ?? 0) <= Date.now()) throw new Error('invite-expired');
 
     const joinerUid = String(invite.joinerUid ?? '');
     const joinerName = String(invite.joinerName ?? '상대방');
@@ -331,6 +357,7 @@ export async function finalizeInviteAsOwner(uid: string, ownerName: string, rawC
     const coupleId = coupleRef.id;
     transaction.set(coupleRef, {
       id: coupleId,
+      inviteCode: code,
       memberUids: [uid, joinerUid],
       members: {
         [uid]: { uid, role: 'user', displayName: ownerName },

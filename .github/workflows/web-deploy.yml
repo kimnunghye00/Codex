@@ -12,6 +12,10 @@ on:
       - 'package-lock.json'
       - 'vite.config.ts'
       - 'firebase.json'
+      - 'firestore.rules'
+      - 'storage.rules'
+      - 'tests/firebase-security*'
+      - 'vitest.security.config.ts'
       - '.github/workflows/web-deploy.yml'
 
 concurrency:
@@ -38,8 +42,17 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Setup Java for Firebase emulators
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - name: Install dependencies
         run: npm ci
+
+      - name: Verify Firebase permissions and two-account flow
+        run: npm run test:security
 
       - name: Build web app
         run: npm run build
@@ -94,17 +107,20 @@ jobs:
           echo 'Configure **ROUTE_FIREBASE_SERVICE_ACCOUNT** (recommended) or **ROUTE_FIREBASE_TOKEN**, then rerun this workflow.' >> "$GITHUB_STEP_SUMMARY"
           exit 1
 
-      - name: Deploy Firebase Hosting
+      - name: Deploy verified Firebase rules and Hosting
         if: ${{ env.FIREBASE_SERVICE_ACCOUNT_JSON != '' || env.FIREBASE_TOKEN != '' }}
         shell: bash
         run: |
           set -euo pipefail
-          # Web publishing is intentionally independent from Firestore/Storage
-          # rule deployment. A restricted CI service account can publish the UI
-          # without being blocked by Service Usage permissions for Storage.
+          # Publish the new client only after its permission rules succeed.
+          # Firebase releases are not atomic; a Hosting failure must be retried.
           if [[ -n "$FIREBASE_SERVICE_ACCOUNT_JSON" ]]; then
             unset FIREBASE_TOKEN
           fi
+          npx --yes firebase-tools@15.29.0 deploy \
+            --only firestore:rules,storage \
+            --project meluni-f4e00 \
+            --non-interactive
           npx --yes firebase-tools@15.29.0 deploy \
             --only hosting \
             --project meluni-f4e00 \
