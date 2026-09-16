@@ -14,6 +14,13 @@
     ],
     "rewrites": [
       {
+        "source": "/api/turn-credentials",
+        "function": {
+          "functionId": "turnCredentials",
+          "region": "asia-northeast3"
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
@@ -66,5 +73,8 @@
       "enabled": false
     },
     "singleProjectMode": true
+  },
+  "functions": {
+    "source": "functions"
   }
 }

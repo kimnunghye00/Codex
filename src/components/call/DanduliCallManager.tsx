@@ -17,6 +17,7 @@ import {
   type StoredIceCandidate,
 } from '../../lib/coupleCall';
 import { createCallTaskQueue } from '../../lib/callTaskQueue';
+import { loadTurnIceServers } from '../../lib/turnCredentials';
 import './DanduliCallManager.css';
 
 type CallRole = 'caller' | 'callee';
@@ -261,11 +262,11 @@ export function DanduliCallManager({
     });
   }, [connection?.coupleId]);
 
-  const createPeer = useCallback((callId: string, role: CallRole) => {
+  const createPeer = useCallback((callId: string, role: CallRole, turnIceServers: RTCIceServer[] = []) => {
     peerRef.current?.close();
     if (typeof RTCPeerConnection === 'undefined') throw new Error('webrtc-not-supported');
     const peer = new RTCPeerConnection({
-      iceServers: ICE_SERVERS,
+      iceServers: [...turnIceServers, ...ICE_SERVERS],
       iceCandidatePoolSize: 8,
       iceTransportPolicy: 'all',
       bundlePolicy: 'max-bundle',
@@ -431,7 +432,11 @@ export function DanduliCallManager({
         stream.getTracks().forEach((track) => track.stop());
         return;
       }
-      const peer = createPeer(callId, 'caller');
+      const turnIceServers = await loadTurnIceServers(connection.coupleId).catch((cause) => {
+        console.warn('[DANDULI TURN credentials]', cause);
+        return [];
+      });
+      const peer = createPeer(callId, 'caller', turnIceServers);
       stream.getTracks().forEach((track) => peer.addTrack(track, stream));
       if (!stream.getAudioTracks().length) peer.addTransceiver('audio', { direction: 'recvonly' });
       if (kind === 'video' && !stream.getVideoTracks().length) peer.addTransceiver('video', { direction: 'recvonly' });
@@ -482,7 +487,11 @@ export function DanduliCallManager({
         stream.getTracks().forEach((track) => track.stop());
         return;
       }
-      const peer = createPeer(signal.callId, 'callee');
+      const turnIceServers = await loadTurnIceServers(connection.coupleId).catch((cause) => {
+        console.warn('[DANDULI TURN credentials]', cause);
+        return [];
+      });
+      const peer = createPeer(signal.callId, 'callee', turnIceServers);
 
       // Apply the caller's offer before adding local tracks so the browser can
       // reuse the offer's media sections instead of accidentally creating extra
