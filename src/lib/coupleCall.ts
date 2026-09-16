@@ -269,8 +269,17 @@ export async function appendCoupleCallCandidate(
   side: 'caller' | 'callee',
   candidate: RTCIceCandidate | RTCIceCandidateInit,
 ) {
-  const serialized = serializeIceCandidate(candidate);
-  if (!serialized.candidate) return;
+  return appendCoupleCallCandidates(coupleId, callId, side, [candidate]);
+}
+
+export async function appendCoupleCallCandidates(
+  coupleId: string,
+  callId: string,
+  side: 'caller' | 'callee',
+  candidates: (RTCIceCandidate | RTCIceCandidateInit)[],
+) {
+  const serialized = candidates.map(serializeIceCandidate).filter((item) => item.candidate);
+  if (!serialized.length) return;
 
   const ref = coupleRef(coupleId);
   await runTransaction(db, async (transaction) => {
@@ -282,12 +291,18 @@ export async function appendCoupleCallCandidate(
 
     const key = side === 'caller' ? 'callerCandidates' : 'calleeCandidates';
     const existing = current[key];
-    if (existing.some((item) => item.candidate === serialized.candidate)) return;
+    const seen = new Set(existing.map((item) => item.candidate));
+    const additions = serialized.filter((item) => {
+      if (seen.has(item.candidate)) return false;
+      seen.add(item.candidate);
+      return true;
+    });
+    if (!additions.length) return;
 
     transaction.update(ref, {
       activeCall: {
         ...current,
-        [key]: [...existing, serialized],
+        [key]: [...existing, ...additions],
       },
     });
   });

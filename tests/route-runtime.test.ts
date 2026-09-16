@@ -117,3 +117,42 @@ test('broken startup caches recover without discarding valid records', () => {
     else Reflect.deleteProperty(globalThis, 'window');
   }
 });
+
+// A burst of Firestore snapshots must not apply the same SDP answer concurrently.
+test('call snapshots serialize answer application before candidates', async () => {
+  const { createCallTaskQueue } = await import('../src/lib/callTaskQueue.ts');
+  const enqueue = createCallTaskQueue();
+  let release!: () => void;
+  const blocked = new Promise<void>((resolve) => { release = resolve; });
+  let remoteDescription = false;
+  let answers = 0;
+  const applied: number[] = [];
+  const applySnapshot = (index: number) => enqueue(async () => {
+    if (!remoteDescription) {
+      answers += 1;
+      await blocked;
+      remoteDescription = true;
+    }
+    applied.push(index);
+  });
+  const first = applySnapshot(1);
+  const second = applySnapshot(2);
+  await Promise.resolve();
+  assert.equal(answers, 1);
+  assert.deepEqual(applied, []);
+  release();
+  await Promise.all([first, second]);
+  assert.equal(answers, 1);
+  assert.deepEqual(applied, [1, 2]);
+});
+
+test('failed call signal does not block later snapshots', async () => {
+  const { createCallTaskQueue } = await import('../src/lib/callTaskQueue.ts');
+  const enqueue = createCallTaskQueue();
+  let recovered = false;
+  const failed = enqueue(async () => { throw new Error('transient failure'); });
+  const next = enqueue(async () => { recovered = true; });
+  await assert.rejects(failed, /transient failure/);
+  await next;
+  assert.equal(recovered, true);
+});
