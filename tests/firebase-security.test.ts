@@ -207,6 +207,25 @@ test('storage prevents cross-couple reads, forged ownership, replacement and uns
   await assertFails(uploadBytes(ref(client.storage, `couples/${coupleId}/chatMedia/eve/3/photo.png`), bytes, { contentType: 'image/png' }));
 });
 
+test('cancelled call transactions cannot publish stale offers/answers or end a replacement call', async () => {
+  const { startCoupleCall, answerCoupleCall, finishCoupleCall } = await import('../src/lib/coupleCall');
+  const { coupleId } = await pair();
+  as('alice');
+  await expect(startCoupleCall(coupleId, 'cancelled', 'alice', 'bob', 'voice', { type: 'offer', sdp: 'offer' }, () => false)).rejects.toThrow('call-cancelled');
+  expect((await getDoc(doc(client.db, 'couples', coupleId))).data()?.activeCall).toBeUndefined();
+  await startCoupleCall(coupleId, 'first', 'alice', 'bob', 'voice', { type: 'offer', sdp: 'offer' });
+  as('bob');
+  await expect(answerCoupleCall(coupleId, 'first', 'bob', { type: 'answer', sdp: 'answer' }, () => false)).rejects.toThrow('call-cancelled');
+  expect((await getDoc(doc(client.db, 'couples', coupleId))).data()?.activeCall.status).toBe('ringing');
+  await finishCoupleCall(coupleId, 'first', 'ended', 'hangup');
+  as('alice');
+  await startCoupleCall(coupleId, 'replacement', 'alice', 'bob', 'voice', { type: 'offer', sdp: 'new-offer' });
+  await finishCoupleCall(coupleId, 'first', 'failed', 'late-completion');
+  const active = (await getDoc(doc(client.db, 'couples', coupleId))).data()?.activeCall;
+  expect(active.callId).toBe('replacement');
+  expect(active.status).toBe('ringing');
+});
+
 test('callee can write a legitimate call record without permitting forged text attribution', async () => {
   const { startCoupleCall, answerCoupleCall, finishCoupleCall } = await import('../src/lib/coupleCall');
   const { coupleId } = await pair();

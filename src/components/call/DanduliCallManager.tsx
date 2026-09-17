@@ -17,7 +17,8 @@ import {
   type StoredIceCandidate,
 } from '../../lib/coupleCall';
 import { createCallTaskQueue } from '../../lib/callTaskQueue';
-import { loadTurnIceServers } from '../../lib/turnCredentials';
+import { clearTurnIceServers, loadTurnIceServers } from '../../lib/turnCredentials';
+import { acquireCallStream, createCallLifetime, waitForCurrentCall } from '../../lib/callLifetime';
 import './DanduliCallManager.css';
 
 type CallRole = 'caller' | 'callee';
@@ -38,6 +39,7 @@ const ICE_SERVERS: RTCIceServer[] = [
 ];
 const DISCONNECT_GRACE_MS = 8_000;
 const CONNECT_TIMEOUT_MS = 35_000;
+const RING_TIMEOUT_MS = 60_000;
 
 function makeCallId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
@@ -103,7 +105,7 @@ function canFallbackFromMediaError(cause: unknown) {
 }
 
 function waitForIceGathering(peer: RTCPeerConnection, timeoutMs = 5000) {
-  if (peer.iceGatheringState === 'complete') return Promise.resolve();
+  if (peer.iceGatheringState === 'complete' || peer.signalingState === 'closed') return Promise.resolve();
 
   return new Promise<void>((resolve) => {
     let settled = false;
@@ -111,14 +113,16 @@ function waitForIceGathering(peer: RTCPeerConnection, timeoutMs = 5000) {
       if (settled) return;
       settled = true;
       peer.removeEventListener('icegatheringstatechange', onState);
+      peer.removeEventListener('signalingstatechange', onState);
       window.clearTimeout(timer);
       resolve();
     };
     const onState = () => {
-      if (peer.iceGatheringState === 'complete') finish();
+      if (peer.iceGatheringState === 'complete' || peer.signalingState === 'closed') finish();
     };
     const timer = window.setTimeout(finish, timeoutMs);
     peer.addEventListener('icegatheringstatechange', onState);
+    peer.addEventListener('signalingstatechange', onState);
   });
 }
 
@@ -150,6 +154,8 @@ export function DanduliCallManager({
   partnerName: string;
   onIncomingCall?: (kind: CoupleCallKind) => void;
 }) {
+  const connectedCoupleId = connection?.coupleId;
+  const connectedPartnerUid = connection?.partnerUid;
   const [incoming, setIncoming] = useState<CoupleCallSignal | null>(null);
   const [session, setSession] = useState<ActiveSession | null>(null);
   const [message, setMessage] = useState('');
@@ -162,6 +168,7 @@ export function DanduliCallManager({
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
 
   const signalQueueRef = useRef(createCallTaskQueue());
+  const callLifetimeRef = useRef(createCallLifetime());
   const candidateQueueRef = useRef(createCallTaskQueue());
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -175,10 +182,12 @@ export function DanduliCallManager({
   const addedRemoteCandidatesRef = useRef(new Set<string>());
   const disconnectTimerRef = useRef<number | undefined>(undefined);
   const closeTimerRef = useRef<number | undefined>(undefined);
+  const messageTimerRef = useRef<number | undefined>(undefined);
   const latestSignalRef = useRef<CoupleCallSignal | null>(null);
   const notifiedCallIdRef = useRef('');
   const handledUpgradeVersionRef = useRef(0);
   const processingUpgradeVersionRef = useRef(0);
+  const videoUpgradePendingRef = useRef(false);
 
   const stopStreams = useCallback(() => {
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
@@ -190,14 +199,18 @@ export function DanduliCallManager({
   }, []);
 
   const resetLocalSession = useCallback((preserveMessage = false) => {
+    callLifetimeRef.current.end();
+    if (messageTimerRef.current) window.clearTimeout(messageTimerRef.current);
+    messageTimerRef.current = undefined;
     if (disconnectTimerRef.current) window.clearTimeout(disconnectTimerRef.current);
     if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current);
     closeTimerRef.current = undefined;
     disconnectTimerRef.current = undefined;
     signalQueueRef.current = createCallTaskQueue();
     candidateQueueRef.current = createCallTaskQueue();
-    peerRef.current?.close();
+    const peer = peerRef.current;
     peerRef.current = null;
+    peer?.close();
     stopStreams();
     activeCallIdRef.current = '';
     roleRef.current = null;
@@ -209,6 +222,7 @@ export function DanduliCallManager({
     setMuted(false);
     setCameraOff(false);
     setSwitchingToVideo(false);
+    videoUpgradePendingRef.current = false;
     handledUpgradeVersionRef.current = 0;
     processingUpgradeVersionRef.current = 0;
     setConnectedAt(null);
@@ -217,6 +231,16 @@ export function DanduliCallManager({
   }, [stopStreams]);
 
   const finishAndCloseLater = useCallback((text: string) => {
+    if (!callLifetimeRef.current.capture()()) return;
+    callLifetimeRef.current.end();
+    if (disconnectTimerRef.current) window.clearTimeout(disconnectTimerRef.current);
+    disconnectTimerRef.current = undefined;
+    const peer = peerRef.current;
+    peerRef.current = null;
+    peer?.close();
+    stopStreams();
+    signalReadyRef.current = false;
+    pendingLocalCandidatesRef.current = [];
     setMessage(text);
     setSession((current) => current ? { ...current, phase: 'ended' } : current);
     if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current);
@@ -224,15 +248,26 @@ export function DanduliCallManager({
       closeTimerRef.current = undefined;
       resetLocalSession();
     }, 1400);
-  }, [resetLocalSession]);
+  }, [resetLocalSession, stopStreams]);
+
+  const clearMessageLater = useCallback((delay: number) => {
+    if (messageTimerRef.current) window.clearTimeout(messageTimerRef.current);
+    messageTimerRef.current = window.setTimeout(() => {
+      messageTimerRef.current = undefined;
+      setMessage('');
+    }, delay);
+  }, []);
 
   const applyRemoteCandidates = useCallback(async (candidates: StoredIceCandidate[]) => {
     const peer = peerRef.current;
     if (!peer?.remoteDescription) return;
+    const isCurrent = callLifetimeRef.current.capture();
     for (const candidate of candidates) {
+      if (!isCurrent() || peerRef.current !== peer) return;
       if (!candidate.candidate || addedRemoteCandidatesRef.current.has(candidate.candidate)) continue;
       try {
         await peer.addIceCandidate(candidate);
+        if (!isCurrent() || peerRef.current !== peer) return;
         addedRemoteCandidatesRef.current.add(candidate.candidate);
       } catch (cause) {
         console.warn('[DANDULI call remote candidate]', cause);
@@ -282,6 +317,7 @@ export function DanduliCallManager({
     setRemoteStream(remote);
 
     peer.ontrack = (event) => {
+      if (peerRef.current !== peer || activeCallIdRef.current !== callId) return;
       const target = remoteStreamRef.current ?? remote;
       const tracks = event.streams[0]?.getTracks() ?? [event.track];
       tracks.forEach((track) => {
@@ -313,9 +349,10 @@ export function DanduliCallManager({
         setMessage('연결을 다시 확인하고 있어요…');
         if (disconnectTimerRef.current) window.clearTimeout(disconnectTimerRef.current);
         disconnectTimerRef.current = window.setTimeout(() => {
+          if (peerRef.current !== peer || activeCallIdRef.current !== callId) return;
           const coupleId = connection?.coupleId;
           if (coupleId && activeCallIdRef.current === callId) {
-            void finishCoupleCall(coupleId, callId, 'failed', 'webrtc-disconnected');
+            void finishCoupleCall(coupleId, callId, 'failed', 'webrtc-disconnected').catch((cause) => console.warn('[DANDULI call end]', cause));
           }
           finishAndCloseLater('통화 연결이 끊어졌어요.');
         }, DISCONNECT_GRACE_MS);
@@ -325,7 +362,7 @@ export function DanduliCallManager({
       if (peer.connectionState === 'failed') {
         const coupleId = connection?.coupleId;
         if (coupleId && activeCallIdRef.current === callId) {
-          void finishCoupleCall(coupleId, callId, 'failed', 'webrtc-failed');
+          void finishCoupleCall(coupleId, callId, 'failed', 'webrtc-failed').catch((cause) => console.warn('[DANDULI call end]', cause));
         }
         finishAndCloseLater('상대방과 음성·영상 경로를 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
       }
@@ -334,7 +371,7 @@ export function DanduliCallManager({
     return peer;
   }, [connection?.coupleId, finishAndCloseLater, flushLocalCandidates]);
 
-  const acquireMedia = useCallback(async (kind: CoupleCallKind) => {
+  const acquireMedia = useCallback(async (kind: CoupleCallKind, isCurrent: () => boolean) => {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('media-not-supported');
 
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
@@ -342,29 +379,29 @@ export function DanduliCallManager({
     let stream: MediaStream;
     if (kind === 'voice') {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        stream = await acquireCallStream(isCurrent, () => navigator.mediaDevices.getUserMedia({ audio: true, video: false }));
       } catch (cause) {
-        if (!canFallbackFromMediaError(cause)) throw cause;
+        if (!isCurrent() || !canFallbackFromMediaError(cause)) throw cause;
         // A desktop without a microphone can still receive the partner's audio.
         // Do not misreport that hardware condition as an internet outage.
         stream = new MediaStream();
       }
     } else {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
+        stream = await acquireCallStream(isCurrent, () => navigator.mediaDevices.getUserMedia({
           audio: true,
           video: { facingMode: 'user' },
-        });
+        }));
       } catch (firstCause) {
-        if (!canFallbackFromMediaError(firstCause)) throw firstCause;
+        if (!isCurrent() || !canFallbackFromMediaError(firstCause)) throw firstCause;
         try {
-          stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          stream = await acquireCallStream(isCurrent, () => navigator.mediaDevices.getUserMedia({ audio: true, video: false }));
         } catch (audioCause) {
-          if (!canFallbackFromMediaError(audioCause)) throw audioCause;
+          if (!isCurrent() || !canFallbackFromMediaError(audioCause)) throw audioCause;
           try {
-            stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: true });
+            stream = await acquireCallStream(isCurrent, () => navigator.mediaDevices.getUserMedia({ audio: false, video: true }));
           } catch (videoCause) {
-            if (!canFallbackFromMediaError(videoCause)) throw videoCause;
+            if (!isCurrent() || !canFallbackFromMediaError(videoCause)) throw videoCause;
             stream = new MediaStream();
           }
         }
@@ -378,19 +415,22 @@ export function DanduliCallManager({
     return stream;
   }, []);
 
-  const ensureLocalVideoTrack = useCallback(async () => {
+  const ensureLocalVideoTrack = useCallback(async (isCurrent: () => boolean) => {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('media-not-supported');
 
     const current = localStreamRef.current ?? new MediaStream();
     const existing = current.getVideoTracks().find((track) => track.readyState === 'live');
     if (existing) return existing;
 
-    const cameraStream = await navigator.mediaDevices.getUserMedia({
+    const cameraStream = await acquireCallStream(isCurrent, () => navigator.mediaDevices.getUserMedia({
       audio: false,
       video: { facingMode: 'user' },
-    });
+    }));
     const track = cameraStream.getVideoTracks()[0];
-    if (!track) throw new Error('camera-not-found');
+    if (!track) {
+      cameraStream.getTracks().forEach((item) => item.stop());
+      throw new Error('camera-not-found');
+    }
 
     current.addTrack(track);
     localStreamRef.current = current;
@@ -399,11 +439,11 @@ export function DanduliCallManager({
     return track;
   }, []);
 
-  const attachVideoTrack = useCallback((peer: RTCPeerConnection, track: MediaStreamTrack) => {
+  const attachVideoTrack = useCallback(async (peer: RTCPeerConnection, track: MediaStreamTrack) => {
     const stream = localStreamRef.current ?? new MediaStream([track]);
     const sender = peer.getSenders().find((item) => item.track?.kind === 'video');
     if (sender) {
-      void sender.replaceTrack(track);
+      await sender.replaceTrack(track);
       return;
     }
     peer.addTrack(track, stream);
@@ -414,63 +454,68 @@ export function DanduliCallManager({
     // notification permission here. Native permission is prepared on connect.
     void prepareIncomingCallNotifications();
 
-    if (!connection?.coupleId || !connection.partnerUid || !currentUid) {
+    if (!connectedCoupleId || !connectedPartnerUid || !currentUid) {
       setMessage('상대방과 연결된 뒤 통화할 수 있어요.');
       return;
     }
     if (activeCallIdRef.current) return;
 
     const callId = makeCallId();
+    const isCurrent = callLifetimeRef.current.begin();
+    if (messageTimerRef.current) window.clearTimeout(messageTimerRef.current);
     activeCallIdRef.current = callId;
     signalReadyRef.current = false;
     try {
       setMessage('');
       setIncoming(null);
       setSession({ callId, kind, role: 'caller', phase: 'calling' });
-      const stream = await acquireMedia(kind);
-      if (activeCallIdRef.current !== callId) {
-        stream.getTracks().forEach((track) => track.stop());
-        return;
-      }
-      const turnIceServers = await loadTurnIceServers(connection.coupleId).catch((cause) => {
+      const stream = await acquireMedia(kind, isCurrent);
+      const turnIceServers = await waitForCurrentCall(isCurrent, () => loadTurnIceServers(connectedCoupleId).catch((cause) => {
         console.warn('[DANDULI TURN credentials]', cause);
         return [];
-      });
+      }));
       const peer = createPeer(callId, 'caller', turnIceServers);
       stream.getTracks().forEach((track) => peer.addTrack(track, stream));
       if (!stream.getAudioTracks().length) peer.addTransceiver('audio', { direction: 'recvonly' });
       if (kind === 'video' && !stream.getVideoTracks().length) peer.addTransceiver('video', { direction: 'recvonly' });
 
-      const offer = await peer.createOffer();
-      await peer.setLocalDescription(offer);
+      const offer = await waitForCurrentCall(isCurrent, () => peer.createOffer());
+      await waitForCurrentCall(isCurrent, () => peer.setLocalDescription(offer));
 
-      await startCoupleCall(connection.coupleId, callId, currentUid, connection.partnerUid, kind, peer.localDescription ?? offer);
+      await startCoupleCall(connectedCoupleId, callId, currentUid, connectedPartnerUid, kind, peer.localDescription ?? offer, isCurrent);
+      if (!isCurrent()) {
+        void finishCoupleCall(connectedCoupleId, callId, 'ended', 'cancelled-during-start').catch((cause) => console.warn('[DANDULI cancelled call]', cause));
+        return;
+      }
       signalReadyRef.current = true;
       void flushLocalCandidates();
 
       void waitForIceGathering(peer).then(async () => {
-        if (activeCallIdRef.current !== callId) return;
+        if (!isCurrent() || peerRef.current !== peer) return;
         const gatheredOffer = peer.localDescription;
         if (!gatheredOffer) return;
         try {
-          await refreshCoupleCallDescription(connection.coupleId, callId, 'caller', gatheredOffer);
+          await refreshCoupleCallDescription(connectedCoupleId, callId, 'caller', gatheredOffer);
           await flushLocalCandidates();
         } catch (cause) {
           console.warn('[DANDULI call offer refresh]', cause);
         }
       });
     } catch (cause) {
+      if (!isCurrent()) return;
       console.error('[DANDULI outgoing call]', cause);
       const text = callErrorMessage(cause, kind);
       resetLocalSession(true);
       setMessage(text);
-      window.setTimeout(() => setMessage(''), 2400);
+      clearMessageLater(2400);
     }
-  }, [acquireMedia, connection?.coupleId, connection?.partnerUid, createPeer, currentUid, flushLocalCandidates, resetLocalSession]);
+  }, [acquireMedia, clearMessageLater, connectedCoupleId, connectedPartnerUid, createPeer, currentUid, flushLocalCandidates, resetLocalSession]);
 
   const acceptIncoming = useCallback(async () => {
     const signal = incoming;
-    if (!signal || !connection?.coupleId || signal.calleeUid !== currentUid || activeCallIdRef.current) return;
+    if (!signal || !connectedCoupleId || signal.calleeUid !== currentUid || activeCallIdRef.current) return;
+    const isCurrent = callLifetimeRef.current.begin();
+    if (messageTimerRef.current) window.clearTimeout(messageTimerRef.current);
     activeCallIdRef.current = signal.callId;
     roleRef.current = 'callee';
     signalReadyRef.current = false;
@@ -482,67 +527,68 @@ export function DanduliCallManager({
       setMessage('');
       setIncoming(null);
       setSession({ callId: signal.callId, kind: signal.kind, role: 'callee', phase: 'connecting' });
-      const stream = await acquireMedia(signal.kind);
-      if (activeCallIdRef.current !== signal.callId) {
-        stream.getTracks().forEach((track) => track.stop());
-        return;
-      }
-      const turnIceServers = await loadTurnIceServers(connection.coupleId).catch((cause) => {
+      const stream = await acquireMedia(signal.kind, isCurrent);
+      const turnIceServers = await waitForCurrentCall(isCurrent, () => loadTurnIceServers(connectedCoupleId).catch((cause) => {
         console.warn('[DANDULI TURN credentials]', cause);
         return [];
-      });
+      }));
       const peer = createPeer(signal.callId, 'callee', turnIceServers);
 
       // Apply the caller's offer before adding local tracks so the browser can
       // reuse the offer's media sections instead of accidentally creating extra
       // m-lines on devices that are missing a microphone or camera.
-      await peer.setRemoteDescription(signal.offer);
+      await waitForCurrentCall(isCurrent, () => peer.setRemoteDescription(signal.offer));
       stream.getTracks().forEach((track) => peer.addTrack(track, stream));
       const latest = latestSignalRef.current;
-      await applyRemoteCandidates(latest?.callId === signal.callId ? latest.callerCandidates : signal.callerCandidates);
-      const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
+      await waitForCurrentCall(isCurrent, () => applyRemoteCandidates(latest?.callId === signal.callId ? latest.callerCandidates : signal.callerCandidates));
+      const answer = await waitForCurrentCall(isCurrent, () => peer.createAnswer());
+      await waitForCurrentCall(isCurrent, () => peer.setLocalDescription(answer));
 
-      await answerCoupleCall(connection.coupleId, signal.callId, currentUid, peer.localDescription ?? answer);
+      await answerCoupleCall(connectedCoupleId, signal.callId, currentUid, peer.localDescription ?? answer, isCurrent);
+      if (!isCurrent()) {
+        void finishCoupleCall(connectedCoupleId, signal.callId, 'ended', 'cancelled-during-answer').catch((cause) => console.warn('[DANDULI cancelled call]', cause));
+        return;
+      }
       signalReadyRef.current = true;
       void flushLocalCandidates();
 
       void waitForIceGathering(peer).then(async () => {
-        if (activeCallIdRef.current !== signal.callId) return;
+        if (!isCurrent() || peerRef.current !== peer) return;
         const gatheredAnswer = peer.localDescription;
         if (!gatheredAnswer) return;
         try {
-          await refreshCoupleCallDescription(connection.coupleId, signal.callId, 'callee', gatheredAnswer);
+          await refreshCoupleCallDescription(connectedCoupleId, signal.callId, 'callee', gatheredAnswer);
           await flushLocalCandidates();
         } catch (cause) {
           console.warn('[DANDULI call answer refresh]', cause);
         }
       });
     } catch (cause) {
+      if (!isCurrent()) return;
       console.error('[DANDULI accept call]', cause);
-      void finishCoupleCall(connection.coupleId, signal.callId, 'failed', 'accept-failed');
+      void finishCoupleCall(connectedCoupleId, signal.callId, 'failed', 'accept-failed').catch((error) => console.warn('[DANDULI call end]', error));
       resetLocalSession(true);
       setMessage(callErrorMessage(cause, signal.kind));
-      window.setTimeout(() => setMessage(''), 2400);
+      clearMessageLater(2400);
     }
-  }, [acquireMedia, applyRemoteCandidates, connection?.coupleId, createPeer, currentUid, flushLocalCandidates, incoming, resetLocalSession]);
+  }, [acquireMedia, applyRemoteCandidates, clearMessageLater, connectedCoupleId, createPeer, currentUid, flushLocalCandidates, incoming, resetLocalSession]);
 
   const rejectIncoming = useCallback(() => {
-    if (!incoming || !connection?.coupleId) return;
+    if (!incoming || !connectedCoupleId) return;
     const callId = incoming.callId;
     setIncoming(null);
     notifiedCallIdRef.current = '';
     void clearIncomingCallNotification(callId);
-    void finishCoupleCall(connection.coupleId, callId, 'rejected', 'declined');
-  }, [connection?.coupleId, incoming]);
+    void finishCoupleCall(connectedCoupleId, callId, 'rejected', 'declined').catch((cause) => console.warn('[DANDULI call end]', cause));
+  }, [connectedCoupleId, incoming]);
 
   const hangUp = useCallback(() => {
     const callId = activeCallIdRef.current;
-    if (callId && connection?.coupleId) {
-      void finishCoupleCall(connection.coupleId, callId, 'ended', 'hangup');
+    if (callId && connectedCoupleId) {
+      void finishCoupleCall(connectedCoupleId, callId, 'ended', 'hangup').catch((cause) => console.warn('[DANDULI call end]', cause));
     }
     resetLocalSession();
-  }, [connection?.coupleId, resetLocalSession]);
+  }, [connectedCoupleId, resetLocalSession]);
 
   const toggleMute = useCallback(() => {
     // Keep the visual state update completely separate from the MediaStream.
@@ -572,31 +618,36 @@ export function DanduliCallManager({
       || !peer
       || !role
       || switchingToVideo
+      || videoUpgradePendingRef.current
     ) return;
 
+    const isCurrent = callLifetimeRef.current.capture();
+    videoUpgradePendingRef.current = true;
     setSwitchingToVideo(true);
     setMessage('영상통화로 전환하고 있어요…');
 
     try {
-      const track = await ensureLocalVideoTrack();
-      attachVideoTrack(peer, track);
+      const track = await ensureLocalVideoTrack(isCurrent);
+      await waitForCurrentCall(isCurrent, () => attachVideoTrack(peer, track));
 
-      const offer = await peer.createOffer();
-      await peer.setLocalDescription(offer);
-      await requestCoupleCallVideoUpgrade(
+      const offer = await waitForCurrentCall(isCurrent, () => peer.createOffer());
+      await waitForCurrentCall(isCurrent, () => peer.setLocalDescription(offer));
+      await waitForCurrentCall(isCurrent, () => requestCoupleCallVideoUpgrade(
         coupleId,
         currentSession.callId,
         role,
         peer.localDescription ?? offer,
-      );
+      ));
 
       setSession((current) => current && current.callId === currentSession.callId
         ? { ...current, kind: 'video' }
         : current);
       setMessage('');
     } catch (cause) {
+      if (!isCurrent()) return;
       console.error('[DANDULI call video upgrade]', cause);
       const name = callErrorName(cause);
+      videoUpgradePendingRef.current = false;
       setSwitchingToVideo(false);
       if (name === 'NotAllowedError' || name === 'SecurityError') {
         setMessage('영상통화로 전환하려면 카메라 권한을 허용해 주세요.');
@@ -605,12 +656,12 @@ export function DanduliCallManager({
       } else {
         setMessage('영상통화로 전환하지 못했어요. 잠시 후 다시 시도해 주세요.');
       }
-      window.setTimeout(() => setMessage(''), 2200);
+      clearMessageLater(2200);
     }
-  }, [attachVideoTrack, connection?.coupleId, ensureLocalVideoTrack, session, switchingToVideo]);
+  }, [attachVideoTrack, clearMessageLater, connection?.coupleId, ensureLocalVideoTrack, session, switchingToVideo]);
 
   useEffect(() => {
-    if (session?.phase !== 'connecting') return;
+    if (session?.phase !== 'connecting' && session?.phase !== 'calling') return;
     const callId = session.callId;
     const timer = window.setTimeout(() => {
       if (activeCallIdRef.current !== callId || peerRef.current?.connectionState === 'connected') return;
@@ -618,21 +669,17 @@ export function DanduliCallManager({
         void finishCoupleCall(connection.coupleId, callId, 'failed', 'connection-timeout')
           .catch((cause) => console.warn('[DANDULI call timeout]', cause));
       }
-      finishAndCloseLater('통화 연결 시간이 초과됐어요. 네트워크를 바꾼 뒤 다시 시도해 주세요.');
-    }, CONNECT_TIMEOUT_MS);
+      finishAndCloseLater(session.phase === 'calling' ? '상대방이 응답하지 않아 통화를 종료했어요.' : '통화 연결 시간이 초과됐어요. 네트워크를 바꾼 뒤 다시 시도해 주세요.');
+    }, session.phase === 'calling' ? RING_TIMEOUT_MS : CONNECT_TIMEOUT_MS);
     return () => window.clearTimeout(timer);
   }, [session?.callId, session?.phase, connection?.coupleId, finishAndCloseLater]);
 
   useEffect(() => {
-    if (!connectedAt) {
-      setElapsedSeconds(0);
-      return;
-    }
+    if (!connectedAt || session?.phase === 'ended') return;
     const update = () => setElapsedSeconds(Math.floor((Date.now() - connectedAt) / 1000));
-    update();
     const timer = window.setInterval(update, 1000);
     return () => window.clearInterval(timer);
-  }, [connectedAt]);
+  }, [connectedAt, session?.phase]);
 
   useEffect(() => {
     const tracks = localStream?.getAudioTracks() ?? [];
@@ -675,7 +722,6 @@ export function DanduliCallManager({
     const coupleId = connection?.coupleId;
     if (!coupleId) {
       latestSignalRef.current = null;
-      resetLocalSession();
       return;
     }
 
@@ -718,11 +764,12 @@ export function DanduliCallManager({
       const role = roleRef.current;
       const peer = peerRef.current;
       if (!role || !peer) return;
+      const isCurrent = callLifetimeRef.current.capture();
 
       void signalQueueRef.current(async () => {
-        if (peerRef.current !== peer || activeCallIdRef.current !== signal.callId) return;
+        if (!isCurrent() || peerRef.current !== peer || activeCallIdRef.current !== signal.callId) return;
         if (role === 'caller' && signal.answer?.sdp && !peer.remoteDescription) {
-          await peer.setRemoteDescription(signal.answer);
+          await waitForCurrentCall(isCurrent, () => peer.setRemoteDescription(signal.answer!));
         }
 
         const upgrade = signal.upgrade;
@@ -740,43 +787,46 @@ export function DanduliCallManager({
             if (upgrade.requestedBy !== role && !upgrade.answer) {
               setSwitchingToVideo(true);
               setMessage('영상통화로 전환하고 있어요…');
-              await peer.setRemoteDescription(upgrade.offer);
+              await waitForCurrentCall(isCurrent, () => peer.setRemoteDescription(upgrade.offer));
 
               try {
-                const track = await ensureLocalVideoTrack();
-                attachVideoTrack(peer, track);
+                const track = await ensureLocalVideoTrack(isCurrent);
+                await waitForCurrentCall(isCurrent, () => attachVideoTrack(peer, track));
               } catch (cameraCause) {
+                if (!isCurrent()) return;
                 console.warn('[DANDULI call upgrade camera unavailable]', cameraCause);
                 setCameraOff(true);
               }
 
-              const answer = await peer.createAnswer();
-              await peer.setLocalDescription(answer);
-              await answerCoupleCallVideoUpgrade(
+              const answer = await waitForCurrentCall(isCurrent, () => peer.createAnswer());
+              await waitForCurrentCall(isCurrent, () => peer.setLocalDescription(answer));
+              await waitForCurrentCall(isCurrent, () => answerCoupleCallVideoUpgrade(
                 coupleId,
                 signal.callId,
                 role,
                 upgrade.version,
                 peer.localDescription ?? answer,
-              );
+              ));
 
               handledUpgradeVersionRef.current = upgrade.version;
               setSession((current) => current && current.callId === signal.callId
                 ? { ...current, kind: 'video' }
                 : current);
               setSwitchingToVideo(false);
+              videoUpgradePendingRef.current = false;
               setMessage('');
             } else if (upgrade.requestedBy === role && upgrade.answer) {
-              await peer.setRemoteDescription(upgrade.answer);
+              await waitForCurrentCall(isCurrent, () => peer.setRemoteDescription(upgrade.answer!));
               handledUpgradeVersionRef.current = upgrade.version;
               setSession((current) => current && current.callId === signal.callId
                 ? { ...current, kind: 'video' }
                 : current);
               setSwitchingToVideo(false);
+              videoUpgradePendingRef.current = false;
               setMessage('');
             }
           } finally {
-            if (processingUpgradeVersionRef.current === upgrade.version) {
+            if (isCurrent() && processingUpgradeVersionRef.current === upgrade.version) {
               processingUpgradeVersionRef.current = 0;
             }
           }
@@ -790,7 +840,9 @@ export function DanduliCallManager({
             : current);
         }
       }).catch((cause) => {
+        if (!isCurrent()) return;
         processingUpgradeVersionRef.current = 0;
+        videoUpgradePendingRef.current = false;
         setSwitchingToVideo(false);
         console.warn('[DANDULI call signal apply]', cause);
       });
@@ -801,10 +853,20 @@ export function DanduliCallManager({
   }, [applyRemoteCandidates, attachVideoTrack, connection?.coupleId, currentUid, ensureLocalVideoTrack, finishAndCloseLater, onIncomingCall, partnerName, resetLocalSession]);
 
   useEffect(() => () => {
+    clearTurnIceServers();
+    latestSignalRef.current = null;
+    resetLocalSession();
+  }, [connection?.coupleId, currentUid, resetLocalSession]);
+
+  useEffect(() => () => {
+    callLifetimeRef.current.end();
+    if (messageTimerRef.current) window.clearTimeout(messageTimerRef.current);
     if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current);
     if (disconnectTimerRef.current) window.clearTimeout(disconnectTimerRef.current);
     if (notifiedCallIdRef.current) void clearIncomingCallNotification(notifiedCallIdRef.current);
     peerRef.current?.close();
+    peerRef.current = null;
+    activeCallIdRef.current = '';
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
     remoteStreamRef.current?.getTracks().forEach((track) => track.stop());
   }, []);

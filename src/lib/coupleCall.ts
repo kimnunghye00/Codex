@@ -118,11 +118,13 @@ export async function startCoupleCall(
   calleeUid: string,
   kind: CoupleCallKind,
   offer: RTCSessionDescriptionInit,
+  isCurrent: () => boolean = () => true,
 ) {
   const ref = coupleRef(coupleId);
   const cleanOffer = cleanDescription(offer);
   await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(ref);
+    if (!isCurrent()) throw new Error('call-cancelled');
     if (!snapshot.exists()) throw new Error('couple-not-found');
 
     const existing = normalizeSignal(snapshot.data()?.activeCall);
@@ -151,11 +153,13 @@ export async function answerCoupleCall(
   callId: string,
   calleeUid: string,
   answer: RTCSessionDescriptionInit,
+  isCurrent: () => boolean = () => true,
 ) {
   const ref = coupleRef(coupleId);
   const cleanAnswer = cleanDescription(answer);
   await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(ref);
+    if (!isCurrent()) throw new Error('call-cancelled');
     if (!snapshot.exists()) throw new Error('couple-not-found');
     const current = normalizeSignal(snapshot.data()?.activeCall);
     if (!current || current.callId !== callId || current.calleeUid !== calleeUid) throw new Error('call-expired');
