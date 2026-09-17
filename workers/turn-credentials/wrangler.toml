@@ -1,0 +1,10 @@
+name = "danduli-turn-credentials"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+FIREBASE_PROJECT_ID = "meluni-f4e00"
+TURN_KEY_ID = "8df471a8892b5c3d1bc4a59a39d2b661"
+
+# Register TURN_API_TOKEN with `wrangler secret put TURN_API_TOKEN`.
+# Never store the token in this file or in the repository.

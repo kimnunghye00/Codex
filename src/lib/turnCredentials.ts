@@ -21,9 +21,11 @@ export async function loadTurnIceServers(coupleId: string): Promise<RTCIceServer
     const user = auth.currentUser;
     if (!user || !coupleId) return [];
     const token = await user.getIdToken();
-    const response = await fetch('/api/turn-credentials', {
+    const configuredEndpoint = String(import.meta.env.VITE_TURN_CREDENTIALS_URL || '').trim();
+    const endpoint = configuredEndpoint || '/api/turn-credentials';
+    const response = await fetch(endpoint, {
       method: 'POST',
-      credentials: 'same-origin',
+      credentials: configuredEndpoint ? 'omit' : 'same-origin',
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
