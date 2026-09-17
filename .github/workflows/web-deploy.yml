@@ -55,6 +55,8 @@ jobs:
         run: npm run test:security
 
       - name: Build web app
+        env:
+          VITE_TURN_CREDENTIALS_URL: ${{ vars.VITE_TURN_CREDENTIALS_URL }}
         run: npm run build
 
       - name: Verify PWA files

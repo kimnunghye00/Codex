@@ -1,50 +1,24 @@
 import { auth } from './firebaseAuth';
+import { createTurnCredentialClient } from './turnCredentialClient';
 
-let cached: { iceServers: RTCIceServer[]; expiresAt: number } | null = null;
-let inflight: Promise<RTCIceServer[]> | null = null;
+const client = createTurnCredentialClient({ getUser: () => auth.currentUser });
 
-function validIceServers(value: unknown): RTCIceServer[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((server): server is RTCIceServer => {
-    if (!server || typeof server !== 'object' || !('urls' in server)) return false;
-    const rawUrls = (server as { urls?: unknown }).urls;
-    const urls: unknown[] = Array.isArray(rawUrls) ? rawUrls : [rawUrls];
-    return urls.length > 0 && urls.every((url) => typeof url === 'string' && /^(stun|turn|turns):/.test(url));
-  });
+export function clearTurnIceServers() {
+  client.clear();
+  document.documentElement.dataset.danduliTurnReady = '0';
 }
 
 export async function loadTurnIceServers(coupleId: string): Promise<RTCIceServer[]> {
-  if (cached && cached.expiresAt > Date.now() + 5 * 60_000) return cached.iceServers;
-  if (inflight) return inflight;
-
-  inflight = (async () => {
-    const user = auth.currentUser;
-    if (!user || !coupleId) return [];
-    const token = await user.getIdToken();
-    const configuredEndpoint = String(import.meta.env.VITE_TURN_CREDENTIALS_URL || '').trim();
-    const endpoint = configuredEndpoint || '/api/turn-credentials';
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      credentials: configuredEndpoint ? 'omit' : 'same-origin',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ coupleId }),
-    });
-    if (!response.ok) throw new Error(`turn-credentials-${response.status}`);
-    const payload = await response.json() as { iceServers?: unknown; expiresIn?: unknown };
-    const iceServers = validIceServers(payload.iceServers);
-    if (!iceServers.some((server) => {
-      const urls = Array.isArray(server.urls) ? server.urls : [server.urls];
-      return urls.some((url) => url.startsWith('turn:') || url.startsWith('turns:'));
-    })) throw new Error('turn-credentials-invalid');
-
-    const expiresIn = Math.max(600, Math.min(3600, Number(payload.expiresIn) || 3600));
-    cached = { iceServers, expiresAt: Date.now() + expiresIn * 1000 };
-    document.documentElement.dataset.danduliTurnReady = '1';
-    return iceServers;
-  })().finally(() => { inflight = null; });
-
-  return inflight;
+  const endpoint = String(import.meta.env.VITE_TURN_CREDENTIALS_URL || '').trim();
+  if (endpoint && !/^https:\/\//.test(endpoint) && !/^\/(?!\/)/.test(endpoint)) {
+    throw new Error('turn-credentials-insecure-url');
+  }
+  try {
+    const servers = await client.load(coupleId, endpoint);
+    document.documentElement.dataset.danduliTurnReady = servers.length ? '1' : '0';
+    return servers;
+  } catch (cause) {
+    document.documentElement.dataset.danduliTurnReady = '0';
+    throw cause;
+  }
 }
