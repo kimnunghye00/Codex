@@ -1,7 +1,9 @@
 import { onAuthStateChanged } from 'firebase/auth';
 import { PERSISTENT_STATE_CHANGE_EVENT } from '../utils/persistenceSignal';
-import { auth } from './firebase';
-import { saveBackupValue } from './persistentBackup';
+import { auth } from './firebaseAuth';
+import { prepareUserLocalStateBackup, saveBackupValue } from './persistentBackup';
+import { createBackupCoordinator } from './backupCoordinator';
+import { readLocalStateBackup } from './localStateBackup';
 
 const DEBOUNCE_MS = 1_500;
 const STARTUP_FLUSH_MS = 4_000;
@@ -9,32 +11,31 @@ const SAFETY_INTERVAL_MS = 120_000;
 
 let initialized = false;
 let activeUid = '';
-let dirty = false;
+let authGeneration = 0;
 let flushTimer: number | undefined;
 let safetyTimer: number | undefined;
-let running = false;
-let rerun = false;
-let lastLocalState = '';
-
-function localStateKeys(uid: string) {
-  return [
-    `route-scheduled-chat:${uid}`,
-    `route-date-plans:${uid}`,
-    `route-local-schedules:${uid}`,
-    `meluni-location-visits:${uid}`,
-    `meluni-location-sharing:${uid}`,
-    'route.memories.deleted.v1',
-  ];
+function reportError(error: unknown) {
+  // Diagnostics must never turn a handled storage/network failure into an
+  // unhandled rejection when localStorage is full or temporarily unavailable.
+  try {
+    localStorage.setItem('route.backup.lastError', error instanceof Error ? error.message : String(error));
+  } catch { /* best-effort diagnostic only */ }
+  console.error('[ROUTE efficient backup]', error);
 }
 
-function readLocalState(uid: string) {
-  const result: Record<string, string> = {};
-  for (const key of localStateKeys(uid)) {
-    const value = localStorage.getItem(key);
-    if (value !== null) result[key] = value;
-  }
-  return result;
-}
+const coordinator = createBackupCoordinator({
+  currentUid: () => auth.currentUser?.uid ?? '',
+  read: (uid) => readLocalStateBackup(uid, localStorage),
+  save: (uid, value) => saveBackupValue(uid, 'local-state-latest', value),
+  onSuccess: () => {
+    try {
+      localStorage.setItem('route.backup.lastSuccess', new Date().toISOString());
+      localStorage.removeItem('route.backup.lastError');
+    } catch { /* best-effort diagnostic only */ }
+  },
+  onError: reportError,
+  schedule: (delay) => scheduleFlush(delay),
+});
 
 function clearFlushTimer() {
   if (flushTimer !== undefined) window.clearTimeout(flushTimer);
@@ -43,68 +44,49 @@ function clearFlushTimer() {
 
 function scheduleFlush(delay = DEBOUNCE_MS) {
   if (!activeUid) return;
-  dirty = true;
   clearFlushTimer();
+  const generation = authGeneration;
   flushTimer = window.setTimeout(() => {
     flushTimer = undefined;
-    if (document.visibilityState === 'hidden') return;
-    void flushBackup();
+    if (generation !== authGeneration || document.visibilityState === 'hidden') return;
+    void coordinator.flush();
   }, delay);
 }
 
-async function flushBackup(force = false) {
-  const uid = activeUid;
-  if (!uid || auth.currentUser?.uid !== uid) return;
-  if (running) {
-    rerun = true;
-    return;
-  }
-
-  const localStateSnapshot = JSON.stringify(readLocalState(uid));
-  const localStateChanged = localStateSnapshot !== lastLocalState;
-
-  if (!force && !dirty && !localStateChanged) return;
-  if (!localStateChanged) {
-    dirty = false;
-    return;
-  }
-
-  running = true;
-  try {
-    await saveBackupValue(uid, 'local-state-latest', JSON.parse(localStateSnapshot) as Record<string, string>);
-    lastLocalState = localStateSnapshot;
-    dirty = false;
-    localStorage.setItem('route.backup.lastSuccess', new Date().toISOString());
-    localStorage.removeItem('route.backup.lastError');
-  } catch (error) {
-    dirty = true;
-    localStorage.setItem('route.backup.lastError', error instanceof Error ? error.message : String(error));
-    console.error('[ROUTE efficient backup]', error);
-  } finally {
-    running = false;
-    if (rerun) {
-      rerun = false;
-      scheduleFlush(500);
-    }
-  }
-}
-
 function resetForUser(uid: string) {
+  const generation = ++authGeneration;
   activeUid = uid;
-  dirty = Boolean(uid);
-  lastLocalState = uid ? JSON.stringify(readLocalState(uid)) : '';
+  coordinator.clear();
   clearFlushTimer();
   if (safetyTimer !== undefined) window.clearInterval(safetyTimer);
   safetyTimer = undefined;
 
   if (!uid) return;
-  flushTimer = window.setTimeout(() => {
-    flushTimer = undefined;
-    void flushBackup(true);
-  }, STARTUP_FLUSH_MS);
-  safetyTimer = window.setInterval(() => {
-    if (document.visibilityState === 'visible' && dirty) void flushBackup();
-  }, SAFETY_INTERVAL_MS);
+  let preparationFailures = 0;
+  const current = () => generation === authGeneration && auth.currentUser?.uid === uid;
+  const prepare = async () => {
+    try {
+      const { cloudState, changed } = await prepareUserLocalStateBackup(uid);
+      if (!current()) return;
+      coordinator.activate(uid, cloudState);
+      scheduleFlush(STARTUP_FLUSH_MS);
+      safetyTimer = window.setInterval(() => {
+        if (current() && document.visibilityState === 'visible' && coordinator.pending()) void coordinator.flush();
+      }, SAFETY_INTERVAL_MS);
+      if (changed) window.dispatchEvent(new Event('route-backup-restored'));
+    } catch (error) {
+      if (!current()) return;
+      reportError(error);
+      preparationFailures += 1;
+      // Do not overwrite the cloud with an empty/partial local state when the
+      // initial restore failed. Retry preparation with bounded backoff first.
+      flushTimer = window.setTimeout(() => {
+        flushTimer = undefined;
+        if (current()) void prepare();
+      }, Math.min(120_000, 2000 * 2 ** Math.min(6, preparationFailures - 1)));
+    }
+  };
+  void prepare();
 }
 
 export function startEfficientPersistentBackup() {
@@ -112,27 +94,30 @@ export function startEfficientPersistentBackup() {
   initialized = true;
 
   onAuthStateChanged(auth, (user) => resetForUser(user?.uid ?? ''));
-  window.addEventListener(PERSISTENT_STATE_CHANGE_EVENT, () => scheduleFlush());
+  window.addEventListener(PERSISTENT_STATE_CHANGE_EVENT, () => {
+    coordinator.markDirty();
+    if (coordinator.pending()) scheduleFlush();
+  });
 
   document.addEventListener('visibilitychange', () => {
     if (!activeUid) return;
     if (document.visibilityState === 'hidden') {
-      clearFlushTimer();
-      void flushBackup(true);
-    } else if (dirty) {
+      if (coordinator.pending()) clearFlushTimer();
+      void coordinator.flush();
+    } else if (coordinator.pending()) {
       scheduleFlush(500);
     }
   });
 
   window.addEventListener('route-app-pause', () => {
-    clearFlushTimer();
-    if (activeUid) void flushBackup(true);
+    if (coordinator.pending()) clearFlushTimer();
+    if (activeUid) void coordinator.flush();
   });
   window.addEventListener('route-app-resume', () => {
-    if (dirty) scheduleFlush(500);
+    if (coordinator.pending()) scheduleFlush(500);
   });
   window.addEventListener('pagehide', () => {
-    clearFlushTimer();
-    if (activeUid) void flushBackup(true);
+    if (coordinator.pending()) clearFlushTimer();
+    if (activeUid) void coordinator.flush();
   });
 }
