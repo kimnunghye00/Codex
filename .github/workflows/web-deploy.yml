@@ -56,7 +56,7 @@ jobs:
 
       - name: Build web app
         env:
-          VITE_TURN_CREDENTIALS_URL: ${{ vars.VITE_TURN_CREDENTIALS_URL }}
+          VITE_TURN_CREDENTIALS_URL: ${{ vars.VITE_TURN_CREDENTIALS_URL || 'https://codex.kimnunghye00.workers.dev' }}
         run: npm run build
 
       - name: Verify PWA files

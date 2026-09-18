@@ -14,6 +14,7 @@ Cloudflare Git 자동 빌드는 저장소 루트의 `wrangler.toml`을 사용해
 배포 후 GitHub 저장소의 Actions 변수 `VITE_TURN_CREDENTIALS_URL`에 Worker의 공개 HTTPS 주소를 등록합니다.
 웹 배포 워크플로가 이 변수를 빌드에 전달합니다. 로컬/네이티브 빌드에도 같은 환경 변수를 설정해야 합니다.
 API 토큰은 이 변수나 `VITE_` 변수에 넣지 마세요.
+변수를 따로 지정하지 않으면 웹 배포는 운영 주소 `https://codex.kimnunghye00.workers.dev`를 사용합니다.
 
 주소가 비어 있으면 TURN 서버 호출을 건너뛰고 직접 연결만 시도합니다. 이 경우 서로 다른 제한된 네트워크 사이의 통화는 여전히 실패할 수 있습니다.
 Firebase Hosting 기본 설정에서 미배포 Functions 재작성 규칙을 제거했으며, `functions/`의 이전 대안은 자동 배포되지 않습니다.
