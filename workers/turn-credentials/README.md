@@ -6,6 +6,11 @@ Cloudflare TURN API 토큰을 브라우저에 노출하지 않고 단기 WebRTC 
 
 - `TURN_API_TOKEN`: Cloudflare TURN 앱 생성 시 발급된 API 토큰
 
+Cloudflare Git 자동 빌드는 저장소 루트의 `wrangler.toml`을 사용해 기존
+`codex` Worker를 배포합니다. 수동 명령을 실행할 때도 저장소 루트에서
+`npx wrangler deploy`를 사용하세요. 하위 폴더의 설정은 독립 배포나 로컬
+검증용이며, 운영 자동 빌드의 진입점은 루트 설정입니다.
+
 배포 후 GitHub 저장소의 Actions 변수 `VITE_TURN_CREDENTIALS_URL`에 Worker의 공개 HTTPS 주소를 등록합니다.
 웹 배포 워크플로가 이 변수를 빌드에 전달합니다. 로컬/네이티브 빌드에도 같은 환경 변수를 설정해야 합니다.
 API 토큰은 이 변수나 `VITE_` 변수에 넣지 마세요.
