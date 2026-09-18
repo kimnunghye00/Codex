@@ -159,7 +159,7 @@ function recordMigrationDiagnostic(candidate: Candidate, attempt: number, code: 
       { at: new Date().toISOString(), messageId: candidate.message.id, mediaIndex: candidate.index, attempt, code },
     ];
     sessionStorage.setItem(DIAGNOSTIC_KEY, JSON.stringify(next));
-  } catch {}
+  } catch { /* Diagnostic storage failure must not stop media conversion. */ }
 }
 
 function nextCandidate(state: RoomState, now = Date.now()): Candidate | undefined {
@@ -310,10 +310,6 @@ export function migrateLoadedLegacyChatMedia(coupleId: string, ownerUid: string,
 
   rooms.set(key, state);
   if (state.requested.size > 0) schedulePump(state, 0);
-}
-
-export async function startLegacyChatMediaMigration(_coupleId: string, _ownerUid: string) {
-  return Promise.resolve();
 }
 
 export function releaseLegacyChatMediaRoom(coupleId: string, ownerUid: string) {

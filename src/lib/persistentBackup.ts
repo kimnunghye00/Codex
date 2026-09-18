@@ -1,10 +1,11 @@
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { doc, getDoc, getDocFromServer, serverTimestamp, setDoc } from 'firebase/firestore';
 import { PERSISTENT_STATE_CHANGE_EVENT } from '../utils/persistenceSignal';
 import {
   type MemoryDeletionMap,
 } from '../utils/storage';
 import { auth, db } from './firebase';
+import { readLocalStateBackup, validLocalStateBackup, type LocalStateBackup } from './localStateBackup';
 
 const KEEP_POLICY = 'keep-until-user-deletes';
 const RESTORED_SESSION_KEY = 'route.backup.restored.uid';
@@ -18,8 +19,6 @@ type BackupEnvelope<T> = {
   retentionPolicy?: string;
   sourceDeviceId?: string;
 };
-
-type LocalStateBackup = Record<string, string>;
 
 let activeUid = '';
 let backupTimer: number | undefined;
@@ -39,23 +38,8 @@ function backupRef(uid: string, key: string) {
 
 
 
-function localStateKeys(uid: string) {
-  return [
-    `route-scheduled-chat:${uid}`,
-    `route-date-plans:${uid}`,
-    `route-local-schedules:${uid}`,
-    `meluni-location-visits:${uid}`,
-    `meluni-location-sharing:${uid}`,
-  ];
-}
-
 function readLocalState(uid: string): LocalStateBackup {
-  const result: LocalStateBackup = {};
-  localStateKeys(uid).forEach((key) => {
-    const value = localStorage.getItem(key);
-    if (value !== null) result[key] = value;
-  });
-  return result;
+  return readLocalStateBackup(uid, localStorage);
 }
 
 
@@ -67,12 +51,13 @@ export async function saveBackupValue<T>(uid: string, key: string, value: T) {
     value,
     updatedAt: serverTimestamp(),
     retentionPolicy: KEEP_POLICY,
-  } satisfies BackupEnvelope<T>, { merge: true });
+  } satisfies BackupEnvelope<T>, { mergeFields: ['value', 'updatedAt', 'retentionPolicy'] });
 }
 
 export async function loadBackupValue<T>(uid: string, key: string): Promise<T | undefined> {
   if (!uid) return undefined;
-  const snapshot = await getDoc(backupRef(uid, key));
+  // A stale offline snapshot cannot establish a safe baseline for replacement.
+  const snapshot = await getDocFromServer(backupRef(uid, key));
   if (!snapshot.exists()) return undefined;
   return (snapshot.data() as BackupEnvelope<T>).value;
 }
@@ -80,7 +65,7 @@ export async function loadBackupValue<T>(uid: string, key: string): Promise<T | 
 
 
 
-export async function restoreCoreBackup(_uid: string) {
+export async function restoreCoreBackup() {
   // Chat and couple memories are now restored by their realtime Firestore
   // collections. Reading legacy "messages-latest" / "memories-live" documents
   // here could pull old base64 media into memory a second time and crash Chrome.
@@ -104,17 +89,20 @@ async function waitForInitialAuth(): Promise<User | null> {
 }
 
 async function restoreIntoLocalStorage(uid: string) {
+  const expectedUser = auth.currentUser;
+  if (expectedUser?.uid !== uid) throw new Error('backup-user-changed');
   const [localState, userSnapshot] = await Promise.all([
     loadBackupValue<LocalStateBackup>(uid, 'local-state-latest'),
     getDoc(doc(db, 'users', uid)),
   ]);
 
-  if (auth.currentUser?.uid !== uid) return false;
+  if (auth.currentUser !== expectedUser) throw new Error('backup-user-changed');
 
   let changed = false;
+  const cloudState = validLocalStateBackup(uid, localState);
 
   if (localState) {
-    Object.entries(localState).forEach(([key, value]) => {
+    Object.entries(cloudState).forEach(([key, value]) => {
       if (localStorage.getItem(key) === null && typeof value === 'string') {
         localStorage.setItem(key, value);
         changed = true;
@@ -132,7 +120,23 @@ async function restoreIntoLocalStorage(uid: string) {
   }
 
   lastLocalStateSnapshot = JSON.stringify(readLocalState(uid));
-  return changed;
+  return { changed, cloudState };
+}
+
+let prepared: { user: User; promise: ReturnType<typeof restoreIntoLocalStorage> } | null = null;
+
+// Share startup restoration with the efficient writer. Rejected restoration is
+// never treated as an empty cloud backup, and may be retried after reconnecting.
+export function prepareUserLocalStateBackup(uid: string) {
+  const user = auth.currentUser;
+  if (!user || user.uid !== uid) return Promise.reject(new Error('backup-user-changed'));
+  if (prepared?.user === user) return prepared.promise;
+  const promise = restoreIntoLocalStorage(uid).catch((error) => {
+    if (prepared?.promise === promise) prepared = null;
+    throw error;
+  });
+  prepared = { user, promise };
+  return promise;
 }
 
 async function backupCurrentLocalState(uid: string) {
@@ -185,7 +189,7 @@ export async function preparePersistentBackup() {
   const user = await waitForInitialAuth();
   if (!user) return;
   try {
-    await restoreIntoLocalStorage(user.uid);
+    await prepareUserLocalStateBackup(user.uid);
     if (auth.currentUser?.uid === user.uid) sessionStorage.setItem(RESTORED_SESSION_KEY, user.uid);
   } catch (error) {
     console.warn('[ROUTE backup restore]', error);
@@ -234,7 +238,7 @@ export function startPersistentBackup() {
     }
 
     void restoreIntoLocalStorage(uid)
-      .then((changed) => {
+      .then(({ changed }) => {
         if (generation !== authGeneration || auth.currentUser?.uid !== uid) return;
         sessionStorage.setItem(RESTORED_SESSION_KEY, uid);
         schedule(uid, generation);

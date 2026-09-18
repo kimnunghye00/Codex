@@ -99,7 +99,7 @@ function flushPendingState() {
     // The legacy per-account album synchronizer was retired after memories
     // moved to the couple-scoped realtime collection. Clear its old pending
     // marker instead of loading a second, duplicate album sync pipeline.
-    try { localStorage.removeItem(ALBUM_PENDING_KEY); } catch {}
+    try { localStorage.removeItem(ALBUM_PENDING_KEY); } catch { /* Retired sync marker cleanup is best-effort when storage is blocked. */ }
   }
   try { signalPersistentStateChange(); } catch (error) { console.warn('[ROUTE reconnect backup]', error); }
   window.dispatchEvent(new Event('route-network-restored'));
@@ -112,7 +112,7 @@ function recoverRestoredBackup() {
   try {
     if (sessionStorage.getItem(key) === '1') return;
     sessionStorage.setItem(key, '1');
-  } catch {}
+  } catch { /* Storage may be blocked; still attempt to show the restored data. */ }
 
   window.setTimeout(() => window.location.reload(), 80);
 }
@@ -123,7 +123,7 @@ function clearRecoveryReloadMarkers() {
       const key = sessionStorage.key(index);
       if (key?.startsWith(RECOVERY_RELOAD_PREFIX)) sessionStorage.removeItem(key);
     }
-  } catch {}
+  } catch { /* Session marker cleanup cannot prevent sign-out recovery. */ }
 }
 
 function localDataOwner() {
@@ -161,24 +161,24 @@ function setLocalDataOwner(uid: string) {
   try {
     if (rawStorageSetItem) rawStorageSetItem.call(localStorage, LOCAL_DATA_OWNER_KEY, uid);
     else localStorage.setItem(LOCAL_DATA_OWNER_KEY, uid);
-  } catch {}
+  } catch { /* If storage is blocked, the next startup must re-evaluate ownership. */ }
 }
 
 async function clearFirestoreAndReload(marker: string) {
   if (accountResetInProgress) return;
   accountResetInProgress = true;
-  try { sessionStorage.setItem(ACCOUNT_SWITCH_RELOAD_KEY, marker); } catch {}
+  try { sessionStorage.setItem(ACCOUNT_SWITCH_RELOAD_KEY, marker); } catch { /* Reload remains necessary even if its session marker cannot be stored. */ }
   try {
     const { clearFirestoreCacheForAccountReset } = await import('./lib/firestoreCacheReset');
     await clearFirestoreCacheForAccountReset();
-  } catch {}
+  } catch { /* Cache reset may fail with active tabs; reload still drops in-memory state. */ }
   window.location.reload();
 }
 
 async function applyAccountIsolation(uid: string | null, markInitialReady: () => void) {
   if (!uid) {
     clearRecoveryReloadMarkers();
-    try { sessionStorage.removeItem(ACCOUNT_SWITCH_RELOAD_KEY); } catch {}
+    try { sessionStorage.removeItem(ACCOUNT_SWITCH_RELOAD_KEY); } catch { /* An unavailable session store must not prevent sign-out. */ }
   }
 
   const previousOwner = localDataOwner();

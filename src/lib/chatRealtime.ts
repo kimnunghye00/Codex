@@ -1,7 +1,8 @@
 import { collection, deleteDoc, doc, limitToLast, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Message, Reaction } from '../types';
-import { startLegacyChatMediaMigration } from './chatMediaMigration';
+import { mergePagedSnapshot, messageTimeValue } from './messageSnapshot';
+import { createUiTaskScope } from '../utils/uiTaskScope';
 
 type CloudReaction = { emoji: string; uid: string };
 type MessageStateSink = (value: Message[] | ((current: Message[]) => Message[])) => void;
@@ -102,66 +103,6 @@ function toMessage(snapshotDoc: { id: string; data: () => unknown }, currentUid:
   } satisfies Message;
 }
 
-function messageTimeValue(message: Message) {
-  const parsed = Date.parse(message.timestamp);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function messageRenderSignature(message: Message) {
-  return JSON.stringify({
-    id: message.id,
-    sender: message.sender,
-    type: message.type,
-    text: message.text ?? '',
-    imageUrl: message.imageUrl ?? '',
-    imageUrls: message.imageUrls ?? [],
-    stickerId: message.stickerId ?? '',
-    attachmentUrl: message.attachmentUrl ?? '',
-    attachmentName: message.attachmentName ?? '',
-    attachmentSize: message.attachmentSize ?? 0,
-    attachmentMime: message.attachmentMime ?? '',
-    audioDuration: message.audioDuration ?? 0,
-    contactName: message.contactName ?? '',
-    contactPhone: message.contactPhone ?? '',
-    callId: message.callId ?? '',
-    callKind: message.callKind ?? '',
-    callStatus: message.callStatus ?? '',
-    callDuration: message.callDuration ?? 0,
-    timestamp: message.timestamp ?? '',
-    read: message.read ?? false,
-    replyTo: message.replyTo ?? null,
-    reactions: message.reactions ?? [],
-    saved: message.saved ?? false,
-    scheduledFor: message.scheduledFor ?? '',
-  });
-}
-
-function sameMessageList(first: Message[], second: Message[]) {
-  if (first.length !== second.length) return false;
-  for (let index = 0; index < first.length; index += 1) {
-    if (messageRenderSignature(first[index]) !== messageRenderSignature(second[index])) return false;
-  }
-  return true;
-}
-
-function mergePagedSnapshot(current: Message[], incoming: Message[]) {
-  if (!incoming.length) return current.length ? [] : current;
-  const incomingIds = new Set(incoming.map((message) => message.id));
-  const earliestIncoming = messageTimeValue(incoming[0]);
-
-  // The live query owns its visible time range. Preserve only a small page of
-  // messages older than that range so cached/previously paged history does not
-  // disappear merely because the latest-window boundary moved forward.
-  const preservedOlder = current
-    .filter((message) => !incomingIds.has(message.id) && messageTimeValue(message) < earliestIncoming)
-    .slice(-CHAT_PAGE_STEP);
-
-  const deduped = new Map<number, Message>();
-  [...preservedOlder, ...incoming].forEach((message) => deduped.set(message.id, message));
-  const next = [...deduped.values()].sort((a, b) => messageTimeValue(a) - messageTimeValue(b));
-  return sameMessageList(current, next) ? current : next;
-}
-
 export function subscribeCoupleMessages(
   coupleId: string,
   currentUid: string,
@@ -174,7 +115,7 @@ export function subscribeCoupleMessages(
   let requestedCount = Math.max(1, pageSize, chatWindowSizeByRoom.get(roomKey) ?? 0);
   let lastSnapshotCount = 0;
   let snapshotUnsubscribe: (() => void) | undefined;
-  let clearStateUnsubscribe: (() => void) | undefined;
+  let queryGeneration = 0;
   let clearStateReady = false;
   let clearedBeforeIso = '';
   try {
@@ -187,14 +128,20 @@ export function subscribeCoupleMessages(
   let previousHeight = 0;
   let previousTop = 0;
   let attachTimer: number | undefined;
-  let migrationTimer: number | undefined;
+  let restoringScroll = false;
+  const scrollTasks = createUiTaskScope();
+  const cancelScrollRestoration = () => {
+    scrollTasks.clear();
+    restoringScroll = false;
+  };
 
   chatWindowSizeByRoom.set(roomKey, requestedCount);
 
   const restoreScrollPosition = () => {
-    if (!messageScroller || !loadingOlder) return;
+    if (!messageScroller || !loadingOlder || restoringScroll) return;
+    restoringScroll = true;
     const restore = () => {
-      if (!messageScroller) return;
+      if (disposed || !messageScroller || !loadingOlder) return;
       const addedHeight = Math.max(0, messageScroller.scrollHeight - previousHeight);
       messageScroller.scrollTop = previousTop + addedHeight;
     };
@@ -202,19 +149,21 @@ export function subscribeCoupleMessages(
     // ChatPage also scrolls to the newest message when its list grows. Re-apply
     // the preserved position after that animation window so loading history does
     // not throw the user back to the bottom.
-    requestAnimationFrame(() => requestAnimationFrame(restore));
-    window.setTimeout(restore, 90);
-    window.setTimeout(restore, 240);
-    window.setTimeout(restore, 450);
-    window.setTimeout(() => {
+    scrollTasks.frame(() => scrollTasks.frame(restore));
+    scrollTasks.delay(restore, 90);
+    scrollTasks.delay(restore, 240);
+    scrollTasks.delay(restore, 450);
+    scrollTasks.delay(() => {
       restore();
       loadingOlder = false;
+      restoringScroll = false;
       messageScroller?.removeAttribute('data-history-loading');
     }, 700);
   };
 
   const listen = () => {
     if (!clearStateReady || disposed) return;
+    const generation = ++queryGeneration;
     snapshotUnsubscribe?.();
     const messageCollection = collection(db, 'couples', coupleId, 'messages');
     const q = clearedBeforeIso
@@ -230,13 +179,16 @@ export function subscribeCoupleMessages(
         limitToLast(requestedCount),
       );
     snapshotUnsubscribe = onSnapshot(q, (snapshot) => {
+      if (disposed || generation !== queryGeneration) return;
       lastSnapshotCount = snapshot.size;
       const incoming = snapshot.docs
         .map((snapshotDoc) => toMessage(snapshotDoc, currentUid))
         .filter((message): message is Message => Boolean(message));
-      onMessages((current) => mergePagedSnapshot(current, incoming));
+      onMessages((current) => mergePagedSnapshot(current, incoming, CHAT_PAGE_STEP));
       if (loadingOlder) restoreScrollPosition();
     }, (error) => {
+      if (disposed || generation !== queryGeneration) return;
+      cancelScrollRestoration();
       loadingOlder = false;
       messageScroller?.removeAttribute('data-history-loading');
       onError?.(error);
@@ -268,13 +220,15 @@ export function subscribeCoupleMessages(
       return;
     }
     if (messageScroller === next) return;
+    cancelScrollRestoration();
     messageScroller?.removeEventListener('scroll', handleScroll);
     messageScroller = next;
     messageScroller.addEventListener('scroll', handleScroll, { passive: true });
   };
 
   const userRef = doc(db, 'users', currentUid);
-  clearStateUnsubscribe = onSnapshot(userRef, (snapshot) => {
+  const clearStateUnsubscribe = onSnapshot(userRef, (snapshot) => {
+    if (disposed) return;
     const data = snapshot.data() as UserChatState | undefined;
     const remoteClear = normalizeClearIso(data?.chatClearBefore?.[coupleId]);
     const nextClear = latestClearIso(clearedBeforeIso, remoteClear);
@@ -292,6 +246,7 @@ export function subscribeCoupleMessages(
     const firstReady = !clearStateReady;
     clearStateReady = true;
     if (changed) {
+      cancelScrollRestoration();
       const cutoff = Date.parse(clearedBeforeIso);
       onMessages((current) => current.filter((message) => messageTimeValue(message) > cutoff));
       requestedCount = Math.max(1, pageSize);
@@ -301,6 +256,7 @@ export function subscribeCoupleMessages(
     }
     if (firstReady || changed) listen();
   }, (error) => {
+    if (disposed) return;
     console.warn('[ROUTE chat clear state]', error);
     if (clearStateReady) return;
     clearStateReady = true;
@@ -309,23 +265,15 @@ export function subscribeCoupleMessages(
 
   attachTimer = window.setTimeout(() => attachScroller(), 0);
 
-  // Give the room its first paint and live-message snapshot before the one-time
-  // historical conversion begins. Migration runs sequentially in the background:
-  // originals are read once, tiny previews are uploaded, and Firestore updates
-  // cause this same listener to replace placeholders with compressed photos.
-  migrationTimer = window.setTimeout(() => {
-    void startLegacyChatMediaMigration(coupleId, currentUid).catch((error) => {
-      console.warn('[ROUTE chat media migration]', error);
-    });
-  }, 900);
-
   return () => {
     disposed = true;
+    cancelScrollRestoration();
     snapshotUnsubscribe?.();
     clearStateUnsubscribe?.();
     if (attachTimer) window.clearTimeout(attachTimer);
-    if (migrationTimer) window.clearTimeout(migrationTimer);
     messageScroller?.removeEventListener('scroll', handleScroll);
+    messageScroller?.removeAttribute('data-history-loading');
+    messageScroller = null;
     chatWindowSizeByRoom.delete(roomKey);
   };
 }

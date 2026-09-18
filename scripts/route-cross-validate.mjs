@@ -185,7 +185,7 @@ check('Android WebView uses adjustResize', manifest.includes('android:windowSoft
 check('Android backup is disabled', manifest.includes('android:allowBackup="false"'));
 check('launcher icon aliases remain configured', ['RouteDefaultIcon', 'RouteHeartIcon', 'RouteNightIcon', 'RouteCreamIcon'].every((name) => manifest.includes(name)));
 
-check('package exposes runtime gate', pkg.scripts?.['stability:runtime'] === 'node --experimental-strip-types --test tests/route-runtime.test.ts');
+check('package exposes runtime gate', pkg.scripts?.['stability:runtime'] === 'node --experimental-strip-types --test tests/*runtime.test.ts');
 check('package exposes flow gate', pkg.scripts?.['stability:flow'] === 'node scripts/route-flow-smoke.mjs');
 check('package exposes native gate', pkg.scripts?.['stability:native'] === 'node scripts/route-native-smoke.mjs');
 check('package exposes cross gate', pkg.scripts?.['stability:cross'] === 'node scripts/route-cross-validate.mjs');
