@@ -23,6 +23,18 @@ export type CoupleInviteState = CoupleInvite & {
 };
 
 const INVITE_TTL = 7 * 24 * 60 * 60 * 1000;
+interface CoupleDoc {
+  memberUids?: string[];
+  testMode?: boolean;
+  nicknames?: Record<string, string>;
+  members?: Record<string, { displayName?: string }>;
+}
+
+interface PartnerDoc {
+  coupleId?: string;
+  partnerUid?: string;
+  profile?: UserProfile;
+}
 const isTestCouple = (coupleId?: string) => Boolean(coupleId?.startsWith('test-'));
 
 function normalizeCode(code: string) {
@@ -74,8 +86,8 @@ function repairCloudProfileOnce(uid: string, cloudProfile: unknown, localProfile
   });
 }
 
-function partnerProfileFromData(coupleData: Record<string, any>, partnerUid: string, partnerData: Record<string, any>): UserProfile | null {
-  const cloudProfile = (partnerData?.profile as UserProfile | undefined) ?? null;
+function partnerProfileFromData(coupleData: CoupleDoc, partnerUid: string, partnerData: PartnerDoc): UserProfile | null {
+  const cloudProfile = partnerData?.profile ?? null;
   const fallbackName = String(coupleData?.members?.[partnerUid]?.displayName ?? '').trim();
   const sharedNickname = String(coupleData?.nicknames?.[partnerUid] ?? '').trim();
   if (cloudProfile) return { ...cloudProfile, nickname: sharedNickname || cloudProfile.nickname };
@@ -87,11 +99,13 @@ function connectionFromData(
   uid: string,
   coupleId: string,
   expectedPartnerUid: string,
-  coupleData: Record<string, any>,
-  partnerData: Record<string, any>,
+  coupleData: CoupleDoc,
+  partnerData: PartnerDoc,
 ): RealCoupleConnection | null {
   if (coupleData?.testMode) return null;
-  const memberUids = (coupleData?.memberUids ?? []) as string[];
+  const memberUids = coupleData?.memberUids;
+  // Firestore data is external input: TypeScript interfaces do not validate it.
+  if (!Array.isArray(memberUids) || !memberUids.every((member) => typeof member === 'string')) return null;
   if (memberUids.length !== 2 || !memberUids.includes(uid) || !memberUids.includes(expectedPartnerUid)) return null;
 
   const partnerUid = memberUids.find((memberUid) => memberUid !== uid);
@@ -189,8 +203,8 @@ export function subscribeRealCoupleConnection(
     const currentGeneration = generation;
     let coupleReady = false;
     let partnerReady = false;
-    let coupleData: Record<string, any> | null = null;
-    let partnerData: Record<string, any> | null = null;
+    let coupleData: CoupleDoc | null = null;
+    let partnerData: PartnerDoc | null = null;
 
     const emit = () => {
       if (currentGeneration !== generation || !coupleReady || !partnerReady) return;

@@ -1,7 +1,6 @@
 import { collection, deleteDoc, doc, limitToLast, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Message, Reaction } from '../types';
-import { startLegacyChatMediaMigration } from './chatMediaMigration';
 import { mergePagedSnapshot, messageTimeValue } from './messageSnapshot';
 import { createUiTaskScope } from '../utils/uiTaskScope';
 
@@ -266,23 +265,12 @@ export function subscribeCoupleMessages(
 
   attachTimer = window.setTimeout(() => attachScroller(), 0);
 
-  // Give the room its first paint and live-message snapshot before the one-time
-  // historical conversion begins. Migration runs sequentially in the background:
-  // originals are read once, tiny previews are uploaded, and Firestore updates
-  // cause this same listener to replace placeholders with compressed photos.
-  const migrationTimer = window.setTimeout(() => {
-    void startLegacyChatMediaMigration(coupleId, currentUid).catch((error) => {
-      console.warn('[ROUTE chat media migration]', error);
-    });
-  }, 900);
-
   return () => {
     disposed = true;
     cancelScrollRestoration();
     snapshotUnsubscribe?.();
     clearStateUnsubscribe?.();
     if (attachTimer) window.clearTimeout(attachTimer);
-    if (migrationTimer) window.clearTimeout(migrationTimer);
     messageScroller?.removeEventListener('scroll', handleScroll);
     messageScroller?.removeAttribute('data-history-loading');
     messageScroller = null;

@@ -38,7 +38,7 @@ function normalizeLocationDateValue(value: unknown): string | undefined {
         const date = candidate.toDate();
         return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
       }
-    } catch {}
+    } catch { /* Invalid Timestamp conversion falls back to its seconds field. */ }
 
     const seconds = Number(candidate.seconds ?? candidate._seconds);
     if (Number.isFinite(seconds)) {

@@ -176,7 +176,7 @@ export async function hideNativeSplash() {
   try {
     const { SplashScreen } = await import('@capacitor/splash-screen');
     await SplashScreen.hide();
-  } catch {}
+  } catch { /* Splash plugin failure must not reject application startup. */ }
 }
 
 export async function ensureCameraPermission() {
@@ -225,7 +225,7 @@ export async function startRouteLocationWatch(
       const id = activeId;
       activeId = undefined;
       if (!id) return;
-      try { await Geolocation.clearWatch({ id }); } catch {}
+      try { await Geolocation.clearWatch({ id }); } catch { /* Best-effort cleanup of a possibly expired native watch. */ }
     };
 
     const startNativeWatch = async () => {
@@ -251,7 +251,7 @@ export async function startRouteLocationWatch(
           },
         );
         if (stopped || suspended) {
-          try { await Geolocation.clearWatch({ id }); } catch {}
+          try { await Geolocation.clearWatch({ id }); } catch { /* A late watch must not reject shutdown if native cleanup fails. */ }
         } else {
           activeId = id;
         }
@@ -355,5 +355,5 @@ export async function nativeImpact() {
   try {
     const { Haptics, ImpactStyle } = await import('@capacitor/haptics');
     await Haptics.impact({ style: ImpactStyle.Light });
-  } catch {}
+  } catch { /* Optional haptic feedback must not interrupt the action. */ }
 }
