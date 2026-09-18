@@ -1,0 +1,10 @@
+name = "codex"
+main = "workers/turn-credentials/src/index.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+FIREBASE_PROJECT_ID = "meluni-f4e00"
+TURN_KEY_ID = "8df471a8892b5c3d1bc4a59a39d2b661"
+
+# Cloudflare Git builds run from the repository root and deploy the existing
+# `codex` service. TURN_API_TOKEN must remain a Worker secret.
