@@ -5,7 +5,6 @@ import type { LocationTabId } from './components/location/LocationPage';
 import type { MoreNavigationTarget } from './components/more/MoreServices';
 import { AppHeader as SharedAppHeader } from './components/navigation/AppHeader';
 import { BottomNav, type AppTab } from './components/navigation/BottomNav';
-import { DanduliCallManager } from './components/call/DanduliCallManager';
 import type { RealCoupleConnection } from './lib/coupleConnection';
 import type { User } from 'firebase/auth';
 import type { Memory, MemoryDraft, Message } from './types';
@@ -231,16 +230,6 @@ function App({ user, profile, onProfileChange }: AppProps) {
       return next;
     });
   }, [user.uid]);
-
-  const addIncomingCallActivity = useCallback((kind: 'voice' | 'video') => {
-    const callerName = connection?.partnerProfile ? displayName(connection.partnerProfile) : '상대방';
-    addActivity({
-      actor: 'partner',
-      kind: 'call',
-      title: kind === 'video' ? `${callerName}님의 영상통화` : `${callerName}님의 전화`,
-      detail: kind === 'video' ? '영상통화가 왔어요.' : '전화가 왔어요.',
-    });
-  }, [addActivity, connection?.partnerProfile]);
 
   useEffect(() => {
     let disposed = false;
@@ -514,8 +503,6 @@ function App({ user, profile, onProfileChange }: AppProps) {
       {tab === 'anniversary' && <AnniversaryPage connected={Boolean(connection)} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} onSaveStartDate={saveStartDate} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'more' && <MorePage onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} onNavigate={navigateMoreTarget} />}
     </Suspense></main><BottomNav tab={tab} onNavigate={navigateTab} /></div>
-
-    <DanduliCallManager currentUid={user.uid} connection={connection} partnerName={connection?.partnerProfile ? displayName(connection.partnerProfile) : '상대방'} onIncomingCall={addIncomingCallActivity} />
 
     <Suspense fallback={null}>
       {settingsOpen && <AccountSettings user={user} profile={profile} onProfileChange={onProfileChange} onClose={() => setSettingsOpen(false)} />}
