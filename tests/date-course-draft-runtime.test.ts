@@ -18,3 +18,33 @@ test('ignores empty IDs and stops at the server-supported 20-place limit', () =>
   assert.equal(appendPlaceToCourse(initial, '   '), initial);
   assert.deepEqual(appendPlaceToCourse(initial.slice(0, -1), '  last-stop  ').at(-1), 'last-stop');
 });
+
+import { courseTimesFromSaved, decodeCourseTimeSlot, encodeCourseTimeSlot, validateCourseTimes } from '../src/lib/dateCourseDraft.ts';
+
+test('legacy courses keep their order and render missing times as undecided', () => {
+  const ids = ['busan', 'pizza', 'beach'];
+  assert.deepEqual(courseTimesFromSaved(ids), {
+    busan: { start: '', end: '' }, pizza: { start: '', end: '' }, beach: { start: '', end: '' },
+  });
+  assert.deepEqual(decodeCourseTimeSlot('garbled'), { start: '', end: '' });
+});
+
+test('editable times round-trip by place ID and follow the stop when reordered', () => {
+  const ids = ['busan', 'pizza', 'beach'];
+  const times = courseTimesFromSaved(ids, ['10:00-11:00', '11:30-13:00', '']);
+  assert.equal(validateCourseTimes(ids, times), null);
+  const reordered = ['pizza', 'busan', 'beach'];
+  const slots = reordered.map((id) => encodeCourseTimeSlot(times[id]));
+  assert.deepEqual(slots, ['11:30-13:00', '10:00-11:00', '']);
+  assert.equal(validateCourseTimes(reordered, times)?.includes('겹쳐요'), true);
+  assert.deepEqual(courseTimesFromSaved(reordered, slots).pizza, times.pizza);
+});
+
+test('incomplete, invalid and reversed time ranges are rejected without inventing times', () => {
+  const ids = ['one', 'two'];
+  assert.equal(encodeCourseTimeSlot({ start: '', end: '' }), '');
+  assert.match(validateCourseTimes(ids, { one: { start: '12:00', end: '' } }) ?? '', /모두 입력/);
+  assert.match(validateCourseTimes(ids, { one: { start: '25:00', end: '26:00' } }) ?? '', /확인/);
+  assert.match(validateCourseTimes(ids, { one: { start: '13:00', end: '12:00' } }) ?? '', /늦어야/);
+  assert.equal(validateCourseTimes(ids, {}), null);
+});

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { CalendarDays, ChevronDown, ChevronUp, Heart, MapPin, MessageCircle, Plus, Search, Trash2, X } from 'lucide-react';
 import { auth } from '../../lib/firebase';
-import { appendPlaceToCourse, MAX_DATE_COURSE_PLACES } from '../../lib/dateCourseDraft';
+import { appendPlaceToCourse, courseTimesFromSaved, encodeCourseTimeSlot, MAX_DATE_COURSE_PLACES, validateCourseTimes, type CourseTimeSlot } from '../../lib/dateCourseDraft';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
 import { reverseGeocode, searchLocations, type LocationSearchResult } from '../../utils/location';
 import {
@@ -68,6 +68,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const [courseTitle, setCourseTitle] = useState('');
   const [courseDate, setCourseDate] = useState(dateToday);
   const [coursePlaceIds, setCoursePlaceIds] = useState<string[]>([]);
+  const [courseTimes, setCourseTimes] = useState<Record<string, CourseTimeSlot>>({});
   const [choiceId, setChoiceId] = useState('');
   const [message, setMessage] = useState('');
   const [pending, setPending] = useState(false);
@@ -87,7 +88,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const visible = useMemo(() => places.filter((item) => category === ALL || item.category === category), [places, category]);
 
   useEffect(() => {
-    setPlaces([]); setCourses([]); setSelectedId(''); setCourseId(''); setLikes([]); setOpinions([]);
+    setPlaces([]); setCourses([]); setSelectedId(''); setCourseId(''); setCourseTimes({}); setLikes([]); setOpinions([]);
     if (!coupleId) return;
     const stopPlaces = subscribeDatePlaces(coupleId, setPlaces, (error) => setMessage(errorText(error)));
     const stopCourses = subscribeDateCourses(coupleId, setCourses, (error) => setMessage(errorText(error)));
@@ -110,6 +111,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   useEffect(() => {
     if (!course) return;
     setCourseTitle(course.title); setCourseDate(course.date); setCoursePlaceIds(course.placeIds);
+    setCourseTimes(courseTimesFromSaved(course.placeIds, course.timeSlots));
   }, [course?.id, course?.updatedAt]);
 
   const search = async (value: string) => {
@@ -285,20 +287,40 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   };
 
   const newCourse = () => {
-    setCourseId(''); setCourseTitle(''); setCourseDate(dateToday()); setCoursePlaceIds([]); setChoiceId(''); setTab('courses');
+    setCourseId(''); setCourseTitle(''); setCourseDate(dateToday()); setCoursePlaceIds([]); setCourseTimes({});
+    setChoiceId(''); setTab('courses');
   };
   const chooseCourse = (item: DateCourse) => {
-    setCourseId(item.id); setCourseTitle(item.title); setCourseDate(item.date); setCoursePlaceIds([...item.placeIds]); setTab('courses');
+    setCourseId(item.id); setCourseTitle(item.title); setCourseDate(item.date);
+    setCoursePlaceIds([...item.placeIds]); setCourseTimes(courseTimesFromSaved(item.placeIds, item.timeSlots)); setTab('courses');
+  };
+  const setStopTime = (id: string, field: keyof CourseTimeSlot, value: string) => {
+    setCourseTimes((times) => ({
+      ...times, [id]: { ...(times[id] ?? { start: '', end: '' }), [field]: value },
+    }));
+  };
+  const removeStop = (id: string) => {
+    setCoursePlaceIds((ids) => ids.filter((placeId) => placeId !== id));
+    setCourseTimes((times) => {
+      const next = { ...times };
+      delete next[id];
+      return next;
+    });
   };
   const saveCourse = async () => {
     if (!coupleId || !uid || !courseTitle.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(courseDate)) {
       setMessage('데이트 코스 이름과 날짜를 확인해 주세요.'); return;
     }
     if (!coursePlaceIds.length) { setMessage('데이트 코스에 장소를 하나 이상 추가해 주세요.'); return; }
+    const timeError = validateCourseTimes(coursePlaceIds, courseTimes);
+    if (timeError) { setMessage(timeError); return; }
+    const timeSlots = coursePlaceIds.map((id) => encodeCourseTimeSlot(courseTimes[id]));
     await submit(async () => {
-      const id = await saveDateCourse(coupleId, uid, { title: courseTitle.trim().slice(0, 100), date: courseDate, placeIds: coursePlaceIds }, courseId || undefined);
+      const id = await saveDateCourse(coupleId, uid, {
+        title: courseTitle.trim().slice(0, 100), date: courseDate, placeIds: coursePlaceIds, timeSlots,
+      }, courseId || undefined);
       setCourseId(id);
-    }, '데이트 코스를 저장했어요. 상대방에게도 표시돼요.');
+    }, '데이트 코스와 방문 시간을 저장했어요. 상대방에게도 표시돼요.');
   };
   const changeOrder = (index: number, offset: number) => setCoursePlaceIds((ids) => {
     const next = [...ids]; const target = index + offset;
@@ -405,11 +427,34 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             <label className="date-map-label">코스 이름<input maxLength={100} placeholder="예: 강릉 주말 데이트" value={courseTitle} onChange={(e) => setCourseTitle(e.target.value)}/></label>
             <label className="date-map-label">데이트 날짜<input type="date" value={courseDate} onChange={(e) => setCourseDate(e.target.value)}/></label>
             <div className="date-map-panel-header"><strong>방문 예정 장소</strong><span>{coursePlaceIds.length} / 20곳</span></div>
-            <p className="date-map-add-hint">저장된 장소를 선택하거나 화면 상단에서 새 장소를 검색해 ‘이 코스에 추가’를 눌러 주세요. 기존 코스와 날짜는 유지돼요.</p>
-            {coursePlaceIds.map((id, index) => { const place = places.find((item) => item.id === id); return <div className="date-map-course-row" key={id}><span>{index + 1}. {place?.name ?? '삭제된 장소'}</span>
-              <button type="button" aria-label="위로 이동" disabled={index === 0} onClick={() => changeOrder(index,-1)}><ChevronUp size={16}/></button>
-              <button type="button" aria-label="아래로 이동" disabled={index === coursePlaceIds.length - 1} onClick={() => changeOrder(index,1)}><ChevronDown size={16}/></button>
-              <button type="button" aria-label="코스에서 제거" onClick={() => setCoursePlaceIds((ids) => ids.filter((placeId) => placeId !== id))}><X size={16}/></button></div>; })}
+            <p className="date-map-add-hint">방문할 장소와 시간을 순서대로 정해보세요. 시간을 설정하지 않은 장소는 ‘미정’으로 저장돼요. 화살표로 방문 순서를 바꿀 수 있어요.</p>
+            <div className="date-map-course-schedule" aria-label="방문 순서와 시간">
+              <div className="date-map-course-head" aria-hidden="true">
+                <span>순서</span><span>장소</span><span>시간 · 순서 변경</span>
+              </div>
+              {coursePlaceIds.map((id, index) => {
+                const place = places.find((item) => item.id === id);
+                const slot = courseTimes[id] ?? { start: '', end: '' };
+                const name = place?.name ?? '삭제된 장소';
+                return <div className="date-map-course-stop" key={id}>
+                  <span className="date-map-stop-number" aria-label={index + 1 + '번째 장소'}>{index + 1}</span>
+                  <div className="date-map-stop-place">
+                    <strong>{name}</strong>
+                    <small><MapPin size={12} aria-hidden="true"/>{place?.address || '장소 정보를 확인해 주세요.'}</small>
+                  </div>
+                  <div className="date-map-stop-times" aria-label={name + ' 방문 시간'}>
+                    <label><span>시작</span><input type="time" aria-label={name + ' 시작 시간'} value={slot.start} onChange={(event) => setStopTime(id, 'start', event.target.value)}/></label>
+                    <span className="date-map-time-tilde" aria-hidden="true">~</span>
+                    <label><span>종료</span><input type="time" aria-label={name + ' 종료 시간'} value={slot.end} onChange={(event) => setStopTime(id, 'end', event.target.value)}/></label>
+                  </div>
+                  <div className="date-map-stop-controls">
+                    <button type="button" aria-label={name + ' 위로 이동'} title="위로 이동" disabled={index === 0} onClick={() => changeOrder(index, -1)}><ChevronUp size={17}/></button>
+                    <button type="button" aria-label={name + ' 아래로 이동'} title="아래로 이동" disabled={index === coursePlaceIds.length - 1} onClick={() => changeOrder(index, 1)}><ChevronDown size={17}/></button>
+                    <button type="button" aria-label={name + ' 코스에서 제거'} title="코스에서 제거" onClick={() => removeStop(id)}><X size={17}/></button>
+                  </div>
+                </div>;
+              })}
+            </div>
             <div className="date-map-inline"><select aria-label="코스에 추가할 장소" value={choiceId} onChange={(e) => setChoiceId(e.target.value)}><option value="">장소 선택</option>{places.filter((item) => !coursePlaceIds.includes(item.id)).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
               <button type="button" disabled={!choiceId || coursePlaceIds.length >= MAX_DATE_COURSE_PLACES} onClick={() => {
                 if (!choiceId) return;
