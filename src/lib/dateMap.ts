@@ -9,6 +9,8 @@ export type DatePlace = {
   longitude: number;
   category: '맛집' | '카페' | '놀거리' | '여행' | '기타';
   memo: string;
+  /** Optional explicit photo URL; never inferred from a similarly named branch. */
+  photoUrl?: string;
   createdBy: string;
   createdAt?: unknown;
   updatedAt?: unknown;
