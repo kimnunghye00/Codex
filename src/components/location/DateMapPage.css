@@ -73,3 +73,236 @@
 .date-map-branch small { font-size:11px; line-height:1.5; color:var(--text-secondary); overflow-wrap:anywhere; }
 .date-map-branch.active { background:var(--primary-soft); border-color:var(--primary); }
 .date-map-pick-hint { border:1px solid var(--primary); background:var(--primary-soft); color:var(--text-primary); padding:9px 10px; font-size:11px; border-radius:9px; line-height:1.5; }
+
+
+/* Selected place: app-native card. Scoped to the candidate so existing
+   place/course editors and all theme palettes retain their current styles. */
+.date-map-panel .date-map-candidate {
+  gap: 0;
+  min-width: 0;
+  padding: 16px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: 19px;
+  background: var(--surface);
+  color: var(--text-primary);
+  box-shadow: 0 5px 18px #27202b0a;
+}
+.date-map-candidate-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  min-width: 0;
+  gap: 10px;
+  margin-bottom: 13px;
+}
+.date-map-candidate-header h2 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.35;
+  font-weight: 800;
+  letter-spacing: -.025em;
+}
+.date-map-candidate-header p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.date-map-candidate-close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  margin: -5px -6px 0 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.date-map-candidate-close:hover {
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+.date-map-candidate-summary {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+  padding: 11px;
+  margin-bottom: 15px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--primary-soft);
+}
+.date-map-candidate-pin {
+  display: grid;
+  flex: 0 0 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--primary);
+}
+.date-map-candidate-summary-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 4px;
+}
+.date-map-candidate-summary-text strong {
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.date-map-candidate-summary-text > span {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.date-map-candidate-fields {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 13px;
+  margin-bottom: 13px;
+}
+.date-map-candidate-field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.date-map-candidate-field > span {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+}
+.date-map-panel .date-map-candidate .date-map-candidate-field input,
+.date-map-panel .date-map-candidate .date-map-candidate-field textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  outline: 0;
+  box-shadow: none;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  transition: border-color .15s, box-shadow .15s;
+}
+.date-map-panel .date-map-candidate .date-map-candidate-field input {
+  height: 44px;
+}
+.date-map-panel .date-map-candidate .date-map-candidate-field textarea {
+  min-height: 75px;
+  resize: vertical;
+}
+.date-map-panel .date-map-candidate .date-map-candidate-field input::placeholder,
+.date-map-panel .date-map-candidate .date-map-candidate-field textarea::placeholder {
+  color: var(--text-secondary);
+  opacity: .8;
+}
+.date-map-panel .date-map-candidate .date-map-candidate-field :is(input,textarea):focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+.date-map-candidate-actions {
+  display: grid;
+  grid-template-columns: minmax(0,.85fr) minmax(0,1.15fr);
+  gap: 8px;
+  margin-bottom: 15px;
+}
+.date-map-candidate-category {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+.date-map-panel .date-map-candidate .date-map-candidate-category select {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  padding: 0 28px 0 11px;
+  appearance: none;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.date-map-candidate-category svg {
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--text-secondary);
+}
+.date-map-candidate-map-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  height: 42px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.date-map-candidate-map-button:hover {
+  border-color: var(--primary);
+}
+.date-map-candidate-memo { margin-bottom: 11px; }
+.date-map-candidate-note {
+  margin: 0 0 14px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.date-map-panel .date-map-candidate .date-map-candidate-submit {
+  min-height: 44px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 800;
+}
+.date-map-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+@media(max-width: 360px) {
+  .date-map-panel .date-map-candidate { padding: 12px; }
+  .date-map-candidate-actions { gap: 6px; }
+  .date-map-candidate-map-button { font-size: 10px; padding: 0 4px; }
+}
