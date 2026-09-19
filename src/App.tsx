@@ -3,7 +3,6 @@ import { transitionCoupleCache } from './utils/coupleCacheIsolation';
 import type { HubTabId } from './components/memories/MemoriesPage';
 import { previewLegacyFootprints } from './lib/footprintFoundation';
 import { loadLocationVisits } from './utils/location';
-import type { LocationTabId } from './components/location/LocationPage';
 import type { MoreNavigationTarget } from './components/more/MoreServices';
 import { AppHeader as SharedAppHeader } from './components/navigation/AppHeader';
 import { BottomNav, type AppTab } from './components/navigation/BottomNav';
@@ -39,10 +38,7 @@ const MemoriesPage = lazy(() => Promise.all([
   import('./styles/features/memories'),
   import('./components/memories/MemoriesPage'),
 ]).then(([, module]) => ({ default: module.MemoriesPage })));
-const LocationPage = lazy(() => Promise.all([
-  import('./styles/features/location'),
-  import('./components/location/LocationPage'),
-]).then(([, module]) => ({ default: module.LocationPage })));
+const DateMapPage = lazy(() => import('./components/location/DateMapPage').then((module) => ({ default: module.DateMapPage })));
 const AccountSettings = lazy(() => Promise.all([
   import('./styles/features/settings'),
   import('./components/auth/AccountSettings'),
@@ -194,7 +190,6 @@ function App({ user, profile, onProfileChange }: AppProps) {
   const [footprintMemoryId, setFootprintMemoryId] = useState<number>();
   const [locationFocus, setLocationFocus] = useState<string>();
   const [requestedHubTab, setRequestedHubTab] = useState<HubTabId>();
-  const [requestedLocationTab, setRequestedLocationTab] = useState<LocationTabId>();
   const previousMessages = useRef(messages);
   const previousMemories = useRef(memories);
   const memoriesRef = useRef(memories);
@@ -224,7 +219,11 @@ function App({ user, profile, onProfileChange }: AppProps) {
       navigateTab('memories');
       return;
     }
-    setRequestedLocationTab(target.tab);
+    if (target.tab === 'footprints') {
+      setFootprintMemoryId(undefined);
+      navigateTab('footprints');
+      return;
+    }
     navigateTab('location');
   }, [navigateTab]);
 
@@ -512,10 +511,10 @@ function App({ user, profile, onProfileChange }: AppProps) {
   return <>
     <div className="app-shell"><main><Suspense fallback={<div className="page auth-loading" role="status" aria-live="polite"><div className="loading-mark" /><p>화면을 불러오는 중이에요</p></div>}>
       {tab === 'home' && <HomePage uid={user.uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} memories={memories} onNavigate={navigateTab} onOpenMemory={openMemory} onOpenFootprints={() => openFootprints()} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
-      {tab === 'memories' && <MemoriesPage requestedTab={requestedHubTab} Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={(place) => { setLocationFocus(place); setRequestedLocationTab('map'); navigateTab('location'); }} onOpenFootprints={(memoryId) => openFootprints(memoryId)} sharedProfile={profile} sharedConnection={connection} sharedRelationshipStartDate={relationshipStartDate} />}
+      {tab === 'memories' && <MemoriesPage requestedTab={requestedHubTab} Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={(place) => { setLocationFocus(place); navigateTab('location'); }} onOpenFootprints={(memoryId) => openFootprints(memoryId)} sharedProfile={profile} sharedConnection={connection} sharedRelationshipStartDate={relationshipStartDate} />}
       {tab === 'footprints' && <FootprintsPage uid={user.uid} memories={memories} initialMemoryId={footprintMemoryId} onOpenMemory={openMemory} onBack={closeFootprints} Header={AppHeader} />}
       {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} connection={connection} />}
-      {tab === 'location' && <LocationPage requestedTab={requestedLocationTab} Header={AppHeader} connection={connection} focusPlace={locationFocus} onClearFocus={() => setLocationFocus(undefined)} onCreateMemory={(draft) => { setMemoryToOpen(undefined); setMemoryDraft(draft); setRequestedHubTab('album'); navigateTab('memories'); }} onActivity={(title, detail) => addActivity({ actor: 'me', kind: 'location', title, detail })} />}
+      {tab === 'location' && <DateMapPage Header={AppHeader} connection={connection} focusPlace={locationFocus} onClearFocus={() => setLocationFocus(undefined)} />}
       {tab === 'anniversary' && <AnniversaryPage connected={Boolean(connection)} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} onSaveStartDate={saveStartDate} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'more' && <MorePage onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} onNavigate={navigateMoreTarget} />}
     </Suspense></main><BottomNav tab={tab === 'footprints' ? 'home' : tab} onNavigate={navigateTab} /></div>
