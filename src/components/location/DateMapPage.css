@@ -1,0 +1,64 @@
+.date-map-page { width:100%; min-height:0; overflow:auto; padding-bottom:120px; color:var(--text-primary); }
+.date-map-heading { display:flex; align-items:center; justify-content:space-between; margin:12px 0; }
+.date-map-heading small { font-size:10px; letter-spacing:.12em; color:var(--primary); font-weight:800; }
+.date-map-heading h1 { font-size:clamp(19px,3vw,26px); font-weight:800; margin:3px 0; }
+.date-map-heading p,.date-map-disclaimer { font-size:12px; line-height:1.6; color:var(--text-secondary); margin:0; }
+.date-map-search { display:flex; align-items:center; gap:10px; width:100%; padding:6px 7px 6px 14px; border:1px solid var(--border); background:var(--surface); border-radius:15px; }
+.date-map-search svg { flex-shrink:0; color:var(--text-secondary); }
+.date-map-search input { border:0; background:transparent; outline:0; min-width:0; flex:1; font:inherit; color:var(--text-primary); font-size:13px; }
+.date-map-search button,.date-map-primary { border:0; border-radius:10px; background:var(--primary); color:white; padding:9px 14px; font-weight:750; font-size:12px; }
+.date-map-search button:disabled,.date-map-primary:disabled { opacity:.48; cursor:not-allowed; }
+.date-map-feedback,.date-map-connect { padding:9px 12px; border:1px solid var(--border); border-radius:11px; background:var(--surface); font-size:11px; line-height:1.5; margin:9px 0 0; }
+.date-map-filters { display:flex; gap:6px; overflow-x:auto; padding:10px 1px; }
+.date-map-filters button { flex:0 0 auto; padding:7px 12px; border:1px solid var(--border); border-radius:99px; background:var(--surface); color:var(--text-secondary); font-size:11px; }
+.date-map-filters button.active { background:var(--primary); color:white; border-color:var(--primary); }
+.date-map-workspace { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(280px,.85fr); align-items:stretch; gap:14px; min-height:min(62vh,610px); }
+.date-map-map { position:relative; border:1px solid var(--border); border-radius:22px; overflow:hidden; background:var(--surface); min-height:460px; }
+.date-map-map iframe { width:100%; height:100%; min-height:460px; display:block; border:0; }
+.date-map-loading { position:absolute; inset:0; display:grid; place-items:center; padding:20px; font-size:12px; text-align:center; background:var(--surface); }
+.date-map-caption { position:absolute; left:12px; bottom:12px; padding:8px 11px; font-size:11px; border-radius:12px; color:var(--text-primary); background:var(--surface); box-shadow:0 2px 12px #1c20321a; pointer-events:none; }
+.date-map-panel { min-width:0; overflow-y:auto; max-height:650px; border:1px solid var(--border); border-radius:22px; padding:14px; background:var(--surface); }
+.date-map-tabs { display:flex; gap:5px; border:1px solid var(--border); border-radius:12px; padding:4px; margin-bottom:12px; }
+.date-map-tabs button { flex:1; border:0; border-radius:9px; padding:9px 4px; background:transparent; color:var(--text-secondary); font-size:12px; font-weight:700; }
+.date-map-tabs button.active { color:white; background:var(--primary); }
+.date-map-panel-header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:4px 0 10px; }
+.date-map-panel-header strong { font-size:13px; }
+.date-map-panel-header > span { font-size:11px; color:var(--text-secondary); }
+.date-map-panel-header > button { display:flex; align-items:center; gap:3px; border:0; border-radius:9px; background:var(--primary-soft); color:var(--primary); padding:6px 8px; font-size:11px; }
+.date-map-candidate,.date-map-detail { display:flex; flex-direction:column; gap:10px; border:1px solid var(--border); border-radius:15px; padding:12px; margin-bottom:14px; }
+.date-map-candidate { background:var(--primary-soft); }
+.date-map-candidate > b,.date-map-detail > strong { font-size:14px; }
+.date-map-candidate > small,.date-map-detail > small { color:var(--text-secondary); font-size:11px; overflow-wrap:anywhere; }
+.date-map-candidate textarea,.date-map-detail textarea { width:100%; resize:vertical; min-height:56px; }
+.date-map-inline { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
+.date-map-inline > button,.date-map-inline > select { flex:1 1 auto; min-width:0; }
+.date-map-inline > span { display:flex; gap:4px; align-items:center; font-size:11px; color:var(--text-secondary); }
+.date-map-inline button,.date-map-course-row button,.date-map-detail form button { display:inline-flex; align-items:center; justify-content:center; gap:4px; padding:8px; border:1px solid var(--border); border-radius:9px; background:var(--surface); color:var(--text-primary); font-size:11px; }
+.date-map-inline button.active { color:var(--primary); background:var(--primary-soft); }
+.date-map-inline .date-map-delete,.date-map-detail .date-map-delete { display:inline-flex; align-items:center; justify-content:center; gap:4px; color:#c53d59; border:1px solid var(--border); border-radius:9px; padding:8px; background:var(--surface); font-size:11px; }
+.date-map-candidate select,.date-map-detail select,.date-map-detail input,.date-map-detail textarea { border:1px solid var(--border); border-radius:9px; background:var(--surface); color:var(--text-primary); padding:8px; font:inherit; font-size:12px; max-width:100%; }
+.date-map-primary { display:flex; width:100%; align-items:center; justify-content:center; gap:5px; min-height:36px; }
+.date-map-place,.date-map-course-choice { display:flex; align-items:center; gap:10px; width:100%; border:1px solid var(--border); padding:11px 9px; border-radius:13px; background:var(--surface); text-align:left; margin-bottom:7px; color:var(--text-primary); }
+.date-map-place.active,.date-map-course-choice.active { border-color:var(--primary); background:var(--primary-soft); }
+.date-map-place > span:nth-child(2),.date-map-course-choice > span { display:flex; flex-direction:column; flex:1; gap:3px; min-width:0; }
+.date-map-place b,.date-map-course-choice b { font-size:12px; overflow-wrap:anywhere; }
+.date-map-place small,.date-map-course-choice small { font-size:10px; color:var(--text-secondary); line-height:1.4; overflow-wrap:anywhere; }
+.date-map-pin { display:grid; place-items:center; background:var(--primary-soft); color:var(--primary); width:30px; height:30px; border-radius:50%; flex-shrink:0; }
+.date-map-course-choice > svg { color:var(--primary); flex-shrink:0; }
+.date-map-label { display:flex; flex-direction:column; gap:5px; font-size:11px; font-weight:700; }
+.date-map-detail form { display:flex; gap:6px; }
+.date-map-detail form input { min-width:0; flex:1; }
+.date-map-opinions { display:flex; flex-direction:column; gap:6px; }
+.date-map-opinions > div { display:flex; align-items:center; justify-content:space-between; gap:6px; border-radius:8px; padding:8px; background:var(--primary-soft); font-size:11px; overflow-wrap:anywhere; }
+.date-map-opinions button { border:0; background:transparent; color:var(--text-secondary); }
+.date-map-course-row { display:flex; align-items:center; gap:5px; border:1px solid var(--border); padding:6px; border-radius:9px; }
+.date-map-course-row > span { flex:1; font-size:11px; min-width:0; overflow-wrap:anywhere; }
+.date-map-course-row button { padding:5px; flex-shrink:0; }
+.date-map-empty { color:var(--text-secondary); font-size:11px; line-height:1.6; padding:14px; text-align:center; }
+.date-map-disclaimer { margin:12px 3px; font-size:11px; }
+@media(max-width:760px) {
+ .date-map-page { padding-bottom:105px; }
+ .date-map-workspace { grid-template-columns:minmax(0,1fr); min-height:0; }
+ .date-map-map,.date-map-map iframe { height:42vh; min-height:290px; max-height:420px; }
+ .date-map-panel { max-height:none; }
+}
