@@ -63,23 +63,32 @@ jobs:
         run: |
           set -euo pipefail
           CLI="npx --yes firebase-tools@15.29.0"
-          if $CLI hosting:sites:list --project "$FIREBASE_PROJECT_ID" --json | grep -q "\"$FIREBASE_SITE_ID\""; then
-            echo "Hosting site already exists: $FIREBASE_SITE_ID"
-            exit 0
-          fi
+          echo "Ensuring Hosting site exists: $FIREBASE_SITE_ID"
 
-          echo "Creating Hosting site: $FIREBASE_SITE_ID"
-          if $CLI hosting:sites:create "$FIREBASE_SITE_ID" --project "$FIREBASE_PROJECT_ID" --non-interactive; then
+          set +e
+          OUTPUT=$($CLI hosting:sites:create "$FIREBASE_SITE_ID" --project "$FIREBASE_PROJECT_ID" --non-interactive 2>&1)
+          CODE=$?
+          set -e
+          echo "$OUTPUT"
+
+          if [[ $CODE -eq 0 ]] || grep -qi "already exists" <<< "$OUTPUT"; then
+            echo "Hosting site is ready: $FIREBASE_SITE_ID"
             exit 0
           fi
 
           if [[ -n "$FIREBASE_TOKEN" ]]; then
             echo "Retrying site creation with Firebase token."
             unset GOOGLE_APPLICATION_CREDENTIALS
-            $CLI hosting:sites:create "$FIREBASE_SITE_ID" --project "$FIREBASE_PROJECT_ID" --token "$FIREBASE_TOKEN" --non-interactive
-          else
-            exit 1
+            set +e
+            OUTPUT=$($CLI hosting:sites:create "$FIREBASE_SITE_ID" --project "$FIREBASE_PROJECT_ID" --token "$FIREBASE_TOKEN" --non-interactive 2>&1)
+            CODE=$?
+            set -e
+            echo "$OUTPUT"
+            if [[ $CODE -eq 0 ]] || grep -qi "already exists" <<< "$OUTPUT"; then
+              exit 0
+            fi
           fi
+          exit 1
 
       - name: Deploy E2-2 app
         id: deploy
