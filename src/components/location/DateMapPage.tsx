@@ -427,11 +427,34 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             <label className="date-map-label">코스 이름<input maxLength={100} placeholder="예: 강릉 주말 데이트" value={courseTitle} onChange={(e) => setCourseTitle(e.target.value)}/></label>
             <label className="date-map-label">데이트 날짜<input type="date" value={courseDate} onChange={(e) => setCourseDate(e.target.value)}/></label>
             <div className="date-map-panel-header"><strong>방문 예정 장소</strong><span>{coursePlaceIds.length} / 20곳</span></div>
-            <p className="date-map-add-hint">저장된 장소를 선택하거나 화면 상단에서 새 장소를 검색해 ‘이 코스에 추가’를 눌러 주세요. 기존 코스와 날짜는 유지돼요.</p>
-            {coursePlaceIds.map((id, index) => { const place = places.find((item) => item.id === id); return <div className="date-map-course-row" key={id}><span>{index + 1}. {place?.name ?? '삭제된 장소'}</span>
-              <button type="button" aria-label="위로 이동" disabled={index === 0} onClick={() => changeOrder(index,-1)}><ChevronUp size={16}/></button>
-              <button type="button" aria-label="아래로 이동" disabled={index === coursePlaceIds.length - 1} onClick={() => changeOrder(index,1)}><ChevronDown size={16}/></button>
-              <button type="button" aria-label="코스에서 제거" onClick={() => setCoursePlaceIds((ids) => ids.filter((placeId) => placeId !== id))}><X size={16}/></button></div>; })}
+            <p className="date-map-add-hint">방문할 장소와 시간을 순서대로 정해보세요. 시간을 설정하지 않은 장소는 ‘미정’으로 저장돼요. 화살표로 방문 순서를 바꿀 수 있어요.</p>
+            <div className="date-map-course-schedule" aria-label="방문 순서와 시간">
+              <div className="date-map-course-head" aria-hidden="true">
+                <span>순서</span><span>장소</span><span>시간 · 순서 변경</span>
+              </div>
+              {coursePlaceIds.map((id, index) => {
+                const place = places.find((item) => item.id === id);
+                const slot = courseTimes[id] ?? { start: '', end: '' };
+                const name = place?.name ?? '삭제된 장소';
+                return <div className="date-map-course-stop" key={id}>
+                  <span className="date-map-stop-number" aria-label={index + 1 + '번째 장소'}>{index + 1}</span>
+                  <div className="date-map-stop-place">
+                    <strong>{name}</strong>
+                    <small><MapPin size={12} aria-hidden="true"/>{place?.address || '장소 정보를 확인해 주세요.'}</small>
+                  </div>
+                  <div className="date-map-stop-times" aria-label={name + ' 방문 시간'}>
+                    <label><span>시작</span><input type="time" aria-label={name + ' 시작 시간'} value={slot.start} onChange={(event) => setStopTime(id, 'start', event.target.value)}/></label>
+                    <span className="date-map-time-tilde" aria-hidden="true">~</span>
+                    <label><span>종료</span><input type="time" aria-label={name + ' 종료 시간'} value={slot.end} onChange={(event) => setStopTime(id, 'end', event.target.value)}/></label>
+                  </div>
+                  <div className="date-map-stop-controls">
+                    <button type="button" aria-label={name + ' 위로 이동'} title="위로 이동" disabled={index === 0} onClick={() => changeOrder(index, -1)}><ChevronUp size={17}/></button>
+                    <button type="button" aria-label={name + ' 아래로 이동'} title="아래로 이동" disabled={index === coursePlaceIds.length - 1} onClick={() => changeOrder(index, 1)}><ChevronDown size={17}/></button>
+                    <button type="button" aria-label={name + ' 코스에서 제거'} title="코스에서 제거" onClick={() => removeStop(id)}><X size={17}/></button>
+                  </div>
+                </div>;
+              })}
+            </div>
             <div className="date-map-inline"><select aria-label="코스에 추가할 장소" value={choiceId} onChange={(e) => setChoiceId(e.target.value)}><option value="">장소 선택</option>{places.filter((item) => !coursePlaceIds.includes(item.id)).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
               <button type="button" disabled={!choiceId || coursePlaceIds.length >= MAX_DATE_COURSE_PLACES} onClick={() => {
                 if (!choiceId) return;
