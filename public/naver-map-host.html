@@ -133,7 +133,8 @@
         const palette = activePalette();
         naver.maps.Event.trigger(map, 'resize');
         clearOverlays();
-        if (mode === 'date-plan') clearFocus();
+        // Keep the selected date-plan marker and viewport through result/label re-renders.
+        // A new search or explicit dismissal sends clear-focus from the parent.
 
         const validVisits = lastRender.visits
           .filter((visit) => Number.isFinite(Number(visit.latitude)) && Number.isFinite(Number(visit.longitude)))
@@ -182,10 +183,12 @@
             backgroundColor: '#fff',
           });
           naver.maps.Event.addListener(marker, 'click', () => {
-            popup.open(map, marker);
-            if (mode === 'date-plan' && typeof visit.id === 'string' && visit.id.startsWith('search-')) {
+            if (mode === 'date-plan' && typeof visit.id === 'string' && /^search-\d+$/.test(visit.id)) {
               pickMode = false;
+              focus(visit, true);
               send('search-marker-selected', { id: visit.id });
+            } else {
+              popup.open(map, marker);
             }
           });
           overlays.push(marker);

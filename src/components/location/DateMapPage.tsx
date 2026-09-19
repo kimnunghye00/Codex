@@ -16,7 +16,7 @@ import './DateMapPage.css';
 type Category = DatePlace['category'];
 const CATEGORIES: Category[] = ['맛집', '카페', '놀거리', '여행', '기타'];
 const MAP_ORIGIN = 'https://meluni-f4e00.web.app';
-const MAP_HOST = `${MAP_ORIGIN}/naver-map-host.html?v=8`;
+const MAP_HOST = `${MAP_ORIGIN}/naver-map-host.html?v=9`;
 const ALL = '전체';
 function dateToday() {
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
@@ -74,6 +74,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState(false);
   const frame = useRef<HTMLIFrameElement>(null);
+  const queuedFocus = useRef<{ latitude: number; longitude: number; placeName: string } | null>(null);
   const panel = useRef<HTMLElement>(null);
   const searchSequence = useRef(0);
   const lookupSequence = useRef(0);
@@ -115,6 +116,9 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     const trimmed = value.trim();
     if (!trimmed) { setMessage('검색할 장소나 주소를 입력해 주세요.'); return; }
     const sequence = ++searchSequence.current;
+    // A new query intentionally releases the previous selection so its map bounds can update.
+    queuedFocus.current = null;
+    if (mapReady) frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'clear-focus' }, MAP_ORIGIN);
     setSearching(true); setCandidate(null); setCandidateSearch(''); setResults([]); setPicking(false); setMessage('');
     try {
       const found = await searchLocations(trimmed);
@@ -156,7 +160,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       if (event.origin !== MAP_ORIGIN || event.source !== frame.current?.contentWindow || event.data?.source !== 'route-map-host') return;
       if (event.data.type === 'ready') { setMapReady(true); setMapError(false); }
       if (event.data.type === 'search-marker-selected' && typeof event.data.id === 'string') {
-        const match = /^search-(\\d+)$/.exec(event.data.id);
+        const match = /^search-(\d+)$/.exec(event.data.id);
         const index = match ? Number(match[1]) : -1;
         const found = resultsRef.current[index];
         if (found) {
@@ -164,6 +168,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
           setCandidateAddress(found.address ?? '');
           setCandidateSearch(queryRef.current.trim());
           setPicking(false); setMessage('');
+          mapFocus(found);
           panel.current?.scrollTo({ top: 0, behavior: 'smooth' });
         }
       }
@@ -177,6 +182,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
         setCandidate({ latitude, longitude, placeName: searchName || '선택한 위치' });
         setCandidateName(searchName); setCandidateAddress('');
         setCandidateSearch(searchName);
+        mapFocus({ latitude, longitude, placeName: searchName || '선택한 위치' });
         panel.current?.scrollTo({ top: 0, behavior: 'smooth' });
         void reverseGeocode(latitude, longitude).then((address) => {
           if (lookupSequence.current === sequence && address) setCandidateAddress((value) => value || address);
@@ -190,7 +196,13 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
 
   useEffect(() => {
     if (!mapReady) return;
-    frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'render', mode: 'date-plan', visits: mapVisits }, MAP_ORIGIN);
+    const target = frame.current?.contentWindow;
+    target?.postMessage({ source: 'route-map-parent', type: 'render', mode: 'date-plan', visits: mapVisits }, MAP_ORIGIN);
+    // If a result was selected before the iframe became ready, apply it after the initial render.
+    if (queuedFocus.current && target) {
+      target.postMessage({ source: 'route-map-parent', type: 'focus', showPopup: true, visit: queuedFocus.current }, MAP_ORIGIN);
+      queuedFocus.current = null;
+    }
   }, [mapReady, mapVisits]);
 
   useEffect(() => {
@@ -205,9 +217,18 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   };
 
   const mapFocus = (place: { latitude: number; longitude: number; placeName: string }) => {
-    if (!mapReady) return;
-    frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'focus', showPopup: true,
+    if (!mapReady || !frame.current?.contentWindow) {
+      queuedFocus.current = place;
+      return;
+    }
+    queuedFocus.current = null;
+    frame.current.contentWindow.postMessage({ source: 'route-map-parent', type: 'focus', showPopup: true,
       visit: { latitude: place.latitude, longitude: place.longitude, placeName: place.placeName } }, MAP_ORIGIN);
+  };
+
+  const clearMapFocus = () => {
+    queuedFocus.current = null;
+    if (mapReady) frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'clear-focus' }, MAP_ORIGIN);
   };
 
   const submit = async (work: () => Promise<unknown>, success: string) => {
@@ -242,7 +263,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       } else {
         setSelectedId(duplicate.id);
       }
-      setCandidate(null); setResults([]);
+      setCandidate(null); setResults([]); clearMapFocus();
       setMessage(addToCurrentCourse
         ? '기존에 저장된 장소를 코스에 추가했어요. 마지막에 코스 저장을 눌러 주세요.'
         : '이미 저장된 장소예요. 기존 장소를 선택했어요.');
@@ -257,7 +278,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       });
       if (addToCurrentCourse) appendToCourse(id);
       else setSelectedId(id);
-      setCandidate(null); setResults([]); setCandidateMemo('');
+      setCandidate(null); setResults([]); setCandidateMemo(''); clearMapFocus();
     }, addToCurrentCourse
       ? '새 장소를 코스에 추가했어요. 마지막에 코스 저장을 눌러 주세요.'
       : '우리의 지도에 장소를 저장했어요.');
@@ -298,7 +319,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     <div className="date-map-filters">{[ALL,...CATEGORIES].map((item) => <button key={item} type="button" className={category === item ? 'active' : ''} onClick={() => setCategory(item)}>{item}</button>)}</div>
     <div className="date-map-workspace">
       <section className="date-map-map" aria-label="데이트 장소 지도">
-        <iframe ref={frame} title="단둘이 데이트 지도" src={MAP_HOST} referrerPolicy="strict-origin-when-cross-origin" onLoad={() => setMapReady(false)} onError={() => setMapError(true)} />
+        <iframe ref={frame} title="단둘이 데이트 지도" src={MAP_HOST} referrerPolicy="strict-origin-when-cross-origin" onError={() => setMapError(true)} />
         {!mapReady && <div className="date-map-loading">{mapError ? '지도를 불러오지 못했어요. 네트워크 또는 지도 인증을 확인해 주세요.' : '네이버 지도를 불러오는 중이에요…'}</div>}
         <div className="date-map-caption">📍 저장한 장소 {places.length}곳 · 방문 기록과 분리된 계획 지도</div>
       </section>
@@ -318,7 +339,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
         {candidate && <article className="date-map-candidate" aria-label="선택한 장소 확인">
           <div className="date-map-candidate-header">
             <div><h2>선택한 장소</h2><p>위치를 확인하고 우리 코스에 추가해요.</p></div>
-            <button type="button" className="date-map-candidate-close" aria-label="선택한 장소 닫기" onClick={() => setCandidate(null)}><X size={18}/></button>
+            <button type="button" className="date-map-candidate-close" aria-label="선택한 장소 닫기" onClick={() => { setCandidate(null); clearMapFocus(); }}><X size={18}/></button>
           </div>
           <div className="date-map-candidate-summary">
             <span className="date-map-candidate-pin"><MapPin size={19}/></span>
