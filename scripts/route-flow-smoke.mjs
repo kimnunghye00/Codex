@@ -122,8 +122,8 @@ check('chat realtime subscription is present', chat.includes('subscribeCoupleMes
 check('chat media upload path is present', chat.includes('uploadChatMedia'));
 check('chat composer remains mounted', chat.includes('<ChatComposer'));
 check('chat uses collision-resistant message ids', chat.includes('createMessageId') && messageId.includes('cryptoApi?.getRandomValues'));
-check('voice/video call controls are enabled', releaseFlags.includes('CALLING_ENABLED = true') && chat.includes('danduli-call-request'));
-check('call manager is app-wide', app.includes('<DanduliCallManager') && callManager.includes('subscribeCoupleCall'));
+check('voice/video call controls remain intentionally hidden', releaseFlags.includes('CALLING_ENABLED = false') && !chat.includes('danduli-call-request'));
+check('call manager stays unmounted while calling is paused', !app.includes('<DanduliCallManager') && callManager.includes('subscribeCoupleCall'));
 check('call signaling is couple-scoped', coupleCall.includes("doc(db, 'couples', coupleId)") && coupleCall.includes('activeCall'));
 check('chat room CSS is feature-loaded only', chatStyles.includes('route-chat-room-v26.css') && !app.includes("import './route-chat-room-v26.css'"));
 
