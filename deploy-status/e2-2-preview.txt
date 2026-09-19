@@ -1,8 +1,8 @@
-status=failure
+status=success
 url=https://e2-2-kimnunghye00.web.app
 credentials=success
-site=failure
-deploy=skipped
-verify=skipped
-source_commit=e6220568b7a95cbdd843408c31032c5f8d419d5e
-deployed_at=2026-09-19T01:23:06Z
+site=success
+deploy=success
+verify=success
+source_commit=57a79ad2eb75e329e8ed3ba24c84d71228b42635
+deployed_at=2026-09-19T01:24:14Z
