@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { CalendarDays, ChevronDown, ChevronUp, Heart, MapPin, MessageCircle, Plus, Search, Trash2, X } from 'lucide-react';
 import { auth } from '../../lib/firebase';
-import { appendPlaceToCourse, MAX_DATE_COURSE_PLACES } from '../../lib/dateCourseDraft';
+import { appendPlaceToCourse, courseTimesFromSaved, encodeCourseTimeSlot, MAX_DATE_COURSE_PLACES, validateCourseTimes, type CourseTimeSlot } from '../../lib/dateCourseDraft';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
 import { reverseGeocode, searchLocations, type LocationSearchResult } from '../../utils/location';
 import {
@@ -68,6 +68,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const [courseTitle, setCourseTitle] = useState('');
   const [courseDate, setCourseDate] = useState(dateToday);
   const [coursePlaceIds, setCoursePlaceIds] = useState<string[]>([]);
+  const [courseTimes, setCourseTimes] = useState<Record<string, CourseTimeSlot>>({});
   const [choiceId, setChoiceId] = useState('');
   const [message, setMessage] = useState('');
   const [pending, setPending] = useState(false);
@@ -87,7 +88,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const visible = useMemo(() => places.filter((item) => category === ALL || item.category === category), [places, category]);
 
   useEffect(() => {
-    setPlaces([]); setCourses([]); setSelectedId(''); setCourseId(''); setLikes([]); setOpinions([]);
+    setPlaces([]); setCourses([]); setSelectedId(''); setCourseId(''); setCourseTimes({}); setLikes([]); setOpinions([]);
     if (!coupleId) return;
     const stopPlaces = subscribeDatePlaces(coupleId, setPlaces, (error) => setMessage(errorText(error)));
     const stopCourses = subscribeDateCourses(coupleId, setCourses, (error) => setMessage(errorText(error)));
@@ -110,6 +111,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   useEffect(() => {
     if (!course) return;
     setCourseTitle(course.title); setCourseDate(course.date); setCoursePlaceIds(course.placeIds);
+    setCourseTimes(courseTimesFromSaved(course.placeIds, course.timeSlots));
   }, [course?.id, course?.updatedAt]);
 
   const search = async (value: string) => {
@@ -285,20 +287,40 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   };
 
   const newCourse = () => {
-    setCourseId(''); setCourseTitle(''); setCourseDate(dateToday()); setCoursePlaceIds([]); setChoiceId(''); setTab('courses');
+    setCourseId(''); setCourseTitle(''); setCourseDate(dateToday()); setCoursePlaceIds([]); setCourseTimes({});
+    setChoiceId(''); setTab('courses');
   };
   const chooseCourse = (item: DateCourse) => {
-    setCourseId(item.id); setCourseTitle(item.title); setCourseDate(item.date); setCoursePlaceIds([...item.placeIds]); setTab('courses');
+    setCourseId(item.id); setCourseTitle(item.title); setCourseDate(item.date);
+    setCoursePlaceIds([...item.placeIds]); setCourseTimes(courseTimesFromSaved(item.placeIds, item.timeSlots)); setTab('courses');
+  };
+  const setStopTime = (id: string, field: keyof CourseTimeSlot, value: string) => {
+    setCourseTimes((times) => ({
+      ...times, [id]: { ...(times[id] ?? { start: '', end: '' }), [field]: value },
+    }));
+  };
+  const removeStop = (id: string) => {
+    setCoursePlaceIds((ids) => ids.filter((placeId) => placeId !== id));
+    setCourseTimes((times) => {
+      const next = { ...times };
+      delete next[id];
+      return next;
+    });
   };
   const saveCourse = async () => {
     if (!coupleId || !uid || !courseTitle.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(courseDate)) {
       setMessage('데이트 코스 이름과 날짜를 확인해 주세요.'); return;
     }
     if (!coursePlaceIds.length) { setMessage('데이트 코스에 장소를 하나 이상 추가해 주세요.'); return; }
+    const timeError = validateCourseTimes(coursePlaceIds, courseTimes);
+    if (timeError) { setMessage(timeError); return; }
+    const timeSlots = coursePlaceIds.map((id) => encodeCourseTimeSlot(courseTimes[id]));
     await submit(async () => {
-      const id = await saveDateCourse(coupleId, uid, { title: courseTitle.trim().slice(0, 100), date: courseDate, placeIds: coursePlaceIds }, courseId || undefined);
+      const id = await saveDateCourse(coupleId, uid, {
+        title: courseTitle.trim().slice(0, 100), date: courseDate, placeIds: coursePlaceIds, timeSlots,
+      }, courseId || undefined);
       setCourseId(id);
-    }, '데이트 코스를 저장했어요. 상대방에게도 표시돼요.');
+    }, '데이트 코스와 방문 시간을 저장했어요. 상대방에게도 표시돼요.');
   };
   const changeOrder = (index: number, offset: number) => setCoursePlaceIds((ids) => {
     const next = [...ids]; const target = index + offset;
