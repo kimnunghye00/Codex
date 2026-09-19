@@ -50,6 +50,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [candidate, setCandidate] = useState<LocationSearchResult | null>(null);
+  const [candidateSearch, setCandidateSearch] = useState('');
   const [candidateCategory, setCandidateCategory] = useState<Category>('기타');
   const [candidateMemo, setCandidateMemo] = useState('');
   const [selectedId, setSelectedId] = useState<string>('');
@@ -68,6 +69,8 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState(false);
   const frame = useRef<HTMLIFrameElement>(null);
+  const panel = useRef<HTMLElement>(null);
+  const searchSequence = useRef(0);
   const selected = places.find((item) => item.id === selectedId);
   const course = courses.find((item) => item.id === courseId);
   const visible = useMemo(() => places.filter((item) => category === ALL || item.category === category), [places, category]);
@@ -101,14 +104,17 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const search = async (value: string) => {
     const trimmed = value.trim();
     if (!trimmed) { setMessage('검색할 장소나 주소를 입력해 주세요.'); return; }
-    setSearching(true); setCandidate(null); setMessage('');
+    const sequence = ++searchSequence.current;
+    setSearching(true); setCandidate(null); setCandidateSearch(''); setMessage('');
     try {
       const found = await searchLocation(trimmed);
+      if (sequence !== searchSequence.current) return;
       if (!found) { setCandidate(null); setMessage('장소를 찾지 못했어요. 주소나 지역명을 더 자세히 입력해 주세요.'); return; }
-      setCandidate(found);
+      setCandidate(found); setCandidateSearch(trimmed);
+      panel.current?.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
-      setMessage(errorText(error));
-    } finally { setSearching(false); }
+      if (sequence === searchSequence.current) setMessage(errorText(error));
+    } finally { if (sequence === searchSequence.current) setSearching(false); }
   };
 
   useEffect(() => {
@@ -186,7 +192,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     // course draft. Never reset the selected course or erase earlier stops.
     await submit(async () => {
       const id = await addDatePlace(coupleId, uid, {
-        name: candidate.placeName.slice(0, 120), address: query.trim().slice(0, 240),
+        name: candidate.placeName.slice(0, 120), address: candidateSearch.slice(0, 240),
         latitude: candidate.latitude, longitude: candidate.longitude, category: candidateCategory, memo: candidateMemo.trim().slice(0, 1000),
       });
       if (addToCurrentCourse) appendToCourse(id);
@@ -236,14 +242,14 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
         {!mapReady && <div className="date-map-loading">{mapError ? '지도를 불러오지 못했어요. 네트워크 또는 지도 인증을 확인해 주세요.' : '네이버 지도를 불러오는 중이에요…'}</div>}
         <div className="date-map-caption">📍 저장한 장소 {places.length}곳 · 방문 기록과 분리된 계획 지도</div>
       </section>
-      <section className="date-map-panel">
+      <section className="date-map-panel" ref={panel}>
         <div className="date-map-tabs" role="tablist" aria-label="데이트 지도 보기">
           <button type="button" role="tab" aria-selected={tab === 'places'} className={tab === 'places' ? 'active' : ''} onClick={() => setTab('places')}>저장한 장소</button>
           <button type="button" role="tab" aria-selected={tab === 'courses'} className={tab === 'courses' ? 'active' : ''} onClick={() => setTab('courses')}>데이트 코스</button>
         </div>
         {candidate && <article className="date-map-candidate">
             <div className="date-map-panel-header"><strong>검색한 장소</strong><button type="button" aria-label="검색 결과 닫기" onClick={() => setCandidate(null)}><X size={16}/></button></div>
-            <b>{candidate.placeName}</b><small>검색어: {query} · 지도 핀 위치가 맞는지 확인한 후 추가해 주세요.</small>
+            <b>{candidate.placeName}</b><small>검색어: {candidateSearch} · 지도 핀 위치가 맞는지 확인한 후 추가해 주세요.</small>
             <div className="date-map-inline"><select aria-label="장소 분류" value={candidateCategory} onChange={(e) => setCandidateCategory(e.target.value as Category)}>{CATEGORIES.map((item) => <option key={item}>{item}</option>)}</select>
             <button type="button" onClick={() => mapFocus(candidate)}>지도에서 보기</button></div>
             <textarea value={candidateMemo} onChange={(e) => setCandidateMemo(e.target.value)} maxLength={1000} placeholder="함께 가고 싶은 이유나 메모 (선택)" />
