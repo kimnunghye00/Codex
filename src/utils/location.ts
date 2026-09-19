@@ -1,4 +1,5 @@
 import { signalPersistentStateChange } from './persistenceSignal';
+import { searchLocations } from './locationSearch';
 
 export type LocationVisit = {
   id: string;
@@ -14,6 +15,7 @@ export type LocationSearchResult = {
   latitude: number;
   longitude: number;
   placeName: string;
+  address?: string;
 };
 
 export type LocationSharingState = {
@@ -156,25 +158,8 @@ export async function reverseGeocode(latitude: number, longitude: number): Promi
   }
 }
 
+export { searchLocations } from './locationSearch';
+/** Older single-place callers retain their existing contract. */
 export async function searchLocation(query: string): Promise<LocationSearchResult | null> {
-  const value = query.trim();
-  if (!value) return null;
-  try {
-    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(value)}&limit=1&addressdetails=1&accept-language=ko&countrycodes=kr`;
-    const response = await fetch(url, { headers: { Accept: 'application/json' } });
-    if (!response.ok) return null;
-    const rows = await response.json() as Array<{ lat?: string; lon?: string; name?: string; display_name?: string; address?: Record<string, string> }>;
-    const first = rows[0];
-    if (!first) return null;
-    const latitude = Number(first.lat);
-    const longitude = Number(first.lon);
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-    return {
-      latitude,
-      longitude,
-      placeName: detailedKoreanPlaceName(first) || value,
-    };
-  } catch {
-    return null;
-  }
+  return (await searchLocations(query))[0] ?? null;
 }

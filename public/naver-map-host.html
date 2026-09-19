@@ -38,6 +38,7 @@
       let sdkWaitTimer;
       let sdkWaitStartedAt = 0;
       let lastRender = { visits: [], mode: 'map' };
+      let pickMode = false;
 
       const send = (type, detail = {}) => {
         if (window.parent === window) return;
@@ -132,6 +133,7 @@
         const palette = activePalette();
         naver.maps.Event.trigger(map, 'resize');
         clearOverlays();
+        if (mode === 'date-plan') clearFocus();
 
         const validVisits = lastRender.visits
           .filter((visit) => Number.isFinite(Number(visit.latitude)) && Number.isFinite(Number(visit.longitude)))
@@ -179,7 +181,13 @@
             borderWidth: 0,
             backgroundColor: '#fff',
           });
-          naver.maps.Event.addListener(marker, 'click', () => popup.open(map, marker));
+          naver.maps.Event.addListener(marker, 'click', () => {
+            popup.open(map, marker);
+            if (mode === 'date-plan' && typeof visit.id === 'string' && visit.id.startsWith('search-')) {
+              pickMode = false;
+              send('search-marker-selected', { id: visit.id });
+            }
+          });
           overlays.push(marker);
         });
 
@@ -224,6 +232,7 @@
         const data = event.data || {};
         if (data.source !== 'route-map-parent') return;
         if (data.type === 'render') render(data);
+        if (data.type === 'set-pick-mode') pickMode = data.enabled === true && lastRender.mode === 'date-plan';
         if (data.type === 'focus') focus(data.visit, data.showPopup);
         if (data.type === 'clear-focus') { clearFocus(); render(lastRender); }
         if (data.type === 'resize' && map && hasMapSdk()) window.naver.maps.Event.trigger(map, 'resize');
@@ -259,6 +268,14 @@
             zoom: 15,
             zoomControl: true,
             zoomControlOptions: { position: window.naver.maps.Position.TOP_RIGHT },
+          });
+          naver.maps.Event.addListener(map, 'click', (event) => {
+            if (!pickMode || lastRender.mode !== 'date-plan') return;
+            const lat = Number(event.coord?.lat());
+            const lng = Number(event.coord?.lng());
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+            pickMode = false;
+            send('map-point-selected', { latitude: lat, longitude: lng });
           });
           initialized = true;
           window.clearTimeout(initTimer);
