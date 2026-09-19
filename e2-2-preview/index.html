@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#fffaf6" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>E2-2 맛집 추천</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <button class="brand-lockup" onclick="setTab('home')" aria-label="홈으로 이동">
+        <span class="brand-mark">E2</span>
+        <span class="brand-copy"><strong>맛집 추천</strong><small>내 취향으로 찾는 근처 맛집</small></span>
+      </button>
+      <button id="resetBtn" class="icon-btn" title="테스트 데이터 초기화" aria-label="테스트 데이터 초기화">↻</button>
+    </header>
+
+    <main id="app" class="app-content"></main>
+
+    <nav class="bottom-nav" aria-label="주요 메뉴">
+      <button data-tab="home" class="nav-item active"><span>⌂</span><small>홈</small></button>
+      <button data-tab="explore" class="nav-item"><span>⌕</span><small>맛집 찾기</small></button>
+      <button data-tab="verify" class="nav-item nav-primary"><span>＋</span><small>기록</small></button>
+      <button data-tab="visits" class="nav-item"><span>♥</span><small>내 맛집</small></button>
+      <button data-tab="taste" class="nav-item"><span>◎</span><small>취향</small></button>
+    </nav>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app-1.js"></script>
+  <script src="app-2.js"></script>
+  <script src="app-3.js"></script>
+  <script src="app-4.js"></script>
+  <script src="app-5.js"></script>
+  <script src="app-6.js"></script>
+  <script src="app-7.js"></script>
+  <script src="app-8.js"></script>
+  <script src="app-9.js"></script>
+</body>
+</html>
