@@ -62,3 +62,5 @@
  .date-map-map,.date-map-map iframe { height:42vh; min-height:290px; max-height:420px; }
  .date-map-panel { max-height:none; }
 }
+
+.date-map-add-hint { margin:-2px 0 5px; padding:8px 10px; border-radius:9px; background:var(--primary-soft); color:var(--text-secondary); font-size:11px; line-height:1.55; }
