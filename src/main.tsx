@@ -30,7 +30,7 @@ import './profile-style.css';
 
 import './input-ime-stability';
 import './route-themes';
-import './home-map-overlay';
+// Legacy home map click-capture disabled: the home card now opens the footprints page.
 import './native-back-ui';
 import './app-icon-native';
 import './settings-quick';
