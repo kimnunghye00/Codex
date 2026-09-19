@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { searchLocation, searchLocations } from '../src/utils/location.ts';
+import { searchLocations } from '../src/utils/locationSearch.ts';
 
 test('same-name places remain independently selectable with disambiguating addresses', async () => {
   const oldFetch = globalThis.fetch;
@@ -22,8 +22,6 @@ test('same-name places remain independently selectable with disambiguating addre
     assert.notEqual(branches[0].latitude, branches[1].latitude);
     assert.match(requestUrl, /limit=15/);
     assert.match(requestUrl, /countrycodes=kr/);
-    const legacy = await searchLocation('이재모피자');
-    assert.equal(legacy?.latitude, branches[0].latitude);
   } finally {
     globalThis.fetch = oldFetch;
   }
