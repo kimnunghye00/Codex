@@ -16,6 +16,7 @@ import { createCoupleInvite, connectWithInviteCode, finalizeInviteAsOwner, compl
 import { disconnectCouple } from '../src/lib/coupleDisconnect';
 import { sendCoupleMessage, toggleCoupleMessageReaction, setCoupleMessageReactions, hideCoupleMessageForMe, deleteCoupleMessageForEveryone, clearCoupleChatForMe } from '../src/lib/chatRealtime';
 import { uploadChatAttachment, uploadChatMedia } from '../src/lib/chatMedia';
+import { addDatePlace, saveDateCourse, setPlaceLike, addPlaceOpinion } from '../src/lib/dateMap';
 
 const projectId = 'demo-danduli-security';
 let env: RulesTestEnvironment;
@@ -298,4 +299,40 @@ test('an accepted invitation reserves the joiner before their device completes t
   await assertFails(connectWithInviteCode('bob', 'bob', second.code));
   await assertFails(updateDoc(doc(client.db, 'users', 'bob'), { pendingInviteCode: second.code }));
   await completeJoinerConnection('bob', first.code);
+});
+
+test('date planning: members share places and courses but outsiders and identity spoofing are blocked', async () => {
+  const { coupleId } = await pair();
+  as('alice');
+  const placeId = await addDatePlace(coupleId, 'alice', {
+    name: '안목해변', address: '강릉시', latitude: 37.77, longitude: 128.94, category: '여행', memo: '함께 걷기',
+  });
+  const placePath = `couples/${coupleId}/datePlaces/${placeId}`;
+  as('bob');
+  expect((await getDocFromServer(doc(client.db, placePath))).data()?.name).toBe('안목해변');
+  await assertSucceeds(updateDoc(doc(client.db, placePath), { memo: '저녁에 걷기', updatedAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(client.db, placePath), { createdBy: 'bob', updatedAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(client.db, placePath), { latitude: 0, longitude: 0, updatedAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(client.db, 'couples', coupleId, 'datePlaces', 'spoof'), {
+    id: 'spoof', name: '위조', address: '', latitude: 37, longitude: 128, category: '기타',
+    memo: '', createdBy: 'alice', createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  }));
+  await setPlaceLike(coupleId, placeId, 'bob', true);
+  await assertFails(setDoc(doc(client.db, placePath, 'likes', 'alice'), { uid: 'alice', liked: true }));
+  await addPlaceOpinion(coupleId, placeId, 'bob', '좋아!');
+  await assertFails(setDoc(doc(client.db, placePath, 'opinions', 'fake'), {
+    id: 'fake', authorUid: 'alice', text: '상대방 사칭', createdAt: serverTimestamp(),
+  }));
+  await saveDateCourse(coupleId, 'bob', { title: '강릉 데이트', date: '2026-09-20', placeIds: [placeId] });
+  as('alice');
+  const courseRef = doc(client.db, 'couples', coupleId, 'dateCourses', 'forged');
+  await assertFails(setDoc(courseRef, {
+    id: 'forged', title: '허위', date: '2026-09-20', placeIds: [placeId], createdBy: 'bob', updatedAt: serverTimestamp(),
+  }));
+  await signup('eve');
+  const outsider = as('eve');
+  for (const path of [placePath, `${placePath}/likes/bob`, `${placePath}/opinions/fake`]) {
+    await assertFails(getDocFromServer(doc(outsider.db, path)));
+  }
+  await assertFails(setDoc(doc(outsider.db, placePath, 'likes', 'eve'), { uid: 'eve', liked: true }));
 });
