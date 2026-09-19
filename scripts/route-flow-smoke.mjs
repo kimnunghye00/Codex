@@ -95,7 +95,7 @@ check('responsive frame owns desktop viewport', responsiveFrame.includes('lg:[&_
 check('App routes home', app.includes("tab === 'home'"));
 check('App routes memories directly', app.includes("from './components/memories/MemoriesPage'") && app.includes('<MemoriesPage requestedTab={requestedHubTab}'));
 check('App routes chat directly into page', app.includes("tab === 'chat'") && app.includes('<ChatPage Header={AppHeader}') && !app.includes('chat-room-layer'));
-check('App routes location directly', app.includes("from './components/location/LocationPage'") && app.includes('<LocationPage requestedTab={requestedLocationTab}'));
+check('App routes date planning directly', app.includes("import('./components/location/DateMapPage')") && app.includes('<DateMapPage Header={AppHeader}') && !app.includes('<LocationPage requestedTab='));
 check('App routes more', app.includes("tab === 'more'"));
 check('native back handler remains connected', app.includes('route-native-back'));
 check('App uses realtime couple subscription', app.includes('subscribeRealCoupleConnection'));
