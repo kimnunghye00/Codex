@@ -90,7 +90,7 @@ function scheduleSignature(item: Pick<Schedule, 'title' | 'date' | 'startTime'>)
   return `${item.title}|${item.date}|${item.startTime}`;
 }
 
-export function MemoriesPage({ requestedTab, Header, memories, setMemories, initialMemoryId, initialDraft, onClearInitial, onClearInitialDraft, onOpenLocation, sharedProfile, sharedConnection, sharedRelationshipStartDate }: {
+export function MemoriesPage({ requestedTab, Header, memories, setMemories, initialMemoryId, initialDraft, onClearInitial, onClearInitialDraft, onOpenLocation, onOpenFootprints, sharedProfile, sharedConnection, sharedRelationshipStartDate }: {
   requestedTab?: HubTabId;
   Header: ({ title }: { title?: string }) => React.ReactNode;
   memories: Memory[];
@@ -100,6 +100,7 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
   onClearInitial: () => void;
   onClearInitialDraft: () => void;
   onOpenLocation?: (place: string) => void;
+  onOpenFootprints?: (memoryId: number) => void;
   sharedProfile?: UserProfile;
   sharedConnection?: RealCoupleConnection | null;
   sharedRelationshipStartDate?: string;
@@ -652,7 +653,7 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
     }
   };
 
-  if (selectedMemory) return <><MemoryDetail memory={selectedMemory} onBack={() => { setSelected(undefined); onClearInitial(); }} onFavorite={() => favorite(selectedMemory.id)} onEdit={() => setEditing(selectedMemory)} onDelete={() => { setMemories((items) => items.filter((item) => item.id !== selectedMemory.id)); setSelected(undefined); }} onOpenPlaceTimeline={(place) => { setSelected(undefined); onClearInitial(); setActiveTab('record'); setPlaceTimelineFocus(place); }} />{editing && <MemoryForm memory={editing} onClose={() => setEditing(undefined)} onSave={(memory) => { update(memory); setEditing(undefined); }} />}</>;
+  if (selectedMemory) return <><MemoryDetail memory={selectedMemory} onBack={() => { setSelected(undefined); onClearInitial(); }} onFavorite={() => favorite(selectedMemory.id)} onEdit={() => setEditing(selectedMemory)} onDelete={() => { setMemories((items) => items.filter((item) => item.id !== selectedMemory.id)); setSelected(undefined); }} onOpenPlaceTimeline={(place) => { setSelected(undefined); onClearInitial(); setActiveTab('record'); setPlaceTimelineFocus(place); }} onOpenFootprints={onOpenFootprints ? () => onOpenFootprints(selectedMemory.id) : undefined} />{editing && <MemoryForm memory={editing} onClose={() => setEditing(undefined)} onSave={(memory) => { update(memory); setEditing(undefined); }} />}</>;
 
   return <div className="page memories-page route-hub"><Header title="추억" />
     <div className="hub-head"><div><small>ROUTE TOGETHER</small><h1>{TAB_LABEL[activeTab]}</h1></div><button type="button" className="hub-settings" onClick={() => setOrderOpen(true)}><Settings2 size={18} /></button></div>
