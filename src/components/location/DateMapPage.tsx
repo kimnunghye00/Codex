@@ -315,16 +315,39 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
           {picking && <p className="date-map-pick-hint" role="status">지도에서 방문할 지점을 클릭해 주세요. 위치를 선택한 뒤 지점 이름과 주소를 직접 확인할 수 있어요.</p>}
           {!results.length && !candidate && !picking && <p className="date-map-empty">결과에 원하는 지점이 없다면 지도에서 직접 위치를 선택할 수 있어요.</p>}
         </div>}
-        {candidate && <article className="date-map-candidate">
-            <div className="date-map-panel-header"><strong>검색한 장소</strong><button type="button" aria-label="검색 결과 닫기" onClick={() => setCandidate(null)}><X size={16}/></button></div>
-            <label className="date-map-label">선택한 지점 이름<input aria-label="선택한 지점 이름" value={candidateName} maxLength={120} onChange={(e) => setCandidateName(e.target.value)} placeholder="예: 이재모피자 서면점"/></label>
-            <label className="date-map-label">주소 또는 지점 설명<input aria-label="선택한 지점 주소" value={candidateAddress} maxLength={240} onChange={(e) => setCandidateAddress(e.target.value)} placeholder="지도 위치를 확인하고 주소를 입력해 주세요"/></label>
-            <small>검색어: {candidateSearch} · 정확한 지점인지 지도 위치를 확인해 주세요.</small>
-            <div className="date-map-inline"><select aria-label="장소 분류" value={candidateCategory} onChange={(e) => setCandidateCategory(e.target.value as Category)}>{CATEGORIES.map((item) => <option key={item}>{item}</option>)}</select>
-            <button type="button" onClick={() => mapFocus(candidate)}>지도에서 보기</button></div>
-            <textarea value={candidateMemo} onChange={(e) => setCandidateMemo(e.target.value)} maxLength={1000} placeholder="함께 가고 싶은 이유나 메모 (선택)" />
-            <button className="date-map-primary" type="button" disabled={pending || !connection || (tab === 'courses' && coursePlaceIds.length >= MAX_DATE_COURSE_PLACES)} onClick={() => void saveCandidate(tab === 'courses')}><Plus size={15}/> {tab === 'courses' ? '이 코스에 추가' : '우리 장소로 저장'}</button>
-          </article>}
+        {candidate && <article className="date-map-candidate" aria-label="선택한 장소 확인">
+          <div className="date-map-candidate-header">
+            <div><h2>선택한 장소</h2><p>위치를 확인하고 우리 코스에 추가해요.</p></div>
+            <button type="button" className="date-map-candidate-close" aria-label="선택한 장소 닫기" onClick={() => setCandidate(null)}><X size={18}/></button>
+          </div>
+          <div className="date-map-candidate-summary">
+            <span className="date-map-candidate-pin"><MapPin size={19}/></span>
+            <div className="date-map-candidate-summary-text">
+              <strong>{candidateName || candidate.placeName}</strong>
+              <span>{candidateAddress || '주소를 입력하거나 지도에서 위치를 확인해 주세요.'}</span>
+            </div>
+          </div>
+          <div className="date-map-candidate-fields">
+            <label className="date-map-candidate-field">선택한 지점 이름
+              <input aria-label="선택한 지점 이름" value={candidateName} maxLength={120} onChange={(e) => setCandidateName(e.target.value)} placeholder="예: 이재모피자 서면점"/>
+            </label>
+            <label className="date-map-candidate-field">주소 또는 지점 설명
+              <input aria-label="선택한 지점 주소" value={candidateAddress} maxLength={240} onChange={(e) => setCandidateAddress(e.target.value)} placeholder="지도 위치를 확인하고 주소를 입력해 주세요"/>
+            </label>
+          </div>
+          <div className="date-map-candidate-actions">
+            <label className="date-map-candidate-category"><span className="date-map-visually-hidden">장소 분류</span>
+              <select aria-label="장소 분류" value={candidateCategory} onChange={(e) => setCandidateCategory(e.target.value as Category)}>{CATEGORIES.map((item) => <option key={item}>{item}</option>)}</select>
+              <ChevronDown size={15} aria-hidden="true"/>
+            </label>
+            <button type="button" className="date-map-candidate-map-button" onClick={() => mapFocus(candidate)}><MapPin size={15}/> 지도에서 위치 확인</button>
+          </div>
+          <label className="date-map-candidate-field date-map-candidate-memo">함께 가고 싶은 이유나 메모 <span>(선택)</span>
+            <textarea value={candidateMemo} onChange={(e) => setCandidateMemo(e.target.value)} maxLength={1000} placeholder="예: 여기서 식사하고 근처 카페에 가기"/>
+          </label>
+          <p className="date-map-candidate-note">검색어: {candidateSearch} · 저장하기 전에 위치가 맞는지 확인해 주세요.</p>
+          <button className="date-map-primary date-map-candidate-submit" type="button" disabled={pending || !connection || (tab === 'courses' && coursePlaceIds.length >= MAX_DATE_COURSE_PLACES)} onClick={() => void saveCandidate(tab === 'courses')}><Plus size={17}/> {tab === 'courses' ? '이 코스에 추가' : '우리 장소로 저장'}</button>
+        </article>}
         {tab === 'places' && <>
           <div className="date-map-panel-header"><strong>우리가 가고 싶은 곳</strong><span>{visible.length}곳</span></div>
           {!visible.length && <p className="date-map-empty">아직 저장한 장소가 없어요. 검색해서 첫 데이트 장소를 등록해 봐요.</p>}
