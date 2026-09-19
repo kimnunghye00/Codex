@@ -172,7 +172,7 @@
         focusOverlay = null;
       };
 
-      const render = ({ visits = [], mode = 'map' } = {}) => {
+      const render = ({ visits = [], mode = 'map' } = {}, preserveViewport = false) => {
         lastRender = { visits: Array.isArray(visits) ? visits : [], mode };
         if (!map || !hasMapSdk()) return;
         const naver = window.naver;
@@ -215,18 +215,31 @@
           }));
         }
 
-        validVisits.forEach((visit, index) => {
+        clustersFor(validVisits, mode, map.getZoom()).forEach((group) => {
+          if (group.length > 1) {
+            const latitude = group.reduce((sum, visit) => sum + Number(visit.latitude), 0) / group.length;
+            const longitude = group.reduce((sum, visit) => sum + Number(visit.longitude), 0) / group.length;
+            const marker = new naver.maps.Marker({
+              map, position: new naver.maps.LatLng(latitude, longitude),
+              icon: clusterIcon(naver, group.length, palette), zIndex: 230,
+            });
+            naver.maps.Event.addListener(marker, 'click', () => {
+              map.setCenter(new naver.maps.LatLng(latitude, longitude));
+              map.setZoom(Math.min(17, map.getZoom() + 2));
+            });
+            overlays.push(marker);
+            return;
+          }
+          const visit = group[0];
+          const index = validVisits.indexOf(visit);
           const current = !visit.leftAt && index === validVisits.length - 1;
           const marker = new naver.maps.Marker({
-            map,
-            position: points[index],
-            icon: markerIcon(naver, current, mode === 'footprints' ? index : undefined, palette),
+            map, position: points[index],
+            icon: markerIcon(naver, current, mode === 'footprints' ? index : undefined, palette, mode === 'date-plan'),
             zIndex: 200,
           });
           const popup = new naver.maps.InfoWindow({
-            content: mode === 'date-plan' ? `<div style="padding:10px 12px;font-size:12px;line-height:1.45"><strong>${escapeHtml(visit.placeName || '데이트 장소')}</strong><br>함께 가고 싶은 장소</div>` : `<div style="padding:10px 12px;font-size:12px;line-height:1.45"><strong>${escapeHtml(visit.placeName || '위치 기록')}</strong><br>${escapeHtml(dayText(visit.arrivedAt))} · ${escapeHtml(timeText(visit.arrivedAt))}${visit.leftAt ? ` ~ ${escapeHtml(timeText(visit.leftAt))}` : ' · 현재'}</div>`,
-            borderWidth: 0,
-            backgroundColor: '#fff',
+            content: placeCard(visit, mode), borderWidth: 0, backgroundColor: '#fff',
           });
           naver.maps.Event.addListener(marker, 'click', () => {
             if (mode === 'date-plan' && typeof visit.id === 'string' && /^search-\d+$/.test(visit.id)) {
@@ -234,13 +247,14 @@
               focus(visit, true);
               send('search-marker-selected', { id: visit.id });
             } else {
+              map.setCenter(points[index]);
               popup.open(map, marker);
             }
           });
           overlays.push(marker);
         });
 
-        if (focusOverlay) return;
+        if (focusOverlay || preserveViewport) return;
         if (points.length === 1) {
           map.setCenter(points[0]);
           map.setZoom(17);
@@ -262,13 +276,11 @@
         focusOverlay = new naver.maps.Marker({
           map,
           position: point,
-          icon: markerIcon(naver, true, undefined, activePalette()),
+          icon: markerIcon(naver, true, undefined, activePalette(), lastRender.mode === 'date-plan'),
           zIndex: 2000,
         });
         focusPopup = new naver.maps.InfoWindow({
-          content: `<div style="padding:10px 12px;font-size:12px;line-height:1.45"><strong>${escapeHtml(visit.placeName || '일정 장소')}</strong><br><span style="color:#777">ROUTE에서 연결한 장소</span></div>`,
-          borderWidth: 0,
-          backgroundColor: '#fff',
+          content: placeCard(visit, lastRender.mode), borderWidth: 0, backgroundColor: '#fff',
         });
         naver.maps.Event.addListener(focusOverlay, 'click', () => focusPopup?.open(map, focusOverlay));
         map.setCenter(point);
@@ -317,6 +329,9 @@
             zoom: 15,
             zoomControl: true,
             zoomControlOptions: { position: window.naver.maps.Position.TOP_RIGHT },
+          });
+          naver.maps.Event.addListener(map, 'zoom_changed', () => {
+            if (['footprint-pins', 'date-plan'].includes(lastRender.mode)) render(lastRender, true);
           });
           naver.maps.Event.addListener(map, 'click', (event) => {
             if (!pickMode || lastRender.mode !== 'date-plan') return;
