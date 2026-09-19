@@ -1,0 +1,21 @@
+{
+  "hosting": {
+    "site": "e2-2-kimnunghye00",
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "**/.*"
+    ],
+    "headers": [
+      {
+        "source": "/index.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      }
+    ]
+  }
+}
