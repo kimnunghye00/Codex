@@ -246,6 +246,9 @@
               pickMode = false;
               focus(visit, true);
               send('search-marker-selected', { id: visit.id });
+            } else if (mode === 'date-plan' && typeof visit.id === 'string') {
+              focus(visit, true);
+              send('saved-marker-selected', { id: visit.id });
             } else {
               map.setCenter(points[index]);
               popup.open(map, marker);
