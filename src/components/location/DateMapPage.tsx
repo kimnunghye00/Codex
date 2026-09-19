@@ -16,7 +16,7 @@ import './DateMapPage.css';
 type Category = DatePlace['category'];
 const CATEGORIES: Category[] = ['맛집', '카페', '놀거리', '여행', '기타'];
 const MAP_ORIGIN = 'https://meluni-f4e00.web.app';
-const MAP_HOST = `${MAP_ORIGIN}/naver-map-host.html?v=9`;
+const MAP_HOST = `${MAP_ORIGIN}/naver-map-host.html?v=10`;
 const ALL = '전체';
 function dateToday() {
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
@@ -75,7 +75,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState(false);
   const frame = useRef<HTMLIFrameElement>(null);
-  const queuedFocus = useRef<{ latitude: number; longitude: number; placeName: string } | null>(null);
+  const queuedFocus = useRef<{ latitude: number; longitude: number; placeName: string; photoUrl?: string; address?: string } | null>(null);
   const panel = useRef<HTMLElement>(null);
   const searchSequence = useRef(0);
   const lookupSequence = useRef(0);
@@ -144,6 +144,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const mapVisits = useMemo(() => [
     ...(results.length || candidate ? [] : visible).map((item) => ({
       id: item.id, latitude: item.latitude, longitude: item.longitude, placeName: item.name,
+      photoUrl: item.photoUrl, address: item.address,
       arrivedAt: '2026-01-01T00:00:00.000Z', leftAt: '2026-01-01T00:00:00.000Z',
     })),
     // When searching, show all returned branches (not only the first) on the map.
@@ -161,6 +162,12 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     const receive = (event: MessageEvent<{ source?: string; type?: string; id?: string; latitude?: number; longitude?: number }>) => {
       if (event.origin !== MAP_ORIGIN || event.source !== frame.current?.contentWindow || event.data?.source !== 'route-map-host') return;
       if (event.data.type === 'ready') { setMapReady(true); setMapError(false); }
+      if (event.data.type === 'saved-marker-selected' && typeof event.data.id === 'string') {
+        setSelectedId(event.data.id);
+        setCandidate(null);
+        setMessage('');
+        panel.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      }
       if (event.data.type === 'search-marker-selected' && typeof event.data.id === 'string') {
         const match = /^search-(\d+)$/.exec(event.data.id);
         const index = match ? Number(match[1]) : -1;
@@ -218,14 +225,14 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     mapFocus(item);
   };
 
-  const mapFocus = (place: { latitude: number; longitude: number; placeName: string }) => {
+  const mapFocus = (place: { latitude: number; longitude: number; placeName: string; photoUrl?: string; address?: string }) => {
     if (!mapReady || !frame.current?.contentWindow) {
       queuedFocus.current = place;
       return;
     }
     queuedFocus.current = null;
     frame.current.contentWindow.postMessage({ source: 'route-map-parent', type: 'focus', showPopup: true,
-      visit: { latitude: place.latitude, longitude: place.longitude, placeName: place.placeName } }, MAP_ORIGIN);
+      visit: { latitude: place.latitude, longitude: place.longitude, placeName: place.placeName, photoUrl: place.photoUrl, address: place.address } }, MAP_ORIGIN);
   };
 
   const clearMapFocus = () => {
