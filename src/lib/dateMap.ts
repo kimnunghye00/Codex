@@ -18,6 +18,8 @@ export type DateCourse = {
   title: string;
   date: string;
   placeIds: string[];
+  /** Optional for legacy courses; entries align with placeIds and use HH:mm-HH:mm or ''. */
+  timeSlots?: string[];
   createdBy: string;
   updatedAt?: unknown;
 };
@@ -68,12 +70,16 @@ export async function deleteDatePlace(coupleId: string, id: string) {
   await deleteDoc(doc(placeCollection(coupleId), id));
 }
 
-export async function saveDateCourse(coupleId: string, uid: string, input: Pick<DateCourse, 'title' | 'date' | 'placeIds'>, existingId?: string) {
+export async function saveDateCourse(coupleId: string, uid: string,
+  input: Pick<DateCourse, 'title' | 'date' | 'placeIds'> & { timeSlots?: string[] }, existingId?: string) {
   const ref = existingId ? doc(courseCollection(coupleId), existingId) : doc(courseCollection(coupleId));
+  // Existing callers and saved courses remain compatible: missing time = undecided.
+  const timeSlots = input.placeIds.map((_, index) => input.timeSlots?.[index] ?? '');
+  const data = { title: input.title, date: input.date, placeIds: input.placeIds, timeSlots, updatedAt: serverTimestamp() };
   if (existingId) {
-    await setDoc(ref, { ...input, updatedAt: serverTimestamp() }, { merge: true });
+    await setDoc(ref, data, { merge: true });
   } else {
-    await setDoc(ref, { ...input, id: ref.id, createdBy: uid, updatedAt: serverTimestamp() });
+    await setDoc(ref, { ...data, id: ref.id, createdBy: uid });
   }
   return ref.id;
 }
