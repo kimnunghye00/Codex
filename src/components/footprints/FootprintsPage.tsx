@@ -7,7 +7,7 @@ import { loadLocationVisits } from '../../utils/location';
 import './FootprintsPage.css';
 
 const MAP_ORIGIN = 'https://meluni-f4e00.web.app';
-const MAP_URL = `${MAP_ORIGIN}/naver-map-host.html?v=6`;
+const MAP_URL = `${MAP_ORIGIN}/naver-map-host.html?v=10`;
 const DISPLAY_DATE = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: 'long', day: 'numeric' });
 const KOREAN_DATE = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' });
 
