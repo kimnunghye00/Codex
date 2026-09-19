@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { CalendarDays, ChevronDown, ChevronUp, Heart, MapPin, MessageCircle, Plus, Search, Trash2, X } from 'lucide-react';
 import { auth } from '../../lib/firebase';
+import { appendPlaceToCourse, MAX_DATE_COURSE_PLACES } from '../../lib/dateCourseDraft';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
 import { searchLocation, type LocationSearchResult } from '../../utils/location';
 import {
@@ -161,12 +162,12 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   };
 
   const appendToCourse = (placeId: string) => {
-    setCoursePlaceIds((ids) => ids.includes(placeId) || ids.length >= 20 ? ids : [...ids, placeId]);
+    setCoursePlaceIds((ids) => appendPlaceToCourse(ids, placeId));
   };
 
   const saveCandidate = async (addToCurrentCourse = false) => {
     if (!candidate || !uid || !coupleId || pending) return;
-    if (addToCurrentCourse && coursePlaceIds.length >= 20) {
+    if (addToCurrentCourse && coursePlaceIds.length >= MAX_DATE_COURSE_PLACES) {
       setMessage('하나의 코스에는 장소를 최대 20곳까지 추가할 수 있어요.');
       return;
     }
@@ -253,7 +254,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             <div className="date-map-inline"><select aria-label="장소 분류" value={candidateCategory} onChange={(e) => setCandidateCategory(e.target.value as Category)}>{CATEGORIES.map((item) => <option key={item}>{item}</option>)}</select>
             <button type="button" onClick={() => mapFocus(candidate)}>지도에서 보기</button></div>
             <textarea value={candidateMemo} onChange={(e) => setCandidateMemo(e.target.value)} maxLength={1000} placeholder="함께 가고 싶은 이유나 메모 (선택)" />
-            <button className="date-map-primary" type="button" disabled={pending || !connection || (tab === 'courses' && coursePlaceIds.length >= 20)} onClick={() => void saveCandidate(tab === 'courses')}><Plus size={15}/> {tab === 'courses' ? '이 코스에 추가' : '우리 장소로 저장'}</button>
+            <button className="date-map-primary" type="button" disabled={pending || !connection || (tab === 'courses' && coursePlaceIds.length >= MAX_DATE_COURSE_PLACES)} onClick={() => void saveCandidate(tab === 'courses')}><Plus size={15}/> {tab === 'courses' ? '이 코스에 추가' : '우리 장소로 저장'}</button>
           </article>}
         {tab === 'places' && <>
           <div className="date-map-panel-header"><strong>우리가 가고 싶은 곳</strong><span>{visible.length}곳</span></div>
@@ -275,7 +276,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             </form>
             <div className="date-map-inline"><button type="button" onClick={() => {
               if (coursePlaceIds.includes(selected.id)) setMessage('이미 이 코스에 포함된 장소예요.');
-              else if (coursePlaceIds.length >= 20) setMessage('하나의 코스에는 장소를 최대 20곳까지 추가할 수 있어요.');
+              else if (coursePlaceIds.length >= MAX_DATE_COURSE_PLACES) setMessage('하나의 코스에는 장소를 최대 20곳까지 추가할 수 있어요.');
               else { appendToCourse(selected.id); setMessage('장소를 추가했어요. 마지막에 코스 저장을 눌러 주세요.'); }
               setTab('courses');
             }}>{courseId || coursePlaceIds.length ? '현재 코스에 추가' : '코스에 넣기'}</button>
@@ -297,7 +298,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
               <button type="button" aria-label="아래로 이동" disabled={index === coursePlaceIds.length - 1} onClick={() => changeOrder(index,1)}><ChevronDown size={16}/></button>
               <button type="button" aria-label="코스에서 제거" onClick={() => setCoursePlaceIds((ids) => ids.filter((placeId) => placeId !== id))}><X size={16}/></button></div>; })}
             <div className="date-map-inline"><select aria-label="코스에 추가할 장소" value={choiceId} onChange={(e) => setChoiceId(e.target.value)}><option value="">장소 선택</option>{places.filter((item) => !coursePlaceIds.includes(item.id)).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-              <button type="button" disabled={!choiceId || coursePlaceIds.length >= 20} onClick={() => {
+              <button type="button" disabled={!choiceId || coursePlaceIds.length >= MAX_DATE_COURSE_PLACES} onClick={() => {
                 if (!choiceId) return;
                 appendToCourse(choiceId); setChoiceId('');
                 setMessage('장소를 추가했어요. 마지막에 코스 저장을 눌러 주세요.');
