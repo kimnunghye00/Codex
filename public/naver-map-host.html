@@ -153,7 +153,7 @@
         // The recent-places screen can contain visits from more than one day.
         // Connect every displayed visit chronologically so the route never
         // disappears simply because two visible points belong to different days.
-        if (points.length >= 2 && mode !== 'footprint-pins') {
+        if (points.length >= 2 && mode !== 'footprint-pins' && mode !== 'date-plan') {
           overlays.push(new naver.maps.Polyline({
             map,
             path: points,
@@ -175,7 +175,7 @@
             zIndex: 200,
           });
           const popup = new naver.maps.InfoWindow({
-            content: `<div style="padding:10px 12px;font-size:12px;line-height:1.45"><strong>${escapeHtml(visit.placeName || '위치 기록')}</strong><br>${escapeHtml(dayText(visit.arrivedAt))} · ${escapeHtml(timeText(visit.arrivedAt))}${visit.leftAt ? ` ~ ${escapeHtml(timeText(visit.leftAt))}` : ' · 현재'}</div>`,
+            content: mode === 'date-plan' ? `<div style="padding:10px 12px;font-size:12px;line-height:1.45"><strong>${escapeHtml(visit.placeName || '데이트 장소')}</strong><br>함께 가고 싶은 장소</div>` : `<div style="padding:10px 12px;font-size:12px;line-height:1.45"><strong>${escapeHtml(visit.placeName || '위치 기록')}</strong><br>${escapeHtml(dayText(visit.arrivedAt))} · ${escapeHtml(timeText(visit.arrivedAt))}${visit.leftAt ? ` ~ ${escapeHtml(timeText(visit.leftAt))}` : ' · 현재'}</div>`,
             borderWidth: 0,
             backgroundColor: '#fff',
           });
