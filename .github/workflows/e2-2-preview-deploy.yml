@@ -1,0 +1,103 @@
+name: Deploy E2-2 Preview
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'e2-2-preview/**'
+      - '.github/workflows/e2-2-preview-deploy.yml'
+
+concurrency:
+  group: e2-2-preview-deploy
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.ROUTE_FIREBASE_SERVICE_ACCOUNT }}
+      FIREBASE_TOKEN: ${{ secrets.ROUTE_FIREBASE_TOKEN }}
+      FIREBASE_PROJECT_ID: meluni-f4e00
+      FIREBASE_SITE_ID: e2-2-kimnunghye00
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Prepare Firebase service account
+        if: ${{ env.FIREBASE_SERVICE_ACCOUNT_JSON != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ADC_FILE="$RUNNER_TEMP/e2-2-firebase-service-account.json"
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$ADC_FILE"
+          chmod 600 "$ADC_FILE"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$ADC_FILE" >> "$GITHUB_ENV"
+
+      - name: Verify deployment credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$FIREBASE_SERVICE_ACCOUNT_JSON" && -z "$FIREBASE_TOKEN" ]]; then
+            echo "::error::Firebase deployment credentials are missing."
+            exit 1
+          fi
+
+      - name: Ensure isolated Hosting site exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          CLI="npx --yes firebase-tools@15.29.0"
+          if $CLI hosting:sites:list --project "$FIREBASE_PROJECT_ID" --json | grep -q "\"$FIREBASE_SITE_ID\""; then
+            echo "Hosting site already exists: $FIREBASE_SITE_ID"
+            exit 0
+          fi
+
+          echo "Creating Hosting site: $FIREBASE_SITE_ID"
+          if $CLI hosting:sites:create "$FIREBASE_SITE_ID" --project "$FIREBASE_PROJECT_ID" --non-interactive; then
+            exit 0
+          fi
+
+          if [[ -n "$FIREBASE_TOKEN" ]]; then
+            echo "Service-account site creation failed; retrying with Firebase token."
+            unset GOOGLE_APPLICATION_CREDENTIALS
+            $CLI hosting:sites:create "$FIREBASE_SITE_ID" --project "$FIREBASE_PROJECT_ID" --token "$FIREBASE_TOKEN" --non-interactive
+          else
+            exit 1
+          fi
+
+      - name: Deploy E2-2 app
+        working-directory: e2-2-preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          CLI="npx --yes firebase-tools@15.29.0"
+          if $CLI deploy --only hosting --project "$FIREBASE_PROJECT_ID" --non-interactive; then
+            exit 0
+          fi
+
+          if [[ -n "$FIREBASE_TOKEN" ]]; then
+            echo "Service-account deploy failed; retrying with Firebase token."
+            unset GOOGLE_APPLICATION_CREDENTIALS
+            $CLI deploy --only hosting --project "$FIREBASE_PROJECT_ID" --token "$FIREBASE_TOKEN" --non-interactive
+          else
+            exit 1
+          fi
+
+      - name: Verify live app
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://$FIREBASE_SITE_ID.web.app"
+          curl --fail --silent --show-error --retry 8 --retry-delay 5 "$URL/" | grep -q "E2-2 맛집 추천"
+          echo "E2-2 preview is live: $URL"
