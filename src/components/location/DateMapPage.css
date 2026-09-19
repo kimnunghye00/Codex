@@ -306,3 +306,110 @@
   .date-map-candidate-actions { gap: 6px; }
   .date-map-candidate-map-button { font-size: 10px; padding: 0 4px; }
 }
+
+/* Date-course itinerary: sequence, actual place, editable times, and actions. */
+.date-map-course-schedule {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  container-type: inline-size;
+}
+.date-map-course-head {
+  display: grid;
+  grid-template-columns: 38px minmax(0,1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 8px;
+  border-radius: 11px;
+  background: var(--primary-soft);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 750;
+}
+.date-map-course-stop {
+  display: grid;
+  grid-template-columns: 32px minmax(0,1fr) auto;
+  grid-template-areas: "number place controls" ". times times";
+  align-items: center;
+  gap: 9px 8px;
+  min-width: 0;
+  padding: 10px 8px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface);
+}
+.date-map-stop-number {
+  grid-area: number;
+  display: grid;
+  place-items: center;
+  width: 31px;
+  height: 31px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 800;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.date-map-stop-place { grid-area: place; display: flex; flex-direction: column; min-width: 0; gap: 3px; }
+.date-map-stop-place strong { font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.date-map-stop-place small { display: flex; align-items: flex-start; gap: 3px; color: var(--text-secondary); line-height: 1.4; font-size: 10px; overflow-wrap: anywhere; }
+.date-map-stop-place small svg { flex: 0 0 auto; margin-top: 1px; }
+.date-map-stop-times {
+  grid-area: times;
+  display: flex;
+  align-items: end;
+  gap: 3px;
+  min-width: 0;
+  border-radius: 10px;
+  padding: 6px;
+  background: var(--primary-soft);
+}
+.date-map-stop-times label { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 3px; font-size: 10px; color: var(--text-secondary); font-weight: 650; }
+.date-map-stop-times label span { padding-left: 2px; }
+.date-map-detail .date-map-stop-times input[type="time"] {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 33px;
+  padding: 4px 2px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  box-sizing: border-box;
+}
+.date-map-time-tilde { align-self: end; padding-bottom: 9px; color: var(--text-secondary); font-size: 11px; }
+.date-map-stop-controls { grid-area: controls; display: flex; align-items: center; gap: 3px; }
+.date-map-detail .date-map-stop-controls button {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 30px;
+  padding: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.date-map-detail .date-map-stop-controls button:disabled { opacity: .25; cursor: not-allowed; }
+.date-map-detail .date-map-stop-controls button:last-child { color: #c53d59; }
+@container (min-width: 590px) {
+  .date-map-course-head { grid-template-columns: 38px minmax(0,1fr) 190px 94px; }
+  .date-map-course-head span:last-child { grid-column: 3 / 5; }
+  .date-map-course-stop {
+    grid-template-columns: 38px minmax(0,1fr) minmax(170px,190px) 94px;
+    grid-template-areas: "number place times controls";
+  }
+}
+@media (max-width: 370px) {
+  .date-map-course-stop { gap: 7px 4px; padding: 8px 5px; }
+  .date-map-detail .date-map-stop-controls button { width: 26px; height: 28px; }
+  .date-map-stop-times { padding: 4px; }
+}
