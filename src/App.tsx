@@ -1,6 +1,8 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { transitionCoupleCache } from './utils/coupleCacheIsolation';
 import type { HubTabId } from './components/memories/MemoriesPage';
+import { previewLegacyFootprints } from './lib/footprintFoundation';
+import { loadLocationVisits } from './utils/location';
 import type { LocationTabId } from './components/location/LocationPage';
 import type { MoreNavigationTarget } from './components/more/MoreServices';
 import { AppHeader as SharedAppHeader } from './components/navigation/AppHeader';
@@ -24,6 +26,8 @@ import './home-couple-tools.css';
 import './home-couple-layout.css';
 import './home-map-overlay.css';
 import './home-brand-polish-v5.css';
+
+const FootprintsPage = lazy(() => import('./components/footprints/FootprintsPage').then((module) => ({ default: module.FootprintsPage })));
 
 const CoupleHomeTools = lazy(() => import('./components/home/CoupleHomeTools').then((module) => ({ default: module.CoupleHomeTools })));
 
@@ -52,7 +56,7 @@ const MoreServices = lazy(() => Promise.all([
   import('./components/more/MoreServices'),
 ]).then(([, module]) => ({ default: module.MoreServices })));
 
-type Tab = AppTab;
+type Tab = AppTab | 'footprints';
 type Anniversary = { id: string; icon: string; title: string; date: Date; recurring?: boolean };
 type AppProps = { user: User; profile: UserProfile; onProfileChange: (profile: UserProfile) => void };
 
@@ -187,6 +191,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
   const [memories, setMemories] = useState<Memory[]>(() => loadMemories(initialMemories));
   const [memoryToOpen, setMemoryToOpen] = useState<number>();
   const [memoryDraft, setMemoryDraft] = useState<MemoryDraft>();
+  const [footprintMemoryId, setFootprintMemoryId] = useState<number>();
   const [locationFocus, setLocationFocus] = useState<string>();
   const [requestedHubTab, setRequestedHubTab] = useState<HubTabId>();
   const [requestedLocationTab, setRequestedLocationTab] = useState<LocationTabId>();
@@ -485,6 +490,16 @@ function App({ user, profile, onProfileChange }: AppProps) {
     setRequestedHubTab('album');
     navigateTab('memories');
   }, [navigateTab]);
+  const openFootprints = (memoryId?: number) => {
+    setFootprintMemoryId(memoryId);
+    navigateTab('footprints');
+  };
+  const closeFootprints = () => {
+    if (tabHistory.current.length > 1) tabHistory.current.pop();
+    const prior = tabHistory.current[tabHistory.current.length - 1] ?? 'home';
+    tabHistory.current = tabHistory.current.length ? tabHistory.current : ['home'];
+    setTab(prior);
+  };
   const saveStartDate = async (value: string) => {
     if (!connection?.coupleId) throw new Error('not-connected');
     const { saveRelationshipStartDate } = await import('./lib/coupleShared');
@@ -496,13 +511,14 @@ function App({ user, profile, onProfileChange }: AppProps) {
 
   return <>
     <div className="app-shell"><main><Suspense fallback={<div className="page auth-loading" role="status" aria-live="polite"><div className="loading-mark" /><p>화면을 불러오는 중이에요</p></div>}>
-      {tab === 'home' && <HomePage uid={user.uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} memories={memories} onNavigate={navigateTab} onOpenMemory={openMemory} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
-      {tab === 'memories' && <MemoriesPage requestedTab={requestedHubTab} Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={(place) => { setLocationFocus(place); setRequestedLocationTab('map'); navigateTab('location'); }} sharedProfile={profile} sharedConnection={connection} sharedRelationshipStartDate={relationshipStartDate} />}
+      {tab === 'home' && <HomePage uid={user.uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} memories={memories} onNavigate={navigateTab} onOpenMemory={openMemory} onOpenFootprints={() => openFootprints()} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
+      {tab === 'memories' && <MemoriesPage requestedTab={requestedHubTab} Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={(place) => { setLocationFocus(place); setRequestedLocationTab('map'); navigateTab('location'); }} onOpenFootprints={(memoryId) => openFootprints(memoryId)} sharedProfile={profile} sharedConnection={connection} sharedRelationshipStartDate={relationshipStartDate} />}
+      {tab === 'footprints' && <FootprintsPage uid={user.uid} memories={memories} initialMemoryId={footprintMemoryId} onOpenMemory={openMemory} onBack={closeFootprints} Header={AppHeader} />}
       {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} connection={connection} />}
       {tab === 'location' && <LocationPage requestedTab={requestedLocationTab} Header={AppHeader} connection={connection} focusPlace={locationFocus} onClearFocus={() => setLocationFocus(undefined)} onCreateMemory={(draft) => { setMemoryToOpen(undefined); setMemoryDraft(draft); setRequestedHubTab('album'); navigateTab('memories'); }} onActivity={(title, detail) => addActivity({ actor: 'me', kind: 'location', title, detail })} />}
       {tab === 'anniversary' && <AnniversaryPage connected={Boolean(connection)} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} onSaveStartDate={saveStartDate} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'more' && <MorePage onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} onNavigate={navigateMoreTarget} />}
-    </Suspense></main><BottomNav tab={tab} onNavigate={navigateTab} /></div>
+    </Suspense></main><BottomNav tab={tab === 'footprints' ? 'home' : tab} onNavigate={navigateTab} /></div>
 
     <Suspense fallback={null}>
       {settingsOpen && <AccountSettings user={user} profile={profile} onProfileChange={onProfileChange} onClose={() => setSettingsOpen(false)} />}
@@ -511,21 +527,20 @@ function App({ user, profile, onProfileChange }: AppProps) {
   </>;
 }
 
-const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connection, relationshipStartDate, coupleDay, memories, onNavigate, onOpenMemory, onSettings, onNotifications, unreadCount }: { uid: string; profile: UserProfile; onProfileChange: (profile: UserProfile) => void; connection: RealCoupleConnection | null; relationshipStartDate?: string; coupleDay: number; memories: Memory[]; onNavigate: (tab: Tab) => void; onOpenMemory: (id: number) => void; onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
+const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connection, relationshipStartDate, coupleDay, memories, onNavigate, onOpenMemory, onOpenFootprints, onSettings, onNotifications, unreadCount }: { uid: string; profile: UserProfile; onProfileChange: (profile: UserProfile) => void; connection: RealCoupleConnection | null; relationshipStartDate?: string; coupleDay: number; memories: Memory[]; onNavigate: (tab: Tab) => void; onOpenMemory: (id: number) => void; onOpenFootprints: () => void; onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
   const previewMemories = memories.slice(0, 4);
-  const partnerProfile = connection?.partnerProfile ?? null;
-  const partnerName = partnerProfile ? displayName(partnerProfile) : '상대방';
-  const partnerInitial = partnerName.slice(0, 1) || '상';
+  const personalVisits = useMemo(() => previewLegacyFootprints(uid, loadLocationVisits(uid)), [uid]);
+  const recentPlaces = personalVisits.slice(-3).reverse();
 
   return <div className="page home-page home-dashboard">
     <SharedAppHeader onSettings={onSettings} onNotifications={onNotifications} unreadCount={unreadCount} />
 
     <div className="home-dashboard-grid">
-      <button className="home-map-card" type="button" aria-label="우리의 지도 열기" onClick={() => onNavigate('location')}>
+      <button className="home-map-card" type="button" aria-label="우리의 발자취 열기" onClick={onOpenFootprints}>
         <div className="home-map-grid-lines" /><span className="home-map-road road-a" /><span className="home-map-road road-b" /><span className="home-map-river" />
-        <span className="home-map-place place-office">단둘이</span><span className="home-map-place place-cafe">카페</span><span className="home-map-place place-park">공원</span>
-        <div className="home-location-status"><MapPin size={16} /><span><b>{connection ? `${partnerName} · 위치 공유` : '상대방 연결 전'}</b><small>{connection ? '최근 위치를 확인해보세요' : '설정에서 상대방을 연결해 주세요'}</small></span></div>
-        <div className="home-map-person"><span className="home-map-halo" /><span className="home-map-avatar">{partnerInitial}</span><MapPin size={25} fill="currentColor" /></div>
+        {recentPlaces.map((place, index) => <span key={place.id} className={`home-map-place ${['place-office', 'place-cafe', 'place-park'][index]}`}>{place.placeName || '방문 지점'}</span>)}
+        <div className="home-location-status"><MapPin size={16} /><span><b>우리의 발자취 ♡</b><small>{personalVisits.length ? `내 이전 방문 기록 ${personalVisits.length}곳 · 전체 보기` : '새로운 추억을 남길 준비 중이에요'}</small></span></div>
+        <div className="home-map-person"><span className="home-map-halo" /><span className="home-map-avatar">♡</span><MapPin size={25} fill="currentColor" /></div>
         <div className="home-map-locate"><MapPinned size={20} /></div>
       </button>
 
