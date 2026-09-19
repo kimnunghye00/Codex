@@ -622,6 +622,7 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
       if (uploadedPaths.length) await deleteUploadedChatMedia(uploadedPaths);
       console.error('[DANDULI chat gif]', cause);
       setSyncError(mediaErrorMessage(cause, 'gif'));
+      throw cause;
     }
   };
 
