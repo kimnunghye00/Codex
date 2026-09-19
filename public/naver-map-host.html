@@ -12,6 +12,20 @@
     #map-status strong{display:block;margin-bottom:7px;font-size:15px}
     #map-status span{display:block;font-size:12px;line-height:1.55;color:#737684;word-break:keep-all}
     #map-status code{display:block;margin-top:9px;font-size:10px;color:#a04939;word-break:break-all}
+    /* The exact two-pin silhouette drawn on the left side of login. */
+    .danduli-map-pin{position:relative;width:36px;height:43px;filter:drop-shadow(0 3px 3px #0003);pointer-events:none}
+    .danduli-map-pin i{position:absolute;width:24px;height:24px;border-radius:50% 50% 50% 6px;transform:rotate(-45deg);background:var(--pin-primary)}
+    .danduli-map-pin i:first-child{top:1px;left:1px}
+    .danduli-map-pin i:nth-child(2){right:1px;bottom:5px;background:var(--pin-accent)}
+    .danduli-map-pin i::after{content:"";position:absolute;top:6px;left:6px;width:8px;height:8px;border-radius:50%;background:#fff}
+    .danduli-map-pin.selected{transform:scale(1.17);transform-origin:center bottom;filter:drop-shadow(0 3px 6px #0004)}
+    .danduli-map-pin.planned::after{content:"";position:absolute;right:-4px;top:-3px;width:9px;height:9px;border:2px solid #fff;background:var(--pin-accent);border-radius:50%}
+    .danduli-map-pin .pin-order{position:absolute;top:-7px;right:-7px;z-index:1;background:#fff;border:1px solid var(--pin-primary);color:var(--pin-primary);border-radius:999px;min-width:16px;height:16px;padding:0 2px;box-sizing:border-box;display:grid;place-items:center;font:800 10px system-ui}
+    .danduli-map-cluster{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;border:3px solid #fff;background:var(--pin-primary);color:#fff;box-shadow:0 3px 9px #0003;font:800 13px system-ui;box-sizing:border-box}
+    .danduli-place-card{min-width:160px;max-width:210px;padding:9px 10px;font:12px/1.5 system-ui,-apple-system,sans-serif;color:#383848;overflow-wrap:anywhere}
+    .danduli-place-card strong{display:block;font-size:13px;margin-bottom:3px}
+    .danduli-place-card small{display:block;color:#777;line-height:1.5}
+    .danduli-place-card img{display:block;width:100%;height:96px;object-fit:cover;border-radius:9px;margin:0 0 7px;background:#f6eff0}
   </style>
 </head>
 <body>
@@ -86,18 +100,19 @@
         return { primary, accent };
       };
 
-      const markerSize = (current) => current ? 24 : 20;
-      const markerHtml = (current, index, palette) => {
-        const color = current ? palette.accent : palette.primary;
-        const size = markerSize(current);
-        const label = Number.isInteger(index) ? `<span style="font-size:9px;color:#fff;font-weight:800">${index + 1}</span>` : '';
-        return `<div style="width:${size}px;height:${size}px;border:3px solid #fff;border-radius:50%;background:${color};box-sizing:border-box;box-shadow:0 3px 10px #0003;display:grid;place-items:center">${label}</div>`;
+      // Reuse the login screen's two CSS-drawn pins; no image downloaded per location.
+      const markerHtml = (current, index, palette, planned = false) => {
+        const label = Number.isInteger(index) ? `<span class="pin-order">${index + 1}</span>` : '';
+        return `<div class="danduli-map-pin${current ? ' selected' : ''}${planned ? ' planned' : ''}" style="--pin-primary:${palette.primary};--pin-accent:${palette.accent}"><i></i><i></i>${label}</div>`;
       };
-
-      const markerIcon = (naver, current, index, palette = activePalette()) => {
-        const size = markerSize(current);
-        return { content: markerHtml(current, index, palette), anchor: new naver.maps.Point(size / 2, size / 2) };
-      };
+      const markerIcon = (naver, current, index, palette = activePalette(), planned = false) => ({
+        content: markerHtml(current, index, palette, planned),
+        anchor: new naver.maps.Point(18, 42),
+      });
+      const clusterIcon = (naver, count, palette) => ({
+        content: `<div class="danduli-map-cluster" style="--pin-primary:${palette.primary}">${count}</div>`,
+        anchor: new naver.maps.Point(19, 19),
+      });
 
       const escapeHtml = (value) => String(value ?? '').replace(/[&<>'\"]/g, (character) => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
@@ -112,6 +127,37 @@
       const dayText = (value) => {
         try { return new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }).format(new Date(value)); }
         catch { return ''; }
+      };
+
+      // Facility images must be explicitly provided. Load only in an opened
+      // info card, never for the whole map and never substitute an unrelated photo.
+      const safePhoto = (value) => {
+        if (typeof value !== 'string') return '';
+        try { const url = new URL(value); return url.protocol === 'https:' ? escapeHtml(url.href) : ''; }
+        catch { return ''; }
+      };
+      const placeCard = (visit, mode) => {
+        const name = escapeHtml(visit.placeName || (mode === 'date-plan' ? '데이트 장소' : '위치 기록'));
+        const photo = safePhoto(visit.photoUrl);
+        const subtitle = mode === 'date-plan'
+          ? '함께 가고 싶은 장소'
+          : `${escapeHtml(dayText(visit.arrivedAt))} · ${escapeHtml(timeText(visit.arrivedAt))}${visit.leftAt ? ` ~ ${escapeHtml(timeText(visit.leftAt))}` : ' · 현재'}`;
+        const address = visit.address ? `<small>${escapeHtml(visit.address)}</small>` : '';
+        return `<div class="danduli-place-card">${photo ? `<img src="${photo}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}<strong>${name}</strong><small>${subtitle}</small>${address}</div>`;
+      };
+      const clustersFor = (visits, mode, zoom) => {
+        if (!['footprint-pins', 'date-plan'].includes(mode) || zoom > 14) return visits.map((visit) => [visit]);
+        const grid = new Map();
+        const step = 0.008 * 2 ** (14 - Math.max(zoom, 3));
+        for (const visit of visits) {
+          const lat = Number(visit.latitude);
+          const lng = Number(visit.longitude);
+          const lonStep = step / Math.max(0.25, Math.cos(lat * Math.PI / 180));
+          const key = `${Math.floor(lat / step)}:${Math.floor(lng / lonStep)}`;
+          if (!grid.has(key)) grid.set(key, []);
+          grid.get(key).push(visit);
+        }
+        return [...grid.values()];
       };
 
       const clearOverlays = () => {
