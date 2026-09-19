@@ -4,7 +4,7 @@ import { CalendarDays, ChevronDown, ChevronUp, Heart, MapPin, MessageCircle, Plu
 import { auth } from '../../lib/firebase';
 import { appendPlaceToCourse, MAX_DATE_COURSE_PLACES } from '../../lib/dateCourseDraft';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
-import { searchLocation, type LocationSearchResult } from '../../utils/location';
+import { reverseGeocode, searchLocations, type LocationSearchResult } from '../../utils/location';
 import {
   addDatePlace, addPlaceOpinion, deleteDateCourse, deleteDatePlace, deletePlaceOpinion,
   saveDateCourse, setPlaceLike, subscribeDateCourses, subscribeDatePlaces,
@@ -16,7 +16,7 @@ import './DateMapPage.css';
 type Category = DatePlace['category'];
 const CATEGORIES: Category[] = ['맛집', '카페', '놀거리', '여행', '기타'];
 const MAP_ORIGIN = 'https://meluni-f4e00.web.app';
-const MAP_HOST = `${MAP_ORIGIN}/naver-map-host.html?v=7`;
+const MAP_HOST = `${MAP_ORIGIN}/naver-map-host.html?v=8`;
 const ALL = '전체';
 function dateToday() {
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
@@ -51,6 +51,10 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [candidate, setCandidate] = useState<LocationSearchResult | null>(null);
+  const [results, setResults] = useState<LocationSearchResult[]>([]);
+  const [picking, setPicking] = useState(false);
+  const [candidateName, setCandidateName] = useState('');
+  const [candidateAddress, setCandidateAddress] = useState('');
   const [candidateSearch, setCandidateSearch] = useState('');
   const [candidateCategory, setCandidateCategory] = useState<Category>('기타');
   const [candidateMemo, setCandidateMemo] = useState('');
@@ -72,6 +76,11 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const frame = useRef<HTMLIFrameElement>(null);
   const panel = useRef<HTMLElement>(null);
   const searchSequence = useRef(0);
+  const lookupSequence = useRef(0);
+  const resultsRef = useRef(results);
+  const queryRef = useRef(query);
+  resultsRef.current = results;
+  queryRef.current = query;
   const selected = places.find((item) => item.id === selectedId);
   const course = courses.find((item) => item.id === courseId);
   const visible = useMemo(() => places.filter((item) => category === ALL || item.category === category), [places, category]);
@@ -106,12 +115,13 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     const trimmed = value.trim();
     if (!trimmed) { setMessage('검색할 장소나 주소를 입력해 주세요.'); return; }
     const sequence = ++searchSequence.current;
-    setSearching(true); setCandidate(null); setCandidateSearch(''); setMessage('');
+    setSearching(true); setCandidate(null); setCandidateSearch(''); setResults([]); setPicking(false); setMessage('');
     try {
-      const found = await searchLocation(trimmed);
+      const found = await searchLocations(trimmed);
       if (sequence !== searchSequence.current) return;
-      if (!found) { setCandidate(null); setMessage('장소를 찾지 못했어요. 주소나 지역명을 더 자세히 입력해 주세요.'); return; }
-      setCandidate(found); setCandidateSearch(trimmed);
+      setResults(found);
+      setCandidateSearch(trimmed);
+      if (!found.length) setMessage('검색 결과가 없어요. 지도에서 직접 위치를 지정하거나 지점명과 지역을 함께 검색해 주세요.');
       panel.current?.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
       if (sequence === searchSequence.current) setMessage(errorText(error));
@@ -126,18 +136,52 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   }, [focusPlace]);
 
   const mapVisits = useMemo(() => [
-    ...visible.map((item) => ({
+    ...(results.length || candidate ? [] : visible).map((item) => ({
       id: item.id, latitude: item.latitude, longitude: item.longitude, placeName: item.name,
       arrivedAt: '2026-01-01T00:00:00.000Z', leftAt: '2026-01-01T00:00:00.000Z',
     })),
-    ...(candidate ? [{ id: 'search-preview', latitude: candidate.latitude, longitude: candidate.longitude,
-      placeName: candidate.placeName, arrivedAt: '2026-01-01T00:00:00.000Z', leftAt: '2026-01-01T00:00:00.000Z' }] : []),
-  ], [visible, candidate]);
+    // When searching, show all returned branches (not only the first) on the map.
+    ...results.map((item, index) => ({
+      id: `search-${index}`, latitude: item.latitude, longitude: item.longitude, placeName: item.placeName,
+      arrivedAt: '2026-01-01T00:00:00.000Z', leftAt: '2026-01-01T00:00:00.000Z',
+    })),
+    ...(candidate && !results.some((item) => item.latitude === candidate.latitude && item.longitude === candidate.longitude)
+      ? [{ id: 'search-manual', latitude: candidate.latitude, longitude: candidate.longitude,
+        placeName: candidateName || candidate.placeName, arrivedAt: '2026-01-01T00:00:00.000Z', leftAt: '2026-01-01T00:00:00.000Z' }]
+      : []),
+  ], [visible, results, candidate, candidateName]);
   useEffect(() => {
     const timer = window.setTimeout(() => { if (!mapReady) setMapError(true); }, 12000);
-    const receive = (event: MessageEvent<{ source?: string; type?: string }>) => {
+    const receive = (event: MessageEvent<{ source?: string; type?: string; id?: string; latitude?: number; longitude?: number }>) => {
       if (event.origin !== MAP_ORIGIN || event.source !== frame.current?.contentWindow || event.data?.source !== 'route-map-host') return;
       if (event.data.type === 'ready') { setMapReady(true); setMapError(false); }
+      if (event.data.type === 'search-marker-selected' && typeof event.data.id === 'string') {
+        const match = /^search-(\\d+)$/.exec(event.data.id);
+        const index = match ? Number(match[1]) : -1;
+        const found = resultsRef.current[index];
+        if (found) {
+          setCandidate(found); setCandidateName(found.placeName);
+          setCandidateAddress(found.address ?? '');
+          setCandidateSearch(queryRef.current.trim());
+          setPicking(false); setMessage('');
+          panel.current?.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }
+      if (event.data.type === 'map-point-selected' && Number.isFinite(event.data.latitude) && Number.isFinite(event.data.longitude)) {
+        const latitude = Number(event.data.latitude);
+        const longitude = Number(event.data.longitude);
+        if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return;
+        const searchName = queryRef.current.trim().slice(0, 120);
+        const sequence = ++lookupSequence.current;
+        setPicking(false); setResults([]); setMessage('');
+        setCandidate({ latitude, longitude, placeName: searchName || '선택한 위치' });
+        setCandidateName(searchName); setCandidateAddress('');
+        setCandidateSearch(searchName);
+        panel.current?.scrollTo({ top: 0, behavior: 'smooth' });
+        void reverseGeocode(latitude, longitude).then((address) => {
+          if (lookupSequence.current === sequence && address) setCandidateAddress((value) => value || address);
+        });
+      }
       if (['auth-error', 'sdk-error', 'render-error'].includes(event.data.type ?? '')) setMapError(true);
     };
     window.addEventListener('message', receive);
@@ -148,6 +192,17 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     if (!mapReady) return;
     frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'render', mode: 'date-plan', visits: mapVisits }, MAP_ORIGIN);
   }, [mapReady, mapVisits]);
+
+  useEffect(() => {
+    if (!mapReady) return;
+    frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'set-pick-mode', enabled: picking }, MAP_ORIGIN);
+  }, [mapReady, picking]);
+
+  const chooseResult = (item: LocationSearchResult) => {
+    setCandidate(item); setCandidateName(item.placeName); setCandidateAddress(item.address ?? '');
+    setCandidateSearch(query.trim()); setPicking(false); setMessage('');
+    mapFocus(item);
+  };
 
   const mapFocus = (place: { latitude: number; longitude: number; placeName: string }) => {
     if (!mapReady) return;
@@ -167,11 +222,15 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
 
   const saveCandidate = async (addToCurrentCourse = false) => {
     if (!candidate || !uid || !coupleId || pending) return;
+    if (!candidateName.trim() || !candidateAddress.trim()) {
+      setMessage('선택한 지점의 이름과 주소를 확인하고 입력해 주세요.');
+      return;
+    }
     if (addToCurrentCourse && coursePlaceIds.length >= MAX_DATE_COURSE_PLACES) {
       setMessage('하나의 코스에는 장소를 최대 20곳까지 추가할 수 있어요.');
       return;
     }
-    const duplicate = places.find((item) => item.name.trim().toLowerCase() === candidate.placeName.trim().toLowerCase()
+    const duplicate = places.find((item) => item.name.trim().toLowerCase() === candidateName.trim().toLowerCase()
       && kmApprox(item, candidate) < 0.15);
     if (duplicate) {
       if (addToCurrentCourse) {
@@ -183,7 +242,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       } else {
         setSelectedId(duplicate.id);
       }
-      setCandidate(null);
+      setCandidate(null); setResults([]);
       setMessage(addToCurrentCourse
         ? '기존에 저장된 장소를 코스에 추가했어요. 마지막에 코스 저장을 눌러 주세요.'
         : '이미 저장된 장소예요. 기존 장소를 선택했어요.');
@@ -193,12 +252,12 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     // course draft. Never reset the selected course or erase earlier stops.
     await submit(async () => {
       const id = await addDatePlace(coupleId, uid, {
-        name: candidate.placeName.slice(0, 120), address: candidateSearch.slice(0, 240),
+        name: candidateName.trim().slice(0, 120), address: candidateAddress.trim().slice(0, 240),
         latitude: candidate.latitude, longitude: candidate.longitude, category: candidateCategory, memo: candidateMemo.trim().slice(0, 1000),
       });
       if (addToCurrentCourse) appendToCourse(id);
       else setSelectedId(id);
-      setCandidate(null); setCandidateMemo('');
+      setCandidate(null); setResults([]); setCandidateMemo('');
     }, addToCurrentCourse
       ? '새 장소를 코스에 추가했어요. 마지막에 코스 저장을 눌러 주세요.'
       : '우리의 지도에 장소를 저장했어요.');
@@ -248,9 +307,19 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
           <button type="button" role="tab" aria-selected={tab === 'places'} className={tab === 'places' ? 'active' : ''} onClick={() => setTab('places')}>저장한 장소</button>
           <button type="button" role="tab" aria-selected={tab === 'courses'} className={tab === 'courses' ? 'active' : ''} onClick={() => setTab('courses')}>데이트 코스</button>
         </div>
+        {(results.length > 0 || candidateSearch || query.trim()) && <div className="date-map-search-results">
+          <div className="date-map-panel-header"><strong>검색 결과 {results.length}곳</strong><button type="button" onClick={() => { setPicking((v) => !v); setMessage(''); }} disabled={!mapReady}>{picking ? '위치 선택 취소' : '지도에서 직접 위치 선택'}</button></div>
+          {results.map((item, index) => <button key={`branch-${index}`} type="button" className={candidate === item ? 'date-map-branch active' : 'date-map-branch'} onClick={() => chooseResult(item)}>
+            <MapPin size={17} /><span><b>{item.placeName}</b><small>{item.address || '상세 주소 정보 없음'}</small></span>
+          </button>)}
+          {picking && <p className="date-map-pick-hint" role="status">지도에서 방문할 지점을 클릭해 주세요. 위치를 선택한 뒤 지점 이름과 주소를 직접 확인할 수 있어요.</p>}
+          {!results.length && !candidate && !picking && <p className="date-map-empty">결과에 원하는 지점이 없다면 지도에서 직접 위치를 선택할 수 있어요.</p>}
+        </div>}
         {candidate && <article className="date-map-candidate">
             <div className="date-map-panel-header"><strong>검색한 장소</strong><button type="button" aria-label="검색 결과 닫기" onClick={() => setCandidate(null)}><X size={16}/></button></div>
-            <b>{candidate.placeName}</b><small>검색어: {candidateSearch} · 지도 핀 위치가 맞는지 확인한 후 추가해 주세요.</small>
+            <label className="date-map-label">선택한 지점 이름<input aria-label="선택한 지점 이름" value={candidateName} maxLength={120} onChange={(e) => setCandidateName(e.target.value)} placeholder="예: 이재모피자 서면점"/></label>
+            <label className="date-map-label">주소 또는 지점 설명<input aria-label="선택한 지점 주소" value={candidateAddress} maxLength={240} onChange={(e) => setCandidateAddress(e.target.value)} placeholder="지도 위치를 확인하고 주소를 입력해 주세요"/></label>
+            <small>검색어: {candidateSearch} · 정확한 지점인지 지도 위치를 확인해 주세요.</small>
             <div className="date-map-inline"><select aria-label="장소 분류" value={candidateCategory} onChange={(e) => setCandidateCategory(e.target.value as Category)}>{CATEGORIES.map((item) => <option key={item}>{item}</option>)}</select>
             <button type="button" onClick={() => mapFocus(candidate)}>지도에서 보기</button></div>
             <textarea value={candidateMemo} onChange={(e) => setCandidateMemo(e.target.value)} maxLength={1000} placeholder="함께 가고 싶은 이유나 메모 (선택)" />
