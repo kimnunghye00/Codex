@@ -1,0 +1,8 @@
+status=failure
+url=https://e2-2-kimnunghye00.web.app
+credentials=success
+site=failure
+deploy=skipped
+verify=skipped
+source_commit=e6220568b7a95cbdd843408c31032c5f8d419d5e
+deployed_at=2026-09-19T01:23:06Z
