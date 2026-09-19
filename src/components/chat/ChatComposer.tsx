@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Message } from '../../types';
 import { DANDULI_STICKERS, DanduliSticker, stickerToken } from './DanduliSticker';
+import { GifCameraCapture } from './GifCameraCapture';
 
 const QUICK = ['기분 좋아 😊', '배고파 🍚', '심심해 🫠', '우울해 🥺', '놀아줘 ❤️'];
 const MAX_CHAT_PHOTO_SELECTION = 100;
@@ -52,7 +53,6 @@ export function ChatComposer({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const attachmentRef = useRef<HTMLInputElement>(null);
-  const gifRef = useRef<HTMLInputElement>(null);
   const composingRef = useRef(false);
   const pendingRef = useRef<PendingPhoto[]>([]);
   const recorderRef = useRef<MediaRecorder | undefined>(undefined);
@@ -65,6 +65,7 @@ export function ChatComposer({
   const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
   const [photoSending, setPhotoSending] = useState(false);
   const [voiceRecording, setVoiceRecording] = useState(false);
+  const [gifCameraOpen, setGifCameraOpen] = useState(false);
 
   useEffect(() => {
     pendingRef.current = pendingPhotos;
@@ -221,7 +222,6 @@ export function ChatComposer({
       <div className="composer">
         <input ref={fileRef} className="file-input" type="file" accept="image/*" multiple aria-label={`사진 선택, 최대 ${MAX_CHAT_PHOTO_SELECTION}장`} onChange={(event) => { addPendingPhotos(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
         <input ref={attachmentRef} className="file-input" type="file" aria-label="파일 선택" onChange={(event) => { const file = event.target.files?.[0]; if (file) void Promise.resolve(onFile(file)); event.target.value = ''; setExtras(false); }} />
-        <input ref={gifRef} className="file-input" type="file" accept="image/gif" onChange={(event) => { const file = event.target.files?.[0]; if (file) void onGif(file); event.target.value = ''; }} />
         <button type="button" onClick={() => { setExtras((value) => !value); setStickerOpen(false); }} aria-label="추가 기능"><Plus size={21} /></button>
         <button type="button" className={`composer-sticker-toggle ${stickerOpen ? 'active' : ''}`} onClick={() => { setStickerOpen((value) => !value); setExtras(false); setQuickOpen(false); }} aria-label="이모티콘"><SmilePlus size={21} strokeWidth={2.1} /></button>
         <textarea
@@ -244,11 +244,12 @@ export function ChatComposer({
         />
         {draft.trim()
           ? <button type="button" className="send ready" onClick={onSend} aria-label="메시지 전송"><Send size={18} /></button>
-          : <button type="button" className="composer-gif-shortcut" onClick={() => gifRef.current?.click()} aria-label="움짤 보내기">
+          : <button type="button" className="composer-gif-shortcut" onClick={() => setGifCameraOpen(true)} aria-label="카메라로 움짤 촬영">
             <span className="composer-gif-lens" aria-hidden="true" />
           </button>}
       </div>
     </div>
     {preview}
+    {gifCameraOpen && <GifCameraCapture onClose={() => setGifCameraOpen(false)} onCaptured={onGif} onError={onVoiceError} />}
   </>;
 }
