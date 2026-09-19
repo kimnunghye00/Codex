@@ -101,12 +101,11 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const search = async (value: string) => {
     const trimmed = value.trim();
     if (!trimmed) { setMessage('검색할 장소나 주소를 입력해 주세요.'); return; }
-    setSearching(true); setMessage('');
+    setSearching(true); setCandidate(null); setMessage('');
     try {
       const found = await searchLocation(trimmed);
       if (!found) { setCandidate(null); setMessage('장소를 찾지 못했어요. 주소나 지역명을 더 자세히 입력해 주세요.'); return; }
       setCandidate(found);
-      setTab('places');
     } catch (error) {
       setMessage(errorText(error));
     } finally { setSearching(false); }
@@ -155,21 +154,47 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     finally { setPending(false); }
   };
 
-  const saveCandidate = async () => {
-    if (!candidate || !uid || !coupleId) return;
+  const appendToCourse = (placeId: string) => {
+    setCoursePlaceIds((ids) => ids.includes(placeId) || ids.length >= 20 ? ids : [...ids, placeId]);
+  };
+
+  const saveCandidate = async (addToCurrentCourse = false) => {
+    if (!candidate || !uid || !coupleId || pending) return;
+    if (addToCurrentCourse && coursePlaceIds.length >= 20) {
+      setMessage('하나의 코스에는 장소를 최대 20곳까지 추가할 수 있어요.');
+      return;
+    }
     const duplicate = places.find((item) => item.name.trim().toLowerCase() === candidate.placeName.trim().toLowerCase()
       && kmApprox(item, candidate) < 0.15);
     if (duplicate) {
-      setSelectedId(duplicate.id); setCandidate(null); setMessage('이미 저장된 장소예요. 기존 장소를 선택했어요.');
+      if (addToCurrentCourse) {
+        if (coursePlaceIds.includes(duplicate.id)) {
+          setMessage('이미 이 코스에 포함된 장소예요.');
+          return;
+        }
+        appendToCourse(duplicate.id);
+      } else {
+        setSelectedId(duplicate.id);
+      }
+      setCandidate(null);
+      setMessage(addToCurrentCourse
+        ? '기존에 저장된 장소를 코스에 추가했어요. 마지막에 코스 저장을 눌러 주세요.'
+        : '이미 저장된 장소예요. 기존 장소를 선택했어요.');
       return;
     }
+    // Save a shared place first, then append its stable ID to this unsaved
+    // course draft. Never reset the selected course or erase earlier stops.
     await submit(async () => {
       const id = await addDatePlace(coupleId, uid, {
         name: candidate.placeName.slice(0, 120), address: query.trim().slice(0, 240),
         latitude: candidate.latitude, longitude: candidate.longitude, category: candidateCategory, memo: candidateMemo.trim().slice(0, 1000),
       });
-      setSelectedId(id); setCandidate(null); setCandidateMemo('');
-    }, '우리의 지도에 장소를 저장했어요.');
+      if (addToCurrentCourse) appendToCourse(id);
+      else setSelectedId(id);
+      setCandidate(null); setCandidateMemo('');
+    }, addToCurrentCourse
+      ? '새 장소를 코스에 추가했어요. 마지막에 코스 저장을 눌러 주세요.'
+      : '우리의 지도에 장소를 저장했어요.');
   };
 
   const newCourse = () => {
@@ -216,15 +241,15 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
           <button type="button" role="tab" aria-selected={tab === 'places'} className={tab === 'places' ? 'active' : ''} onClick={() => setTab('places')}>저장한 장소</button>
           <button type="button" role="tab" aria-selected={tab === 'courses'} className={tab === 'courses' ? 'active' : ''} onClick={() => setTab('courses')}>데이트 코스</button>
         </div>
-        {tab === 'places' && <>
-          {candidate && <article className="date-map-candidate">
+        {candidate && <article className="date-map-candidate">
             <div className="date-map-panel-header"><strong>검색한 장소</strong><button type="button" aria-label="검색 결과 닫기" onClick={() => setCandidate(null)}><X size={16}/></button></div>
-            <b>{candidate.placeName}</b><small>{query}</small>
+            <b>{candidate.placeName}</b><small>검색어: {query} · 지도 핀 위치가 맞는지 확인한 후 추가해 주세요.</small>
             <div className="date-map-inline"><select aria-label="장소 분류" value={candidateCategory} onChange={(e) => setCandidateCategory(e.target.value as Category)}>{CATEGORIES.map((item) => <option key={item}>{item}</option>)}</select>
             <button type="button" onClick={() => mapFocus(candidate)}>지도에서 보기</button></div>
             <textarea value={candidateMemo} onChange={(e) => setCandidateMemo(e.target.value)} maxLength={1000} placeholder="함께 가고 싶은 이유나 메모 (선택)" />
-            <button className="date-map-primary" type="button" disabled={pending || !connection} onClick={() => void saveCandidate()}><Plus size={15}/> 우리 장소로 저장</button>
+            <button className="date-map-primary" type="button" disabled={pending || !connection || (tab === 'courses' && coursePlaceIds.length >= 20)} onClick={() => void saveCandidate(tab === 'courses')}><Plus size={15}/> {tab === 'courses' ? '이 코스에 추가' : '우리 장소로 저장'}</button>
           </article>}
+        {tab === 'places' && <>
           <div className="date-map-panel-header"><strong>우리가 가고 싶은 곳</strong><span>{visible.length}곳</span></div>
           {!visible.length && <p className="date-map-empty">아직 저장한 장소가 없어요. 검색해서 첫 데이트 장소를 등록해 봐요.</p>}
           {visible.map((item) => <button type="button" className={selectedId === item.id ? 'date-map-place active' : 'date-map-place'} key={item.id} onClick={() => { setSelectedId(item.id); setCandidate(null); mapFocus({ ...item, placeName: item.name }); }}>
@@ -242,7 +267,12 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             <form onSubmit={(e) => { e.preventDefault(); if (!opinion.trim()) return; void submit(async () => { await addPlaceOpinion(coupleId, selected.id, uid, opinion.trim().slice(0, 500)); setOpinion(''); }, '의견을 등록했어요.'); }}>
               <input aria-label="상대방에게 남길 장소 의견" value={opinion} maxLength={500} onChange={(e) => setOpinion(e.target.value)} placeholder="이 장소에 대한 의견 남기기"/><button type="submit" disabled={!opinion.trim() || pending}>등록</button>
             </form>
-            <div className="date-map-inline"><button type="button" onClick={() => { newCourse(); setCoursePlaceIds([selected.id]); }}>코스에 넣기</button>
+            <div className="date-map-inline"><button type="button" onClick={() => {
+              if (coursePlaceIds.includes(selected.id)) setMessage('이미 이 코스에 포함된 장소예요.');
+              else if (coursePlaceIds.length >= 20) setMessage('하나의 코스에는 장소를 최대 20곳까지 추가할 수 있어요.');
+              else { appendToCourse(selected.id); setMessage('장소를 추가했어요. 마지막에 코스 저장을 눌러 주세요.'); }
+              setTab('courses');
+            }}>{courseId || coursePlaceIds.length ? '현재 코스에 추가' : '코스에 넣기'}</button>
               <button type="button" className="date-map-delete" disabled={pending} onClick={() => { if (window.confirm('이 장소를 삭제할까요? 코스에서도 표시되지 않을 수 있어요.')) void submit(async () => { await deleteDatePlace(coupleId, selected.id); setSelectedId(''); }, '장소를 삭제했어요.'); }}><Trash2 size={14}/> 장소 삭제</button></div>
           </article>}
         </>}
@@ -254,13 +284,18 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             <strong>{courseId ? '데이트 코스 수정' : '새 데이트 코스'}</strong>
             <label className="date-map-label">코스 이름<input maxLength={100} placeholder="예: 강릉 주말 데이트" value={courseTitle} onChange={(e) => setCourseTitle(e.target.value)}/></label>
             <label className="date-map-label">데이트 날짜<input type="date" value={courseDate} onChange={(e) => setCourseDate(e.target.value)}/></label>
-            <div className="date-map-panel-header"><strong>방문 예정 장소</strong><span>{coursePlaceIds.length}곳</span></div>
+            <div className="date-map-panel-header"><strong>방문 예정 장소</strong><span>{coursePlaceIds.length} / 20곳</span></div>
+            <p className="date-map-add-hint">저장된 장소를 선택하거나 화면 상단에서 새 장소를 검색해 ‘이 코스에 추가’를 눌러 주세요. 기존 코스와 날짜는 유지돼요.</p>
             {coursePlaceIds.map((id, index) => { const place = places.find((item) => item.id === id); return <div className="date-map-course-row" key={id}><span>{index + 1}. {place?.name ?? '삭제된 장소'}</span>
               <button type="button" aria-label="위로 이동" disabled={index === 0} onClick={() => changeOrder(index,-1)}><ChevronUp size={16}/></button>
               <button type="button" aria-label="아래로 이동" disabled={index === coursePlaceIds.length - 1} onClick={() => changeOrder(index,1)}><ChevronDown size={16}/></button>
               <button type="button" aria-label="코스에서 제거" onClick={() => setCoursePlaceIds((ids) => ids.filter((placeId) => placeId !== id))}><X size={16}/></button></div>; })}
             <div className="date-map-inline"><select aria-label="코스에 추가할 장소" value={choiceId} onChange={(e) => setChoiceId(e.target.value)}><option value="">장소 선택</option>{places.filter((item) => !coursePlaceIds.includes(item.id)).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-              <button type="button" disabled={!choiceId} onClick={() => { if (choiceId) setCoursePlaceIds((ids) => [...ids, choiceId]); setChoiceId(''); }}><Plus size={14}/> 추가</button></div>
+              <button type="button" disabled={!choiceId || coursePlaceIds.length >= 20} onClick={() => {
+                if (!choiceId) return;
+                appendToCourse(choiceId); setChoiceId('');
+                setMessage('장소를 추가했어요. 마지막에 코스 저장을 눌러 주세요.');
+              }}><Plus size={14}/> 추가</button></div>
             <button type="button" className="date-map-primary" disabled={pending || !connection} onClick={() => void saveCourse()}>두 사람의 코스로 저장</button>
             {courseId && <button type="button" className="date-map-delete" disabled={pending} onClick={() => { if (window.confirm('이 데이트 코스를 삭제할까요?')) void submit(async () => { await deleteDateCourse(coupleId, courseId); newCourse(); }, '코스를 삭제했어요.'); }}><Trash2 size={14}/> 코스 삭제</button>}
           </article>
