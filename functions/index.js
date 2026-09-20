@@ -71,3 +71,6 @@ exports.turnCredentials = onRequest({
   }
   return json(res, 201, { iceServers, expiresIn: 3600 });
 });
+
+// Optional NAVER Local Search endpoint. Requires two separate server-side secrets.
+exports.searchDatePlaces = require('./localSearch').searchDatePlaces;
