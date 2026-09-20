@@ -462,3 +462,41 @@
 .date-map-saved-region[open] > summary svg { transform:rotate(180deg); }
 .date-map-saved-region > .date-map-region-group { padding:0 10px 8px; }
 .date-map-saved-region .date-map-region-group h3 { margin-top:12px; font-size:12px; color:var(--text-secondary); }
+
+/* Guided course picking: only regions containing saved places appear. */
+.date-map-course-picker { min-width:0; }
+.date-map-picker-actions { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin:10px 0; color:var(--text-secondary); font-size:12px; }
+.date-map-picker-actions b { color:var(--primary); font-size:16px; }
+.date-map-picker-actions button,.date-map-course-add,.date-map-course-schedule-toggle {
+  display:inline-flex; align-items:center; justify-content:center; gap:6px; border:1px solid var(--border);
+  border-radius:11px; padding:10px 12px; background:var(--surface); color:var(--text-primary);
+  font-size:12px; font-weight:700; cursor:pointer;
+}
+.date-map-picker-place {
+  display:flex; width:100%; min-width:0; align-items:center; gap:9px; text-align:left;
+  margin:0 0 7px; padding:10px; border:1px solid var(--border); border-radius:12px;
+  background:var(--surface); color:var(--text-primary); cursor:pointer;
+}
+.date-map-picker-place.selected { border-color:var(--primary); background:var(--primary-soft); }
+.date-map-picker-place:disabled { opacity:.45; cursor:not-allowed; }
+.date-map-picker-place > span:nth-child(2) { flex:1; min-width:0; display:flex; flex-direction:column; gap:4px; }
+.date-map-picker-place strong { font-size:12px; overflow-wrap:anywhere; }
+.date-map-picker-place small { color:var(--text-secondary); font-size:10px; line-height:1.4; overflow-wrap:anywhere; }
+.date-map-picker-number { flex:0 0 28px; height:28px; border-radius:50%; display:grid; place-items:center; background:var(--primary-soft); color:var(--primary); font-size:12px; font-weight:800; }
+.date-map-picker-place.selected .date-map-picker-number { background:var(--primary); color:white; }
+.date-map-picker-check { color:var(--text-secondary); font-size:10px; white-space:nowrap; }
+.date-map-picker-footer { position:sticky; bottom:-14px; z-index:3; padding:12px 0 4px; background:var(--surface); }
+.date-map-picker-footer .date-map-primary { min-height:44px; }
+.date-map-course-editor { display:flex; flex-direction:column; gap:10px; }
+.date-map-course-editor .date-map-label { margin:0; }
+.date-map-course-add { width:100%; min-height:42px; color:var(--primary); border-style:dashed; }
+.date-map-course-schedule-toggle { width:100%; min-height:42px; justify-content:flex-start; background:var(--primary-soft); }
+.date-map-course-schedule-toggle > svg:last-child { margin-left:auto; }
+.date-map-course-stop { cursor:grab; }
+.date-map-course-stop:active { cursor:grabbing; }
+.date-map-drag-handle { color:var(--text-secondary); display:inline-flex; align-items:center; }
+.date-map-course-stop:not(:has(.date-map-stop-times)) { grid-template-areas:"number place controls"; }
+@container (min-width: 590px) {
+  .date-map-course-stop:not(:has(.date-map-stop-times)) { grid-template-columns:38px minmax(0,1fr) auto; grid-template-areas:"number place controls"; }
+}
+@media(max-width:450px) { .date-map-drag-handle { display:none; } }
