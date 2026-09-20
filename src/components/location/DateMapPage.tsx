@@ -290,6 +290,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
           return;
         }
         appendToCourse(duplicate.id);
+        if (!courseId) { const region = placeRegion(duplicate.address).province; setCourseTitle((current) => current.trim() || `${region === '지역 미분류' ? '우리의' : region} 데이트`); }
       } else {
         setSelectedId(duplicate.id);
       }
@@ -308,7 +309,10 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
         name: candidateName.trim().slice(0, 120), address: candidateAddress.trim().slice(0, 240),
         latitude: candidate.latitude, longitude: candidate.longitude, category: candidateCategory, memo: candidateMemo.trim().slice(0, 1000),
       });
-      if (addToCurrentCourse) appendToCourse(id);
+      if (addToCurrentCourse) {
+        appendToCourse(id);
+        if (!courseId) { const region = placeRegion(candidateAddress).province; setCourseTitle((current) => current.trim() || `${region === '지역 미분류' ? '우리의' : region} 데이트`); }
+      }
       else setSelectedId(id);
       setCandidate(null); setResults([]); setCandidateMemo(''); clearMapFocus();
       if (addToCurrentCourse) { setTab('courses'); setCoursePicking(true); setAddingToCourse(false); }
