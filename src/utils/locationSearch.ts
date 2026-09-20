@@ -1,5 +1,5 @@
 import type { LocationSearchResult } from './location';
-import { matchesPlaceSearchIntent, parsePlaceSearchIntent } from './placeSearchIntent';
+import { matchesPlaceSearchIntent, parsePlaceSearchIntent } from './placeSearchIntent.ts';
 
 export type MapBounds = { west: number; south: number; east: number; north: number };
 export function validMapBounds(b: MapBounds): boolean {
