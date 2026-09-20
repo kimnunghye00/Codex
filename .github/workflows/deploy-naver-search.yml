@@ -59,6 +59,27 @@ jobs:
             echo "If deployment fails with iam.serviceAccounts.ActAs, grant this principal Service Account User on the specific runtime service account named in the error."
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Diagnose Cloud Functions list access (no credentials logged)
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const admin = require('./functions/node_modules/firebase-admin');
+          const credential = admin.credential.cert(JSON.parse(fs.readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, 'utf8')));
+          (async () => {
+            const { access_token } = await credential.getAccessToken();
+            for (const version of ['v1', 'v2']) {
+              const url = 'https://cloudfunctions.googleapis.com/' + version + '/projects/meluni-f4e00/locations/-/functions?pageSize=1';
+              const response = await fetch(url, { headers: { Authorization: 'Bearer ' + access_token } });
+              const payload = await response.json().catch(() => ({}));
+              const error = payload.error || {};
+              console.log('Cloud Functions LIST ' + version + ': HTTP ' + response.status
+                + (error.status ? ', ' + error.status : ''));
+              if (!response.ok && error.message) console.log('LIST ' + version + ' error: ' + String(error.message).slice(0, 350));
+            }
+          })().catch((e) => { console.error('LIST diagnostic failed: ' + e.message); process.exitCode = 1; });
+          NODE
+
       - name: Deploy only the authenticated Naver search function
         shell: bash
         run: |
