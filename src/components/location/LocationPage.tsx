@@ -18,7 +18,8 @@ import {
 } from '../../utils/location';
 
 const MIN_MOVE_METERS = 120;
-const ROUTE_MAP_ORIGIN = 'https://meluni-f4e00.web.app';
+const ROUTE_MAP_ORIGIN = typeof window !== 'undefined' && window.location.hostname === 'danduli.web.app'
+  ? 'https://danduli.web.app' : 'https://meluni-f4e00.web.app';
 const ROUTE_MAP_HOST = `${ROUTE_MAP_ORIGIN}/naver-map-host.html`;
 const LOCATION_FOCUS_KEY = 'route-pending-location-focus';
 const MAP_READY_TIMEOUT_MS = 12_000;
@@ -265,7 +266,7 @@ export function LocationPage({ requestedTab, Header, connection, focusPlace, onC
       if (event.data.type === 'auth-error') {
         setMapReady(false);
         setMapFailed(true);
-        setMapStatus('네이버 지도 인증이 거부됐어요. NAVER Cloud Maps에서 Dynamic Map과 웹 서비스 URL meluni-f4e00.web.app 등록을 확인해 주세요.');
+        setMapStatus('네이버 지도 인증이 거부됐어요. NAVER Cloud Maps에서 Dynamic Map과 현재 웹 주소의 서비스 URL 등록을 확인해 주세요.');
         return;
       }
 
