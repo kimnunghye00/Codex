@@ -177,7 +177,7 @@
         if (!map || !hasMapSdk()) return;
         const naver = window.naver;
         const palette = activePalette();
-        naver.maps.Event.trigger(map, 'resize');
+        // Repaint overlays without resizing the map: a resize can emit zoom_changed.
         clearOverlays();
         // Keep the selected date-plan marker and viewport through result/label re-renders.
         // A new search or explicit dismissal sends clear-focus from the parent.
@@ -187,10 +187,8 @@
           .sort((a, b) => new Date(a.arrivedAt || 0).getTime() - new Date(b.arrivedAt || 0).getTime());
 
         if (!validVisits.length) {
-          if (!focusOverlay) {
-            map.setCenter(new naver.maps.LatLng(37.5666103, 126.9783882));
-            map.setZoom(15);
-          }
+          // The Seoul city hall coordinates are only an initial map default.
+          // Removing a course/marker or zooming an empty map must never recenter it.
           return;
         }
 
@@ -298,14 +296,14 @@
         if (data.type === 'render') render(data);
         if (data.type === 'set-pick-mode') pickMode = data.enabled === true && lastRender.mode === 'date-plan';
         if (data.type === 'focus') focus(data.visit, data.showPopup);
-        if (data.type === 'clear-focus') { clearFocus(); render(lastRender); }
+        if (data.type === 'clear-focus') { clearFocus(); render(lastRender, true); }
         if (data.type === 'resize' && map && hasMapSdk()) window.naver.maps.Event.trigger(map, 'resize');
       });
 
       try {
         if (window.parent !== window && window.parent.location.origin === location.origin) {
           const themeObserver = new MutationObserver(() => {
-            if (initialized) render(lastRender);
+            if (initialized) render(lastRender, true);
           });
           themeObserver.observe(window.parent.document.documentElement, {
             attributes: true,
