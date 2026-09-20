@@ -1,5 +1,5 @@
 /**
- * NAVER's local-search API uses different credentials from NAVER Maps JS.
+ * NAVER API HUB local search uses separate credentials from NAVER Maps JS.
  * This endpoint is intentionally NOT enabled by the web build until its
  * NAVER_LOCAL_SEARCH_ID and NAVER_LOCAL_SEARCH_SECRET secrets are provisioned.
  */
@@ -62,10 +62,10 @@ exports.searchDatePlaces = onRequest({
   const seen = new Set();
   try {
     for (const text of queries) {
-      const url = new URL('https://openapi.naver.com/v1/search/local.json');
-      url.search = new URLSearchParams({ query: text, display: '5', start: '1', sort: 'random' }).toString();
+      const url = new URL('https://naverapihub.apigw.ntruss.com/search/v1/local');
+      url.search = new URLSearchParams({ query: text, display: '5', start: '1', sort: 'random', format: 'json' }).toString();
       const response = await fetch(url, {
-        headers: { 'X-Naver-Client-Id': naverId.value(), 'X-Naver-Client-Secret': naverSecret.value() },
+        headers: { 'X-NCP-APIGW-API-KEY-ID': naverId.value(), 'X-NCP-APIGW-API-KEY': naverSecret.value() },
         signal: AbortSignal.timeout(4500), redirect: 'error',
       });
       if (!response.ok) {
