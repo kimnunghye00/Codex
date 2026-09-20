@@ -50,7 +50,7 @@ jobs:
           chmod 600 "$ADC_FILE"
           echo "GOOGLE_APPLICATION_CREDENTIALS=$ADC_FILE" >> "$GITHUB_ENV"
           # Public service-account email only, never print its private key.
-          DEPLOY_PRINCIPAL="$(node -e 'let s="";process.stdin.on("data",x=>s+=x);process.stdin.on("end",()=>{const v=JSON.parse(s); if(!/^[^@\\s]+@[^@\\s]+\\.iam\\.gserviceaccount\\.com$/.test(v.client_email || ""))process.exit(1);process.stdout.write(v.client_email);});' <<< "$FIREBASE_SERVICE_ACCOUNT_JSON")"
+          DEPLOY_PRINCIPAL="$(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).client_email' "$ADC_FILE")"
           echo "GitHub deploy identity: $DEPLOY_PRINCIPAL"
           {
             echo "### GitHub deployment service account"
