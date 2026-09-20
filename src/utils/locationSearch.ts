@@ -62,9 +62,9 @@ async function overpassSearch(query: string, bounds: MapBounds): Promise<Locatio
   const width = bounds.east - bounds.west, height = bounds.north - bounds.south;
   // Avoid running a costly nationwide Overpass query on a zoomed-out map.
   if (width > 0.5 || height > 0.5 || width <= 0 || height <= 0) return [];
-  const escaped = escapeOverpassRegex(query.trim().slice(0, 80));
+  const escaped = JSON.stringify(escapeOverpassRegex(query.trim().replace(/\\s+/g, ' ').slice(0, 80)));
   const bbox = [bounds.south, bounds.west, bounds.north, bounds.east].join(',');
-  const statement = `[out:json][timeout:9];(nwr["name"~"${escaped}",i](${bbox});nwr["name:ko"~"${escaped}",i](${bbox}););out center 40;`;
+  const statement = `[out:json][timeout:9];(nwr["name"~${escaped},i](${bbox});nwr["name:ko"~${escaped},i](${bbox}););out center 40;`;
   const response = await fetch('https://overpass-api.de/api/interpreter', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8', Accept: 'application/json' },
