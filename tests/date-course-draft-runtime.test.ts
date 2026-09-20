@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { appendPlaceToCourse, MAX_DATE_COURSE_PLACES } from '../src/lib/dateCourseDraft.ts';
+import { appendPlaceToCourse, MAX_DATE_COURSE_PLACES, placesForDateMap } from '../src/lib/dateCourseDraft.ts';
 
 test('adds multiple unique stops without changing the existing plan or their order', () => {
   const original = ['busan-station'];
@@ -47,4 +47,14 @@ test('incomplete, invalid and reversed time ranges are rejected without inventin
   assert.match(validateCourseTimes(ids, { one: { start: '25:00', end: '26:00' } }) ?? '', /확인/);
   assert.match(validateCourseTimes(ids, { one: { start: '13:00', end: '12:00' } }) ?? '', /늦어야/);
   assert.equal(validateCourseTimes(ids, {}), null);
+});
+
+
+test('deleted course pins disappear without deleting independently saved places', () => {
+  const places = [{ id: 'pizza' }, { id: 'beach' }, { id: 'cafe' }];
+  assert.deepEqual(placesForDateMap(places, 'courses', ['beach', 'pizza']).map((place) => place.id), ['beach', 'pizza']);
+  assert.deepEqual(placesForDateMap(places, 'courses', ['pizza']).map((place) => place.id), ['pizza']);
+  assert.deepEqual(placesForDateMap(places, 'courses', []).map((place) => place.id), []);
+  assert.deepEqual(placesForDateMap(places, 'places', []).map((place) => place.id), ['pizza', 'beach', 'cafe']);
+  assert.deepEqual(placesForDateMap(places, 'courses', ['missing', 'cafe']).map((place) => place.id), ['cafe']);
 });
