@@ -70,3 +70,68 @@ test('new search API distinguishes a service failure from a real empty result', 
   try { await assert.rejects(searchLocationPage('카페')); }
   finally { globalThis.fetch = original; }
 });
+
+
+test('map search retries outside the strict viewbox and filters nationwide false positives', async () => {
+  const oldFetch = globalThis.fetch;
+  const urls: string[] = [];
+  globalThis.fetch = async (url) => {
+    urls.push(String(url));
+    if (urls.length === 1) return new Response(JSON.stringify([]));
+    return new Response(JSON.stringify([
+      { place_id: 44, lat: '37.563', lon: '126.974', name: '서진닭갈비', display_name: '서진닭갈비, 서울' },
+      { place_id: 45, lat: '35.170', lon: '129.060', name: '서진닭갈비', display_name: '다른 지역 서진닭갈비' },
+    ]));
+  };
+  try {
+    const results = await searchLocationPage('서진닭갈비', { bounds: { west: 126.97, south: 37.56, east: 126.98, north: 37.57 } });
+    assert.equal(results.results.length, 1);
+    assert.equal(results.results[0].placeName, '서진닭갈비');
+    assert.match(urls[0], /bounded=1/);
+    assert.ok(!urls[1].includes('bounded=1'));
+  } finally { globalThis.fetch = oldFetch; }
+});
+
+test('map search falls back to nearby named OSM POIs, excluding out-of-view locations and duplicate geometries', async () => {
+  const oldFetch = globalThis.fetch;
+  const urls: string[] = [];
+  let poiRequest = '';
+  globalThis.fetch = async (url, options) => {
+    urls.push(String(url));
+    if (String(url).includes('overpass-api')) {
+      poiRequest = String(options?.body ?? '');
+      return new Response(JSON.stringify({ elements: [
+        { type: 'node', id: 1, lat: 37.563, lon: 126.974, tags: { name: '서진닭갈비', 'addr:street': '서소문로' } },
+        { type: 'way', id: 2, center: { lat: 37.563, lon: 126.974 }, tags: { name: '서진닭갈비' } },
+        { type: 'node', id: 3, lat: 35.16, lon: 129.06, tags: { name: '서진닭갈비' } },
+        { type: 'node', id: 4, lat: 37.564, lon: 126.975, tags: { name: '다른 식당' } },
+      ] }));
+    }
+    return new Response(JSON.stringify([]));
+  };
+  try {
+    const page = await searchLocationPage('서진닭갈비', { bounds: { west: 126.97, south: 37.56, east: 126.98, north: 37.57 } });
+    assert.equal(page.results.length, 1);
+    assert.equal(page.results[0].address, '서소문로');
+    assert.equal(page.hasMore, false);
+    assert.equal(urls.length, 3);
+    assert.match(new URLSearchParams(poiRequest).get('data') ?? '', /37\.56,126\.97,37\.57,126\.98/);
+  } finally { globalThis.fetch = oldFetch; }
+});
+
+test('a missing POI query with quotes is safely escaped and map search cannot return remote matches', async () => {
+  const oldFetch = globalThis.fetch;
+  let poiQuery = '';
+  globalThis.fetch = async (url, options) => {
+    if (String(url).includes('overpass-api')) {
+      poiQuery = new URLSearchParams(String(options?.body)).get('data') ?? '';
+      return new Response(JSON.stringify({ elements: [] }));
+    }
+    return new Response(JSON.stringify([]));
+  };
+  try {
+    const result = await searchLocationPage('카페 "안녕"', { bounds: { west: 126.97, south: 37.56, east: 126.98, north: 37.57 } });
+    assert.deepEqual(result.results, []);
+    assert.match(poiQuery, /\\"안녕\\"/);
+  } finally { globalThis.fetch = oldFetch; }
+});
