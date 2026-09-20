@@ -152,7 +152,7 @@ export async function searchLocationPage(query: string, options: { bounds?: MapB
   return {
     results,
     excludedIds: ids,
-    hasMore: Boolean(effectiveResponse && effectiveResponse.rows.length > 0
+    hasMore: Boolean(results.length && effectiveResponse && effectiveResponse.rows.length > 0
       && ids.length > (options.excludedIds?.length ?? 0)),
   };
 }
