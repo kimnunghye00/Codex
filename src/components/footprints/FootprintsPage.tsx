@@ -8,7 +8,7 @@ import './FootprintsPage.css';
 
 const MAP_ORIGIN = typeof window !== 'undefined' && window.location.hostname === 'danduli.web.app'
   ? 'https://danduli.web.app' : 'https://meluni-f4e00.web.app';
-const MAP_URL = `${MAP_ORIGIN}/naver-map-host.html?v=11`;
+const MAP_URL = `${MAP_ORIGIN}/naver-map-host.html?v=12`;
 const DISPLAY_DATE = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: 'long', day: 'numeric' });
 const KOREAN_DATE = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' });
 
