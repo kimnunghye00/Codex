@@ -33,6 +33,7 @@ jobs:
       - name: Install CLI and validate search source
         run: |
           npm ci
+          npm install --prefix functions --no-audit --no-fund
           node --check functions/localSearch.js
           node --check functions/index.js
           node --input-type=module -e "import fs from 'node:fs';const cfg=JSON.parse(fs.readFileSync('firebase.json','utf8'));if(cfg.functions?.source!=='functions')process.exit(1);"
