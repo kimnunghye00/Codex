@@ -39,11 +39,14 @@ function normalizePlace(item) {
 
 exports.searchDatePlaces = onRequest({
   region: 'asia-northeast3', timeoutSeconds: 12, memory: '256MiB',
+  // The web client sends Authorization, so its GET request is preflighted.
+  // Firebase CORS middleware must answer OPTIONS before token verification.
+  cors: [...ALLOWED_ORIGINS],
   secrets: [naverId, naverSecret],
 }, async (req, res) => {
   const origin = req.get('origin') || '';
   if (origin && !ALLOWED_ORIGINS.has(origin)) return sendJson(res, 403, { error: 'origin-not-allowed' });
-  if (origin) res.set('Access-Control-Allow-Origin', origin).set('Vary', 'Origin');
+  // Origin headers and OPTIONS are handled by the function's CORS middleware.
   if (req.method !== 'GET') return sendJson(res, 405, { error: 'method-not-allowed' });
   const token = (req.get('authorization') || '').match(/^Bearer (\S+)$/)?.[1];
   if (!token || token.length > 8192) return sendJson(res, 401, { error: 'authentication-required' });
