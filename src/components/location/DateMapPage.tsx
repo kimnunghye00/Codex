@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { CalendarDays, ChevronDown, ChevronUp, Heart, MapPin, MessageCircle, Plus, Search, Trash2, X } from 'lucide-react';
 import { auth } from '../../lib/firebase';
-import { appendPlaceToCourse, courseTimesFromSaved, encodeCourseTimeSlot, MAX_DATE_COURSE_PLACES, validateCourseTimes, type CourseTimeSlot } from '../../lib/dateCourseDraft';
+import { appendPlaceToCourse, courseTimesFromSaved, encodeCourseTimeSlot, MAX_DATE_COURSE_PLACES, placesForDateMap, validateCourseTimes, type CourseTimeSlot } from '../../lib/dateCourseDraft';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
 import { reverseGeocode, searchLocations, type LocationSearchResult } from '../../utils/location';
 import {
@@ -87,6 +87,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const selected = places.find((item) => item.id === selectedId);
   const course = courses.find((item) => item.id === courseId);
   const visible = useMemo(() => places.filter((item) => category === ALL || item.category === category), [places, category]);
+  const mappedPlaces = useMemo(() => placesForDateMap(visible, tab, coursePlaceIds), [visible, tab, coursePlaceIds]);
 
   useEffect(() => {
     setPlaces([]); setCourses([]); setSelectedId(''); setCourseId(''); setCourseTimes({}); setLikes([]); setOpinions([]);
@@ -143,7 +144,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   }, [focusPlace]);
 
   const mapVisits = useMemo(() => [
-    ...(results.length || candidate ? [] : visible).map((item) => ({
+    ...(results.length || candidate ? [] : mappedPlaces).map((item) => ({
       id: item.id, latitude: item.latitude, longitude: item.longitude, placeName: item.name,
       photoUrl: item.photoUrl, address: item.address,
       arrivedAt: '2026-01-01T00:00:00.000Z', leftAt: '2026-01-01T00:00:00.000Z',
@@ -157,7 +158,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       ? [{ id: 'search-manual', latitude: candidate.latitude, longitude: candidate.longitude,
         placeName: candidateName || candidate.placeName, arrivedAt: '2026-01-01T00:00:00.000Z', leftAt: '2026-01-01T00:00:00.000Z' }]
       : []),
-  ], [visible, results, candidate, candidateName]);
+  ], [mappedPlaces, results, candidate, candidateName]);
   useEffect(() => {
     const timer = window.setTimeout(() => { if (!mapReady) setMapError(true); }, 12000);
     const receive = (event: MessageEvent<{ source?: string; type?: string; id?: string; latitude?: number; longitude?: number }>) => {
@@ -295,10 +296,12 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   };
 
   const newCourse = () => {
+    clearMapFocus();
     setCourseId(''); setCourseTitle(''); setCourseDate(dateToday()); setCoursePlaceIds([]); setCourseTimes({});
     setChoiceId(''); setTab('courses');
   };
   const chooseCourse = (item: DateCourse) => {
+    clearMapFocus();
     setCourseId(item.id); setCourseTitle(item.title); setCourseDate(item.date);
     setCoursePlaceIds([...item.placeIds]); setCourseTimes(courseTimesFromSaved(item.placeIds, item.timeSlots)); setTab('courses');
   };
@@ -308,6 +311,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     }));
   };
   const removeStop = (id: string) => {
+    clearMapFocus();
     setCoursePlaceIds((ids) => ids.filter((placeId) => placeId !== id));
     setCourseTimes((times) => {
       const next = { ...times };
@@ -355,8 +359,8 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       </section>
       <section className="date-map-panel" ref={panel}>
         <div className="date-map-tabs" role="tablist" aria-label="데이트 지도 보기">
-          <button type="button" role="tab" aria-selected={tab === 'places'} className={tab === 'places' ? 'active' : ''} onClick={() => setTab('places')}>저장한 장소</button>
-          <button type="button" role="tab" aria-selected={tab === 'courses'} className={tab === 'courses' ? 'active' : ''} onClick={() => setTab('courses')}>데이트 코스</button>
+          <button type="button" role="tab" aria-selected={tab === 'places'} className={tab === 'places' ? 'active' : ''} onClick={() => { clearMapFocus(); setTab('places'); }}>저장한 장소</button>
+          <button type="button" role="tab" aria-selected={tab === 'courses'} className={tab === 'courses' ? 'active' : ''} onClick={() => { clearMapFocus(); setTab('courses'); }}>데이트 코스</button>
         </div>
         {(results.length > 0 || candidateSearch || query.trim()) && <div className="date-map-search-results">
           <div className="date-map-panel-header"><strong>검색 결과 {results.length}곳</strong><button type="button" onClick={() => { setPicking((v) => !v); setMessage(''); }} disabled={!mapReady}>{picking ? '위치 선택 취소' : '지도에서 직접 위치 선택'}</button></div>
@@ -423,7 +427,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
               else { appendToCourse(selected.id); setMessage('장소를 추가했어요. 마지막에 코스 저장을 눌러 주세요.'); }
               setTab('courses');
             }}>{courseId || coursePlaceIds.length ? '현재 코스에 추가' : '코스에 넣기'}</button>
-              <button type="button" className="date-map-delete" disabled={pending} onClick={() => { if (window.confirm('이 장소를 삭제할까요? 코스에서도 표시되지 않을 수 있어요.')) void submit(async () => { await deleteDatePlace(coupleId, selected.id); setSelectedId(''); }, '장소를 삭제했어요.'); }}><Trash2 size={14}/> 장소 삭제</button></div>
+              <button type="button" className="date-map-delete" disabled={pending} onClick={() => { if (window.confirm('이 장소를 삭제할까요? 코스에서도 표시되지 않을 수 있어요.')) void submit(async () => { await deleteDatePlace(coupleId, selected.id); clearMapFocus(); setSelectedId(''); }, '장소를 삭제했어요.'); }}><Trash2 size={14}/> 장소 삭제</button></div>
           </article>}
         </>}
         {tab === 'courses' && <>
