@@ -1,4 +1,5 @@
 import type { LocationSearchResult } from './location';
+import { matchesPlaceSearchIntent, parsePlaceSearchIntent } from './placeSearchIntent';
 
 export type MapBounds = { west: number; south: number; east: number; north: number };
 export function validMapBounds(b: MapBounds): boolean {
@@ -96,44 +97,63 @@ export async function searchLocationPage(query: string, options: { bounds?: MapB
   if (!trimmed) return { results: [], excludedIds: [], hasMore: false };
   const bounds = options.bounds;
   if (bounds && !validMapBounds(bounds)) throw new Error('Invalid map bounds');
+
+  const intent = parsePlaceSearchIntent(trimmed);
+  const brandQuery = intent.businessQuery || trimmed;
   let response: { rows: NominatimRow[]; ids: string[] } | undefined;
+  let effectiveResponse: { rows: NominatimRow[]; ids: string[] } | undefined;
   let firstError: unknown;
   try { response = await nominatimSearch(trimmed, bounds, options.excludedIds); }
   catch (error) { firstError = error; }
+  effectiveResponse = response;
 
-  const ids = response?.ids ?? [...(options.excludedIds ?? [])];
   const seen = new Set<string>();
   const results: LocationSearchResult[] = [];
   const addRows = (rows: readonly NominatimRow[]) => {
     for (const row of rows) {
       const place = searchResult(row, trimmed);
-      if (!place || (bounds && !insideMapBounds(place, bounds))) continue;
+      if (!place || (bounds && !insideMapBounds(place, bounds)) || !matchesPlaceSearchIntent(place, intent)) continue;
       const key = coordinateKey(place);
       if (!seen.has(key)) { seen.add(key); results.push(place); }
     }
   };
   if (response) addRows(response.rows);
 
+  // "명륜진사갈비 삼척점" can be absent from Nominatim even if a
+  // same-name POI is indexed. Retry the business name, but accept ONLY
+  // addresses confirming 삼척시. Do not silently substitute a Seoul branch.
+  if (!results.length && intent.hasExplicitRegion && brandQuery !== trimmed) {
+    try {
+      const alternative = await nominatimSearch(brandQuery, bounds, options.excludedIds);
+      addRows(alternative.rows);
+      effectiveResponse = alternative;
+    } catch (error) { if (!response) firstError = error; }
+  }
+
   if (bounds && !results.length && !(options.excludedIds?.length)) {
     // A strict Nominatim viewbox can suppress nearby POIs even when indexed.
-    // A bounded client-side check still prevents distant results.
+    // A client-side bounds AND branch check prevents wrong-district results.
     if (response) {
-      try { addRows((await nominatimSearch(trimmed)).rows); } catch { /* Continue to alternate POI provider. */ }
+      try { addRows((await nominatimSearch(brandQuery)).rows); } catch { /* Continue to alternate POI provider. */ }
     }
     if (!results.length) {
       try {
-        for (const place of await overpassSearch(trimmed, bounds)) {
+        for (const place of await overpassSearch(brandQuery, bounds)) {
+          if (!matchesPlaceSearchIntent(place, intent)) continue;
           const key = coordinateKey(place);
           if (!seen.has(key)) { seen.add(key); results.push(place); }
         }
-      } catch { /* The alternate index is best-effort; the map-point picker remains available. */ }
+      } catch { /* The alternate index is best-effort; manual selection remains available. */ }
     }
   }
-  if (!response && !results.length) throw firstError ?? new Error('Place search unavailable');
+
+  if (!response && !effectiveResponse && !results.length) throw firstError ?? new Error('Place search unavailable');
+  const ids = effectiveResponse?.ids ?? [...(options.excludedIds ?? [])];
   return {
     results,
     excludedIds: ids,
-    hasMore: Boolean(response && response.rows.length > 0 && ids.length > (options.excludedIds?.length ?? 0)),
+    hasMore: Boolean(effectiveResponse && effectiveResponse.rows.length > 0
+      && ids.length > (options.excludedIds?.length ?? 0)),
   };
 }
 
