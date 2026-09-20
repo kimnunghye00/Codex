@@ -12,6 +12,7 @@ import {
   type DateCourse, type DatePlace, type PlaceOpinion,
 } from '../../lib/dateMap';
 import { insideMapBounds, searchLocationPage, validMapBounds, type MapBounds } from '../../utils/locationSearch';
+import { fetchNaverDatePlaces } from '../../utils/naverLocalSearch';
 import { groupSavedPlaces, placeRegion } from '../../utils/placeRegions';
 import { matchesPlaceSearchIntent, parsePlaceSearchIntent } from '../../utils/placeSearchIntent.ts';
 import './DateMapPage.css';
@@ -22,6 +23,8 @@ const MAP_ORIGIN = typeof window !== 'undefined' && window.location.hostname ===
   ? 'https://danduli.web.app' : 'https://meluni-f4e00.web.app';
 const MAP_HOST = `${MAP_ORIGIN}/naver-map-host.html?v=15`;
 const ALL = '전체';
+// This URL is enabled only after the server has its own NAVER Search ID and secret.
+const NAVER_LOCAL_SEARCH_URL = String(import.meta.env.VITE_NAVER_LOCAL_SEARCH_URL || '').trim();
 
 function errorText(error: unknown) {
   const code = String((error as { code?: string })?.code ?? '');
@@ -145,13 +148,37 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       setCandidateSearch(trimmed); setSearchedBounds(activeScope === 'map' ? activeBounds : null); setSearchedScope(activeScope);
     }
     try {
-      const page = await searchLocationPage(trimmed, { bounds: activeScope === 'map' ? activeBounds! : undefined, excludedIds: more ? excludedIds : [] });
+      const currentBounds = activeScope === 'map' ? activeBounds! : undefined;
+      const osmRequest = searchLocationPage(trimmed, { bounds: currentBounds, excludedIds: more ? excludedIds : [] });
+      const naverRequest = !more && NAVER_LOCAL_SEARCH_URL && auth.currentUser
+        ? (async () => {
+          const token = await auth.currentUser?.getIdToken();
+          if (!token) return [] as LocationSearchResult[];
+          let region = '';
+          if (currentBounds && !intent.hasExplicitRegion) {
+            const latitude = (currentBounds.south + currentBounds.north) / 2;
+            const longitude = (currentBounds.west + currentBounds.east) / 2;
+            const address = await reverseGeocode(latitude, longitude);
+            if (address) {
+              const parsed = placeRegion(address);
+              region = parsed.province !== '지역 미분류' ? parsed.province : '';
+              if (parsed.district && parsed.district !== '시·군·구 미분류') region += ' ' + parsed.district;
+              region = region.trim();
+            }
+          }
+          return fetchNaverDatePlaces(trimmed, { endpoint: NAVER_LOCAL_SEARCH_URL, token, region, bounds: currentBounds });
+        })()
+        : Promise.resolve([] as LocationSearchResult[]);
+      const [osm, naver] = await Promise.allSettled([osmRequest, naverRequest]);
       if (sequence !== searchSequence.current) return;
+      if (osm.status === 'rejected' && naver.status === 'rejected') throw osm.reason;
+      const page = osm.status === 'fulfilled' ? osm.value : { results: [], excludedIds: [], hasMore: false };
+      const naverResults = naver.status === 'fulfilled' ? naver.value : [];
       const matchedSaved = places.filter((item) => matchesPlaceSearchIntent({
         latitude: item.latitude, longitude: item.longitude, placeName: item.name, address: item.address,
       }, intent) && (activeScope !== 'map' || insideMapBounds(item, activeBounds!)))
         .map((item) => ({ latitude: item.latitude, longitude: item.longitude, placeName: item.name, address: item.address }));
-      const combined = [...matchedSaved, ...page.results].filter((item, index, all) =>
+      const combined = [...matchedSaved, ...naverResults, ...page.results].filter((item, index, all) =>
         all.findIndex((other) => Math.abs(other.latitude - item.latitude) < 0.00002
           && Math.abs(other.longitude - item.longitude) < 0.00002) === index);
       setResults((previous) => more
@@ -161,7 +188,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       if (!combined.length) setMessage(more ? '추가 검색 결과가 없어요.' : intent.hasExplicitRegion
         ? `${intent.regionLabel}와 일치하는 지점이 검색 데이터에 없어요. 다른 지역의 동명 지점은 표시하지 않았어요. 아래 버튼으로 ${intent.regionLabel} 지도에 이동해 직접 선택할 수 있어요.`
         : activeScope === 'map'
-          ? '현재 지도 안에 일치하는 장소가 없어요. 다른 지역 지점은 “가게명 + 지역명 + 점”으로 검색해 주세요.'
+          ? '현재 검색 데이터에는 지도 안에 일치하는 장소가 없어요. 네이버 지도에 보이는 가게와 별도로 수집되는 데이터이므로 직접 위치를 선택하거나 상호명과 지역명을 함께 검색해 주세요.'
           : '정확한 검색 결과가 없어요. 지점명·지역명을 함께 입력하거나 지도에서 위치를 지정해 주세요.');
       if (!more) panel.current?.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
@@ -471,7 +498,9 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             <MapPin size={15}/> {searchedRegion} 지도로 이동해 직접 선택
           </button>}
           {hasMore && <button type="button" className="date-map-primary" disabled={searching} onClick={() => void search(candidateSearch, true)}>{searching ? '불러오는 중…' : '검색 결과 더 보기'}</button>}
-          <p className="date-map-add-hint">다른 지역의 지점은 “명륜진사갈비 삼척점”처럼 지역명을 포함해 검색하세요. 네이버 지도와 검색 데이터가 달라 보이지 않는 가게는 지도에서 직접 위치를 지정해 저장할 수 있어요.</p>
+          <p className="date-map-add-hint">{NAVER_LOCAL_SEARCH_URL
+            ? '네이버 지역 검색은 최대 5건씩 조회하므로 모든 지점이 포함되지는 않을 수 있어요. 지도 범위와 지점명을 함께 사용해 주세요.'
+            : '현재 지도와 장소 검색은 별도 데이터예요. 네이버 지도에 보이는 모든 업체를 검색할 수 없어요. 지점은 “명륜진사갈비 삼척점”처럼 검색하고, 누락된 곳은 지도에서 직접 위치를 지정해 주세요.'}</p>
           {picking && <p className="date-map-pick-hint" role="status">지도에서 방문할 지점을 클릭해 주세요. 위치를 선택한 뒤 지점 이름과 주소를 직접 확인할 수 있어요.</p>}
           {!results.length && !candidate && !picking && <div className="date-map-empty date-map-empty-actions">
             <p>원하는 가게가 지도에 보이나요? 지도에서 가게 위치를 눌러 저장할 수 있어요.</p>
