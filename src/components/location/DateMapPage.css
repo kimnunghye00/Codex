@@ -500,3 +500,8 @@
   .date-map-course-stop:not(:has(.date-map-stop-times)) { grid-template-columns:38px minmax(0,1fr) auto; grid-template-areas:"number place controls"; }
 }
 @media(max-width:450px) { .date-map-drag-handle { display:none; } }
+
+/* Search recovery when a NAVER map label is missing from the OSM search index. */
+.date-map-empty-actions { display:flex; flex-direction:column; gap:10px; text-align:left; }
+.date-map-empty-actions p { margin:0; line-height:1.6; }
+.date-map-empty-actions .date-map-primary { min-height:42px; }
