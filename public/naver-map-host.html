@@ -348,6 +348,16 @@
           const sw = map.getBounds().getSW(), ne = map.getBounds().getNE();
           send('viewport-changed', { bounds: { west: sw.lng(), south: sw.lat(), east: ne.lng(), north: ne.lat() } });
         }
+        if (data.type === 'pan-to' && map && hasMapSdk()) {
+          const latitude = Number(data.latitude), longitude = Number(data.longitude);
+          const zoom = Number(data.zoom);
+          if (Number.isFinite(latitude) && latitude >= -90 && latitude <= 90
+            && Number.isFinite(longitude) && longitude >= -180 && longitude <= 180) {
+            clearFocus();
+            map.setCenter(new window.naver.maps.LatLng(latitude, longitude));
+            if (Number.isInteger(zoom) && zoom >= 3 && zoom <= 21) map.setZoom(zoom);
+          }
+        }
         if (data.type === 'focus') focus(data.visit, data.showPopup);
         if (data.type === 'clear-focus') { clearFocus(); render(lastRender, true); }
         if (data.type === 'resize' && map && hasMapSdk()) window.naver.maps.Event.trigger(map, 'resize');
