@@ -26,7 +26,7 @@ test('NAVER local search checks viewport, branch city, provider tag and auth hea
 });
 
 test('NAVER local search refuses non-HTTPS endpoints and unexpected response shape', async () => {
-  assert.rejects(fetchNaverDatePlaces('카페', { endpoint: 'http://not-safe.example', token: 'x' }), /Insecure/);
+  await assert.rejects(fetchNaverDatePlaces('카페', { endpoint: 'http://not-safe.example', token: 'x' }), /Insecure/);
   const oldFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response('<html>not deployed</html>', { status: 200 });
   try {
