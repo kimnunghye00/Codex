@@ -11,8 +11,9 @@
 2. 기존 Firebase 프로젝트 `meluni-f4e00`에 두 비밀값을 등록합니다. 인증된 개발 환경에서 다음 명령을 각각 실행하면 값은 별도 비공개 입력으로 받습니다.
    - `npx firebase-tools@15.29.0 functions:secrets:set NAVER_LOCAL_SEARCH_ID --project meluni-f4e00`
    - `npx firebase-tools@15.29.0 functions:secrets:set NAVER_LOCAL_SEARCH_SECRET --project meluni-f4e00`
-3. Functions를 배포합니다:
-   `npx firebase-tools@15.29.0 deploy --only functions:searchDatePlaces --project meluni-f4e00`.
+3. 비밀값을 등록한 뒤 GitHub → **Actions** → **Deploy 단둘이 Naver Search** → **Run workflow**를 실행합니다.
+   이 워크플로는 `searchDatePlaces` 함수만 배포하며 기존 Firestore/Hosting은 변경하지 않습니다.
+   직접 실행하려면 `npx firebase-tools@15.29.0 deploy --only functions:searchDatePlaces --project meluni-f4e00`를 사용해도 됩니다.
    Functions 배포에는 Firebase Blaze 요금제 및 배포 권한이 필요할 수 있습니다. 기존 Firestore 데이터는 이전하지 않습니다.
 4. Firebase 콘솔에서 배포된 `searchDatePlaces`의 **실제 HTTPS URL**을 확인합니다.
    GitHub 저장소 Settings → Secrets and variables → Actions → **Variables**에
@@ -30,3 +31,9 @@
   표시된 모든 네이버 지도 라벨이 자동으로 검색되는 **완전한 지도-검색 일치 기능은 보장하지 않습니다**.
 - 서버는 로그인 사용자의 토큰을 검사하고 지역 검색용 Secret을 비공개로 유지합니다.
   클라이언트로는 결과 장소명/주소/좌표만 돌려줍니다.
+
+## 컴퓨터에 터미널이 없는 경우
+
+NAVER Developers에서 검색용 ID와 Secret을 발급받은 뒤 Google Cloud Console → **Secret Manager**에서 프로젝트 `meluni-f4e00`을 선택하고 `NAVER_LOCAL_SEARCH_ID` / `NAVER_LOCAL_SEARCH_SECRET` 두 Secret을 각각 등록하세요. GitHub에 비밀값을 입력할 필요가 없습니다. 실제 비밀값이 생성된 것이 확인되면 위 수동 GitHub Actions 워크플로를 실행하면 됩니다. 서버 함수 배포 오류가 나면 GitHub Actions 로그에서 **오류 문구만** 공유하고 Secret 자체는 공유하지 마세요.
+
+클라이언트 쪽 검색은 `VITE_NAVER_LOCAL_SEARCH_URL`이 실제 함수 URL로 설정되고 웹을 재배포하기 전까지 기존 검색 경로를 유지합니다. **이 단계에서 등록만으로 모든 네이버 지도 라벨을 검색할 수 있는 것은 아닙니다.** 지역 검색 API는 호출당 5건 제한이 있으므로 업소별 지점 누락이 있을 수 있습니다.
