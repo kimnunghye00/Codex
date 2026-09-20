@@ -1,0 +1,17 @@
+{
+  "projects": {
+    "default": "meluni-f4e00"
+  },
+  "targets": {
+    "meluni-f4e00": {
+      "hosting": {
+        "legacy": [
+          "meluni-f4e00"
+        ],
+        "danduli": [
+          "danduli"
+        ]
+      }
+    }
+  }
+}
