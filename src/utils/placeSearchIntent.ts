@@ -1,4 +1,4 @@
-import { MUNICIPALITIES, PROVINCES, placeRegion } from './placeRegions';
+import { MUNICIPALITIES, PROVINCES, placeRegion } from './placeRegions.ts';
 import type { LocationSearchResult } from './location';
 
 export type PlaceSearchIntent = {
