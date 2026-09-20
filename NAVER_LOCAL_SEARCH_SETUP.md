@@ -1,12 +1,12 @@
 # 단둘이: 네이버 지역 검색 연결
 
 현재 지도는 NAVER Maps JS를 사용하지만 기존 검색은 OpenStreetMap(Nominatim/Overpass) 데이터입니다.
-네이버 지도에 표시되는 사업장을 같은 데이터로 검색하려면 **별도의 네이버 개발자 센터 지역 검색 API**가 필요합니다.
-지도용 `ncpKeyId`는 지역 검색의 `X-Naver-Client-Id`/`X-Naver-Client-Secret`를 대신하지 않습니다.
+네이버 지도에 표시되는 사업장을 같은 데이터로 검색하려면 **별도의 NAVER CLOUD PLATFORM → NAVER API HUB 지역 검색 API**가 필요합니다.
+지도용 `ncpKeyId`는 지역 검색의 `X-NCP-APIGW-API-KEY-ID`/`X-NCP-APIGW-API-KEY`를 대신하지 않습니다.
 
 ## 준비 및 연결
 
-1. NAVER Developers(https://developers.naver.com/)에서 앱을 생성하고 **검색** API 사용 권한을 켭니다.
+1. NAVER CLOUD PLATFORM(https://console.ncloud.com/naver-api-hub/application)에서 **NAVER API HUB → 지역**을 선택해 검색용 애플리케이션을 등록합니다.
    발급받은 검색용 Client ID와 Client Secret은 소스 코드, `.env`, 채팅 또는 프런트엔드에 넣지 마세요.
 2. 기존 Firebase 프로젝트 `meluni-f4e00`에 두 비밀값을 등록합니다. 인증된 개발 환경에서 다음 명령을 각각 실행하면 값은 별도 비공개 입력으로 받습니다.
    - `npx firebase-tools@15.29.0 functions:secrets:set NAVER_LOCAL_SEARCH_ID --project meluni-f4e00`
@@ -34,6 +34,12 @@
 
 ## 컴퓨터에 터미널이 없는 경우
 
-NAVER Developers에서 검색용 ID와 Secret을 발급받은 뒤 Google Cloud Console → **Secret Manager**에서 프로젝트 `meluni-f4e00`을 선택하고 `NAVER_LOCAL_SEARCH_ID` / `NAVER_LOCAL_SEARCH_SECRET` 두 Secret을 각각 등록하세요. GitHub에 비밀값을 입력할 필요가 없습니다. 실제 비밀값이 생성된 것이 확인되면 위 수동 GitHub Actions 워크플로를 실행하면 됩니다. 서버 함수 배포 오류가 나면 GitHub Actions 로그에서 **오류 문구만** 공유하고 Secret 자체는 공유하지 마세요.
+NAVER API HUB에서 지역 검색용 ID와 Secret을 발급받은 뒤 Google Cloud Console → **Secret Manager**에서 프로젝트 `meluni-f4e00`을 선택하고 `NAVER_LOCAL_SEARCH_ID` / `NAVER_LOCAL_SEARCH_SECRET` 두 Secret을 각각 등록하세요. GitHub에 비밀값을 입력할 필요가 없습니다. 실제 비밀값이 생성된 것이 확인되면 위 수동 GitHub Actions 워크플로를 실행하면 됩니다. 서버 함수 배포 오류가 나면 GitHub Actions 로그에서 **오류 문구만** 공유하고 Secret 자체는 공유하지 마세요.
 
 클라이언트 쪽 검색은 `VITE_NAVER_LOCAL_SEARCH_URL`이 실제 함수 URL로 설정되고 웹을 재배포하기 전까지 기존 검색 경로를 유지합니다. **이 단계에서 등록만으로 모든 네이버 지도 라벨을 검색할 수 있는 것은 아닙니다.** 지역 검색 API는 호출당 5건 제한이 있으므로 업소별 지점 누락이 있을 수 있습니다.
+
+### NAVER API HUB 요청 사양 (2026)
+
+- 요청 URL: `https://naverapihub.apigw.ntruss.com/search/v1/local`
+- 인증 헤더: `X-NCP-APIGW-API-KEY-ID` / `X-NCP-APIGW-API-KEY`
+- 두 비밀은 Google Secret Manager에만 보관합니다. 과거 `openapi.naver.com`의 `X-Naver-Client-Id` 헤더와 혼용하지 않습니다.
