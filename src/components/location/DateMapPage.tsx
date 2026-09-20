@@ -11,9 +11,9 @@ import {
   subscribePlaceLikes, subscribePlaceOpinions, updateDatePlace,
   type DateCourse, type DatePlace, type PlaceOpinion,
 } from '../../lib/dateMap';
-import { searchLocationPage, validMapBounds, type MapBounds } from '../../utils/locationSearch';
+import { insideMapBounds, searchLocationPage, validMapBounds, type MapBounds } from '../../utils/locationSearch';
 import { groupSavedPlaces, placeRegion } from '../../utils/placeRegions';
-import { parsePlaceSearchIntent } from '../../utils/placeSearchIntent';
+import { matchesPlaceSearchIntent, parsePlaceSearchIntent } from '../../utils/placeSearchIntent';
 import './DateMapPage.css';
 
 type Category = DatePlace['category'];
@@ -147,9 +147,18 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     try {
       const page = await searchLocationPage(trimmed, { bounds: activeScope === 'map' ? activeBounds! : undefined, excludedIds: more ? excludedIds : [] });
       if (sequence !== searchSequence.current) return;
-      setResults((previous) => more ? [...previous, ...page.results.filter((item) => !previous.some((old) => old.latitude === item.latitude && old.longitude === item.longitude))] : page.results);
+      const matchedSaved = places.filter((item) => matchesPlaceSearchIntent({
+        latitude: item.latitude, longitude: item.longitude, placeName: item.name, address: item.address,
+      }, intent) && (activeScope !== 'map' || insideMapBounds(item, activeBounds!)))
+        .map((item) => ({ latitude: item.latitude, longitude: item.longitude, placeName: item.name, address: item.address }));
+      const combined = [...matchedSaved, ...page.results].filter((item, index, all) =>
+        all.findIndex((other) => Math.abs(other.latitude - item.latitude) < 0.00002
+          && Math.abs(other.longitude - item.longitude) < 0.00002) === index);
+      setResults((previous) => more
+        ? [...previous, ...combined.filter((item) => !previous.some((old) => old.latitude === item.latitude && old.longitude === item.longitude))]
+        : combined);
       setExcludedIds(page.excludedIds); setHasMore(page.hasMore);
-      if (!page.results.length) setMessage(more ? '추가 검색 결과가 없어요.' : intent.hasExplicitRegion
+      if (!combined.length) setMessage(more ? '추가 검색 결과가 없어요.' : intent.hasExplicitRegion
         ? `${intent.regionLabel}와 일치하는 지점이 검색 데이터에 없어요. 다른 지역의 동명 지점은 표시하지 않았어요. 아래 버튼으로 ${intent.regionLabel} 지도에 이동해 직접 선택할 수 있어요.`
         : activeScope === 'map'
           ? '현재 지도 안에 일치하는 장소가 없어요. 다른 지역 지점은 “가게명 + 지역명 + 점”으로 검색해 주세요.'
