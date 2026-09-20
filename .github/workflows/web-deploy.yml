@@ -12,6 +12,7 @@ on:
       - 'package-lock.json'
       - 'vite.config.ts'
       - 'firebase.json'
+      - '.firebaserc'
       - 'firestore.rules'
       - 'storage.rules'
       - 'tests/firebase-security*'
@@ -82,7 +83,9 @@ jobs:
           test -f public/sw.js
           grep -q "AppCrashBoundary" src/main.tsx
           grep -q "preparePersistentBackup" src/main.tsx
-          grep -q "meluni-f4e00.web.app" src/components/location/LocationPage.tsx
+          grep -q "danduli.web.app" src/components/location/LocationPage.tsx
+          grep -q '"danduli"' .firebaserc
+          grep -q '"legacy"' .firebaserc
           grep -q "ncpKeyId" public/naver-map-host.html
           grep -q '"storage"' firebase.json
           grep -q "backups" firestore.rules
@@ -109,6 +112,32 @@ jobs:
           echo 'Configure **ROUTE_FIREBASE_SERVICE_ACCOUNT** (recommended) or **ROUTE_FIREBASE_TOKEN**, then rerun this workflow.' >> "$GITHUB_STEP_SUMMARY"
           exit 1
 
+      - name: Provision and verify danduli Hosting site
+        if: ${{ env.FIREBASE_SERVICE_ACCOUNT_JSON != '' || env.FIREBASE_TOKEN != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "$FIREBASE_SERVICE_ACCOUNT_JSON" ]]; then
+            unset FIREBASE_TOKEN
+          fi
+          FIREBASE_CLI="npx --yes firebase-tools@15.29.0"
+          # The Firebase project ID and Firebase Auth tenant stay unchanged.
+          # This is a new Hosting site only, not a new Firebase project.
+          if ! $FIREBASE_CLI hosting:sites:list --project meluni-f4e00 --json > "$RUNNER_TEMP/hosting-sites.json"; then
+            echo '::error::Unable to read Hosting sites; legacy website remains untouched.'
+            exit 1
+          fi
+          if ! node -e 'const v=require(process.argv[1]);const x=v.result?.sites||v.result||v.sites||[];process.exit(Array.isArray(x)&&x.some(s=>s.name?.split("/").pop()==="danduli"||s.siteId==="danduli")?0:1)' "$RUNNER_TEMP/hosting-sites.json"; then
+            echo 'danduli site not found in this project; checking whether the global site ID can be created.'
+            if ! $FIREBASE_CLI hosting:sites:create danduli --project meluni-f4e00 --non-interactive; then
+              echo '::error::Unable to claim danduli.web.app; check global name availability and Hosting creation permissions. Existing site was not removed.'
+              exit 1
+            fi
+          fi
+          $FIREBASE_CLI hosting:sites:list --project meluni-f4e00 --json > "$RUNNER_TEMP/hosting-sites.json"
+          node -e 'const v=require(process.argv[1]);const x=v.result?.sites||v.result||v.sites||[];if(!Array.isArray(x)||!x.some(s=>s.name?.split("/").pop()==="danduli"||s.siteId==="danduli"))process.exit(1)' "$RUNNER_TEMP/hosting-sites.json"
+          echo 'danduli Hosting site belongs to the existing Firebase project.'
+
       - name: Deploy verified Firebase rules and Hosting
         if: ${{ env.FIREBASE_SERVICE_ACCOUNT_JSON != '' || env.FIREBASE_TOKEN != '' }}
         shell: bash
@@ -124,6 +153,6 @@ jobs:
             --project meluni-f4e00 \
             --non-interactive
           npx --yes firebase-tools@15.29.0 deploy \
-            --only hosting \
+            --only hosting:legacy,hosting:danduli \
             --project meluni-f4e00 \
             --non-interactive
