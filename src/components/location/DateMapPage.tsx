@@ -144,7 +144,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       if (sequence !== searchSequence.current) return;
       setResults((previous) => more ? [...previous, ...page.results.filter((item) => !previous.some((old) => old.latitude === item.latitude && old.longitude === item.longitude))] : page.results);
       setExcludedIds(page.excludedIds); setHasMore(page.hasMore);
-      if (!page.results.length) setMessage(more ? '추가 검색 결과가 없어요.' : activeScope === 'map' ? '현재 지도 안에 검색 결과가 없어요. 지도를 축소하거나 전국 검색을 선택해 주세요.' : '검색 결과가 없어요. 지역·지점명을 함께 입력하거나 지도에서 위치를 지정해 주세요.');
+      if (!page.results.length) setMessage(more ? '추가 검색 결과가 없어요.' : activeScope === 'map' ? '현재 지도에서 검색한 장소를 찾지 못했어요. 네이버 지도에 보이는 상호도 검색 데이터에는 없을 수 있어요. 지도에서 직접 위치를 선택해 주세요.' : '검색 결과가 없어요. 지역·지점명을 함께 입력하거나 지도에서 위치를 지정해 주세요.');
       if (!more) panel.current?.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
       if (sequence === searchSequence.current) setMessage(errorText(error));
@@ -431,9 +431,14 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
           </button>)}
           {candidateSearch && <small>{searchedScope === 'map' ? '검색 당시 지도 영역' : '전국'} · “{candidateSearch}”</small>}
           {hasMore && <button type="button" className="date-map-primary" disabled={searching} onClick={() => void search(candidateSearch, true)}>{searching ? '불러오는 중…' : '검색 결과 더 보기'}</button>}
-          <p className="date-map-add-hint">검색 데이터에 등록되지 않은 가게는 나오지 않을 수 있어요. 지도에서 직접 위치를 지정해 저장할 수 있어요.</p>
+          <p className="date-map-add-hint">네이버 지도 표시 정보와 장소 검색 데이터는 다를 수 있어요. 표시된 가게가 검색되지 않으면 지도에서 직접 위치를 지정해 저장하세요.</p>
           {picking && <p className="date-map-pick-hint" role="status">지도에서 방문할 지점을 클릭해 주세요. 위치를 선택한 뒤 지점 이름과 주소를 직접 확인할 수 있어요.</p>}
-          {!results.length && !candidate && !picking && <p className="date-map-empty">결과에 원하는 지점이 없다면 지도에서 직접 위치를 선택할 수 있어요.</p>}
+          {!results.length && !candidate && !picking && <div className="date-map-empty date-map-empty-actions">
+            <p>원하는 가게가 지도에 보이나요? 지도에서 가게 위치를 눌러 저장할 수 있어요.</p>
+            <button type="button" className="date-map-primary" disabled={!mapReady} onClick={() => { setPicking(true); setMessage('지도에서 가게 위치를 눌러 주세요. 상호와 주소를 확인한 뒤 저장할 수 있어요.'); }}>
+              <MapPin size={15}/> 지도에서 위치 선택하기
+            </button>
+          </div>}
         </div>}
         {tab === 'search' && candidate && <article className="date-map-candidate" aria-label="선택한 장소 확인">
           <div className="date-map-candidate-header">
