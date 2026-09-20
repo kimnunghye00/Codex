@@ -1,4 +1,4 @@
-const PROVINCES: Record<string, string> = {
+export const PROVINCES: Record<string, string> = {
   서울: '서울', 서울시: '서울', 서울특별시: '서울', 부산: '부산', 부산시: '부산', 부산광역시: '부산',
   대구: '대구', 대구광역시: '대구', 인천: '인천', 인천광역시: '인천', 광주: '광주', 광주광역시: '광주',
   대전: '대전', 대전광역시: '대전', 울산: '울산', 울산광역시: '울산', 세종: '세종', 세종시: '세종', 세종특별자치시: '세종',
@@ -9,7 +9,7 @@ const PROVINCES: Record<string, string> = {
 };
 // Legacy saved addresses may omit the province (for example “삼척시 성내동”).
 // Only unambiguous municipality names are inferred; shared district names stay unknown.
-const MUNICIPALITIES: Record<string, string> = {
+export const MUNICIPALITIES: Record<string, string> = {
   경기: '수원시 성남시 의정부시 안양시 부천시 광명시 평택시 동두천시 안산시 고양시 과천시 구리시 남양주시 오산시 시흥시 군포시 의왕시 하남시 용인시 파주시 이천시 안성시 김포시 화성시 광주시 양주시 포천시 여주시 연천군 가평군 양평군',
   강원: '춘천시 원주시 강릉시 동해시 태백시 속초시 삼척시 홍천군 횡성군 영월군 평창군 정선군 철원군 화천군 양구군 인제군 양양군',
   충북: '청주시 충주시 제천시 보은군 옥천군 영동군 증평군 진천군 괴산군 음성군 단양군',
