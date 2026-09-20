@@ -19,7 +19,7 @@ type Category = DatePlace['category'];
 const CATEGORIES: Category[] = ['맛집', '카페', '놀거리', '여행', '기타'];
 const MAP_ORIGIN = typeof window !== 'undefined' && window.location.hostname === 'danduli.web.app'
   ? 'https://danduli.web.app' : 'https://meluni-f4e00.web.app';
-const MAP_HOST = `${MAP_ORIGIN}/naver-map-host.html?v=13`;
+const MAP_HOST = `${MAP_ORIGIN}/naver-map-host.html?v=14`;
 const ALL = '전체';
 
 function errorText(error: unknown) {

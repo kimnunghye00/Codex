@@ -12,14 +12,12 @@
     #map-status strong{display:block;margin-bottom:7px;font-size:15px}
     #map-status span{display:block;font-size:12px;line-height:1.55;color:#737684;word-break:keep-all}
     #map-status code{display:block;margin-top:9px;font-size:10px;color:#a04939;word-break:break-all}
-    /* The exact two-pin silhouette drawn on the left side of login. */
+    /* One marker per place; its tip matches the (18, 42) geographic anchor. */
     .danduli-map-pin{position:relative;width:36px;height:43px;filter:drop-shadow(0 3px 3px #0003)}
-    .danduli-map-pin i{position:absolute;width:24px;height:24px;border-radius:50% 50% 50% 6px;transform:rotate(-45deg);background:var(--pin-primary)}
-    .danduli-map-pin i:first-child{top:1px;left:1px}
-    .danduli-map-pin i:nth-child(2){right:1px;bottom:5px;background:var(--pin-accent)}
-    .danduli-map-pin i::after{content:"";position:absolute;top:6px;left:6px;width:8px;height:8px;border-radius:50%;background:#fff}
+    .danduli-map-pin svg{display:block;width:36px;height:43px;overflow:visible}
+    .danduli-map-pin .pin-body{fill:var(--pin-primary)}
+    .danduli-map-pin.planned .pin-body{fill:var(--pin-accent)}
     .danduli-map-pin.selected{transform:scale(1.17);transform-origin:center bottom;filter:drop-shadow(0 3px 6px #0004)}
-    .danduli-map-pin.planned::after{content:"";position:absolute;right:-4px;top:-3px;width:9px;height:9px;border:2px solid #fff;background:var(--pin-accent);border-radius:50%}
     .danduli-map-pin .pin-order{position:absolute;top:-7px;right:-7px;z-index:1;background:#fff;border:1px solid var(--pin-primary);color:var(--pin-primary);border-radius:999px;min-width:16px;height:16px;padding:0 2px;box-sizing:border-box;display:grid;place-items:center;font:800 10px system-ui}
     .danduli-map-cluster{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;border:3px solid #fff;background:var(--pin-primary);color:#fff;box-shadow:0 3px 9px #0003;font:800 13px system-ui;box-sizing:border-box}
     .danduli-place-card{min-width:160px;max-width:210px;padding:9px 10px;font:12px/1.5 system-ui,-apple-system,sans-serif;color:#383848;overflow-wrap:anywhere}
@@ -135,10 +133,10 @@
         return { primary, accent };
       };
 
-      // Reuse the login screen's two CSS-drawn pins; no image downloaded per location.
+      // Single vector pin; no image downloaded per location.
       const markerHtml = (current, index, palette, planned = false) => {
         const label = Number.isInteger(index) && index >= 0 ? `<span class="pin-order">${index + 1}</span>` : '';
-        return `<div class="danduli-map-pin${current ? ' selected' : ''}${planned ? ' planned' : ''}" style="--pin-primary:${palette.primary};--pin-accent:${palette.accent}"><i></i><i></i>${label}</div>`;
+        return `<div class="danduli-map-pin${current ? ' selected' : ''}${planned ? ' planned' : ''}" style="--pin-primary:${palette.primary};--pin-accent:${palette.accent}"><svg viewBox="0 0 36 43" aria-hidden="true"><path class="pin-body" d="M18 42C15 36 3 25 3 16a15 15 0 0 1 30 0c0 9-12 20-15 26Z"/><circle cx="18" cy="16" r="5" fill="#fff"/></svg>${label}</div>`;
       };
       const markerIcon = (naver, current, index, palette = activePalette(), planned = false) => ({
         content: markerHtml(current, index, palette, planned),
