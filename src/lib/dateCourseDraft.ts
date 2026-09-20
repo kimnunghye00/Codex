@@ -41,3 +41,15 @@ export function validateCourseTimes(ids: readonly string[], times: Readonly<Reco
   }
   return null;
 }
+
+/** The course tab only displays stops in the selected/draft course; saved places remain independent. */
+export function placesForDateMap<T extends { id: string }>(
+  visiblePlaces: readonly T[], tab: 'places' | 'courses', coursePlaceIds: readonly string[],
+): T[] {
+  if (tab === 'places') return [...visiblePlaces];
+  const byId = new Map(visiblePlaces.map((place) => [place.id, place]));
+  return coursePlaceIds.flatMap((id) => {
+    const place = byId.get(id);
+    return place ? [place] : [];
+  });
+}
