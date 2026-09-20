@@ -1,5 +1,14 @@
 {
-  "functions": { "source": "functions" },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default"
+    },
+    {
+      "source": "functions-search",
+      "codebase": "naver-search"
+    }
+  ],
   "firestore": {
     "rules": "firestore.rules"
   },
