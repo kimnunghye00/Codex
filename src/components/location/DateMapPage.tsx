@@ -4,26 +4,23 @@ import { CalendarDays, ChevronDown, ChevronUp, Heart, MapPin, MessageCircle, Plu
 import { auth } from '../../lib/firebase';
 import { appendPlaceToCourse, courseTimesFromSaved, encodeCourseTimeSlot, MAX_DATE_COURSE_PLACES, placesForDateMap, validateCourseTimes, type CourseTimeSlot } from '../../lib/dateCourseDraft';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
-import { reverseGeocode, searchLocations, type LocationSearchResult } from '../../utils/location';
+import { reverseGeocode, type LocationSearchResult } from '../../utils/location';
 import {
   addDatePlace, addPlaceOpinion, deleteDateCourse, deleteDatePlace, deletePlaceOpinion,
   saveDateCourse, setPlaceLike, subscribeDateCourses, subscribeDatePlaces,
   subscribePlaceLikes, subscribePlaceOpinions, updateDatePlace,
   type DateCourse, type DatePlace, type PlaceOpinion,
 } from '../../lib/dateMap';
+import { searchLocationPage, validMapBounds, type MapBounds } from '../../utils/locationSearch';
+import { placeRegion } from '../../utils/placeRegions';
 import './DateMapPage.css';
 
 type Category = DatePlace['category'];
 const CATEGORIES: Category[] = ['맛집', '카페', '놀거리', '여행', '기타'];
 const MAP_ORIGIN = typeof window !== 'undefined' && window.location.hostname === 'danduli.web.app'
   ? 'https://danduli.web.app' : 'https://meluni-f4e00.web.app';
-const MAP_HOST = `${MAP_ORIGIN}/naver-map-host.html?v=12`;
+const MAP_HOST = `${MAP_ORIGIN}/naver-map-host.html?v=13`;
 const ALL = '전체';
-function dateToday() {
-  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
-  const part = (type: string) => parts.find((item) => item.type === type)?.value || '';
-  return `${part('year')}-${part('month')}-${part('day')}`;
-}
 
 function errorText(error: unknown) {
   const code = String((error as { code?: string })?.code ?? '');
@@ -47,7 +44,16 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const coupleId = connection?.coupleId ?? '';
   const [places, setPlaces] = useState<DatePlace[]>([]);
   const [courses, setCourses] = useState<DateCourse[]>([]);
-  const [tab, setTab] = useState<'places' | 'courses'>('places');
+  const [tab, setTab] = useState<'search' | 'places' | 'courses'>('places');
+  const [scope, setScope] = useState<'map' | 'nationwide'>('map');
+  const [bounds, setBounds] = useState<MapBounds | null>(null);
+  const [searchedBounds, setSearchedBounds] = useState<MapBounds | null>(null);
+  const [searchedScope, setSearchedScope] = useState<'map' | 'nationwide'>('map');
+  const [excludedIds, setExcludedIds] = useState<string[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [province, setProvince] = useState(ALL);
+  const [district, setDistrict] = useState(ALL);
+  const [pickedIds, setPickedIds] = useState<string[]>([]);
   const [category, setCategory] = useState<string>(ALL);
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
@@ -67,7 +73,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const [editCategory, setEditCategory] = useState<Category>('기타');
   const [courseId, setCourseId] = useState('');
   const [courseTitle, setCourseTitle] = useState('');
-  const [courseDate, setCourseDate] = useState(dateToday);
+  const [courseDate, setCourseDate] = useState('');
   const [coursePlaceIds, setCoursePlaceIds] = useState<string[]>([]);
   const [courseTimes, setCourseTimes] = useState<Record<string, CourseTimeSlot>>({});
   const [choiceId, setChoiceId] = useState('');
@@ -87,10 +93,18 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const selected = places.find((item) => item.id === selectedId);
   const course = courses.find((item) => item.id === courseId);
   const visible = useMemo(() => places.filter((item) => category === ALL || item.category === category), [places, category]);
-  const mappedPlaces = useMemo(() => placesForDateMap(visible, tab, coursePlaceIds), [visible, tab, coursePlaceIds]);
+  const regionalPlaces = useMemo(() => visible.filter((item) => {
+    const region = placeRegion(item.address);
+    return (province === ALL || region.province === province) && (district === ALL || region.district === district);
+  }), [visible, province, district]);
+  const regions = [...new Set(visible.map((item) => placeRegion(item.address).province))].sort();
+  const districts = [...new Set(visible.filter((item) => province === ALL || placeRegion(item.address).province === province).map((item) => placeRegion(item.address).district))].sort();
+  const groups = [...new Set(regionalPlaces.map((item) => { const r = placeRegion(item.address); return `${r.province} ${r.district}`; }))].sort();
+  const picked = pickedIds.filter((id) => places.some((item) => item.id === id));
+  const mappedPlaces = useMemo(() => tab === 'search' ? [] : placesForDateMap(tab === 'courses' ? places : regionalPlaces, tab, coursePlaceIds), [places, regionalPlaces, tab, coursePlaceIds]);
 
   useEffect(() => {
-    setPlaces([]); setCourses([]); setSelectedId(''); setCourseId(''); setCourseTimes({}); setLikes([]); setOpinions([]);
+    setPlaces([]); setCourses([]); setPickedIds([]); setCoursePlaceIds([]); setSelectedId(''); setCourseId(''); setCourseTimes({}); setLikes([]); setOpinions([]);
     if (!coupleId) return;
     const stopPlaces = subscribeDatePlaces(coupleId, setPlaces, (error) => setMessage(errorText(error)));
     const stopCourses = subscribeDateCourses(coupleId, setCourses, (error) => setMessage(errorText(error)));
@@ -116,21 +130,26 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     setCourseTimes(courseTimesFromSaved(course.placeIds, course.timeSlots));
   }, [course?.id, course?.updatedAt]);
 
-  const search = async (value: string) => {
-    const trimmed = value.trim();
+  const search = async (value: string, more = false, requestedScope = scope) => {
+    const trimmed = more ? candidateSearch : value.trim();
     if (!trimmed) { setMessage('검색할 장소나 주소를 입력해 주세요.'); return; }
+    const activeScope = more ? searchedScope : requestedScope;
+    const activeBounds = more ? searchedBounds : bounds;
+    if (activeScope === 'map' && !activeBounds) { setMessage('지도가 준비되면 검색해 주세요. 다른 지역은 전국 검색으로 찾을 수 있어요.'); return; }
     const sequence = ++searchSequence.current;
-    // A new query intentionally releases the previous selection so its map bounds can update.
-    queuedFocus.current = null;
-    if (mapReady) frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'clear-focus' }, MAP_ORIGIN);
-    setSearching(true); setCandidate(null); setCandidateSearch(''); setResults([]); setPicking(false); setMessage('');
+    ++lookupSequence.current;
+    clearMapFocus(); setTab('search'); setSearching(true); setPicking(false); setMessage('');
+    if (!more) {
+      setCandidate(null); setResults([]); setHasMore(false); setExcludedIds([]);
+      setCandidateSearch(trimmed); setSearchedBounds(activeScope === 'map' ? activeBounds : null); setSearchedScope(activeScope);
+    }
     try {
-      const found = await searchLocations(trimmed);
+      const page = await searchLocationPage(trimmed, { bounds: activeScope === 'map' ? activeBounds! : undefined, excludedIds: more ? excludedIds : [] });
       if (sequence !== searchSequence.current) return;
-      setResults(found);
-      setCandidateSearch(trimmed);
-      if (!found.length) setMessage('검색 결과가 없어요. 지도에서 직접 위치를 지정하거나 지점명과 지역을 함께 검색해 주세요.');
-      panel.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      setResults((previous) => more ? [...previous, ...page.results.filter((item) => !previous.some((old) => old.latitude === item.latitude && old.longitude === item.longitude))] : page.results);
+      setExcludedIds(page.excludedIds); setHasMore(page.hasMore);
+      if (!page.results.length) setMessage(more ? '추가 검색 결과가 없어요.' : activeScope === 'map' ? '현재 지도 안에 검색 결과가 없어요. 지도를 축소하거나 전국 검색을 선택해 주세요.' : '검색 결과가 없어요. 지역·지점명을 함께 입력하거나 지도에서 위치를 지정해 주세요.');
+      if (!more) panel.current?.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
       if (sequence === searchSequence.current) setMessage(errorText(error));
     } finally { if (sequence === searchSequence.current) setSearching(false); }
@@ -139,33 +158,35 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   useEffect(() => {
     if (!focusPlace) return;
     setQuery(focusPlace);
-    void search(focusPlace).finally(onClearFocus);
+    setScope('nationwide');
+    void search(focusPlace, false, 'nationwide').finally(onClearFocus);
   // One-shot external navigation, not on each render.
   }, [focusPlace]);
 
   const mapVisits = useMemo(() => [
-    ...(results.length || candidate ? [] : mappedPlaces).map((item) => ({
+    ...mappedPlaces.map((item) => ({
       id: item.id, latitude: item.latitude, longitude: item.longitude, placeName: item.name,
       photoUrl: item.photoUrl, address: item.address,
       arrivedAt: '2026-01-01T00:00:00.000Z', leftAt: '2026-01-01T00:00:00.000Z',
     })),
     // When searching, show all returned branches (not only the first) on the map.
-    ...results.map((item, index) => ({
+    ...(tab === 'search' ? results : []).map((item, index) => ({
       id: `search-${index}`, latitude: item.latitude, longitude: item.longitude, placeName: item.placeName,
       arrivedAt: '2026-01-01T00:00:00.000Z', leftAt: '2026-01-01T00:00:00.000Z',
     })),
-    ...(candidate && !results.some((item) => item.latitude === candidate.latitude && item.longitude === candidate.longitude)
+    ...(tab === 'search' && candidate && !results.some((item) => item.latitude === candidate.latitude && item.longitude === candidate.longitude)
       ? [{ id: 'search-manual', latitude: candidate.latitude, longitude: candidate.longitude,
         placeName: candidateName || candidate.placeName, arrivedAt: '2026-01-01T00:00:00.000Z', leftAt: '2026-01-01T00:00:00.000Z' }]
       : []),
-  ], [mappedPlaces, results, candidate, candidateName]);
+  ], [mappedPlaces, results, candidate, candidateName, tab]);
   useEffect(() => {
     const timer = window.setTimeout(() => { if (!mapReady) setMapError(true); }, 12000);
-    const receive = (event: MessageEvent<{ source?: string; type?: string; id?: string; latitude?: number; longitude?: number }>) => {
+    const receive = (event: MessageEvent<{ source?: string; type?: string; id?: string; latitude?: number; longitude?: number; bounds?: MapBounds }>) => {
       if (event.origin !== MAP_ORIGIN || event.source !== frame.current?.contentWindow || event.data?.source !== 'route-map-host') return;
-      if (event.data.type === 'ready') { setMapReady(true); setMapError(false); }
+      if (event.data.type === 'ready') { setMapReady(true); setMapError(false); frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'request-viewport' }, MAP_ORIGIN); }
+      if (event.data.type === 'viewport-changed' && event.data.bounds && validMapBounds(event.data.bounds)) setBounds(event.data.bounds);
       if (event.data.type === 'saved-marker-selected' && typeof event.data.id === 'string') {
-        setSelectedId(event.data.id);
+        setSelectedId(event.data.id); setTab((current) => current === 'search' ? 'places' : current);
         setCandidate(null);
         setMessage('');
         panel.current?.scrollTo({ top: 0, behavior: 'smooth' });
@@ -175,6 +196,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
         const index = match ? Number(match[1]) : -1;
         const found = resultsRef.current[index];
         if (found) {
+          ++lookupSequence.current;
           setCandidate(found); setCandidateName(found.placeName);
           setCandidateAddress(found.address ?? '');
           setCandidateSearch(queryRef.current.trim());
@@ -208,20 +230,21 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   useEffect(() => {
     if (!mapReady) return;
     const target = frame.current?.contentWindow;
-    target?.postMessage({ source: 'route-map-parent', type: 'render', mode: 'date-plan', visits: mapVisits }, MAP_ORIGIN);
+    target?.postMessage({ source: 'route-map-parent', type: 'render', mode: 'date-plan', visits: mapVisits, keepViewport: true, connectStops: tab === 'courses', numbered: tab !== 'places' }, MAP_ORIGIN);
     // If a result was selected before the iframe became ready, apply it after the initial render.
     if (queuedFocus.current && target) {
       target.postMessage({ source: 'route-map-parent', type: 'focus', showPopup: true, visit: queuedFocus.current }, MAP_ORIGIN);
       queuedFocus.current = null;
     }
-  }, [mapReady, mapVisits]);
+  }, [mapReady, mapVisits, tab]);
 
   useEffect(() => {
     if (!mapReady) return;
-    frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'set-pick-mode', enabled: picking }, MAP_ORIGIN);
-  }, [mapReady, picking]);
+    frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'set-pick-mode', enabled: picking && tab === 'search' }, MAP_ORIGIN);
+  }, [mapReady, picking, tab]);
 
   const chooseResult = (item: LocationSearchResult) => {
+    ++lookupSequence.current;
     setCandidate(item); setCandidateName(item.placeName); setCandidateAddress(item.address ?? '');
     setCandidateSearch(query.trim()); setPicking(false); setMessage('');
     mapFocus(item);
@@ -274,7 +297,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       } else {
         setSelectedId(duplicate.id);
       }
-      setCandidate(null); setResults([]); clearMapFocus();
+      setCandidate(null); setResults([]); clearMapFocus(); if (!addToCurrentCourse) setTab('places');
       setMessage(addToCurrentCourse
         ? '기존에 저장된 장소를 코스에 추가했어요. 마지막에 코스 저장을 눌러 주세요.'
         : '이미 저장된 장소예요. 기존 장소를 선택했어요.');
@@ -289,7 +312,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       });
       if (addToCurrentCourse) appendToCourse(id);
       else setSelectedId(id);
-      setCandidate(null); setResults([]); setCandidateMemo(''); clearMapFocus();
+      setCandidate(null); setResults([]); setCandidateMemo(''); clearMapFocus(); if (!addToCurrentCourse) setTab('places');
     }, addToCurrentCourse
       ? '새 장소를 코스에 추가했어요. 마지막에 코스 저장을 눌러 주세요.'
       : '우리의 지도에 장소를 저장했어요.');
@@ -297,7 +320,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
 
   const newCourse = () => {
     clearMapFocus();
-    setCourseId(''); setCourseTitle(''); setCourseDate(dateToday()); setCoursePlaceIds([]); setCourseTimes({});
+    setCourseId(''); setCourseTitle(''); setCourseDate(''); setCoursePlaceIds([]); setCourseTimes({});
     setChoiceId(''); setTab('courses');
   };
   const chooseCourse = (item: DateCourse) => {
@@ -320,7 +343,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     });
   };
   const saveCourse = async () => {
-    if (!coupleId || !uid || !courseTitle.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(courseDate)) {
+    if (!coupleId || !uid || !courseTitle.trim() || (courseDate !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(courseDate))) {
       setMessage('데이트 코스 이름과 날짜를 확인해 주세요.'); return;
     }
     if (!coursePlaceIds.length) { setMessage('데이트 코스에 장소를 하나 이상 추가해 주세요.'); return; }
@@ -334,12 +357,15 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       setCourseId(id);
     }, '데이트 코스와 방문 시간을 저장했어요. 상대방에게도 표시돼요.');
   };
-  const changeOrder = (index: number, offset: number) => setCoursePlaceIds((ids) => {
+  const changeOrder = (index: number, offset: number) => {
+    clearMapFocus();
+    setCoursePlaceIds((ids) => {
     const next = [...ids]; const target = index + offset;
     if (target < 0 || target >= next.length) return ids;
     [next[index], next[target]] = [next[target], next[index]];
     return next;
-  });
+    });
+  };
 
   return <div className="page date-map-page">
     <Header title="지도" />
@@ -348,29 +374,40 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       <Search size={19} aria-hidden="true"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="가게 이름, 주소, 지역 검색" aria-label="데이트 장소 검색"/>
       <button type="submit" disabled={searching}>{searching ? '검색 중…' : '검색'}</button>
     </form>
+    <div className="date-map-search-scope" aria-label="검색 범위">
+      <button type="button" aria-pressed={scope === 'map'} onClick={() => setScope('map')}>현재 지도 안</button>
+      <button type="button" aria-pressed={scope === 'nationwide'} onClick={() => setScope('nationwide')}>전국</button>
+      <span>{scope === 'map' ? '지금 보이는 지도 안에서 찾아요' : '다른 지역도 이름으로 찾아요'}</span>
+    </div>
     {message && <p className="date-map-feedback" role="status">{message}</p>}
     {!connection && <p className="date-map-connect">두 사람이 함께 사용할 장소·코스 저장은 커플 연결 후 이용할 수 있어요. 지도 검색은 먼저 사용해 볼 수 있어요.</p>}
-    <div className="date-map-filters">{[ALL,...CATEGORIES].map((item) => <button key={item} type="button" className={category === item ? 'active' : ''} onClick={() => setCategory(item)}>{item}</button>)}</div>
+
     <div className="date-map-workspace">
       <section className="date-map-map" aria-label="데이트 장소 지도">
         <iframe ref={frame} title="단둘이 데이트 지도" src={MAP_HOST} referrerPolicy="strict-origin-when-cross-origin" onError={() => setMapError(true)} />
         {!mapReady && <div className="date-map-loading">{mapError ? '지도를 불러오지 못했어요. 네트워크 또는 지도 인증을 확인해 주세요.' : '네이버 지도를 불러오는 중이에요…'}</div>}
+        {mapReady && query.trim() && bounds && <button className="date-map-research" type="button" disabled={searching} onClick={() => { setScope('map'); void search(query, false, 'map'); }}>이 지역에서 다시 검색</button>}
         <div className="date-map-caption">📍 저장한 장소 {places.length}곳 · 방문 기록과 분리된 계획 지도</div>
       </section>
       <section className="date-map-panel" ref={panel}>
         <div className="date-map-tabs" role="tablist" aria-label="데이트 지도 보기">
+          <button type="button" role="tab" aria-selected={tab === 'search'} className={tab === 'search' ? 'active' : ''} onClick={() => { clearMapFocus(); setTab('search'); }}>검색 결과</button>
           <button type="button" role="tab" aria-selected={tab === 'places'} className={tab === 'places' ? 'active' : ''} onClick={() => { clearMapFocus(); setTab('places'); }}>저장한 장소</button>
           <button type="button" role="tab" aria-selected={tab === 'courses'} className={tab === 'courses' ? 'active' : ''} onClick={() => { clearMapFocus(); setTab('courses'); }}>데이트 코스</button>
         </div>
-        {(results.length > 0 || candidateSearch || query.trim()) && <div className="date-map-search-results">
+        <button className="date-map-view-all" type="button" disabled={!mapReady || !mapVisits.length} onClick={() => { clearMapFocus(); frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'fit-visits' }, MAP_ORIGIN); }}>{tab === 'courses' ? '코스 전체 지도에서 보기' : '목록 전체 지도에서 보기'}</button>
+        {tab === 'search' && <div className="date-map-search-results">
           <div className="date-map-panel-header"><strong>검색 결과 {results.length}곳</strong><button type="button" onClick={() => { setPicking((v) => !v); setMessage(''); }} disabled={!mapReady}>{picking ? '위치 선택 취소' : '지도에서 직접 위치 선택'}</button></div>
           {results.map((item, index) => <button key={`branch-${index}`} type="button" className={candidate === item ? 'date-map-branch active' : 'date-map-branch'} onClick={() => chooseResult(item)}>
-            <MapPin size={17} /><span><b>{item.placeName}</b><small>{item.address || '상세 주소 정보 없음'}</small></span>
+            <span className="date-map-result-number">{index + 1}</span><span><b>{item.placeName}</b><small>{item.address || '상세 주소 정보 없음'}</small></span>
           </button>)}
+          {candidateSearch && <small>{searchedScope === 'map' ? '검색 당시 지도 영역' : '전국'} · “{candidateSearch}”</small>}
+          {hasMore && <button type="button" className="date-map-primary" disabled={searching} onClick={() => void search(candidateSearch, true)}>{searching ? '불러오는 중…' : '검색 결과 더 보기'}</button>}
+          <p className="date-map-add-hint">검색 데이터에 등록되지 않은 가게는 나오지 않을 수 있어요. 지도에서 직접 위치를 지정해 저장할 수 있어요.</p>
           {picking && <p className="date-map-pick-hint" role="status">지도에서 방문할 지점을 클릭해 주세요. 위치를 선택한 뒤 지점 이름과 주소를 직접 확인할 수 있어요.</p>}
           {!results.length && !candidate && !picking && <p className="date-map-empty">결과에 원하는 지점이 없다면 지도에서 직접 위치를 선택할 수 있어요.</p>}
         </div>}
-        {candidate && <article className="date-map-candidate" aria-label="선택한 장소 확인">
+        {tab === 'search' && candidate && <article className="date-map-candidate" aria-label="선택한 장소 확인">
           <div className="date-map-candidate-header">
             <div><h2>선택한 장소</h2><p>위치를 확인하고 우리 코스에 추가해요.</p></div>
             <button type="button" className="date-map-candidate-close" aria-label="선택한 장소 닫기" onClick={() => { setCandidate(null); clearMapFocus(); }}><X size={18}/></button>
@@ -401,14 +438,29 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             <textarea value={candidateMemo} onChange={(e) => setCandidateMemo(e.target.value)} maxLength={1000} placeholder="예: 여기서 식사하고 근처 카페에 가기"/>
           </label>
           <p className="date-map-candidate-note">검색어: {candidateSearch} · 저장하기 전에 위치가 맞는지 확인해 주세요.</p>
-          <button className="date-map-primary date-map-candidate-submit" type="button" disabled={pending || !connection || (tab === 'courses' && coursePlaceIds.length >= MAX_DATE_COURSE_PLACES)} onClick={() => void saveCandidate(tab === 'courses')}><Plus size={17}/> {tab === 'courses' ? '이 코스에 추가' : '우리 장소로 저장'}</button>
+          <button className="date-map-primary date-map-candidate-submit" type="button" disabled={pending || !connection} onClick={() => void saveCandidate()}><Plus size={17}/> 우리 장소로 저장</button>
         </article>}
         {tab === 'places' && <>
-          <div className="date-map-panel-header"><strong>우리가 가고 싶은 곳</strong><span>{visible.length}곳</span></div>
-          {!visible.length && <p className="date-map-empty">아직 저장한 장소가 없어요. 검색해서 첫 데이트 장소를 등록해 봐요.</p>}
-          {visible.map((item) => <button type="button" className={selectedId === item.id ? 'date-map-place active' : 'date-map-place'} key={item.id} onClick={() => { setSelectedId(item.id); setCandidate(null); mapFocus({ ...item, placeName: item.name }); }}>
-            <span className="date-map-pin"><MapPin size={18}/></span><span><b>{item.name}</b><small>{item.category} · {item.address}</small></span><ChevronDown size={15}/>
-          </button>)}
+    <div className="date-map-filters">{[ALL,...CATEGORIES].map((item) => <button key={item} type="button" className={category === item ? 'active' : ''} onClick={() => { clearMapFocus(); setSelectedId(''); setCategory(item); setProvince(ALL); setDistrict(ALL); }}>{item}</button>)}</div>
+          <div className="date-map-panel-header"><strong>저장한 장소</strong><span>{regionalPlaces.length}곳</span></div>
+          <div className="date-map-region-filters">
+            <select aria-label="시·도 선택" value={province} onChange={(e) => { clearMapFocus(); setSelectedId(''); setProvince(e.target.value); setDistrict(ALL); }}><option value={ALL}>모든 지역</option>{regions.map((r) => <option key={r} value={r}>{r} ({visible.filter((p) => placeRegion(p.address).province === r).length})</option>)}</select>
+            <select aria-label="시·군·구 선택" value={district} onChange={(e) => { clearMapFocus(); setSelectedId(''); setDistrict(e.target.value); }}><option value={ALL}>모든 시·군·구</option>{districts.map((r) => <option key={r} value={r}>{r}</option>)}</select>
+          </div>
+          <p className="date-map-add-hint">장소를 누르면 지도에서 확인해요. 체크한 장소들을 새 코스로 묶을 수 있어요.</p>
+          {picked.length > 0 && <div className="date-map-bulk-actions"><span>{picked.length}곳 선택</span><button type="button" onClick={() => {
+            if ((courseId || coursePlaceIds.length || courseTitle) && !window.confirm('현재 코스 편집을 닫고 선택한 장소로 새 코스를 만들까요? 저장하지 않은 변경은 사라져요.')) return;
+            newCourse(); setCoursePlaceIds(picked); setPickedIds([]);
+          }}>선택한 장소로 코스 만들기</button><button type="button" onClick={() => setPickedIds([])}>선택 해제</button></div>}
+          {!regionalPlaces.length && <p className="date-map-empty">이 분류에 저장한 장소가 없어요. 다른 지역을 선택하거나 장소를 검색해 보세요.</p>}
+          {groups.map((group) => <section key={group} className="date-map-region-group"><h3>{group} <small>{regionalPlaces.filter((p) => { const r = placeRegion(p.address); return `${r.province} ${r.district}` === group; }).length}곳</small></h3>
+            {regionalPlaces.filter((p) => { const r = placeRegion(p.address); return `${r.province} ${r.district}` === group; }).map((item) => <div className="date-map-saved-row" key={item.id}>
+              <input type="checkbox" aria-label={item.name + ' 코스로 묶기 선택'} checked={picked.includes(item.id)} disabled={!picked.includes(item.id) && picked.length >= MAX_DATE_COURSE_PLACES} onChange={(e) => setPickedIds((ids) => e.target.checked ? [...ids, item.id] : ids.filter((id) => id !== item.id))}/>
+              <button type="button" className={selectedId === item.id ? 'date-map-place active' : 'date-map-place'} onClick={() => { setSelectedId(item.id); setCandidate(null); mapFocus({ ...item, placeName: item.name }); }}>
+                <span className="date-map-pin"><MapPin size={18}/></span><span><b>{item.name}</b><small>{item.category} · {item.address}</small></span><ChevronDown size={15}/>
+              </button>
+            </div>)}
+          </section>)}
           {selected && <article className="date-map-detail">
             <div className="date-map-panel-header"><strong>{selected.name}</strong><button type="button" aria-label="선택 해제" onClick={() => setSelectedId('')}><X size={16}/></button></div>
             <small>{selected.category} · {selected.address}</small>
@@ -432,14 +484,15 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
         </>}
         {tab === 'courses' && <>
           <div className="date-map-panel-header"><strong>함께 만드는 코스</strong><button type="button" onClick={newCourse}><Plus size={14}/> 새 코스</button></div>
-          {courses.map((item) => <button key={item.id} type="button" className={courseId === item.id ? 'date-map-course-choice active' : 'date-map-course-choice'} onClick={() => chooseCourse(item)}><CalendarDays size={17}/><span><b>{item.title}</b><small>{item.date} · 장소 {item.placeIds.length}곳</small></span></button>)}
+          {courses.map((item) => <button key={item.id} type="button" className={courseId === item.id ? 'date-map-course-choice active' : 'date-map-course-choice'} onClick={() => chooseCourse(item)}><CalendarDays size={17}/><span><b>{item.title}</b><small>{item.date || '날짜 미정'} · 장소 {item.placeIds.length}곳</small></span></button>)}
           {!courses.length && <p className="date-map-empty">아직 데이트 코스가 없어요. 저장한 장소들을 일정에 맞춰 묶어 보세요.</p>}
           <article className="date-map-detail">
             <strong>{courseId ? '데이트 코스 수정' : '새 데이트 코스'}</strong>
             <label className="date-map-label">코스 이름<input maxLength={100} placeholder="예: 강릉 주말 데이트" value={courseTitle} onChange={(e) => setCourseTitle(e.target.value)}/></label>
-            <label className="date-map-label">데이트 날짜<input type="date" value={courseDate} onChange={(e) => setCourseDate(e.target.value)}/></label>
+            <label className="date-map-label">데이트 날짜 (선택)<input type="date" value={courseDate} onChange={(e) => setCourseDate(e.target.value)}/></label>
+            <button type="button" onClick={() => { setTab('places'); clearMapFocus(); }}>저장한 장소 둘러보기</button>
             <div className="date-map-panel-header"><strong>방문 예정 장소</strong><span>{coursePlaceIds.length} / 20곳</span></div>
-            <p className="date-map-add-hint">방문할 장소와 시간을 순서대로 정해보세요. 시간을 설정하지 않은 장소는 ‘미정’으로 저장돼요. 화살표로 방문 순서를 바꿀 수 있어요.</p>
+            <p className="date-map-add-hint">지도 선은 방문 순서이며 실제 길찾기 경로는 아니에요. 방문할 장소와 시간을 순서대로 정해보세요. 시간을 설정하지 않은 장소는 ‘미정’으로 저장돼요. 화살표로 방문 순서를 바꿀 수 있어요.</p>
             <div className="date-map-course-schedule" aria-label="방문 순서와 시간">
               <div className="date-map-course-head" aria-hidden="true">
                 <span>순서</span><span>장소</span><span>시간 · 순서 변경</span>

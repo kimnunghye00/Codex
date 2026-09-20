@@ -326,7 +326,10 @@ test('date planning: members share places and courses but outsiders and identity
   const savedId = await saveDateCourse(coupleId, 'bob', {
     title: '강릉 데이트', date: '2026-09-20', placeIds: [placeId], timeSlots: ['10:00-11:00'],
   });
+  const undatedId = await saveDateCourse(coupleId, 'bob', { title: '언젠가 갈 코스', date: '', placeIds: [placeId] });
+  expect((await getDocFromServer(doc(client.db, 'couples', coupleId, 'dateCourses', undatedId))).data()?.date).toBe('');
   const savedCourse = doc(client.db, 'couples', coupleId, 'dateCourses', savedId);
+  await assertFails(updateDoc(savedCourse, { date: '잘못된 날짜', updatedAt: serverTimestamp() }));
   expect((await getDocFromServer(savedCourse)).data()?.timeSlots).toEqual(['10:00-11:00']);
   await assertSucceeds(updateDoc(savedCourse, { timeSlots: ['11:00-12:00'], updatedAt: serverTimestamp() }));
   await assertFails(updateDoc(savedCourse, { timeSlots: ['11:00-12:00', '14:00-15:00'], updatedAt: serverTimestamp() }));

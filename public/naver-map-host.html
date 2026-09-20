@@ -137,7 +137,7 @@
 
       // Reuse the login screen's two CSS-drawn pins; no image downloaded per location.
       const markerHtml = (current, index, palette, planned = false) => {
-        const label = Number.isInteger(index) ? `<span class="pin-order">${index + 1}</span>` : '';
+        const label = Number.isInteger(index) && index >= 0 ? `<span class="pin-order">${index + 1}</span>` : '';
         return `<div class="danduli-map-pin${current ? ' selected' : ''}${planned ? ' planned' : ''}" style="--pin-primary:${palette.primary};--pin-accent:${palette.accent}"><i></i><i></i>${label}</div>`;
       };
       const markerIcon = (naver, current, index, palette = activePalette(), planned = false) => ({
@@ -207,9 +207,9 @@
         focusOverlay = null;
       };
 
-      const render = ({ visits = [], mode = 'map' } = {}, preserveViewport = false) => {
+      const render = ({ visits = [], mode = 'map', keepViewport = false, connectStops = false, numbered = false } = {}, preserveViewport = false) => {
         const modeChanged = lastRender.mode !== mode;
-        lastRender = { visits: Array.isArray(visits) ? visits : [], mode };
+        lastRender = { visits: Array.isArray(visits) ? visits : [], mode, keepViewport, connectStops, numbered };
         if (!map || !hasMapSdk()) return;
         if (modeChanged) restoredForMode = restoreViewport(mode);
         const naver = window.naver;
@@ -238,7 +238,7 @@
         // The recent-places screen can contain visits from more than one day.
         // Connect every displayed visit chronologically so the route never
         // disappears simply because two visible points belong to different days.
-        if (points.length >= 2 && mode !== 'footprint-pins' && mode !== 'date-plan') {
+        if (points.length >= 2 && (connectStops || (mode !== 'footprint-pins' && mode !== 'date-plan'))) {
           overlays.push(new naver.maps.Polyline({
             map,
             path: points,
@@ -251,7 +251,7 @@
           }));
         }
 
-        clustersFor(validVisits, mode, map.getZoom()).forEach((group) => {
+        (numbered ? validVisits.map((visit) => [visit]) : clustersFor(validVisits, mode, map.getZoom())).forEach((group) => {
           if (group.length > 1) {
             const latitude = group.reduce((sum, visit) => sum + Number(visit.latitude), 0) / group.length;
             const longitude = group.reduce((sum, visit) => sum + Number(visit.longitude), 0) / group.length;
@@ -271,7 +271,7 @@
           const current = !visit.leftAt && index === validVisits.length - 1;
           const marker = new naver.maps.Marker({
             map, position: points[index],
-            icon: markerIcon(naver, current, mode === 'footprints' ? index : undefined, palette, mode === 'date-plan'),
+            icon: markerIcon(naver, current, mode === 'footprints' || numbered ? index : undefined, palette, mode === 'date-plan'),
             zIndex: 200,
           });
           const popup = new naver.maps.InfoWindow({
@@ -297,7 +297,7 @@
         // An explicit new search can still fit its returned branches into view.
         const hasSearchResults = mode === 'date-plan'
           && validVisits.some((visit) => typeof visit.id === 'string' && /^search-\d+$/.test(visit.id));
-        if (focusOverlay || preserveViewport || (restoredForMode && !hasSearchResults)) return;
+        if (focusOverlay || keepViewport || preserveViewport || (restoredForMode && !hasSearchResults)) return;
         if (points.length === 1) {
           map.setCenter(points[0]);
           map.setZoom(17);
@@ -319,7 +319,7 @@
         focusOverlay = new naver.maps.Marker({
           map,
           position: point,
-          icon: markerIcon(naver, true, undefined, activePalette(), lastRender.mode === 'date-plan'),
+          icon: markerIcon(naver, true, lastRender.numbered ? lastRender.visits.findIndex((item) => Number(item.latitude) === Number(visit.latitude) && Number(item.longitude) === Number(visit.longitude)) : undefined, activePalette(), lastRender.mode === 'date-plan'),
           zIndex: 2000,
         });
         focusPopup = new naver.maps.InfoWindow({
@@ -337,6 +337,19 @@
         if (data.source !== 'route-map-parent') return;
         if (data.type === 'render') { parentRenderReceived = true; render(data); }
         if (data.type === 'set-pick-mode') pickMode = data.enabled === true && lastRender.mode === 'date-plan';
+        if (data.type === 'fit-visits' && map && hasMapSdk()) {
+          const points = lastRender.visits.filter((v) => Number.isFinite(Number(v.latitude)) && Number.isFinite(Number(v.longitude)))
+            .map((v) => new naver.maps.LatLng(Number(v.latitude), Number(v.longitude)));
+          if (points.length === 1) { map.setCenter(points[0]); map.setZoom(17); }
+          else if (points.length > 1) {
+            const bounds = new naver.maps.LatLngBounds(); points.forEach((point) => bounds.extend(point));
+            map.fitBounds(bounds, { top: 50, right: 40, bottom: 50, left: 40 });
+          }
+        }
+        if (data.type === 'request-viewport' && map) {
+          const sw = map.getBounds().getSW(), ne = map.getBounds().getNE();
+          send('viewport-changed', { bounds: { west: sw.lng(), south: sw.lat(), east: ne.lng(), north: ne.lat() } });
+        }
         if (data.type === 'focus') focus(data.visit, data.showPopup);
         if (data.type === 'clear-focus') { clearFocus(); render(lastRender, true); }
         if (data.type === 'resize' && map && hasMapSdk()) window.naver.maps.Event.trigger(map, 'resize');
@@ -377,6 +390,8 @@
           // zoom_changed event causes repeated tile redraws/white flashes.
           naver.maps.Event.addListener(map, 'idle', () => {
             rememberViewport();
+            const sw = map.getBounds().getSW(), ne = map.getBounds().getNE();
+            send('viewport-changed', { bounds: { west: sw.lng(), south: sw.lat(), east: ne.lng(), north: ne.lat() } });
             if (lastRender.visits.length
               && ['footprint-pins', 'date-plan'].includes(lastRender.mode)
               && map.getZoom() !== lastMarkersZoom) render(lastRender, true);
