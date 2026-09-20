@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { searchLocations, searchLocationPage } from '../src/utils/locationSearch.ts';
+import { matchesPlaceSearchIntent, parsePlaceSearchIntent } from '../src/utils/placeSearchIntent.ts';
 
 test('same-name places remain independently selectable with disambiguating addresses', async () => {
   const oldFetch = globalThis.fetch;
@@ -133,5 +134,72 @@ test('a missing POI query with quotes is safely escaped and map search cannot re
     const result = await searchLocationPage('카페 "안녕"', { bounds: { west: 126.97, south: 37.56, east: 126.98, north: 37.57 } });
     assert.deepEqual(result.results, []);
     assert.match(poiQuery, /\\"안녕\\"/);
+  } finally { globalThis.fetch = oldFetch; }
+});
+
+
+test('a named Samcheok branch is parsed even when the suffix is attached', () => {
+  const spaced = parsePlaceSearchIntent('명륜진사갈비 삼척점');
+  const attached = parsePlaceSearchIntent('명륜진사갈비삼척점');
+  const leading = parsePlaceSearchIntent('강원 삼척 명륜진사갈비');
+  assert.equal(spaced.businessQuery, '명륜진사갈비');
+  assert.equal(spaced.city, '삼척시');
+  assert.equal(spaced.province, '강원');
+  assert.equal(attached.city, '삼척시');
+  assert.equal(attached.businessQuery, '명륜진사갈비');
+  assert.equal(leading.city, '삼척시');
+  assert.equal(leading.businessQuery, '명륜진사갈비');
+  assert.equal(parsePlaceSearchIntent('명륜진사갈비').hasExplicitRegion, false);
+});
+
+test('a franchise branch in Seoul never satisfies a named Samcheok search', () => {
+  const intent = parsePlaceSearchIntent('명륜진사갈비 삼척점');
+  assert.equal(matchesPlaceSearchIntent({
+    latitude: 37.57, longitude: 127, placeName: '명륜진사갈비',
+    address: '명륜진사갈비, 종로구, 서울특별시',
+  }, intent), false);
+  assert.equal(matchesPlaceSearchIntent({
+    latitude: 37.45, longitude: 129.16, placeName: '명륜진사갈비 삼척점',
+    address: '명륜진사갈비, 삼척시, 강원특별자치도',
+  }, intent), true);
+  assert.equal(matchesPlaceSearchIntent({
+    latitude: 37.57, longitude: 127, placeName: '명륜진사갈비 삼척점',
+    address: '종로구, 서울특별시',
+  }, intent), false);
+});
+
+test('brand-only retry rejects Seoul and returns only the requested Samcheok branch', async () => {
+  const oldFetch = globalThis.fetch;
+  const urls: URL[] = [];
+  globalThis.fetch = async (url) => {
+    const parsed = new URL(String(url));
+    urls.push(parsed);
+    const name = parsed.searchParams.get('q');
+    return new Response(JSON.stringify(name === '명륜진사갈비 삼척점' ? [
+      { place_id: 1, lat: '37.57', lon: '127', name: '명륜진사갈비', display_name: '명륜진사갈비, 종로구, 서울특별시' },
+    ] : [
+      { place_id: 1, lat: '37.57', lon: '127', name: '명륜진사갈비', display_name: '명륜진사갈비, 종로구, 서울특별시' },
+      { place_id: 2, lat: '37.45', lon: '129.16', name: '명륜진사갈비', display_name: '명륜진사갈비, 삼척시, 강원특별자치도' },
+    ]));
+  };
+  try {
+    const page = await searchLocationPage('명륜진사갈비 삼척점');
+    assert.equal(page.results.length, 1);
+    assert.match(page.results[0].address || '', /삼척시/);
+    assert.equal(urls.length, 2);
+    assert.equal(urls[1].searchParams.get('q'), '명륜진사갈비');
+    assert.equal(urls[0].searchParams.has('bounded'), false);
+  } finally { globalThis.fetch = oldFetch; }
+});
+
+test('when only a Seoul franchise is indexed, Samcheok search is empty rather than an incorrect substitute', async () => {
+  const oldFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify([
+    { place_id: 1, lat: '37.57', lon: '127', name: '명륜진사갈비', display_name: '명륜진사갈비, 종로구, 서울특별시' },
+  ]));
+  try {
+    const page = await searchLocationPage('명륜진사갈비 삼척점');
+    assert.deepEqual(page.results, []);
+    assert.equal(page.hasMore, false);
   } finally { globalThis.fetch = oldFetch; }
 });
