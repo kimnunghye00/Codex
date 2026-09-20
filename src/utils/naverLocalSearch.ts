@@ -1,5 +1,5 @@
 import type { LocationSearchResult } from './location';
-import { insideMapBounds, validMapBounds, type MapBounds } from './locationSearch';
+import { insideMapBounds, validMapBounds, type MapBounds } from './locationSearch.ts';
 import { matchesPlaceSearchIntent, parsePlaceSearchIntent } from './placeSearchIntent.ts';
 
 /** NAVER search uses a private client secret and runs only on our server. */
