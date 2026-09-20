@@ -2,6 +2,14 @@ name: Deploy 단둘이 Naver Search
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'functions/localSearch.js'
+      - 'functions/index.js'
+      - 'functions/package.json'
+      - 'firebase.json'
+      - '.github/workflows/deploy-naver-search.yml'
 
 permissions:
   contents: read
