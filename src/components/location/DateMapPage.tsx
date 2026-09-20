@@ -13,13 +13,14 @@ import {
 } from '../../lib/dateMap';
 import { searchLocationPage, validMapBounds, type MapBounds } from '../../utils/locationSearch';
 import { groupSavedPlaces, placeRegion } from '../../utils/placeRegions';
+import { parsePlaceSearchIntent } from '../../utils/placeSearchIntent';
 import './DateMapPage.css';
 
 type Category = DatePlace['category'];
 const CATEGORIES: Category[] = ['맛집', '카페', '놀거리', '여행', '기타'];
 const MAP_ORIGIN = typeof window !== 'undefined' && window.location.hostname === 'danduli.web.app'
   ? 'https://danduli.web.app' : 'https://meluni-f4e00.web.app';
-const MAP_HOST = `${MAP_ORIGIN}/naver-map-host.html?v=14`;
+const MAP_HOST = `${MAP_ORIGIN}/naver-map-host.html?v=15`;
 const ALL = '전체';
 
 function errorText(error: unknown) {
@@ -97,6 +98,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const regionGroups = useMemo(() => groupSavedPlaces(visible), [visible]);
   const courseRegions = useMemo(() => groupSavedPlaces(places), [places]);
   const picked = pickedIds.filter((id) => places.some((item) => item.id === id));
+  const searchedRegion = parsePlaceSearchIntent(candidateSearch).regionLabel;
   const mappedPlaces = useMemo(() => tab === 'search' ? [] : placesForDateMap(tab === 'courses' ? places : visible, tab, coursePlaceIds), [places, visible, tab, coursePlaceIds]);
 
   useEffect(() => {
@@ -129,7 +131,9 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const search = async (value: string, more = false, requestedScope = scope) => {
     const trimmed = more ? candidateSearch : value.trim();
     if (!trimmed) { setMessage('검색할 장소나 주소를 입력해 주세요.'); return; }
-    const activeScope = more ? searchedScope : requestedScope;
+    const intent = parsePlaceSearchIntent(trimmed);
+    // A specific branch request should not be silently restricted to an unrelated viewport.
+    const activeScope = more ? searchedScope : intent.hasExplicitRegion ? 'nationwide' : requestedScope;
     const activeBounds = more ? searchedBounds : bounds;
     if (activeScope === 'map' && !activeBounds) { setMessage('지도가 준비되면 검색해 주세요. 다른 지역은 전국 검색으로 찾을 수 있어요.'); return; }
     const sequence = ++searchSequence.current;
@@ -137,6 +141,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     clearMapFocus(); setTab('search'); setSearching(true); setPicking(false); setMessage('');
     if (!more) {
       setCandidate(null); setResults([]); setHasMore(false); setExcludedIds([]);
+      if (intent.hasExplicitRegion) setScope('nationwide');
       setCandidateSearch(trimmed); setSearchedBounds(activeScope === 'map' ? activeBounds : null); setSearchedScope(activeScope);
     }
     try {
@@ -144,11 +149,34 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       if (sequence !== searchSequence.current) return;
       setResults((previous) => more ? [...previous, ...page.results.filter((item) => !previous.some((old) => old.latitude === item.latitude && old.longitude === item.longitude))] : page.results);
       setExcludedIds(page.excludedIds); setHasMore(page.hasMore);
-      if (!page.results.length) setMessage(more ? '추가 검색 결과가 없어요.' : activeScope === 'map' ? '현재 지도에서 검색한 장소를 찾지 못했어요. 네이버 지도에 보이는 상호도 검색 데이터에는 없을 수 있어요. 지도에서 직접 위치를 선택해 주세요.' : '검색 결과가 없어요. 지역·지점명을 함께 입력하거나 지도에서 위치를 지정해 주세요.');
+      if (!page.results.length) setMessage(more ? '추가 검색 결과가 없어요.' : intent.hasExplicitRegion
+        ? `${intent.regionLabel}와 일치하는 지점이 검색 데이터에 없어요. 다른 지역의 동명 지점은 표시하지 않았어요. 아래 버튼으로 ${intent.regionLabel} 지도에 이동해 직접 선택할 수 있어요.`
+        : activeScope === 'map'
+          ? '현재 지도 안에 일치하는 장소가 없어요. 다른 지역 지점은 “가게명 + 지역명 + 점”으로 검색해 주세요.'
+          : '정확한 검색 결과가 없어요. 지점명·지역명을 함께 입력하거나 지도에서 위치를 지정해 주세요.');
       if (!more) panel.current?.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
       if (sequence === searchSequence.current) setMessage(errorText(error));
     } finally { if (sequence === searchSequence.current) setSearching(false); }
+  };
+
+  const goToSearchedRegion = async () => {
+    if (!searchedRegion || !mapReady) return;
+    setSearching(true); setMessage('');
+    try {
+      // City/province geocoding locates the MAP, never invents a business marker.
+      const response = await searchLocationPage(searchedRegion);
+      const center = response.results[0];
+      if (!center) { setMessage('지역 위치를 불러오지 못했어요. 지도를 직접 이동해 주세요.'); return; }
+      clearMapFocus();
+      frame.current?.contentWindow?.postMessage({
+        source: 'route-map-parent', type: 'pan-to',
+        latitude: center.latitude, longitude: center.longitude, zoom: 13,
+      }, MAP_ORIGIN);
+      setPicking(true);
+      setMessage(`${searchedRegion} 중심으로 지도를 이동했어요. 정확한 지점을 확인하고 지도에서 위치를 눌러 주세요.`);
+    } catch { setMessage('지역 위치를 불러오지 못했어요. 지도를 직접 이동해 주세요.'); }
+    finally { setSearching(false); }
   };
 
   useEffect(() => {
@@ -429,9 +457,12 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
           {results.map((item, index) => <button key={`branch-${index}`} type="button" className={candidate === item ? 'date-map-branch active' : 'date-map-branch'} onClick={() => chooseResult(item)}>
             <span className="date-map-result-number">{index + 1}</span><span><b>{item.placeName}</b><small>{item.address || '상세 주소 정보 없음'}</small></span>
           </button>)}
-          {candidateSearch && <small>{searchedScope === 'map' ? '검색 당시 지도 영역' : '전국'} · “{candidateSearch}”</small>}
+          {candidateSearch && <small>{searchedRegion ? `지역 조건: ${searchedRegion} · 다른 지역 지점 제외` : searchedScope === 'map' ? '검색 당시 지도 영역' : '전국'} · “{candidateSearch}”</small>}
+          {searchedRegion && !results.length && <button type="button" className="date-map-primary date-map-region-navigate" disabled={!mapReady || searching} onClick={() => void goToSearchedRegion()}>
+            <MapPin size={15}/> {searchedRegion} 지도로 이동해 직접 선택
+          </button>}
           {hasMore && <button type="button" className="date-map-primary" disabled={searching} onClick={() => void search(candidateSearch, true)}>{searching ? '불러오는 중…' : '검색 결과 더 보기'}</button>}
-          <p className="date-map-add-hint">네이버 지도 표시 정보와 장소 검색 데이터는 다를 수 있어요. 표시된 가게가 검색되지 않으면 지도에서 직접 위치를 지정해 저장하세요.</p>
+          <p className="date-map-add-hint">다른 지역의 지점은 “명륜진사갈비 삼척점”처럼 지역명을 포함해 검색하세요. 네이버 지도와 검색 데이터가 달라 보이지 않는 가게는 지도에서 직접 위치를 지정해 저장할 수 있어요.</p>
           {picking && <p className="date-map-pick-hint" role="status">지도에서 방문할 지점을 클릭해 주세요. 위치를 선택한 뒤 지점 이름과 주소를 직접 확인할 수 있어요.</p>}
           {!results.length && !candidate && !picking && <div className="date-map-empty date-map-empty-actions">
             <p>원하는 가게가 지도에 보이나요? 지도에서 가게 위치를 눌러 저장할 수 있어요.</p>
