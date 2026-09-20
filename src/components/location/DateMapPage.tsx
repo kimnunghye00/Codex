@@ -12,7 +12,7 @@ import {
   type DateCourse, type DatePlace, type PlaceOpinion,
 } from '../../lib/dateMap';
 import { searchLocationPage, validMapBounds, type MapBounds } from '../../utils/locationSearch';
-import { placeRegion } from '../../utils/placeRegions';
+import { groupSavedPlaces } from '../../utils/placeRegions';
 import './DateMapPage.css';
 
 type Category = DatePlace['category'];
@@ -51,8 +51,6 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const [searchedScope, setSearchedScope] = useState<'map' | 'nationwide'>('map');
   const [excludedIds, setExcludedIds] = useState<string[]>([]);
   const [hasMore, setHasMore] = useState(false);
-  const [province, setProvince] = useState(ALL);
-  const [district, setDistrict] = useState(ALL);
   const [pickedIds, setPickedIds] = useState<string[]>([]);
   const [category, setCategory] = useState<string>(ALL);
   const [query, setQuery] = useState('');
@@ -93,15 +91,9 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const selected = places.find((item) => item.id === selectedId);
   const course = courses.find((item) => item.id === courseId);
   const visible = useMemo(() => places.filter((item) => category === ALL || item.category === category), [places, category]);
-  const regionalPlaces = useMemo(() => visible.filter((item) => {
-    const region = placeRegion(item.address);
-    return (province === ALL || region.province === province) && (district === ALL || region.district === district);
-  }), [visible, province, district]);
-  const regions = [...new Set(visible.map((item) => placeRegion(item.address).province))].sort();
-  const districts = [...new Set(visible.filter((item) => province === ALL || placeRegion(item.address).province === province).map((item) => placeRegion(item.address).district))].sort();
-  const groups = [...new Set(regionalPlaces.map((item) => { const r = placeRegion(item.address); return `${r.province} ${r.district}`; }))].sort();
+  const regionGroups = useMemo(() => groupSavedPlaces(visible), [visible]);
   const picked = pickedIds.filter((id) => places.some((item) => item.id === id));
-  const mappedPlaces = useMemo(() => tab === 'search' ? [] : placesForDateMap(tab === 'courses' ? places : regionalPlaces, tab, coursePlaceIds), [places, regionalPlaces, tab, coursePlaceIds]);
+  const mappedPlaces = useMemo(() => tab === 'search' ? [] : placesForDateMap(tab === 'courses' ? places : visible, tab, coursePlaceIds), [places, visible, tab, coursePlaceIds]);
 
   useEffect(() => {
     setPlaces([]); setCourses([]); setPickedIds([]); setCoursePlaceIds([]); setSelectedId(''); setCourseId(''); setCourseTimes({}); setLikes([]); setOpinions([]);
@@ -441,26 +433,26 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
           <button className="date-map-primary date-map-candidate-submit" type="button" disabled={pending || !connection} onClick={() => void saveCandidate()}><Plus size={17}/> 우리 장소로 저장</button>
         </article>}
         {tab === 'places' && <>
-    <div className="date-map-filters">{[ALL,...CATEGORIES].map((item) => <button key={item} type="button" className={category === item ? 'active' : ''} onClick={() => { clearMapFocus(); setSelectedId(''); setCategory(item); setProvince(ALL); setDistrict(ALL); }}>{item}</button>)}</div>
-          <div className="date-map-panel-header"><strong>저장한 장소</strong><span>{regionalPlaces.length}곳</span></div>
-          <div className="date-map-region-filters">
-            <select aria-label="시·도 선택" value={province} onChange={(e) => { clearMapFocus(); setSelectedId(''); setProvince(e.target.value); setDistrict(ALL); }}><option value={ALL}>모든 지역</option>{regions.map((r) => <option key={r} value={r}>{r} ({visible.filter((p) => placeRegion(p.address).province === r).length})</option>)}</select>
-            <select aria-label="시·군·구 선택" value={district} onChange={(e) => { clearMapFocus(); setSelectedId(''); setDistrict(e.target.value); }}><option value={ALL}>모든 시·군·구</option>{districts.map((r) => <option key={r} value={r}>{r}</option>)}</select>
-          </div>
+    <div className="date-map-filters">{[ALL,...CATEGORIES].map((item) => <button key={item} type="button" className={category === item ? 'active' : ''} onClick={() => { clearMapFocus(); setSelectedId(''); setCategory(item);  }}>{item}</button>)}</div>
+          <div className="date-map-panel-header"><strong>저장한 장소</strong><span>{visible.length}곳</span></div>
           <p className="date-map-add-hint">장소를 누르면 지도에서 확인해요. 체크한 장소들을 새 코스로 묶을 수 있어요.</p>
           {picked.length > 0 && <div className="date-map-bulk-actions"><span>{picked.length}곳 선택</span><button type="button" onClick={() => {
             if ((courseId || coursePlaceIds.length || courseTitle) && !window.confirm('현재 코스 편집을 닫고 선택한 장소로 새 코스를 만들까요? 저장하지 않은 변경은 사라져요.')) return;
             newCourse(); setCoursePlaceIds(picked); setPickedIds([]);
           }}>선택한 장소로 코스 만들기</button><button type="button" onClick={() => setPickedIds([])}>선택 해제</button></div>}
-          {!regionalPlaces.length && <p className="date-map-empty">이 분류에 저장한 장소가 없어요. 다른 지역을 선택하거나 장소를 검색해 보세요.</p>}
-          {groups.map((group) => <section key={group} className="date-map-region-group"><h3>{group} <small>{regionalPlaces.filter((p) => { const r = placeRegion(p.address); return `${r.province} ${r.district}` === group; }).length}곳</small></h3>
-            {regionalPlaces.filter((p) => { const r = placeRegion(p.address); return `${r.province} ${r.district}` === group; }).map((item) => <div className="date-map-saved-row" key={item.id}>
-              <input type="checkbox" aria-label={item.name + ' 코스로 묶기 선택'} checked={picked.includes(item.id)} disabled={!picked.includes(item.id) && picked.length >= MAX_DATE_COURSE_PLACES} onChange={(e) => setPickedIds((ids) => e.target.checked ? [...ids, item.id] : ids.filter((id) => id !== item.id))}/>
-              <button type="button" className={selectedId === item.id ? 'date-map-place active' : 'date-map-place'} onClick={() => { setSelectedId(item.id); setCandidate(null); mapFocus({ ...item, placeName: item.name }); }}>
-                <span className="date-map-pin"><MapPin size={18}/></span><span><b>{item.name}</b><small>{item.category} · {item.address}</small></span><ChevronDown size={15}/>
-              </button>
-            </div>)}
-          </section>)}
+          {!visible.length && <p className="date-map-empty">이 분류에 저장한 장소가 없어요. 장소를 검색해 저장해 보세요.</p>}
+          {regionGroups.map((region) => <details key={region.name} className="date-map-saved-region" open>
+            <summary><span>{region.name}</span><small>{region.count}곳</small><ChevronDown size={16}/></summary>
+            {region.districts.map((district) => <section key={district.name} className="date-map-region-group">
+              <h3>{district.name} <small>{district.places.length}곳</small></h3>
+              {district.places.map((item) => <div className="date-map-saved-row" key={item.id}>
+                <input type="checkbox" aria-label={item.name + ' 코스로 묶기 선택'} checked={picked.includes(item.id)} disabled={!picked.includes(item.id) && picked.length >= MAX_DATE_COURSE_PLACES} onChange={(e) => setPickedIds((ids) => e.target.checked ? [...ids, item.id] : ids.filter((id) => id !== item.id))}/>
+                <button type="button" className={selectedId === item.id ? 'date-map-place active' : 'date-map-place'} onClick={() => { setSelectedId(item.id); setCandidate(null); mapFocus({ ...item, placeName: item.name }); }}>
+                  <span className="date-map-pin"><MapPin size={18}/></span><span><b>{item.name}</b><small>{item.category} · {item.address}</small></span><ChevronDown size={15}/>
+                </button>
+              </div>)}
+            </section>)}
+          </details>)}
           {selected && <article className="date-map-detail">
             <div className="date-map-panel-header"><strong>{selected.name}</strong><button type="button" aria-label="선택 해제" onClick={() => setSelectedId('')}><X size={16}/></button></div>
             <small>{selected.category} · {selected.address}</small>

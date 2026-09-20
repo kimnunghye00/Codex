@@ -445,8 +445,6 @@
 .date-map-research { position:absolute; top:14px; left:50%; transform:translateX(-50%); z-index:2; border:1px solid var(--border); border-radius:22px; padding:11px 18px; background:var(--surface); color:var(--text-primary, #493c46); box-shadow:0 3px 12px #0002; cursor:pointer; white-space:nowrap; }
 
 .date-map-tabs button { min-width:0; padding:10px 4px; font-size:12px; }
-.date-map-region-filters { display:flex; gap:8px; margin:12px 0; }
-.date-map-region-filters select { min-width:0; width:50%; border:1px solid var(--border); border-radius:10px; padding:10px; background:var(--surface); color:inherit; }
 .date-map-region-group h3 { font-size:13px; margin:18px 0 8px; }
 .date-map-region-group h3 small { font-weight:400; margin-left:6px; }
 .date-map-saved-row { display:flex; align-items:center; gap:8px; }
@@ -457,3 +455,10 @@
 
 .date-map-branch > .date-map-result-number { display:grid; place-items:center; }
 .date-map-view-all { margin:0 0 10px; border:1px solid var(--border); border-radius:10px; padding:8px 12px; background:var(--surface); color:var(--text-primary); font-size:12px; }
+.date-map-saved-region { margin:12px 0; border:1px solid var(--border); border-radius:14px; overflow:hidden; }
+.date-map-saved-region > summary { display:flex; align-items:center; gap:8px; padding:13px; background:var(--primary-soft); cursor:pointer; list-style:none; color:var(--text-primary); font-size:14px; font-weight:750; }
+.date-map-saved-region > summary::-webkit-details-marker { display:none; }
+.date-map-saved-region > summary small { margin-left:auto; font-size:11px; font-weight:400; color:var(--text-secondary); }
+.date-map-saved-region[open] > summary svg { transform:rotate(180deg); }
+.date-map-saved-region > .date-map-region-group { padding:0 10px 8px; }
+.date-map-saved-region .date-map-region-group h3 { margin-top:12px; font-size:12px; color:var(--text-secondary); }
