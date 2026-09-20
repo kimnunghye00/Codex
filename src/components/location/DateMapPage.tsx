@@ -13,7 +13,7 @@ import {
 } from '../../lib/dateMap';
 import { insideMapBounds, searchLocationPage, validMapBounds, type MapBounds } from '../../utils/locationSearch';
 import { groupSavedPlaces, placeRegion } from '../../utils/placeRegions';
-import { matchesPlaceSearchIntent, parsePlaceSearchIntent } from '../../utils/placeSearchIntent';
+import { matchesPlaceSearchIntent, parsePlaceSearchIntent } from '../../utils/placeSearchIntent.ts';
 import './DateMapPage.css';
 
 type Category = DatePlace['category'];
