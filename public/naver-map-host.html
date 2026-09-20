@@ -53,6 +53,41 @@
       let sdkWaitStartedAt = 0;
       let lastRender = { visits: [], mode: 'map' };
       let pickMode = false;
+      let parentRenderReceived = false;
+      let lastMarkersZoom = null;
+      let restoredForMode = false;
+      const VIEWPORT_PREFIX = 'danduli:naver-map:viewport:v1:';
+
+      // A map iframe may be remounted during UI navigation or a reload. Preserve
+      // only the current tab's viewport; never share map positions across modes.
+      const rememberViewport = () => {
+        if (!map || !parentRenderReceived) return;
+        const center = map.getCenter();
+        const latitude = Number(center?.lat());
+        const longitude = Number(center?.lng());
+        const zoom = Number(map.getZoom());
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)
+          || !Number.isFinite(zoom)) return;
+        try {
+          sessionStorage.setItem(VIEWPORT_PREFIX + lastRender.mode,
+            JSON.stringify({ latitude, longitude, zoom }));
+        } catch { /* Storage can be unavailable in private/embedded mode. */ }
+      };
+
+      const restoreViewport = (mode) => {
+        if (!map) return false;
+        try {
+          const raw = sessionStorage.getItem(VIEWPORT_PREFIX + mode);
+          if (!raw) return false;
+          const saved = JSON.parse(raw);
+          if (!Number.isFinite(saved.latitude) || Math.abs(saved.latitude) > 90
+            || !Number.isFinite(saved.longitude) || Math.abs(saved.longitude) > 180
+            || !Number.isInteger(saved.zoom) || saved.zoom < 3 || saved.zoom > 21) return false;
+          map.setCenter(new window.naver.maps.LatLng(saved.latitude, saved.longitude));
+          map.setZoom(saved.zoom);
+          return true;
+        } catch { return false; }
+      };
 
       const send = (type, detail = {}) => {
         if (window.parent === window) return;
@@ -173,8 +208,10 @@
       };
 
       const render = ({ visits = [], mode = 'map' } = {}, preserveViewport = false) => {
+        const modeChanged = lastRender.mode !== mode;
         lastRender = { visits: Array.isArray(visits) ? visits : [], mode };
         if (!map || !hasMapSdk()) return;
+        if (modeChanged) restoredForMode = restoreViewport(mode);
         const naver = window.naver;
         const palette = activePalette();
         // Repaint overlays without resizing the map: a resize can emit zoom_changed.
@@ -186,6 +223,7 @@
           .filter((visit) => Number.isFinite(Number(visit.latitude)) && Number.isFinite(Number(visit.longitude)))
           .sort((a, b) => new Date(a.arrivedAt || 0).getTime() - new Date(b.arrivedAt || 0).getTime());
 
+        lastMarkersZoom = map.getZoom();
         if (!validVisits.length) {
           // The Seoul city hall coordinates are only an initial map default.
           // Removing a course/marker or zooming an empty map must never recenter it.
@@ -255,7 +293,11 @@
           overlays.push(marker);
         });
 
-        if (focusOverlay || preserveViewport) return;
+        // Reopening an existing plan should not override its remembered position.
+        // An explicit new search can still fit its returned branches into view.
+        const hasSearchResults = mode === 'date-plan'
+          && validVisits.some((visit) => typeof visit.id === 'string' && /^search-\d+$/.test(visit.id));
+        if (focusOverlay || preserveViewport || (restoredForMode && !hasSearchResults)) return;
         if (points.length === 1) {
           map.setCenter(points[0]);
           map.setZoom(17);
@@ -293,7 +335,7 @@
         if (event.source !== window.parent) return;
         const data = event.data || {};
         if (data.source !== 'route-map-parent') return;
-        if (data.type === 'render') render(data);
+        if (data.type === 'render') { parentRenderReceived = true; render(data); }
         if (data.type === 'set-pick-mode') pickMode = data.enabled === true && lastRender.mode === 'date-plan';
         if (data.type === 'focus') focus(data.visit, data.showPopup);
         if (data.type === 'clear-focus') { clearFocus(); render(lastRender, true); }
@@ -331,8 +373,13 @@
             zoomControl: true,
             zoomControlOptions: { position: window.naver.maps.Position.TOP_RIGHT },
           });
-          naver.maps.Event.addListener(map, 'zoom_changed', () => {
-            if (['footprint-pins', 'date-plan'].includes(lastRender.mode)) render(lastRender, true);
+          // Wait until the zoom animation settles. Rebuilding markers on each
+          // zoom_changed event causes repeated tile redraws/white flashes.
+          naver.maps.Event.addListener(map, 'idle', () => {
+            rememberViewport();
+            if (lastRender.visits.length
+              && ['footprint-pins', 'date-plan'].includes(lastRender.mode)
+              && map.getZoom() !== lastMarkersZoom) render(lastRender, true);
           });
           naver.maps.Event.addListener(map, 'click', (event) => {
             if (!pickMode || lastRender.mode !== 'date-plan') return;
