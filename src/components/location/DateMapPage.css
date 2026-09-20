@@ -5,7 +5,30 @@
 .date-map-heading p,.date-map-disclaimer { font-size:12px; line-height:1.6; color:var(--text-secondary); margin:0; }
 .date-map-search { display:flex; align-items:center; gap:10px; width:100%; padding:6px 7px 6px 14px; border:1px solid var(--border); background:var(--surface); border-radius:15px; }
 .date-map-search svg { flex-shrink:0; color:var(--text-secondary); }
-.date-map-search input { border:0; background:transparent; outline:0; min-width:0; flex:1; font:inherit; color:var(--text-primary); font-size:13px; }
+/* Keep the search field visually seamless inside its outer rounded form.
+   Theme-wide input backgrounds/borders must not draw a pink or dark inner line. */
+.date-map-page .date-map-search > input,
+:root[data-route-theme] .date-map-page .date-map-search > input {
+  min-width: 0;
+  flex: 1;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0;
+  outline: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  background-image: none !important;
+  -webkit-appearance: none;
+  appearance: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-primary);
+  caret-color: var(--text-primary);
+}
+.date-map-page .date-map-search:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
 .date-map-search button,.date-map-primary { border:0; border-radius:10px; background:var(--primary); color:white; padding:9px 14px; font-weight:750; font-size:12px; }
 .date-map-search button:disabled,.date-map-primary:disabled { opacity:.48; cursor:not-allowed; }
 .date-map-feedback,.date-map-connect { padding:9px 12px; border:1px solid var(--border); border-radius:11px; background:var(--surface); font-size:11px; line-height:1.5; margin:9px 0 0; }
