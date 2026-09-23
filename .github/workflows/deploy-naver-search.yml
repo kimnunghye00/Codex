@@ -84,9 +84,12 @@ jobs:
           set -euo pipefail
           # Isolated NAVER search codebase: do not load unrelated TURN secrets.
           # Both NAVER_LOCAL_SEARCH_ID and NAVER_LOCAL_SEARCH_SECRET must exist.
+          # The CLI also configures the Artifact Registry image cleanup policy.
+          # Without --force it exits nonzero after successfully updating the function.
           npx --yes firebase-tools@15.29.0 deploy \
             --only functions:naver-search \
             --project meluni-f4e00 \
+            --force \
             --non-interactive
 
       - name: Next step
