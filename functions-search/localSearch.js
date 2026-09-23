@@ -66,33 +66,38 @@ exports.searchDatePlaces = onRequest({
     region ? region + ' ' + query : '',
     query,
   ].filter(Boolean))].slice(0, 3);
+  // Independent locality, district, and name searches run concurrently.
+  // Preserve their priority order when merging, so the visible branch wins
+  // over similarly named businesses elsewhere.
+  const responses = await Promise.allSettled(queries.map(async (text) => {
+    const url = new URL('https://naverapihub.apigw.ntruss.com/search/v1/local');
+    url.search = new URLSearchParams({ query: text, display: '5', start: '1', sort: 'random', format: 'json' }).toString();
+    const response = await fetch(url, {
+      headers: { 'X-NCP-APIGW-API-KEY-ID': naverId.value(), 'X-NCP-APIGW-API-KEY': naverSecret.value() },
+      signal: AbortSignal.timeout(4500), redirect: 'error',
+    });
+    if (!response.ok) throw new Error('NAVER provider HTTP ' + response.status);
+    const body = await response.json();
+    if (!Array.isArray(body.items)) throw new Error('Invalid NAVER search response');
+    return body.items;
+  }));
   const results = [];
   const seen = new Set();
-  try {
-    for (const text of queries) {
-      const url = new URL('https://naverapihub.apigw.ntruss.com/search/v1/local');
-      url.search = new URLSearchParams({ query: text, display: '5', start: '1', sort: 'random', format: 'json' }).toString();
-      const response = await fetch(url, {
-        headers: { 'X-NCP-APIGW-API-KEY-ID': naverId.value(), 'X-NCP-APIGW-API-KEY': naverSecret.value() },
-        signal: AbortSignal.timeout(4500), redirect: 'error',
-      });
-      if (!response.ok) {
-        console.error('[DANDULI NAVER local search]', response.status);
-        return sendJson(res, 502, { error: 'search-provider-unavailable' });
-      }
-      const body = await response.json();
-      if (!Array.isArray(body.items)) return sendJson(res, 502, { error: 'invalid-search-response' });
-      for (const item of body.items) {
-        const place = normalizePlace(item);
-        if (!place) continue;
-        const key = [place.latitude.toFixed(6), place.longitude.toFixed(6)].join(':');
-        if (seen.has(key)) continue;
-        seen.add(key); results.push(place);
-      }
+  let successfulQueries = 0;
+  for (const response of responses) {
+    if (response.status !== 'fulfilled') {
+      console.error('[DANDULI NAVER local search]', response.reason instanceof Error ? response.reason.message : 'upstream error');
+      continue;
     }
-    return sendJson(res, 200, { results, provider: 'naver-local', pageSizeLimit: 5 });
-  } catch (cause) {
-    console.error('[DANDULI NAVER local search]', cause instanceof Error ? cause.message : 'upstream error');
-    return sendJson(res, 502, { error: 'search-provider-unavailable' });
+    successfulQueries += 1;
+    for (const item of response.value) {
+      const place = normalizePlace(item);
+      if (!place) continue;
+      const key = [place.latitude.toFixed(6), place.longitude.toFixed(6)].join(':');
+      if (seen.has(key)) continue;
+      seen.add(key); results.push(place);
+    }
   }
+  if (!successfulQueries) return sendJson(res, 502, { error: 'search-provider-unavailable' });
+  return sendJson(res, 200, { results, provider: 'naver-local', pageSizeLimit: 5 });
 });

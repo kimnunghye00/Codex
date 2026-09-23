@@ -93,6 +93,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const lookupSequence = useRef(0);
   const resultsRef = useRef(results);
   const nationwideResults = useRef<{ query: string; results: LocationSearchResult[] } | null>(null);
+  const regionLookup = useRef<{ key: string; expires: number; region: string } | null>(null);
   const queryRef = useRef(query);
   resultsRef.current = results;
   queryRef.current = query;
@@ -148,9 +149,36 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       if (intent.hasExplicitRegion) setScope('nationwide');
       setCandidateSearch(trimmed); setSearchedBounds(activeScope === 'map' ? activeBounds : null); setSearchedScope(activeScope);
     }
+    const currentBounds = activeScope === 'map' ? activeBounds! : undefined;
+    const matchedSaved = places.filter((item) => matchesPlaceSearchIntent({
+      latitude: item.latitude, longitude: item.longitude, placeName: item.name, address: item.address,
+    }, intent) && (activeScope !== 'map' || insideMapBounds(item, activeBounds!)))
+      .map((item) => ({ latitude: item.latitude, longitude: item.longitude, placeName: item.name, address: item.address }));
+    const cached = activeScope === 'map' && nationwideResults.current?.query === trimmed
+      ? nationwideResults.current.results.filter((item) => insideMapBounds(item, activeBounds!)) : [];
+
+    const received: { osm: LocationSearchResult[]; naver: LocationSearchResult[] } = { osm: [], naver: [] };
+    const unique = (items: LocationSearchResult[]) => items.filter((item, index, all) =>
+      all.findIndex((other) => Math.abs(other.latitude - item.latitude) < 0.00002
+        && Math.abs(other.longitude - item.longitude) < 0.00002) === index);
+    const combinedResults = () => unique([...matchedSaved, ...cached, ...received.naver, ...received.osm]);
+    const publish = () => {
+      if (sequence !== searchSequence.current) return;
+      const combined = combinedResults();
+      setResults((previous) => more ? unique([...previous, ...combined]) : combined);
+    };
+    // Saved and cached results do not need an external network request.
+    publish();
     try {
-      const currentBounds = activeScope === 'map' ? activeBounds! : undefined;
-      const osmRequest = searchLocationPage(trimmed, { bounds: currentBounds, excludedIds: more ? excludedIds : [] });
+      const osmRequest = searchLocationPage(trimmed, { bounds: currentBounds, excludedIds: more ? excludedIds : [] })
+        .then((page) => {
+          received.osm = page.results;
+          if (sequence === searchSequence.current) {
+            setExcludedIds(page.excludedIds); setHasMore(page.hasMore);
+            publish();
+          }
+          return page;
+        });
       const naverRequest = !more && NAVER_LOCAL_SEARCH_URL && auth.currentUser
         ? (async () => {
           const token = await auth.currentUser?.getIdToken();
@@ -159,46 +187,44 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
           if (currentBounds && !intent.hasExplicitRegion) {
             const latitude = (currentBounds.south + currentBounds.north) / 2;
             const longitude = (currentBounds.west + currentBounds.east) / 2;
-            const address = await reverseGeocode(latitude, longitude);
-            if (address) {
-              const parsed = placeRegion(address);
-              region = parsed.province !== '지역 미분류' ? parsed.province : '';
-              if (parsed.district && parsed.district !== '시·군·구 미분류') region += ' ' + parsed.district;
-              // Reverse geocoding also provides the neighbourhood. A district-wide
-              // five-item API page often misses a branch in a small viewport.
-              const locality = address.split('·')[0]?.trim().split(/\s+/).at(-1) ?? '';
-              if (/^[가-힣]+(?:동|읍|면|리)$/.test(locality)) region += ' ' + locality;
-              region = region.trim();
+            const regionKey = latitude.toFixed(4) + ':' + longitude.toFixed(4);
+            const memo = regionLookup.current;
+            if (memo && memo.key === regionKey && memo.expires > Date.now()) {
+              region = memo.region;
+            } else {
+              const address = await reverseGeocode(latitude, longitude);
+              if (address) {
+                const parsed = placeRegion(address);
+                region = parsed.province !== '지역 미분류' ? parsed.province : '';
+                if (parsed.district && parsed.district !== '시·군·구 미분류') region += ' ' + parsed.district;
+                // Reverse geocoding also provides the neighbourhood. A district-wide
+                // five-item API page often misses a branch in a small viewport.
+                const locality = address.split('·')[0]?.trim().split(/\s+/).at(-1) ?? '';
+                if (/^[가-힣]+(?:동|읍|면|리)$/.test(locality)) region += ' ' + locality;
+                region = region.trim();
+              }
+              if (region) regionLookup.current = { key: regionKey, expires: Date.now() + 90_000, region };
             }
           }
           return fetchNaverDatePlaces(trimmed, { endpoint: NAVER_LOCAL_SEARCH_URL, token, region, bounds: currentBounds });
-        })()
+        })().then((naverResults) => {
+          received.naver = naverResults;
+          publish();
+          return naverResults;
+        })
         : Promise.resolve([] as LocationSearchResult[]);
       const [osm, naver] = await Promise.allSettled([osmRequest, naverRequest]);
       if (sequence !== searchSequence.current) return;
       if (osm.status === 'rejected' && naver.status === 'rejected') throw osm.reason;
-      const page = osm.status === 'fulfilled' ? osm.value : { results: [], excludedIds: [], hasMore: false };
-      const naverResults = naver.status === 'fulfilled' ? naver.value : [];
-      const matchedSaved = places.filter((item) => matchesPlaceSearchIntent({
-        latitude: item.latitude, longitude: item.longitude, placeName: item.name, address: item.address,
-      }, intent) && (activeScope !== 'map' || insideMapBounds(item, activeBounds!)))
-        .map((item) => ({ latitude: item.latitude, longitude: item.longitude, placeName: item.name, address: item.address }));
-      const cached = activeScope === 'map' && nationwideResults.current?.query === trimmed
-        ? nationwideResults.current.results.filter((item) => insideMapBounds(item, activeBounds!)) : [];
-      const combined = [...matchedSaved, ...cached, ...naverResults, ...page.results].filter((item, index, all) =>
-        all.findIndex((other) => Math.abs(other.latitude - item.latitude) < 0.00002
-          && Math.abs(other.longitude - item.longitude) < 0.00002) === index);
+      const combined = combinedResults();
       if (activeScope === 'nationwide' && !more) nationwideResults.current = { query: trimmed, results: combined };
-      setResults((previous) => more
-        ? [...previous, ...combined.filter((item) => !previous.some((old) => old.latitude === item.latitude && old.longitude === item.longitude))]
-        : combined);
-      setExcludedIds(page.excludedIds); setHasMore(page.hasMore);
+
       if (!combined.length) setMessage(more ? '추가 검색 결과가 없어요.' : intent.hasExplicitRegion
         ? `${intent.regionLabel}와 일치하는 지점이 검색 데이터에 없어요. 다른 지역의 동명 지점은 표시하지 않았어요. 아래 버튼으로 ${intent.regionLabel} 지도에 이동해 직접 선택할 수 있어요.`
         : activeScope === 'map'
           ? '현재 검색 데이터에는 지도 안에 일치하는 장소가 없어요. 네이버 지도에 보이는 가게와 별도로 수집되는 데이터이므로 직접 위치를 선택하거나 상호명과 지역명을 함께 검색해 주세요.'
           : '정확한 검색 결과가 없어요. 지점명·지역명을 함께 입력하거나 지도에서 위치를 지정해 주세요.');
-      if (!more) panel.current?.scrollTo({ top: 0, behavior: 'smooth' });
+
     } catch (error) {
       if (sequence === searchSequence.current) setMessage(errorText(error));
     } finally { if (sequence === searchSequence.current) setSearching(false); }
