@@ -81,6 +81,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const [coursePlaceIds, setCoursePlaceIds] = useState<string[]>([]);
   const [courseTimes, setCourseTimes] = useState<Record<string, CourseTimeSlot>>({});
   const [coursePicking, setCoursePicking] = useState(false);
+  const [courseEditorOpen, setCourseEditorOpen] = useState(false);
   const [addingToCourse, setAddingToCourse] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const dragStopId = useRef('');
@@ -131,7 +132,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const mappedPlaces = useMemo(() => tab === 'search' ? [] : placesForDateMap(tab === 'courses' ? places : visible, tab, coursePlaceIds), [places, visible, tab, coursePlaceIds]);
 
   useEffect(() => {
-    setPlaces([]); setCourses([]); setPickedIds([]); setCoursePlaceIds([]); setSelectedId(''); setCourseId(''); setCourseTimes({}); setCoursePicking(false); setAddingToCourse(false); setShowSchedule(false); setLikes([]); setOpinions([]);
+    setPlaces([]); setCourses([]); setPickedIds([]); setCoursePlaceIds([]); setSelectedId(''); setCourseId(''); setCourseTimes({}); setCoursePicking(false); setCourseEditorOpen(false); setAddingToCourse(false); setShowSchedule(false); setLikes([]); setOpinions([]);
     if (!coupleId) return;
     const stopPlaces = subscribeDatePlaces(coupleId, setPlaces, (error) => setMessage(errorText(error)));
     const stopCourses = subscribeDateCourses(coupleId, setCourses, (error) => setMessage(errorText(error)));
@@ -430,7 +431,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
         setSelectedId(duplicate.id);
       }
       setCandidate(null); setResults([]); clearMapFocus();
-      if (addToCurrentCourse) { setTab('courses'); setCoursePicking(true); setAddingToCourse(false); }
+      if (addToCurrentCourse) { setTab('courses'); setCourseEditorOpen(true); setCoursePicking(true); setAddingToCourse(false); }
       else setTab('places');
       setMessage(addToCurrentCourse
         ? '기존에 저장된 장소를 코스에 추가했어요. 마지막에 코스 저장을 눌러 주세요.'
@@ -450,23 +451,33 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       }
       else setSelectedId(id);
       setCandidate(null); setResults([]); setCandidateMemo(''); clearMapFocus();
-      if (addToCurrentCourse) { setTab('courses'); setCoursePicking(true); setAddingToCourse(false); }
+      if (addToCurrentCourse) { setTab('courses'); setCourseEditorOpen(true); setCoursePicking(true); setAddingToCourse(false); }
       else setTab('places');
     }, addToCurrentCourse
       ? '새 장소를 코스에 추가했어요. 마지막에 코스 저장을 눌러 주세요.'
       : '우리의 지도에 장소를 저장했어요.');
   };
 
+  const resetCourseEditor = () => {
+    clearMapFocus();
+    setCourseId(''); setCourseTitle(''); setCourseDate(''); setCoursePlaceIds([]); setCourseTimes({});
+    setCoursePicking(false); setCourseEditorOpen(false); setAddingToCourse(false); setShowSchedule(false);
+  };
+  const closeCourseEditor = () => {
+    if ((courseTitle.trim() || coursePlaceIds.length || courseDate) &&
+      !window.confirm('코스 편집을 닫을까요? 저장하지 않은 변경은 사라져요.')) return;
+    resetCourseEditor();
+  };
   const newCourse = () => {
     clearMapFocus();
     setCourseId(''); setCourseTitle(''); setCourseDate(''); setCoursePlaceIds([]); setCourseTimes({});
-    setCoursePicking(true); setAddingToCourse(false); setShowSchedule(false); setTab('courses');
+    setCoursePicking(false); setCourseEditorOpen(true); setAddingToCourse(false); setShowSchedule(false); setTab('courses');
   };
   const chooseCourse = (item: DateCourse) => {
     clearMapFocus();
     setCourseId(item.id); setCourseTitle(item.title); setCourseDate(item.date);
     setCoursePlaceIds([...item.placeIds]); setCourseTimes(courseTimesFromSaved(item.placeIds, item.timeSlots));
-    setCoursePicking(false); setAddingToCourse(false); setShowSchedule(Boolean(item.date || item.timeSlots?.some(Boolean))); setTab('courses');
+    setCoursePicking(false); setCourseEditorOpen(true); setAddingToCourse(false); setShowSchedule(Boolean(item.date || item.timeSlots?.some(Boolean))); setTab('courses');
   };
   const toggleCoursePlace = (item: DatePlace) => {
     if (coursePlaceIds.includes(item.id)) { removeStop(item.id); return; }
@@ -667,7 +678,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
               if (coursePlaceIds.includes(selected.id)) setMessage('이미 이 코스에 포함된 장소예요.');
               else if (coursePlaceIds.length >= MAX_DATE_COURSE_PLACES) setMessage('하나의 코스에는 장소를 최대 20곳까지 추가할 수 있어요.');
               else { appendToCourse(selected.id); setMessage('장소를 추가했어요. 마지막에 코스 저장을 눌러 주세요.'); }
-              setTab('courses');
+              setCourseEditorOpen(true); setTab('courses');
             }}>{courseId || coursePlaceIds.length ? '편집 중인 코스에 담기' : '새 코스에 담기'}</button>
               <button type="button" className="date-map-delete" disabled={pending} onClick={() => { if (window.confirm(courseUsage.has(selected.id)
                 ? `이 장소는 ${courseUsage.get(selected.id)}개 코스에서 사용 중이에요. 삭제하면 해당 코스에서 장소 정보가 사라질 수 있어요. 그래도 삭제할까요?`
@@ -680,7 +691,8 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             {courses.map((item) => <button key={item.id} type="button" className={courseId === item.id ? 'date-map-course-choice active' : 'date-map-course-choice'} onClick={() => chooseCourse(item)}><CalendarDays size={17}/><span><b>{item.title}</b><small>{item.date || '날짜 미정'} · 장소 {item.placeIds.length}곳</small></span></button>)}
             {!courses.length && !coursePlaceIds.length && <p className="date-map-empty">아직 데이트 코스가 없어요. 새 코스에서 장소를 골라보세요.</p>}
           </>}
-          {coursePicking ? <div className="date-map-course-picker">
+          {courseEditorOpen && (coursePicking ? <div className="date-map-course-picker">
+            <div className="date-map-panel-header"><strong>{courseId ? '코스에 장소 더 담기' : '코스에 담을 장소 선택'}</strong><button type="button" onClick={closeCourseEditor}>목록으로</button></div>
             <p className="date-map-add-hint">가고 싶은 장소를 차례로 눌러 주세요. 다시 누르면 선택이 취소돼요. 선택 순서가 지도에도 표시돼요.</p>
             <div className="date-map-picker-actions"><span><b>{coursePlaceIds.length}</b> / {MAX_DATE_COURSE_PLACES}곳 선택</span><button type="button" onClick={beginCourseSearch}><Search size={14}/> 저장하지 않은 장소 검색</button></div>
             {!courseRegions.length && <p className="date-map-empty">저장한 장소가 없어요. 검색해서 첫 번째 장소를 추가해 보세요.</p>}
@@ -704,7 +716,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
               </button>
             </div>
           </div> : <article className="date-map-detail date-map-course-editor">
-            <strong>{courseId ? '데이트 코스 수정' : '새 데이트 코스'}</strong>
+            <div className="date-map-panel-header"><strong>{courseId ? '데이트 코스 수정' : '새 데이트 코스'}</strong><button type="button" onClick={closeCourseEditor}>목록으로</button></div>
             <label className="date-map-label">코스 이름<input maxLength={100} placeholder="예: 강릉 주말 데이트" value={courseTitle} onChange={(e) => setCourseTitle(e.target.value)}/></label>
             <div className="date-map-panel-header"><strong>방문 순서</strong><span>{coursePlaceIds.length} / 20곳</span></div>
             <p className="date-map-add-hint">장소를 잡아 끌어 순서를 변경해요. 모바일에서는 위·아래 버튼으로 조정할 수 있어요.</p>
@@ -735,8 +747,8 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             <button type="button" className="date-map-course-schedule-toggle" aria-expanded={showSchedule} onClick={() => setShowSchedule((value) => !value)}><CalendarDays size={16}/> 일정 추가 (선택) {showSchedule ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}</button>
             {showSchedule && <label className="date-map-label">데이트 날짜 (선택)<input type="date" value={courseDate} onChange={(e) => setCourseDate(e.target.value)}/></label>}
             <button type="button" className="date-map-primary" disabled={pending || !connection || !coursePlaceIds.length || !courseTitle.trim()} onClick={() => void saveCourse()}>코스 저장</button>
-            {courseId && <button type="button" className="date-map-delete" disabled={pending} onClick={() => { if (window.confirm('이 데이트 코스를 삭제할까요?')) void submit(async () => { await deleteDateCourse(coupleId, courseId); newCourse(); }, '코스를 삭제했어요.'); }}><Trash2 size={14}/> 코스 삭제</button>}
-          </article>}
+            {courseId && <button type="button" className="date-map-delete" disabled={pending} onClick={() => { if (window.confirm('이 데이트 코스를 삭제할까요?')) void submit(async () => { await deleteDateCourse(coupleId, courseId); resetCourseEditor(); }, '코스를 삭제했어요.'); }}><Trash2 size={14}/> 코스 삭제</button>}
+          </article>)}
         </>}
       </section>
     </div>
