@@ -158,15 +158,9 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       ? nationwideResults.current.results.filter((item) => insideMapBounds(item, activeBounds!)) : [];
 
     const received: { osm: LocationSearchResult[]; naver: LocationSearchResult[] } = { osm: [], naver: [] };
-    const unique = (items: LocationSearchResult[]) => {
-      const seen = new Set<string>();
-      return items.filter((item) => {
-        const key = item.latitude.toFixed(5) + ':' + item.longitude.toFixed(5);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-    };
+    const unique = (items: LocationSearchResult[]) => items.filter((item, index, all) =>
+      all.findIndex((other) => Math.abs(other.latitude - item.latitude) < 0.00002
+        && Math.abs(other.longitude - item.longitude) < 0.00002) === index);
     const combinedResults = () => unique([...matchedSaved, ...cached, ...received.naver, ...received.osm]);
     const publish = () => {
       if (sequence !== searchSequence.current) return;
@@ -193,7 +187,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
           if (currentBounds && !intent.hasExplicitRegion) {
             const latitude = (currentBounds.south + currentBounds.north) / 2;
             const longitude = (currentBounds.west + currentBounds.east) / 2;
-            const regionKey = latitude.toFixed(3) + ':' + longitude.toFixed(3);
+            const regionKey = latitude.toFixed(4) + ':' + longitude.toFixed(4);
             const memo = regionLookup.current;
             if (memo && memo.key === regionKey && memo.expires > Date.now()) {
               region = memo.region;
@@ -209,7 +203,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
                 if (/^[가-힣]+(?:동|읍|면|리)$/.test(locality)) region += ' ' + locality;
                 region = region.trim();
               }
-              regionLookup.current = { key: regionKey, expires: Date.now() + 90_000, region };
+              if (region) regionLookup.current = { key: regionKey, expires: Date.now() + 90_000, region };
             }
           }
           return fetchNaverDatePlaces(trimmed, { endpoint: NAVER_LOCAL_SEARCH_URL, token, region, bounds: currentBounds });
