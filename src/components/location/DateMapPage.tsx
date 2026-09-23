@@ -92,6 +92,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const searchSequence = useRef(0);
   const lookupSequence = useRef(0);
   const resultsRef = useRef(results);
+  const nationwideResults = useRef<{ query: string; results: LocationSearchResult[] } | null>(null);
   const queryRef = useRef(query);
   resultsRef.current = results;
   queryRef.current = query;
@@ -163,6 +164,10 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
               const parsed = placeRegion(address);
               region = parsed.province !== '지역 미분류' ? parsed.province : '';
               if (parsed.district && parsed.district !== '시·군·구 미분류') region += ' ' + parsed.district;
+              // Reverse geocoding also provides the neighbourhood. A district-wide
+              // five-item API page often misses a branch in a small viewport.
+              const locality = address.split('·')[0]?.trim().split(/\s+/).at(-1) ?? '';
+              if (/^[가-힣]+(?:동|읍|면|리)$/.test(locality)) region += ' ' + locality;
               region = region.trim();
             }
           }
@@ -178,9 +183,12 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
         latitude: item.latitude, longitude: item.longitude, placeName: item.name, address: item.address,
       }, intent) && (activeScope !== 'map' || insideMapBounds(item, activeBounds!)))
         .map((item) => ({ latitude: item.latitude, longitude: item.longitude, placeName: item.name, address: item.address }));
-      const combined = [...matchedSaved, ...naverResults, ...page.results].filter((item, index, all) =>
+      const cached = activeScope === 'map' && nationwideResults.current?.query === trimmed
+        ? nationwideResults.current.results.filter((item) => insideMapBounds(item, activeBounds!)) : [];
+      const combined = [...matchedSaved, ...cached, ...naverResults, ...page.results].filter((item, index, all) =>
         all.findIndex((other) => Math.abs(other.latitude - item.latitude) < 0.00002
           && Math.abs(other.longitude - item.longitude) < 0.00002) === index);
+      if (activeScope === 'nationwide' && !more) nationwideResults.current = { query: trimmed, results: combined };
       setResults((previous) => more
         ? [...previous, ...combined.filter((item) => !previous.some((old) => old.latitude === item.latitude && old.longitude === item.longitude))]
         : combined);

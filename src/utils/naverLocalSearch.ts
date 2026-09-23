@@ -15,7 +15,7 @@ export async function fetchNaverDatePlaces(
   if (region) url.searchParams.set('region', region.trim().slice(0, 50));
   const response = await fetch(url.toString(), {
     headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' },
-    signal: AbortSignal.timeout(9500),
+    signal: AbortSignal.timeout(17000),
   });
   if (!response.ok) throw new Error('Naver local search unavailable');
   const payload = await response.json() as { results?: LocationSearchResult[]; provider?: string };

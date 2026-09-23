@@ -38,7 +38,7 @@ function normalizePlace(item) {
 }
 
 exports.searchDatePlaces = onRequest({
-  region: 'asia-northeast3', timeoutSeconds: 12, memory: '256MiB',
+  region: 'asia-northeast3', timeoutSeconds: 18, memory: '256MiB',
   // The web client sends Authorization, so its GET request is preflighted.
   // Firebase CORS middleware must answer OPTIONS before token verification.
   cors: [...ALLOWED_ORIGINS],
@@ -57,7 +57,15 @@ exports.searchDatePlaces = onRequest({
   const region = typeof req.query.region === 'string' ? req.query.region.trim() : '';
   if (!query || query.length > 100 || region.length > 50) return sendJson(res, 400, { error: 'invalid-query' });
   if (!naverId.value() || !naverSecret.value()) return sendJson(res, 503, { error: 'search-not-configured' });
-  const queries = [...new Set([region ? region + ' ' + query : query, query])].slice(0, 2);
+  // Search the smallest locality first: each NAVER response contains at most
+  // five businesses, so a district-wide page can omit the visible branch.
+  const regionParts = region.split(/\s+/).filter(Boolean);
+  const locality = regionParts.at(-1);
+  const queries = [...new Set([
+    regionParts.length > 2 ? locality + ' ' + query : '',
+    region ? region + ' ' + query : '',
+    query,
+  ].filter(Boolean))].slice(0, 3);
   const results = [];
   const seen = new Set();
   try {
