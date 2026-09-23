@@ -734,7 +734,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             <button type="button" aria-label="코스 편집 닫기" disabled={pending} onClick={closeCourseEditor}><X size={20}/></button>
           </header>
           <div className="date-map-course-modal-content">
-            coursePicking ? <div className="date-map-course-picker">
+            {coursePicking ? <div className="date-map-course-picker">
             <div className="date-map-panel-header"><strong>{courseId ? '코스에 장소 더 담기' : '코스에 담을 장소 선택'}</strong></div>
             <p className="date-map-add-hint">가고 싶은 장소를 차례로 눌러 주세요. 다시 누르면 선택이 취소돼요. 선택 순서가 지도에도 표시돼요.</p>
             <div className="date-map-picker-actions"><span><b>{coursePlaceIds.length}</b> / {MAX_DATE_COURSE_PLACES}곳 선택</span><button type="button" onClick={beginCourseSearch}><Search size={14}/> 저장하지 않은 장소 검색</button></div>
@@ -791,7 +791,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             {showSchedule && <label className="date-map-label">데이트 날짜 (선택)<input type="date" value={courseDate} onChange={(e) => setCourseDate(e.target.value)}/></label>}
             <button type="button" className="date-map-primary" disabled={pending || !connection || !coursePlaceIds.length || !courseTitle.trim()} onClick={() => void saveCourse()}>코스 저장</button>
             {courseId && <button type="button" className="date-map-delete" disabled={pending} onClick={() => { if (window.confirm('이 데이트 코스를 삭제할까요?')) void submit(async () => { await deleteDateCourse(coupleId, courseId); resetCourseEditor(); }, '코스를 삭제했어요.'); }}><Trash2 size={14}/> 코스 삭제</button>}
-          </article>
+          </article>}
           </div>
         </section>
       </div>, document.body,
