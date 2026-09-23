@@ -17,6 +17,7 @@ import { disconnectCouple } from '../src/lib/coupleDisconnect';
 import { sendCoupleMessage, toggleCoupleMessageReaction, setCoupleMessageReactions, hideCoupleMessageForMe, deleteCoupleMessageForEveryone, clearCoupleChatForMe } from '../src/lib/chatRealtime';
 import { uploadChatAttachment, uploadChatMedia } from '../src/lib/chatMedia';
 import { addDatePlace, saveDateCourse, setPlaceLike, addPlaceOpinion } from '../src/lib/dateMap';
+import { addDatePlanCandidate, createDatePlanDraft, updateDatePlanCandidateMemo, updateDatePlanDraft } from '../src/lib/datePlanDrafts';
 
 const projectId = 'demo-danduli-security';
 let env: RulesTestEnvironment;
@@ -344,4 +345,60 @@ test('date planning: members share places and courses but outsiders and identity
     await assertFails(getDocFromServer(doc(outsider.db, path)));
   }
   await assertFails(setDoc(doc(outsider.db, placePath, 'likes', 'eve'), { uid: 'eve', liked: true }));
+});
+
+test('date plan V2: unfinished drafts and date-only candidates stay isolated and couple-private', async () => {
+  const { coupleId } = await pair();
+  as('alice');
+  const oldPlace = await addDatePlace(coupleId, 'alice', {
+    name: '기존 보관함', address: '강릉시', latitude: 37.77, longitude: 128.94, category: '여행', memo: '',
+  });
+  const oldCourse = await saveDateCourse(coupleId, 'alice', {
+    title: '기존 코스', date: '2026-10-20', placeIds: [oldPlace], timeSlots: ['08:00-09:00'],
+  });
+  const planId = await createDatePlanDraft(coupleId, 'alice');
+  const planPath = `couples/${coupleId}/datePlans/${planId}`;
+  const candidateId = await addDatePlanCandidate(coupleId, planId, 'alice', {
+    name: '니뽕내뽕', address: '강릉시', latitude: 37.75, longitude: 128.88,
+    category: '맛집', memo: '점심 후보',
+  });
+  const candidatePath = `${planPath}/candidates/${candidateId}`;
+  const plan = (await getDocFromServer(doc(client.db, planPath))).data();
+  expect(plan?.status).toBe('draft');
+  expect(plan?.schemaVersion).toBe(2);
+  expect(plan?.title).toBe('');
+  expect(plan?.date).toBe('');
+  expect((await getDocFromServer(doc(client.db, 'couples', coupleId, 'datePlaces', candidateId))).exists()).toBe(false);
+  expect((await getDocFromServer(doc(client.db, 'couples', coupleId, 'dateCourses', oldCourse))).data()?.placeIds).toEqual([oldPlace]);
+
+  as('bob');
+  expect((await getDocFromServer(doc(client.db, candidatePath))).data()?.name).toBe('니뽕내뽕');
+  await updateDatePlanDraft(coupleId, planId, { title: '함께 만드는 초안', date: '2026-11-21' });
+  await updateDatePlanCandidateMemo(coupleId, planId, candidateId, '예비 식당으로');
+  expect((await getDocFromServer(doc(client.db, planPath))).data()?.title).toBe('함께 만드는 초안');
+  expect((await getDocFromServer(doc(client.db, candidatePath))).data()?.memo).toBe('예비 식당으로');
+
+  await assertFails(updateDoc(doc(client.db, planPath), { status: 'confirmed', updatedAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(client.db, planPath), { createdBy: 'bob', updatedAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(client.db, candidatePath), { latitude: 0, updatedAt: serverTimestamp() }));
+  await assertFails(deleteDoc(doc(client.db, planPath)));
+  await assertFails(setDoc(doc(client.db, 'couples', coupleId, 'datePlans', 'spoof'), {
+    id: 'spoof', title: '', date: '', status: 'draft', schemaVersion: 2, createdBy: 'alice',
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  }));
+  await assertFails(setDoc(doc(client.db, planPath, 'candidates', 'fake'), {
+    id: 'fake', name: '', address: '', latitude: 0, longitude: 0, category: '기타', memo: '',
+    createdBy: 'bob', createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  }));
+  await assertFails(setDoc(doc(client.db, 'couples', coupleId, 'datePlans', 'not-created', 'candidates', 'orphan'), {
+    id: 'orphan', name: '잘못된 후보', address: '', latitude: 0, longitude: 0, category: '기타', memo: '',
+    createdBy: 'bob', createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  }));
+  await signup('eve');
+  const outsider = as('eve');
+  await assertFails(getDocFromServer(doc(outsider.db, planPath)));
+  await assertFails(getDocFromServer(doc(outsider.db, candidatePath)));
+  await assertFails(updateDoc(doc(outsider.db, candidatePath), { memo: '변조', updatedAt: serverTimestamp() }));
+  expect((await getDocFromServer(doc(as('alice').db, 'couples', coupleId, 'dateCourses', oldCourse))).data()?.timeSlots)
+    .toEqual(['08:00-09:00']);
 });
