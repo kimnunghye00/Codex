@@ -277,7 +277,6 @@
           });
           naver.maps.Event.addListener(marker, 'click', () => {
             if (mode === 'date-plan' && typeof visit.id === 'string' && /^search-\d+$/.test(visit.id)) {
-              pickMode = false;
               focus(visit, true);
               send('search-marker-selected', { id: visit.id });
             } else if (mode === 'date-plan' && typeof visit.id === 'string') {
@@ -406,10 +405,12 @@
           });
           naver.maps.Event.addListener(map, 'click', (event) => {
             if (!pickMode || lastRender.mode !== 'date-plan') return;
+            // NAVER's base map exposes tap coordinates, not the printed POI
+            // name. The parent matches nearby search results or requests
+            // the user to confirm the location/name before saving.
             const lat = Number(event.coord?.lat());
             const lng = Number(event.coord?.lng());
             if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-            pickMode = false;
             send('map-point-selected', { latitude: lat, longitude: lng });
           });
           initialized = true;

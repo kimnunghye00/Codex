@@ -17,13 +17,14 @@ import { fetchNaverDatePlaces } from '../../utils/naverLocalSearch';
 import { groupSavedPlaces, placeRegion } from '../../utils/placeRegions';
 import { matchesPlaceSearchIntent, parsePlaceSearchIntent } from '../../utils/placeSearchIntent.ts';
 import { deduplicatePlaceResults } from '../../utils/placeSearchDedup.ts';
+import { matchClickedSearchPlace } from '../../utils/dateMapClick.ts';
 import './DateMapPage.css';
 
 type Category = DatePlace['category'];
 const CATEGORIES: Category[] = ['맛집', '카페', '놀거리', '여행', '기타'];
 const MAP_ORIGIN = typeof window !== 'undefined' && window.location.hostname === 'danduli.web.app'
   ? 'https://danduli.web.app' : 'https://meluni-f4e00.web.app';
-const MAP_HOST = `${MAP_ORIGIN}/naver-map-host.html?v=15`;
+const MAP_HOST = `${MAP_ORIGIN}/naver-map-host.html?v=16`;
 const ALL = '전체';
 // This URL is enabled only after the server has its own NAVER Search ID and secret.
 const NAVER_LOCAL_SEARCH_URL = String(import.meta.env.VITE_NAVER_LOCAL_SEARCH_URL || '').trim();
@@ -93,6 +94,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const frame = useRef<HTMLIFrameElement>(null);
   const queuedFocus = useRef<{ latitude: number; longitude: number; placeName: string; photoUrl?: string; address?: string } | null>(null);
   const panel = useRef<HTMLElement>(null);
+  const candidateCard = useRef<HTMLElement>(null);
   const courseDialog = useRef<HTMLElement>(null);
   const searchSequence = useRef(0);
   const searchAbort = useRef<AbortController | null>(null);
@@ -345,15 +347,26 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
         if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return;
         const searchName = queryRef.current.trim().slice(0, 120);
         const sequence = ++lookupSequence.current;
-        setPicking(false); setResults([]); setMessage('');
-        setCandidate({ latitude, longitude, placeName: searchName || '선택한 위치' });
-        setCandidateName(searchName); setCandidateAddress('');
-        setCandidateSearch(searchName);
-        mapFocus({ latitude, longitude, placeName: searchName || '선택한 위치' });
+        const near = matchClickedSearchPlace({ latitude, longitude }, resultsRef.current);
+        setPicking(false);
+        if (near) {
+          // An independently searched place can supply its verified name and
+          // location. A base-map label cannot be read through this click event.
+          setCandidate(near); setCandidateName(near.placeName);
+          setCandidateAddress(near.address ?? ''); setCandidateSearch(searchName || near.placeName);
+          setMessage('검색 결과의 지점을 선택했어요. 이름과 주소를 확인하고 추가해 주세요.');
+          mapFocus(near);
+        } else {
+          setCandidate({ latitude, longitude, placeName: searchName || '선택한 위치' });
+          setCandidateName(searchName); setCandidateAddress('');
+          setCandidateSearch(searchName);
+          setMessage('지도에서 위치를 선택했어요. 지도에 표시된 가게 이름은 자동으로 확인할 수 없으니 이름과 주소를 확인해 주세요.');
+          mapFocus({ latitude, longitude, placeName: searchName || '선택한 위치' });
+          void reverseGeocode(latitude, longitude).then((address) => {
+            if (lookupSequence.current === sequence && address) setCandidateAddress((value) => value || address);
+          });
+        }
         panel.current?.scrollTo({ top: 0, behavior: 'smooth' });
-        void reverseGeocode(latitude, longitude).then((address) => {
-          if (lookupSequence.current === sequence && address) setCandidateAddress((value) => value || address);
-        });
       }
       if (['auth-error', 'sdk-error', 'render-error'].includes(event.data.type ?? '')) setMapError(true);
     };
@@ -374,8 +387,18 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
 
   useEffect(() => {
     if (!mapReady) return;
-    frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'set-pick-mode', enabled: picking && tab === 'search' }, MAP_ORIGIN);
+    frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'set-pick-mode', enabled: tab === 'search' }, MAP_ORIGIN);
   }, [mapReady, picking, tab]);
+
+  useEffect(() => {
+    if (tab !== 'search' || !candidate) return;
+    // The confirmation form may sit below a long list of search results.
+    // Bring it into view after a map tap so the add-to-course action is visible.
+    const frame = window.requestAnimationFrame(() => {
+      candidateCard.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [candidate, tab]);
 
   const chooseResult = (item: LocationSearchResult) => {
     ++lookupSequence.current;
@@ -583,7 +606,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
         </div>
         <button className="date-map-view-all" type="button" disabled={!mapReady || !mapVisits.length} onClick={() => { clearMapFocus(); frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'fit-visits' }, MAP_ORIGIN); }}>{tab === 'courses' ? '코스 전체 지도에서 보기' : '목록 전체 지도에서 보기'}</button>
         {tab === 'search' && <div className="date-map-search-results">
-          <div className="date-map-panel-header"><strong>검색 결과 {results.length}곳</strong><button type="button" onClick={() => { setPicking((v) => !v); setMessage(''); }} disabled={!mapReady}>{picking ? '위치 선택 취소' : '지도에서 직접 위치 선택'}</button></div>
+          <div className="date-map-panel-header"><strong>검색 결과 {results.length}곳</strong><button type="button" onClick={() => { setPicking((v) => !v); setMessage(''); }} disabled={!mapReady}>{picking ? '선택 안내 닫기' : '지도에서 직접 위치 선택'}</button></div>
           {results.map((item, index) => <button key={`branch-${index}`} type="button" className={candidate === item ? 'date-map-branch active' : 'date-map-branch'} onClick={() => chooseResult(item)}>
             <span className="date-map-result-number">{index + 1}</span><span><b>{item.placeName}</b><small>{item.address || '상세 주소 정보 없음'}</small></span>
           </button>)}
@@ -595,15 +618,16 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
           <p className="date-map-add-hint">{NAVER_LOCAL_SEARCH_URL
             ? '네이버 지역 검색은 최대 5건씩 조회하므로 모든 지점이 포함되지는 않을 수 있어요. 지도 범위와 지점명을 함께 사용해 주세요.'
             : '현재 지도와 장소 검색은 별도 데이터예요. 네이버 지도에 보이는 모든 업체를 검색할 수 없어요. 지점은 “명륜진사갈비 삼척점”처럼 검색하고, 누락된 곳은 지도에서 직접 위치를 지정해 주세요.'}</p>
-          {picking && <p className="date-map-pick-hint" role="status">지도에서 방문할 지점을 클릭해 주세요. 위치를 선택한 뒤 지점 이름과 주소를 직접 확인할 수 있어요.</p>}
+          <p className="date-map-pick-hint">지도에서 검색 결과 핀을 누르거나, 원하는 가게가 있는 위치를 직접 눌러 선택할 수 있어요. 검색 결과에 없는 가게는 상호명과 주소를 확인한 뒤 추가해 주세요.</p>
+          {picking && <p className="date-map-add-hint" role="status">지도에 보이는 가게 글씨 자체에서 이름을 불러올 수는 없어요. 검색어를 입력한 뒤 해당 위치를 선택하면 편리해요.</p>}
           {!results.length && !candidate && !picking && <div className="date-map-empty date-map-empty-actions">
-            <p>원하는 가게가 지도에 보이나요? 지도에서 가게 위치를 눌러 저장할 수 있어요.</p>
+            <p>원하는 가게가 지도에 보이나요? 해당 위치를 눌러 이름과 주소를 확인한 다음 저장할 수 있어요.</p>
             <button type="button" className="date-map-primary" disabled={!mapReady} onClick={() => { setPicking(true); setMessage('지도에서 가게 위치를 눌러 주세요. 상호와 주소를 확인한 뒤 저장할 수 있어요.'); }}>
               <MapPin size={15}/> 지도에서 위치 선택하기
             </button>
           </div>}
         </div>}
-        {tab === 'search' && candidate && <article className="date-map-candidate" aria-label="선택한 장소 확인">
+        {tab === 'search' && candidate && <article ref={candidateCard} className="date-map-candidate" aria-label="선택한 장소 확인">
           <div className="date-map-candidate-header">
             <div><h2>선택한 장소</h2><p>{addingToCourse ? '위치를 확인하고 편집 중인 코스에 담아요.' : '가고 싶은 곳으로 보관한 뒤 언제든 코스에 담을 수 있어요.'}</p></div>
             <button type="button" className="date-map-candidate-close" aria-label="선택한 장소 닫기" onClick={() => { setCandidate(null); clearMapFocus(); }}><X size={18}/></button>
