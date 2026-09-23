@@ -511,3 +511,106 @@
 .date-map-status-filters button { flex:0 0 auto; border:1px solid var(--border); border-radius:9px; padding:7px 9px; background:var(--surface); color:var(--text-secondary); font-size:11px; cursor:pointer; }
 .date-map-status-filters button[aria-pressed="true"] { background:var(--primary-soft); color:var(--primary); border-color:var(--primary); font-weight:700; }
 .date-map-place small.date-map-place-status { color:var(--primary); font-weight:600; }
+
+
+/* Course creation and editing: independent overlay, never squeezed into the
+   map's right-hand panel. Inherit the active theme's surface/text variables. */
+.date-map-page.date-map-course-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  padding: 20px;
+  background: rgba(22, 15, 22, .58);
+  color: var(--text-primary);
+}
+.date-map-course-modal {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: min(100%, 760px);
+  max-height: min(860px, calc(100dvh - 40px));
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: var(--surface);
+  color: var(--text-primary);
+  box-shadow: 0 20px 65px rgba(15, 10, 20, .25);
+}
+.date-map-course-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.date-map-course-modal-header small {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  color: var(--primary);
+}
+.date-map-course-modal-header h2 {
+  margin: 3px 0 4px;
+  font-size: 20px;
+  line-height: 1.3;
+}
+.date-map-course-modal-header p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.date-map-course-modal-header > button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text-primary);
+  background: var(--surface);
+  cursor: pointer;
+}
+.date-map-course-modal-header > button:disabled { opacity: .45; cursor: not-allowed; }
+.date-map-course-modal-content {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px 22px 24px;
+}
+.date-map-course-modal-content .date-map-course-editor {
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+.date-map-course-modal-content .date-map-course-picker { min-width: 0; }
+.date-map-course-modal-content .date-map-picker-footer {
+  bottom: -24px;
+  padding: 12px 0 24px;
+}
+.date-map-course-modal-content .date-map-course-editor > .date-map-primary {
+  min-height: 44px;
+}
+@media (max-width: 760px) {
+  .date-map-page.date-map-course-modal-overlay { padding: 12px; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+  .date-map-course-modal { width: 100%; max-height: calc(100dvh - 24px); border-radius: 18px; }
+  .date-map-course-modal-header { padding: 16px; }
+  .date-map-course-modal-header h2 { font-size: 18px; }
+  .date-map-course-modal-content { padding: 16px; }
+  .date-map-course-modal-content .date-map-picker-footer { bottom: -16px; padding-bottom: 16px; }
+}
