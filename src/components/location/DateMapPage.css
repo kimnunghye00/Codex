@@ -505,3 +505,9 @@
 .date-map-empty-actions { display:flex; flex-direction:column; gap:10px; text-align:left; }
 .date-map-empty-actions p { margin:0; line-height:1.6; }
 .date-map-empty-actions .date-map-primary { min-height:42px; }
+
+/* Shared wish-list status, separate from food/category filters. */
+.date-map-status-filters { display:flex; flex-wrap:wrap; gap:6px; margin:9px 0 2px; }
+.date-map-status-filters button { flex:0 0 auto; border:1px solid var(--border); border-radius:9px; padding:7px 9px; background:var(--surface); color:var(--text-secondary); font-size:11px; cursor:pointer; }
+.date-map-status-filters button[aria-pressed="true"] { background:var(--primary-soft); color:var(--primary); border-color:var(--primary); font-weight:700; }
+.date-map-place small.date-map-place-status { color:var(--primary); font-weight:600; }
