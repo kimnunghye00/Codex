@@ -9,6 +9,21 @@ export function insideMapBounds(p: { latitude: number; longitude: number }, b: M
   return p.latitude >= b.south && p.latitude <= b.north && p.longitude >= b.west && p.longitude <= b.east;
 }
 export type PlaceSearchPage = { results: LocationSearchResult[]; excludedIds: string[]; hasMore: boolean };
+export type PlaceSearchOptions = { bounds?: MapBounds; excludedIds?: string[]; signal?: AbortSignal; cache?: boolean };
+
+// Small in-memory cache for exact searches only. Never reuse a response for a
+// different viewport or pagination cursor, and never retain failed requests.
+const SEARCH_CACHE_TTL_MS = 45_000;
+const SEARCH_CACHE_LIMIT = 30;
+const searchCache = new Map<string, { expires: number; page: PlaceSearchPage }>();
+function clonePage(page: PlaceSearchPage): PlaceSearchPage {
+  return { results: [...page.results], excludedIds: [...page.excludedIds], hasMore: page.hasMore };
+}
+function searchCacheKey(query: string, bounds?: MapBounds) {
+  return JSON.stringify([query, bounds
+    ? [bounds.west, bounds.south, bounds.east, bounds.north].map((value) => value.toFixed(6))
+    : null]);
+}
 
 type NominatimRow = { place_id?: number; lat?: string; lon?: string; name?: string; display_name?: string };
 type OverpassElement = {
@@ -36,7 +51,7 @@ function searchResult(row: NominatimRow, query: string): LocationSearchResult | 
   };
 }
 
-async function nominatimSearch(query: string, bounds?: MapBounds, excludedIds: readonly string[] = []): Promise<{ rows: NominatimRow[]; ids: string[] }> {
+async function nominatimSearch(query: string, bounds?: MapBounds, excludedIds: readonly string[] = [], signal?: AbortSignal): Promise<{ rows: NominatimRow[]; ids: string[] }> {
   const params = new URLSearchParams({ format: 'jsonv2', q: query, limit: '40', addressdetails: '1', 'accept-language': 'ko', countrycodes: 'kr', dedupe: '0' });
   if (bounds) {
     const { west, north, east, south } = bounds;
@@ -44,7 +59,10 @@ async function nominatimSearch(query: string, bounds?: MapBounds, excludedIds: r
     params.set('bounded', '1');
   }
   if (excludedIds.length) params.set('exclude_place_ids', excludedIds.join(','));
-  const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, { headers: { Accept: 'application/json' } });
+  const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+    headers: { Accept: 'application/json' },
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(7_000)]) : AbortSignal.timeout(7_000),
+  });
   if (!response.ok) throw new Error('Place search unavailable');
   const rows = await response.json() as NominatimRow[];
   if (!Array.isArray(rows)) throw new Error('Invalid search response');
@@ -59,7 +77,7 @@ async function nominatimSearch(query: string, bounds?: MapBounds, excludedIds: r
  * The current map uses NAVER data; an OSM POI result is not a guarantee
  * that every NAVER label will be discoverable.
  */
-async function overpassSearch(query: string, bounds: MapBounds): Promise<LocationSearchResult[]> {
+async function overpassSearch(query: string, bounds: MapBounds, signal?: AbortSignal): Promise<LocationSearchResult[]> {
   const width = bounds.east - bounds.west, height = bounds.north - bounds.south;
   // Avoid running a costly nationwide Overpass query on a zoomed-out map.
   if (width > 0.5 || height > 0.5 || width <= 0 || height <= 0) return [];
@@ -70,7 +88,7 @@ async function overpassSearch(query: string, bounds: MapBounds): Promise<Locatio
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8', Accept: 'application/json' },
     body: new URLSearchParams({ data: statement }).toString(),
-    signal: AbortSignal.timeout(11000),
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(7_000)]) : AbortSignal.timeout(7_000),
   });
   if (!response.ok) throw new Error('POI search unavailable');
   const data = await response.json() as { elements?: OverpassElement[] };
@@ -92,19 +110,32 @@ async function overpassSearch(query: string, bounds: MapBounds): Promise<Locatio
   return results;
 }
 
-export async function searchLocationPage(query: string, options: { bounds?: MapBounds; excludedIds?: string[] } = {}): Promise<PlaceSearchPage> {
+export async function searchLocationPage(query: string, options: PlaceSearchOptions = {}): Promise<PlaceSearchPage> {
   const trimmed = query.trim();
   if (!trimmed) return { results: [], excludedIds: [], hasMore: false };
   const bounds = options.bounds;
   if (bounds && !validMapBounds(bounds)) throw new Error('Invalid map bounds');
+  options.signal?.throwIfAborted();
+  const useCache = options.cache === true && !options.excludedIds?.length;
+  const cacheKey = useCache ? searchCacheKey(trimmed, bounds) : '';
+  const memo = useCache ? searchCache.get(cacheKey) : undefined;
+  if (memo && memo.expires > Date.now()) {
+    // A cache hit must still respect a recently aborted search.
+    options.signal?.throwIfAborted();
+    return clonePage(memo.page);
+  }
+  if (memo) searchCache.delete(cacheKey);
 
   const intent = parsePlaceSearchIntent(trimmed);
   const brandQuery = intent.businessQuery || trimmed;
   let response: { rows: NominatimRow[]; ids: string[] } | undefined;
   let effectiveResponse: { rows: NominatimRow[]; ids: string[] } | undefined;
   let firstError: unknown;
-  try { response = await nominatimSearch(trimmed, bounds, options.excludedIds); }
-  catch (error) { firstError = error; }
+  try { response = await nominatimSearch(trimmed, bounds, options.excludedIds, options.signal); }
+  catch (error) {
+    options.signal?.throwIfAborted();
+    firstError = error;
+  }
   effectiveResponse = response;
 
   const seen = new Set<string>();
@@ -124,37 +155,51 @@ export async function searchLocationPage(query: string, options: { bounds?: MapB
   // addresses confirming 삼척시. Do not silently substitute a Seoul branch.
   if (!results.length && intent.hasExplicitRegion && brandQuery !== trimmed) {
     try {
-      const alternative = await nominatimSearch(brandQuery, bounds, options.excludedIds);
+      const alternative = await nominatimSearch(brandQuery, bounds, options.excludedIds, options.signal);
       addRows(alternative.rows);
       effectiveResponse = alternative;
-    } catch (error) { if (!response) firstError = error; }
+    } catch (error) {
+      options.signal?.throwIfAborted();
+      if (!response) firstError = error;
+    }
   }
 
   if (bounds && !results.length && !(options.excludedIds?.length)) {
     // A strict Nominatim viewbox can suppress nearby POIs even when indexed.
     // A client-side bounds AND branch check prevents wrong-district results.
     if (response) {
-      try { addRows((await nominatimSearch(brandQuery)).rows); } catch { /* Continue to alternate POI provider. */ }
+      try { addRows((await nominatimSearch(brandQuery, undefined, [], options.signal)).rows); }
+      catch { options.signal?.throwIfAborted(); /* Continue to alternate POI provider. */ }
     }
     if (!results.length) {
       try {
-        for (const place of await overpassSearch(brandQuery, bounds)) {
+        for (const place of await overpassSearch(brandQuery, bounds, options.signal)) {
           if (!matchesPlaceSearchIntent(place, intent)) continue;
           const key = coordinateKey(place);
           if (!seen.has(key)) { seen.add(key); results.push(place); }
         }
-      } catch { /* The alternate index is best-effort; manual selection remains available. */ }
+      } catch {
+        options.signal?.throwIfAborted();
+        /* The alternate index is best-effort; manual selection remains available. */
+      }
     }
   }
 
+  options.signal?.throwIfAborted();
   if (!response && !effectiveResponse && !results.length) throw firstError ?? new Error('Place search unavailable');
   const ids = effectiveResponse?.ids ?? [...(options.excludedIds ?? [])];
-  return {
+  const page: PlaceSearchPage = {
     results,
     excludedIds: ids,
     hasMore: Boolean(results.length && effectiveResponse && effectiveResponse.rows.length > 0
       && ids.length > (options.excludedIds?.length ?? 0)),
   };
+  if (useCache) {
+    searchCache.delete(cacheKey);
+    searchCache.set(cacheKey, { expires: Date.now() + SEARCH_CACHE_TTL_MS, page: clonePage(page) });
+    if (searchCache.size > SEARCH_CACHE_LIMIT) searchCache.delete(searchCache.keys().next().value!);
+  }
+  return page;
 }
 
 /** Keep older callers' recoverable empty-result contract. */

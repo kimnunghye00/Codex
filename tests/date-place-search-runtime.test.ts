@@ -203,3 +203,47 @@ test('when only a Seoul franchise is indexed, Samcheok search is empty rather th
     assert.equal(page.hasMore, false);
   } finally { globalThis.fetch = oldFetch; }
 });
+
+test('identical map searches reuse fresh data but changed bounds and pagination fetch again', async () => {
+  const original = globalThis.fetch;
+  const bounds = { west: 126.97, east: 126.98, south: 37.56, north: 37.57 };
+  let requests = 0;
+  globalThis.fetch = async () => {
+    requests += 1;
+    return new Response(JSON.stringify([
+      { place_id: 7701, lat: '37.563', lon: '126.974', name: '도토리카페', display_name: '도토리카페, 중구, 서울' },
+    ]));
+  };
+  try {
+    const first = await searchLocationPage('도토리카페', { bounds, cache: true });
+    const second = await searchLocationPage('도토리카페', { bounds, cache: true });
+    assert.equal(requests, 1);
+    assert.deepEqual(first, second);
+    assert.notEqual(first.results, second.results, 'cached pages must not share the results array');
+    await searchLocationPage('도토리카페', { bounds: { ...bounds, west: 126.971 }, cache: true });
+    assert.equal(requests, 2, 'moving the viewport must invalidate the previous area');
+    await searchLocationPage('도토리카페', { bounds, excludedIds: first.excludedIds, cache: true });
+    assert.equal(requests, 3, 'pagination must not reuse the first page');
+  } finally { globalThis.fetch = original; }
+});
+
+test('superseded map searches abort the active Nominatim request without starting fallbacks', async () => {
+  const original = globalThis.fetch;
+  const controller = new AbortController();
+  let requests = 0;
+  globalThis.fetch = async (_url, options) => {
+    requests += 1;
+    return new Promise<Response>((_resolve, reject) => {
+      options?.signal?.addEventListener('abort', () => reject(options.signal?.reason), { once: true });
+    });
+  };
+  try {
+    const search = searchLocationPage('검색취소검증', {
+      bounds: { west: 126.97, east: 126.98, south: 37.56, north: 37.57 },
+      cache: true, signal: controller.signal,
+    });
+    controller.abort();
+    await assert.rejects(search, { name: 'AbortError' });
+    assert.equal(requests, 1, 'an aborted request must not retry nationwide or hit Overpass');
+  } finally { globalThis.fetch = original; }
+});

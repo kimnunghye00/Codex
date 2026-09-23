@@ -90,11 +90,16 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const queuedFocus = useRef<{ latitude: number; longitude: number; placeName: string; photoUrl?: string; address?: string } | null>(null);
   const panel = useRef<HTMLElement>(null);
   const searchSequence = useRef(0);
+  const searchAbort = useRef<AbortController | null>(null);
   const lookupSequence = useRef(0);
   const resultsRef = useRef(results);
   const nationwideResults = useRef<{ query: string; results: LocationSearchResult[] } | null>(null);
   const regionLookup = useRef<{ key: string; expires: number; region: string } | null>(null);
   const queryRef = useRef(query);
+  useEffect(() => () => {
+    ++searchSequence.current;
+    searchAbort.current?.abort();
+  }, []);
   resultsRef.current = results;
   queryRef.current = query;
   const selected = places.find((item) => item.id === selectedId);
@@ -141,6 +146,9 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     const activeScope = more ? searchedScope : intent.hasExplicitRegion ? 'nationwide' : requestedScope;
     const activeBounds = more ? searchedBounds : bounds;
     if (activeScope === 'map' && !activeBounds) { setMessage('지도가 준비되면 검색해 주세요. 다른 지역은 전국 검색으로 찾을 수 있어요.'); return; }
+    searchAbort.current?.abort();
+    const controller = new AbortController();
+    searchAbort.current = controller;
     const sequence = ++searchSequence.current;
     ++lookupSequence.current;
     clearMapFocus(); setTab('search'); setSearching(true); setPicking(false); setMessage('');
@@ -166,11 +174,16 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       if (sequence !== searchSequence.current) return;
       const combined = combinedResults();
       setResults((previous) => more ? unique([...previous, ...combined]) : combined);
+      // Unlock the search form as soon as useful results are available.
+      // The slower provider may still append additional branches afterwards.
+      if (combined.length && !more) setSearching(false);
     };
     // Saved and cached results do not need an external network request.
     publish();
     try {
-      const osmRequest = searchLocationPage(trimmed, { bounds: currentBounds, excludedIds: more ? excludedIds : [] })
+      const osmRequest = searchLocationPage(trimmed, {
+        bounds: currentBounds, excludedIds: more ? excludedIds : [], signal: controller.signal, cache: !more,
+      })
         .then((page) => {
           received.osm = page.results;
           if (sequence === searchSequence.current) {
@@ -182,7 +195,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       const naverRequest = !more && NAVER_LOCAL_SEARCH_URL && auth.currentUser
         ? (async () => {
           const token = await auth.currentUser?.getIdToken();
-          if (!token) return [] as LocationSearchResult[];
+          if (!token || controller.signal.aborted) return [] as LocationSearchResult[];
           let region = '';
           if (currentBounds && !intent.hasExplicitRegion) {
             const latitude = (currentBounds.south + currentBounds.north) / 2;
@@ -193,6 +206,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
               region = memo.region;
             } else {
               const address = await reverseGeocode(latitude, longitude);
+              if (controller.signal.aborted) return [] as LocationSearchResult[];
               if (address) {
                 const parsed = placeRegion(address);
                 region = parsed.province !== '지역 미분류' ? parsed.province : '';
@@ -206,7 +220,8 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
               if (region) regionLookup.current = { key: regionKey, expires: Date.now() + 90_000, region };
             }
           }
-          return fetchNaverDatePlaces(trimmed, { endpoint: NAVER_LOCAL_SEARCH_URL, token, region, bounds: currentBounds });
+          if (controller.signal.aborted) return [] as LocationSearchResult[];
+          return fetchNaverDatePlaces(trimmed, { endpoint: NAVER_LOCAL_SEARCH_URL, token, region, bounds: currentBounds, signal: controller.signal });
         })().then((naverResults) => {
           received.naver = naverResults;
           publish();
@@ -227,7 +242,12 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
 
     } catch (error) {
       if (sequence === searchSequence.current) setMessage(errorText(error));
-    } finally { if (sequence === searchSequence.current) setSearching(false); }
+    } finally {
+      if (sequence === searchSequence.current) {
+        setSearching(false);
+        if (searchAbort.current === controller) searchAbort.current = null;
+      }
+    }
   };
 
   const goToSearchedRegion = async () => {
