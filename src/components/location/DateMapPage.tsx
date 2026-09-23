@@ -21,6 +21,7 @@ import { matchClickedSearchPlace } from '../../utils/dateMapClick.ts';
 import { sameSearchPlace } from '../../utils/placeSearchDedup.ts';
 import { addDatePlanCandidate, createDatePlanDraft, subscribeDatePlanCandidates, subscribeDatePlanDrafts, updateDatePlanDraft, deleteDatePlanCandidate } from '../../lib/datePlanDrafts';
 import type { DatePlanCandidate, DatePlanDraft } from '../../lib/datePlanFoundation';
+import { findPlanCandidateDuplicate } from '../../utils/datePlanCandidateMatch.ts';
 import './DateMapPage.css';
 
 type Category = DatePlace['category'];
@@ -60,6 +61,9 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const [selectedPlanCandidateId, setSelectedPlanCandidateId] = useState('');
   const [addingToPlan, setAddingToPlan] = useState(false);
   const [showSavedImport, setShowSavedImport] = useState(false);
+  const [planMobileView, setPlanMobileView] = useState<'map' | 'list'>('list');
+  const [planEditingName, setPlanEditingName] = useState(false);
+  const [planEditingDate, setPlanEditingDate] = useState(false);
   const [planName, setPlanName] = useState('');
   const [planDate, setPlanDate] = useState('');
   const [tab, setTab] = useState<'search' | 'places' | 'courses'>('places');
@@ -107,6 +111,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const panel = useRef<HTMLElement>(null);
   const candidateCard = useRef<HTMLElement>(null);
   const courseDialog = useRef<HTMLElement>(null);
+  const planCandidatesRef = useRef(planCandidates);
   const searchSequence = useRef(0);
   const searchAbort = useRef<AbortController | null>(null);
   const lookupSequence = useRef(0);
@@ -120,6 +125,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   }, []);
   resultsRef.current = results;
   queryRef.current = query;
+  planCandidatesRef.current = planCandidates;
   const selected = places.find((item) => item.id === selectedId);
   const course = courses.find((item) => item.id === courseId);
   const activePlan = plans.find((item) => item.id === activePlanId);
@@ -150,7 +156,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     ? [] : placesForDateMap(tab === 'courses' ? places : visible, tab, coursePlaceIds), [places, visible, tab, coursePlaceIds, activePlanId]);
 
   useEffect(() => {
-    setPlaces([]); setCourses([]); setPlans([]); setActivePlanId(''); setPlanCandidates([]); setSelectedPlanCandidateId(''); setAddingToPlan(false); setPickedIds([]); setCoursePlaceIds([]); setSelectedId(''); setCourseId(''); setCourseTimes({}); setCoursePicking(false); setCourseEditorOpen(false); setAddingToCourse(false); setShowSchedule(false); setLikes([]); setOpinions([]);
+    setPlaces([]); setCourses([]); setPlans([]); setActivePlanId(''); setPlanCandidates([]); setSelectedPlanCandidateId(''); setAddingToPlan(false); setPlanMobileView('list'); setShowSavedImport(false); setPickedIds([]); setCoursePlaceIds([]); setSelectedId(''); setCourseId(''); setCourseTimes({}); setCoursePicking(false); setCourseEditorOpen(false); setAddingToCourse(false); setShowSchedule(false); setLikes([]); setOpinions([]);
     if (!coupleId) return;
     const stopPlaces = subscribeDatePlaces(coupleId, setPlaces, (error) => setMessage(errorText(error)));
     const stopCourses = subscribeDateCourses(coupleId, setCourses, (error) => setMessage(errorText(error)));
@@ -167,7 +173,14 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   useEffect(() => {
     setPlanName(activePlan?.title ?? '');
     setPlanDate(activePlan?.date ?? '');
-  }, [activePlanId, activePlan?.title, activePlan?.date]);
+    setPlanEditingName(false); setPlanEditingDate(false);
+  }, [activePlanId]);
+  useEffect(() => {
+    if (!planEditingName) setPlanName(activePlan?.title ?? '');
+  }, [activePlan?.title, planEditingName]);
+  useEffect(() => {
+    if (!planEditingDate) setPlanDate(activePlan?.date ?? '');
+  }, [activePlan?.date, planEditingDate]);
 
   useEffect(() => {
     setLikes([]); setOpinions([]); setOpinion('');
@@ -354,7 +367,8 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       if (event.data.type === 'viewport-changed' && event.data.bounds && validMapBounds(event.data.bounds)) setBounds(event.data.bounds);
       if (event.data.type === 'saved-marker-selected' && typeof event.data.id === 'string') {
         if (event.data.id.startsWith('plan-candidate-')) {
-          setSelectedPlanCandidateId(event.data.id.slice('plan-candidate-'.length));
+          const chosen = planCandidatesRef.current.find((item) => item.id === event.data.id.slice('plan-candidate-'.length));
+          if (chosen) { setSelectedPlanCandidateId(chosen.id); setPlanMobileView('list'); }
           panel.current?.scrollTo({ top: 0, behavior: 'smooth' });
           return;
         }
@@ -468,6 +482,63 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     setCoursePlaceIds((ids) => appendPlaceToCourse(ids, placeId));
   };
 
+  const createPlan = async () => {
+    if (!uid || !coupleId || pending) return;
+    await submit(async () => {
+      const id = await createDatePlanDraft(coupleId, uid);
+      setActivePlanId(id); setCourseEditorOpen(false); setShowSavedImport(false);
+      setPlanMobileView('list'); setAddingToPlan(false); setTab('courses');
+    }, '둘만의 데이트 초안을 만들었어요. 후보를 모아보세요.');
+  };
+  const addCandidateToPlan = async (input: Pick<DatePlanCandidate, 'name' | 'address' | 'latitude' | 'longitude' | 'category' | 'memo'> & { sourceSavedPlaceId?: string }) => {
+    if (!activePlanId || !coupleId || !uid || pending) return;
+    if (!input.name.trim() || !input.address.trim()) {
+      setMessage('지점 이름과 주소를 확인한 후 후보에 담아 주세요.');
+      return;
+    }
+    const duplicate = findPlanCandidateDuplicate(planCandidatesRef.current, input);
+    if (duplicate) {
+      setSelectedPlanCandidateId(duplicate.id); setTab('courses'); setPlanMobileView('list');
+      setCandidate(null); setAddingToPlan(false); clearMapFocus();
+      setMessage('이미 이번 데이트 후보에 있는 장소예요.');
+      return;
+    }
+    await submit(async () => {
+      const id = await addDatePlanCandidate(coupleId, activePlanId, uid, input);
+      setSelectedPlanCandidateId(id);
+      setPlanCandidates((current) => current.some((item) => item.id === id) ? current : [...current, {
+        ...input, id, createdBy: uid,
+      }]);
+      setTab('courses'); setPlanMobileView('list'); setCandidate(null); setAddingToPlan(false);
+      setShowSavedImport(false); clearMapFocus();
+    }, '이번 데이트의 후보에 담았어요. 전체 가고 싶은 곳에는 저장되지 않아요.');
+  };
+  const addSelectedToPlan = () => {
+    if (!candidate) return;
+    void addCandidateToPlan({
+      name: candidateName, address: candidateAddress,
+      latitude: candidate.latitude, longitude: candidate.longitude, category: candidateCategory, memo: candidateMemo,
+    });
+  };
+  const openPlanSearch = () => {
+    if (!activePlanId) return;
+    setAddingToPlan(true); setAddingToCourse(false); setCandidate(null); setPlanMobileView('map');
+    clearMapFocus(); setTab('search'); setMessage('지도의 결과 핀이나 가게 위치를 눌러 이번 데이트 후보에 담아 주세요.');
+  };
+  const savePlanField = (field: 'title' | 'date') => {
+    if (!activePlanId || !activePlan || !coupleId || pending) return;
+    const changed = field === 'title' ? planName !== activePlan.title : planDate !== activePlan.date;
+    if (!changed) {
+      if (field === 'title') setPlanEditingName(false);
+      else setPlanEditingDate(false);
+      return;
+    }
+    const value = field === 'title' ? planName : planDate;
+    void submit(() => updateDatePlanDraft(coupleId, activePlanId, { [field]: value }), '초안 정보를 저장했어요. 상대방에게도 표시돼요.');
+    if (field === 'title') setPlanEditingName(false);
+    else setPlanEditingDate(false);
+  };
+
   const saveCandidate = async (addToCurrentCourse = false) => {
     if (!candidate || !uid || !coupleId || pending) return;
     if (!candidateName.trim() || !candidateAddress.trim()) {
@@ -540,11 +611,13 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   }, [courseEditorOpen, tab]);
 
   const newCourse = () => {
+    setActivePlanId(''); setAddingToPlan(false);
     clearMapFocus();
     setCourseId(''); setCourseTitle(''); setCourseDate(''); setCoursePlaceIds([]); setCourseTimes({});
     setCoursePicking(false); setCourseEditorOpen(true); setAddingToCourse(false); setShowSchedule(false); setTab('courses');
   };
   const chooseCourse = (item: DateCourse) => {
+    setActivePlanId(''); setAddingToPlan(false);
     clearMapFocus();
     setCourseId(item.id); setCourseTitle(item.title); setCourseDate(item.date);
     setCoursePlaceIds([...item.placeIds]); setCourseTimes(courseTimesFromSaved(item.placeIds, item.timeSlots));
@@ -615,7 +688,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   return <div className="page date-map-page">
     <Header title="지도" />
     <div className="date-map-heading"><div><small>OUR DATE MAP</small><h1>우리의 데이트 지도 ♡</h1><p>가고 싶은 곳을 모아두고, 함께 갈 순서로 데이트 코스를 만들어요.</p></div></div>
-    <form className="date-map-search" onSubmit={(event) => { event.preventDefault(); if (tab === 'courses') setAddingToCourse(true); void search(query); }}>
+    <form className="date-map-search" onSubmit={(event) => { event.preventDefault(); if (tab === 'courses' && !activePlanId) setAddingToCourse(true); if (tab === 'courses' && activePlanId) setAddingToPlan(true); void search(query); }}>
       <Search size={19} aria-hidden="true"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="가게 이름, 주소, 지역 검색" aria-label="데이트 장소 검색"/>
       <button type="submit" disabled={searching}>{searching ? '검색 중…' : '검색'}</button>
     </form>
@@ -627,7 +700,11 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     {message && <p className="date-map-feedback" role="status">{message}</p>}
     {!connection && <p className="date-map-connect">두 사람이 함께 사용할 장소·코스 저장은 커플 연결 후 이용할 수 있어요. 지도 검색은 먼저 사용해 볼 수 있어요.</p>}
 
-    <div className="date-map-workspace">
+    {tab === 'courses' && activePlanId && <div className="date-plan-mobile-switch" role="group" aria-label="데이트 계획 화면 전환">
+      <button type="button" aria-pressed={planMobileView === 'map'} onClick={() => setPlanMobileView('map')}><MapPin size={15}/> 지도 보기</button>
+      <button type="button" aria-pressed={planMobileView === 'list'} onClick={() => setPlanMobileView('list')}><CalendarDays size={15}/> 후보 목록</button>
+    </div>}
+    <div className={tab === 'courses' && activePlanId ? 'date-map-workspace date-plan-v2-workspace date-plan-mobile-' + planMobileView : 'date-map-workspace'}>
       <section className="date-map-map" aria-label="데이트 장소 지도">
         <iframe ref={frame} title="단둘이 데이트 지도" src={MAP_HOST} referrerPolicy="strict-origin-when-cross-origin" onError={() => setMapError(true)} />
         {!mapReady && <div className="date-map-loading">{mapError ? '지도를 불러오지 못했어요. 네트워크 또는 지도 인증을 확인해 주세요.' : '네이버 지도를 불러오는 중이에요…'}</div>}
@@ -665,7 +742,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
         </div>}
         {tab === 'search' && candidate && <article ref={candidateCard} className="date-map-candidate" aria-label="선택한 장소 확인">
           <div className="date-map-candidate-header">
-            <div><h2>선택한 장소</h2><p>{addingToCourse ? '위치를 확인하고 편집 중인 코스에 담아요.' : '가고 싶은 곳으로 보관한 뒤 언제든 코스에 담을 수 있어요.'}</p></div>
+            <div><h2>선택한 장소</h2><p>{addingToPlan && activePlanId ? '이번 데이트 후보에 담아요. 전체 보관함에는 자동으로 저장되지 않아요.' : addingToCourse ? '위치를 확인하고 편집 중인 코스에 담아요.' : '가고 싶은 곳으로 보관한 뒤 언제든 코스에 담을 수 있어요.'}</p></div>
             <button type="button" className="date-map-candidate-close" aria-label="선택한 장소 닫기" onClick={() => { setCandidate(null); clearMapFocus(); }}><X size={18}/></button>
           </div>
           <div className="date-map-candidate-summary">
@@ -694,11 +771,13 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             <textarea value={candidateMemo} onChange={(e) => setCandidateMemo(e.target.value)} maxLength={1000} placeholder="예: 여기서 식사하고 근처 카페에 가기"/>
           </label>
           <p className="date-map-candidate-note">검색어: {candidateSearch} · 저장하기 전에 위치가 맞는지 확인해 주세요.</p>
-          <button className="date-map-primary date-map-candidate-submit" type="button" disabled={pending || !connection} onClick={() => void saveCandidate(addingToCourse)}><Plus size={17}/> {addingToCourse ? '현재 코스에 장소 추가' : '가고 싶은 곳에 저장'}</button>
+          {addingToPlan && activePlanId && <button className="date-map-primary date-map-candidate-submit" type="button" disabled={pending || !connection} onClick={addSelectedToPlan}><Plus size={17}/> 이번 데이트 후보에 담기</button>}
+          <button className={addingToPlan && activePlanId ? 'date-map-candidate-map-button date-plan-secondary-action' : 'date-map-primary date-map-candidate-submit'} type="button" disabled={pending || !connection} onClick={() => void saveCandidate(addingToCourse)}><Plus size={17}/> {addingToCourse ? '현재 코스에 장소 추가' : '가고 싶은 곳에 저장'}</button>
         </article>}
         {tab === 'places' && <>
           <div className="date-map-panel-header"><strong>우리의 가고 싶은 곳</strong><span>총 {places.length}곳</span></div>
           <p className="date-map-add-hint">둘이 가고 싶은 장소를 함께 모으는 보관함이에요. 코스에 담아도 여기에서 사라지지 않아요.</p>
+          {activePlanId && <p className="date-map-add-hint">현재 작성 중인 데이트 계획에도 장소를 가져올 수 있어요. 원본 보관함은 그대로 유지됩니다.</p>}
           <div className="date-map-status-filters" aria-label="코스 포함 여부">
             <button type="button" aria-pressed={placeStatus === 'all'} onClick={() => { clearMapFocus(); setSelectedId(''); setPlaceStatus('all'); }}>전체 {statusCounts.all}</button>
             <button type="button" aria-pressed={placeStatus === 'unassigned'} onClick={() => { clearMapFocus(); setSelectedId(''); setPlaceStatus('unassigned'); }}>코스 미배정 {statusCounts.unassigned}</button>
@@ -752,6 +831,10 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
               else { appendToCourse(selected.id); setMessage('장소를 추가했어요. 마지막에 코스 저장을 눌러 주세요.'); }
               setCourseEditorOpen(true); setTab('courses');
             }}>{courseId || coursePlaceIds.length ? '편집 중인 코스에 담기' : '새 코스에 담기'}</button>
+              {activePlanId && <button type="button" disabled={pending} onClick={() => void addCandidateToPlan({
+                name: selected.name, address: selected.address, latitude: selected.latitude, longitude: selected.longitude,
+                category: selected.category, memo: selected.memo, sourceSavedPlaceId: selected.id,
+              })}><Plus size={14}/> 이번 데이트 후보에 가져오기</button>}
               <button type="button" className="date-map-delete" disabled={pending} onClick={() => { if (window.confirm(courseUsage.has(selected.id)
                 ? `이 장소는 ${courseUsage.get(selected.id)}개 코스에서 사용 중이에요. 삭제하면 해당 코스에서 장소 정보가 사라질 수 있어요. 그래도 삭제할까요?`
                 : '가고 싶은 곳에서 이 장소를 삭제할까요?')) void submit(async () => { await deleteDatePlace(coupleId, selected.id); clearMapFocus(); setSelectedId(''); }, '장소를 삭제했어요.'); }}><Trash2 size={14}/> 장소 삭제</button></div>
