@@ -15,6 +15,7 @@ import { insideMapBounds, searchLocationPage, validMapBounds, type MapBounds } f
 import { fetchNaverDatePlaces } from '../../utils/naverLocalSearch';
 import { groupSavedPlaces, placeRegion } from '../../utils/placeRegions';
 import { matchesPlaceSearchIntent, parsePlaceSearchIntent } from '../../utils/placeSearchIntent.ts';
+import { deduplicatePlaceResults } from '../../utils/placeSearchDedup.ts';
 import './DateMapPage.css';
 
 type Category = DatePlace['category'];
@@ -166,9 +167,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       ? nationwideResults.current.results.filter((item) => insideMapBounds(item, activeBounds!)) : [];
 
     const received: { osm: LocationSearchResult[]; naver: LocationSearchResult[] } = { osm: [], naver: [] };
-    const unique = (items: LocationSearchResult[]) => items.filter((item, index, all) =>
-      all.findIndex((other) => Math.abs(other.latitude - item.latitude) < 0.00002
-        && Math.abs(other.longitude - item.longitude) < 0.00002) === index);
+    const unique = deduplicatePlaceResults;
     const combinedResults = () => unique([...matchedSaved, ...cached, ...received.naver, ...received.osm]);
     const publish = () => {
       if (sequence !== searchSequence.current) return;
