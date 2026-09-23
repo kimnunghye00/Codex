@@ -94,6 +94,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const frame = useRef<HTMLIFrameElement>(null);
   const queuedFocus = useRef<{ latitude: number; longitude: number; placeName: string; photoUrl?: string; address?: string } | null>(null);
   const panel = useRef<HTMLElement>(null);
+  const candidateCard = useRef<HTMLElement>(null);
   const courseDialog = useRef<HTMLElement>(null);
   const searchSequence = useRef(0);
   const searchAbort = useRef<AbortController | null>(null);
@@ -389,6 +390,16 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'set-pick-mode', enabled: tab === 'search' }, MAP_ORIGIN);
   }, [mapReady, picking, tab]);
 
+  useEffect(() => {
+    if (tab !== 'search' || !candidate) return;
+    // The confirmation form may sit below a long list of search results.
+    // Bring it into view after a map tap so the add-to-course action is visible.
+    const frame = window.requestAnimationFrame(() => {
+      candidateCard.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [candidate, tab]);
+
   const chooseResult = (item: LocationSearchResult) => {
     ++lookupSequence.current;
     setCandidate(item); setCandidateName(item.placeName); setCandidateAddress(item.address ?? '');
@@ -616,7 +627,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             </button>
           </div>}
         </div>}
-        {tab === 'search' && candidate && <article className="date-map-candidate" aria-label="선택한 장소 확인">
+        {tab === 'search' && candidate && <article ref={candidateCard} className="date-map-candidate" aria-label="선택한 장소 확인">
           <div className="date-map-candidate-header">
             <div><h2>선택한 장소</h2><p>{addingToCourse ? '위치를 확인하고 편집 중인 코스에 담아요.' : '가고 싶은 곳으로 보관한 뒤 언제든 코스에 담을 수 있어요.'}</p></div>
             <button type="button" className="date-map-candidate-close" aria-label="선택한 장소 닫기" onClick={() => { setCandidate(null); clearMapFocus(); }}><X size={18}/></button>
