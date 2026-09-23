@@ -347,17 +347,7 @@ service cloud.firestore {
           && request.resource.data.id == planId
           && request.resource.data.title is string && request.resource.data.title.size() <= 100
           && request.resource.data.date is string
-          && (request.resource.data.date == '' || request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}
-        allow read: if memberOf(coupleId);
-        allow create: if memberOf(coupleId)
-          && request.resource.data.ownerId == request.auth.uid;
-        allow update, delete: if memberOf(coupleId)
-          && resource.data.ownerId == request.auth.uid;
-      }
-    }
-  }
-}
-))
+          && (request.resource.data.date == '' || request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'))
           && request.resource.data.status == 'draft'
           && request.resource.data.schemaVersion == 2
           && request.resource.data.createdBy is string;
