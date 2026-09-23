@@ -4,9 +4,9 @@ import { matchesPlaceSearchIntent, parsePlaceSearchIntent } from './placeSearchI
 
 /** NAVER search uses a private client secret and runs only on our server. */
 export async function fetchNaverDatePlaces(
-  query: string, options: { endpoint: string; token: string; region?: string; bounds?: MapBounds },
+  query: string, options: { endpoint: string; token: string; region?: string; bounds?: MapBounds; signal?: AbortSignal },
 ): Promise<LocationSearchResult[]> {
-  const { endpoint, token, region = '', bounds } = options;
+  const { endpoint, token, region = '', bounds, signal } = options;
   if (!endpoint || !token || !query.trim()) return [];
   if (bounds && !validMapBounds(bounds)) throw new Error('Invalid map bounds');
   const url = new URL(endpoint, typeof window === 'undefined' ? 'https://danduli.web.app' : window.location.origin);
@@ -15,7 +15,7 @@ export async function fetchNaverDatePlaces(
   if (region) url.searchParams.set('region', region.trim().slice(0, 50));
   const response = await fetch(url.toString(), {
     headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' },
-    signal: AbortSignal.timeout(17000),
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(12_000)]) : AbortSignal.timeout(12_000),
   });
   if (!response.ok) throw new Error('Naver local search unavailable');
   const payload = await response.json() as { results?: LocationSearchResult[]; provider?: string };
