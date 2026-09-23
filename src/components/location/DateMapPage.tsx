@@ -18,6 +18,9 @@ import { groupSavedPlaces, placeRegion } from '../../utils/placeRegions';
 import { matchesPlaceSearchIntent, parsePlaceSearchIntent } from '../../utils/placeSearchIntent.ts';
 import { deduplicatePlaceResults } from '../../utils/placeSearchDedup.ts';
 import { matchClickedSearchPlace } from '../../utils/dateMapClick.ts';
+import { sameSearchPlace } from '../../utils/placeSearchDedup.ts';
+import { addDatePlanCandidate, createDatePlanDraft, subscribeDatePlanCandidates, subscribeDatePlanDrafts, updateDatePlanDraft, deleteDatePlanCandidate } from '../../lib/datePlanDrafts';
+import type { DatePlanCandidate, DatePlanDraft } from '../../lib/datePlanFoundation';
 import './DateMapPage.css';
 
 type Category = DatePlace['category'];
@@ -51,6 +54,14 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const coupleId = connection?.coupleId ?? '';
   const [places, setPlaces] = useState<DatePlace[]>([]);
   const [courses, setCourses] = useState<DateCourse[]>([]);
+  const [plans, setPlans] = useState<DatePlanDraft[]>([]);
+  const [activePlanId, setActivePlanId] = useState('');
+  const [planCandidates, setPlanCandidates] = useState<DatePlanCandidate[]>([]);
+  const [selectedPlanCandidateId, setSelectedPlanCandidateId] = useState('');
+  const [addingToPlan, setAddingToPlan] = useState(false);
+  const [showSavedImport, setShowSavedImport] = useState(false);
+  const [planName, setPlanName] = useState('');
+  const [planDate, setPlanDate] = useState('');
   const [tab, setTab] = useState<'search' | 'places' | 'courses'>('places');
   const [scope, setScope] = useState<'map' | 'nationwide'>('map');
   const [bounds, setBounds] = useState<MapBounds | null>(null);
@@ -111,6 +122,8 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   queryRef.current = query;
   const selected = places.find((item) => item.id === selectedId);
   const course = courses.find((item) => item.id === courseId);
+  const activePlan = plans.find((item) => item.id === activePlanId);
+  const selectedPlanCandidate = planCandidates.find((item) => item.id === selectedPlanCandidateId);
   // A bookmarked place remains in the shared wishlist after it is added
   // to a course. A course only references its stable place ID.
   const courseUsage = useMemo(() => {
@@ -133,15 +146,28 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const courseRegions = useMemo(() => groupSavedPlaces(places), [places]);
   const picked = pickedIds.filter((id) => places.some((item) => item.id === id));
   const searchedRegion = parsePlaceSearchIntent(candidateSearch).regionLabel;
-  const mappedPlaces = useMemo(() => tab === 'search' ? [] : placesForDateMap(tab === 'courses' ? places : visible, tab, coursePlaceIds), [places, visible, tab, coursePlaceIds]);
+  const mappedPlaces = useMemo(() => tab === 'search' || (tab === 'courses' && activePlanId)
+    ? [] : placesForDateMap(tab === 'courses' ? places : visible, tab, coursePlaceIds), [places, visible, tab, coursePlaceIds, activePlanId]);
 
   useEffect(() => {
-    setPlaces([]); setCourses([]); setPickedIds([]); setCoursePlaceIds([]); setSelectedId(''); setCourseId(''); setCourseTimes({}); setCoursePicking(false); setCourseEditorOpen(false); setAddingToCourse(false); setShowSchedule(false); setLikes([]); setOpinions([]);
+    setPlaces([]); setCourses([]); setPlans([]); setActivePlanId(''); setPlanCandidates([]); setSelectedPlanCandidateId(''); setAddingToPlan(false); setPickedIds([]); setCoursePlaceIds([]); setSelectedId(''); setCourseId(''); setCourseTimes({}); setCoursePicking(false); setCourseEditorOpen(false); setAddingToCourse(false); setShowSchedule(false); setLikes([]); setOpinions([]);
     if (!coupleId) return;
     const stopPlaces = subscribeDatePlaces(coupleId, setPlaces, (error) => setMessage(errorText(error)));
     const stopCourses = subscribeDateCourses(coupleId, setCourses, (error) => setMessage(errorText(error)));
-    return () => { stopPlaces(); stopCourses(); };
+    const stopPlans = subscribeDatePlanDrafts(coupleId, setPlans, (error) => setMessage(errorText(error)));
+    return () => { stopPlaces(); stopCourses(); stopPlans(); };
   }, [coupleId]);
+
+  useEffect(() => {
+    setPlanCandidates([]); setSelectedPlanCandidateId('');
+    if (!coupleId || !activePlanId) return;
+    return subscribeDatePlanCandidates(coupleId, activePlanId, setPlanCandidates, (error) => setMessage(errorText(error)));
+  }, [coupleId, activePlanId]);
+
+  useEffect(() => {
+    setPlanName(activePlan?.title ?? '');
+    setPlanDate(activePlan?.date ?? '');
+  }, [activePlanId, activePlan?.title, activePlan?.date]);
 
   useEffect(() => {
     setLikes([]); setOpinions([]); setOpinion('');
@@ -300,6 +326,11 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   }, [focusPlace]);
 
   const mapVisits = useMemo(() => [
+    ...(tab === 'courses' && activePlanId ? planCandidates.map((item) => ({
+      id: 'plan-candidate-' + item.id, latitude: item.latitude, longitude: item.longitude,
+      placeName: item.name, address: item.address,
+      arrivedAt: '2026-01-01T00:00:00.000Z', leftAt: '2026-01-01T00:00:00.000Z',
+    })) : []),
     ...mappedPlaces.map((item) => ({
       id: item.id, latitude: item.latitude, longitude: item.longitude, placeName: item.name,
       photoUrl: item.photoUrl, address: item.address,
@@ -314,7 +345,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       ? [{ id: 'search-manual', latitude: candidate.latitude, longitude: candidate.longitude,
         placeName: candidateName || candidate.placeName, arrivedAt: '2026-01-01T00:00:00.000Z', leftAt: '2026-01-01T00:00:00.000Z' }]
       : []),
-  ], [mappedPlaces, results, candidate, candidateName, tab]);
+  ], [mappedPlaces, results, candidate, candidateName, tab, activePlanId, planCandidates]);
   useEffect(() => {
     const timer = window.setTimeout(() => { if (!mapReady) setMapError(true); }, 12000);
     const receive = (event: MessageEvent<{ source?: string; type?: string; id?: string; latitude?: number; longitude?: number; bounds?: MapBounds }>) => {
@@ -322,6 +353,11 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       if (event.data.type === 'ready') { setMapReady(true); setMapError(false); frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'request-viewport' }, MAP_ORIGIN); }
       if (event.data.type === 'viewport-changed' && event.data.bounds && validMapBounds(event.data.bounds)) setBounds(event.data.bounds);
       if (event.data.type === 'saved-marker-selected' && typeof event.data.id === 'string') {
+        if (event.data.id.startsWith('plan-candidate-')) {
+          setSelectedPlanCandidateId(event.data.id.slice('plan-candidate-'.length));
+          panel.current?.scrollTo({ top: 0, behavior: 'smooth' });
+          return;
+        }
         setSelectedId(event.data.id); setTab((current) => current === 'search' ? 'places' : current);
         setCandidate(null);
         setMessage('');
@@ -377,7 +413,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   useEffect(() => {
     if (!mapReady) return;
     const target = frame.current?.contentWindow;
-    target?.postMessage({ source: 'route-map-parent', type: 'render', mode: 'date-plan', visits: mapVisits, keepViewport: true, connectStops: tab === 'courses', numbered: tab !== 'places' }, MAP_ORIGIN);
+    target?.postMessage({ source: 'route-map-parent', type: 'render', mode: 'date-plan', visits: mapVisits, keepViewport: true, connectStops: tab === 'courses' && !activePlanId, numbered: tab !== 'places' && !activePlanId }, MAP_ORIGIN);
     // If a result was selected before the iframe became ready, apply it after the initial render.
     if (queuedFocus.current && target) {
       target.postMessage({ source: 'route-map-parent', type: 'focus', showPopup: true, visit: queuedFocus.current }, MAP_ORIGIN);
