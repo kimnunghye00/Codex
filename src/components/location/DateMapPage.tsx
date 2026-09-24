@@ -8,7 +8,7 @@ import { addDatePlanCandidate, createDatePlanDraft, deleteDatePlanCandidate, rea
 import { isSameDatePlanPlace } from '../../lib/datePlanCandidates';
 import type { DatePlanDraft, DatePlanCandidate } from '../../lib/datePlanFoundation';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
-import { reverseGeocode, type LocationSearchResult } from '../../utils/location';
+import { reverseGeocode, reverseGeocodeMapRegion, type LocationSearchResult } from '../../utils/location';
 import {
   addDatePlace, addPlaceOpinion, deleteDateCourse, deleteDatePlace, deletePlaceOpinion,
   saveDateCourse, setPlaceLike, subscribeDateCourses, subscribeDatePlaces,
@@ -16,7 +16,7 @@ import {
   type DateCourse, type DatePlace, type PlaceOpinion,
 } from '../../lib/dateMap';
 import { insideMapBounds, searchLocationPage, validMapBounds, type MapBounds } from '../../utils/locationSearch';
-import { fetchNaverDatePlaces } from '../../utils/naverLocalSearch';
+import { fetchNaverDatePlaces, type NaverSearchCoverage } from '../../utils/naverLocalSearch';
 import { groupSavedPlaces, placeRegion } from '../../utils/placeRegions';
 import { matchesPlaceSearchIntent, parsePlaceSearchIntent } from '../../utils/placeSearchIntent.ts';
 import { deduplicatePlaceResults } from '../../utils/placeSearchDedup.ts';
@@ -80,6 +80,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const [candidate, setCandidate] = useState<LocationSearchResult | null>(null);
   const [manualMapCandidate, setManualMapCandidate] = useState(false);
   const [results, setResults] = useState<LocationSearchResult[]>([]);
+  const [searchCoverage, setSearchCoverage] = useState<NaverSearchCoverage | null>(null);
   const [picking, setPicking] = useState(false);
   const [candidateName, setCandidateName] = useState('');
   const [candidateAddress, setCandidateAddress] = useState('');
@@ -218,7 +219,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     ++lookupSequence.current;
     clearMapFocus(); setTab('search'); setSearching(true); setPicking(false); setMessage('');
     if (!more) {
-      setCandidate(null); setManualMapCandidate(false); setResults([]); setHasMore(false); setExcludedIds([]);
+      setCandidate(null); setManualMapCandidate(false); setResults([]); setSearchCoverage(null); setHasMore(false); setExcludedIds([]);
       if (intent.hasExplicitRegion) setScope('nationwide');
       setCandidateSearch(trimmed); setSearchedBounds(activeScope === 'map' ? activeBounds : null); setSearchedScope(activeScope);
     }
@@ -231,6 +232,13 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       ? nationwideResults.current.results.filter((item) => insideMapBounds(item, activeBounds!)) : [];
 
     const received: { osm: LocationSearchResult[]; naver: LocationSearchResult[] } = { osm: [], naver: [] };
+    const coverage: NaverSearchCoverage = { received: 0, valid: 0, inBounds: 0, matched: 0 };
+    const collectCoverage = (stats: NaverSearchCoverage) => {
+      coverage.received += stats.received;
+      coverage.valid += stats.valid;
+      coverage.inBounds += stats.inBounds;
+      coverage.matched += stats.matched;
+    };
     const unique = deduplicatePlaceResults;
     const combinedResults = () => unique([...matchedSaved, ...cached, ...received.naver, ...received.osm]);
     const publish = () => {
@@ -268,23 +276,37 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             if (memo && memo.key === regionKey && memo.expires > Date.now()) {
               region = memo.region;
             } else {
-              const address = await reverseGeocode(latitude, longitude);
+              // Reverse-geocoding's display label contains POI names and can
+              // omit the province. Use structured administrative fields instead.
+              region = await reverseGeocodeMapRegion(latitude, longitude, controller.signal);
               if (controller.signal.aborted) return [] as LocationSearchResult[];
-              if (address) {
-                const parsed = placeRegion(address);
-                region = parsed.province !== '지역 미분류' ? parsed.province : '';
-                if (parsed.district && parsed.district !== '시·군·구 미분류') region += ' ' + parsed.district;
-                // Reverse geocoding also provides the neighbourhood. A district-wide
-                // five-item API page often misses a branch in a small viewport.
-                const locality = address.split('·')[0]?.trim().split(/\s+/).at(-1) ?? '';
-                if (/^[가-힣]+(?:동|읍|면|리)$/.test(locality)) region += ' ' + locality;
-                region = region.trim();
-              }
               if (region) regionLookup.current = { key: regionKey, expires: Date.now() + 90_000, region };
             }
           }
           if (controller.signal.aborted) return [] as LocationSearchResult[];
-          return fetchNaverDatePlaces(trimmed, { endpoint: NAVER_LOCAL_SEARCH_URL, token, region, bounds: currentBounds, signal: controller.signal });
+          const options = { endpoint: NAVER_LOCAL_SEARCH_URL, token, bounds: currentBounds, signal: controller.signal, onCoverage: collectCoverage };
+          const primary = await fetchNaverDatePlaces(trimmed, { ...options, region });
+          if (primary.length || !currentBounds || controller.signal.aborted) return primary;
+          // A viewport can span more than one district, with the desired
+          // cinema near an edge while the centre geocodes to another dong.
+          // Only search extra areas after the primary search has zero visible hits.
+          const width = currentBounds.east - currentBounds.west;
+          const height = currentBounds.north - currentBounds.south;
+          if (width > 0.12 || height > 0.12) return primary;
+          const latitude = currentBounds.south + height * 0.25;
+          const points = [
+            { latitude, longitude: currentBounds.west + width * 0.12 },
+            { latitude, longitude: currentBounds.east - width * 0.12 },
+          ];
+          const extraRegions = await Promise.all(points.map((point) =>
+            reverseGeocodeMapRegion(point.latitude, point.longitude, controller.signal)));
+          if (controller.signal.aborted) return primary;
+          const distinct = [...new Set(extraRegions.filter((item) => item && item !== region))];
+          const nearby = await Promise.allSettled(distinct.map((item) =>
+            fetchNaverDatePlaces(trimmed, { ...options, region: item, focus: true })));
+          if (controller.signal.aborted) return primary;
+          return deduplicatePlaceResults([...primary, ...nearby.flatMap((item) =>
+            item.status === 'fulfilled' ? item.value : [])]);
         })().then((naverResults) => {
           received.naver = naverResults;
           publish();
@@ -295,6 +317,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       if (sequence !== searchSequence.current) return;
       if (osm.status === 'rejected' && naver.status === 'rejected') throw osm.reason;
       const combined = combinedResults();
+      if (!more) setSearchCoverage({ ...coverage });
       const naverUnavailable = Boolean(NAVER_LOCAL_SEARCH_URL && naver.status === 'rejected');
       if (activeScope === 'nationwide' && !more) nationwideResults.current = { query: trimmed, results: combined };
 
@@ -760,6 +783,10 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             <span className="date-map-result-number">{index + 1}</span><span><b>{item.placeName}</b><small>{item.address || '상세 주소 정보 없음'}</small></span>
           </button>)}
           {candidateSearch && <small>{searchedRegion ? `지역 조건: ${searchedRegion} · 다른 지역 지점 제외` : searchedScope === 'map' ? '검색 당시 지도 영역' : '전국'} · “{candidateSearch}”</small>}
+          {!searching && !results.length && searchCoverage && NAVER_LOCAL_SEARCH_URL && <p className="date-map-add-hint" role="status">
+            실제 검색 확인: 네이버 제공 {searchCoverage.received}건 · 좌표 유효 {searchCoverage.valid}건 · 현재 지도 안 {searchCoverage.inBounds}건 · 검색어 일치 {searchCoverage.matched}건.
+            {searchCoverage.received > 0 && searchCoverage.inBounds === 0 ? ' 검색 결과의 위치가 현재 지도 밖이어서 표시하지 않았어요.' : ' 지도에 인쇄된 업체명이 지역 검색 API 결과에 포함되지 않을 수 있어요.'}
+          </p>}
           {searchedRegion && !results.length && <button type="button" className="date-map-primary date-map-region-navigate" disabled={!mapReady || searching} onClick={() => void goToSearchedRegion()}>
             <MapPin size={15}/> {searchedRegion} 지도로 이동해 직접 선택
           </button>}

@@ -33,3 +33,29 @@ test('NAVER local search refuses non-HTTPS endpoints and unexpected response sha
     await assert.rejects(fetchNaverDatePlaces('카페', { endpoint: 'https://example.com/api/search', token: 'x' }));
   } finally { globalThis.fetch = oldFetch; }
 });
+
+
+test('provider diagnostics distinguish an out-of-map CGV from an unavailable search API', async () => {
+  const before = globalThis.fetch;
+  let target = '';
+  globalThis.fetch = async (url) => {
+    target = String(url);
+    return new Response(JSON.stringify({ provider: 'naver-local', results: [
+      { latitude: 37.534, longitude: 127.094, placeName: 'CGV 강변', address: '서울 광진구' },
+      { latitude: 37.570, longitude: 126.980, placeName: 'CGV 타지역', address: '서울 종로구' },
+    ] }));
+  };
+  try {
+    let stats = { received: 0, valid: 0, inBounds: 0, matched: 0 };
+    const places = await fetchNaverDatePlaces('CGV', {
+      endpoint: 'https://asia-northeast3-example.cloudfunctions.net/searchDatePlaces',
+      token: 'test-token', region: '서울 광진구 구의3동', focus: true,
+      bounds: { west: 127.08, south: 37.53, east: 127.10, north: 37.54 },
+      onCoverage: (coverage) => { stats = coverage; },
+    });
+    assert.deepEqual(places.map((item) => item.placeName), ['CGV 강변']);
+    assert.deepEqual(stats, { received: 2, valid: 2, inBounds: 1, matched: 1 });
+    assert.equal(new URL(target).searchParams.get('region'), '서울 광진구 구의3동');
+    assert.equal(new URL(target).searchParams.get('focus'), '1');
+  } finally { globalThis.fetch = before; }
+});

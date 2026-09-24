@@ -1,5 +1,6 @@
 import { signalPersistentStateChange } from './persistenceSignal';
 import { searchLocations } from './locationSearch';
+import { searchRegionFromAddress } from './mapSearchRegion';
 
 export type LocationVisit = {
   id: string;
@@ -155,6 +156,28 @@ export async function reverseGeocode(latitude: number, longitude: number): Promi
     return detailedKoreanPlaceName(data) || undefined;
   } catch {
     return undefined;
+  }
+}
+
+/** Full administrative name for in-map local search, never inferred from a POI label. */
+export async function reverseGeocodeMapRegion(latitude: number, longitude: number, signal?: AbortSignal): Promise<string> {
+  try {
+    const url = new URL('https://nominatim.openstreetmap.org/reverse');
+    url.search = new URLSearchParams({
+      format: 'jsonv2', lat: String(latitude), lon: String(longitude),
+      zoom: '18', addressdetails: '1', 'accept-language': 'ko',
+    }).toString();
+    const timeout = AbortSignal.timeout(5000);
+    const response = await fetch(url.toString(), {
+      headers: { Accept: 'application/json' },
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+    });
+    if (!response.ok) return '';
+    const data = await response.json() as { address?: Record<string, string> };
+    return searchRegionFromAddress(data.address ?? {});
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    return '';
   }
 }
 
