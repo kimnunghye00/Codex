@@ -843,7 +843,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             <span className="date-map-result-number">{index + 1}</span><span><b>{item.placeName}</b><small>{item.address || '상세 주소 정보 없음'}</small></span>
           </button>)}
           {candidateSearch && <small>{searchedRegion ? `지역 조건: ${searchedRegion} · 다른 지역 지점 제외` : searchedScope === 'map' ? '검색 당시 지도 영역' : '전국'} · “{candidateSearch}”</small>}
-          {mapMovedSinceSearch && !searching && <p className="date-map-add-hint" role="status">지도가 이동했어요. 현재 화면 기준 결과를 보려면 지도 위 「이 지역에서 다시 검색」을 눌러 주세요.</p>
+          {mapMovedSinceSearch && !searching && <p className="date-map-add-hint" role="status">지도가 이동했어요. 현재 화면 기준 결과를 보려면 지도 위 「이 지역에서 다시 검색」을 눌러 주세요.</p>}
           {!searching && !shownResults.length && searchCoverage && NAVER_LOCAL_SEARCH_URL && <p className="date-map-add-hint" role="status">
             실제 검색 확인: 네이버 제공 {searchCoverage.received}건 · 좌표 유효 {searchCoverage.valid}건 · 현재 지도 안 {searchCoverage.inBounds}건 · 검색어 일치 {searchCoverage.matched}건.
             {searchCoverage.received > 0 && searchCoverage.inBounds === 0 ? ' 검색 결과의 위치가 현재 지도 밖이어서 표시하지 않았어요.' : ' 지도에 인쇄된 업체명이 지역 검색 API 결과에 포함되지 않을 수 있어요.'}
