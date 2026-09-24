@@ -27,7 +27,7 @@ type Category = DatePlace['category'];
 const CATEGORIES: Category[] = ['맛집', '카페', '놀거리', '여행', '기타'];
 const MAP_ORIGIN = typeof window !== 'undefined' && window.location.hostname === 'danduli.web.app'
   ? 'https://danduli.web.app' : 'https://meluni-f4e00.web.app';
-const MAP_HOST = `${MAP_ORIGIN}/naver-map-host.html?v=16`;
+const MAP_HOST = `${MAP_ORIGIN}/naver-map-host.html?v=17`;
 const ALL = '전체';
 // This URL is enabled only after the server has its own NAVER Search ID and secret.
 const NAVER_LOCAL_SEARCH_URL = String(import.meta.env.VITE_NAVER_LOCAL_SEARCH_URL || '').trim();
