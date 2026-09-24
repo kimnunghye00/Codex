@@ -78,6 +78,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [candidate, setCandidate] = useState<LocationSearchResult | null>(null);
+  const [manualMapCandidate, setManualMapCandidate] = useState(false);
   const [results, setResults] = useState<LocationSearchResult[]>([]);
   const [picking, setPicking] = useState(false);
   const [candidateName, setCandidateName] = useState('');
@@ -217,7 +218,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     ++lookupSequence.current;
     clearMapFocus(); setTab('search'); setSearching(true); setPicking(false); setMessage('');
     if (!more) {
-      setCandidate(null); setResults([]); setHasMore(false); setExcludedIds([]);
+      setCandidate(null); setManualMapCandidate(false); setResults([]); setHasMore(false); setExcludedIds([]);
       if (intent.hasExplicitRegion) setScope('nationwide');
       setCandidateSearch(trimmed); setSearchedBounds(activeScope === 'map' ? activeBounds : null); setSearchedScope(activeScope);
     }
@@ -294,9 +295,12 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       if (sequence !== searchSequence.current) return;
       if (osm.status === 'rejected' && naver.status === 'rejected') throw osm.reason;
       const combined = combinedResults();
+      const naverUnavailable = Boolean(NAVER_LOCAL_SEARCH_URL && naver.status === 'rejected');
       if (activeScope === 'nationwide' && !more) nationwideResults.current = { query: trimmed, results: combined };
 
-      if (!combined.length) setMessage(more ? '추가 검색 결과가 없어요.' : intent.hasExplicitRegion
+      if (!combined.length) setMessage(naverUnavailable
+        ? '네이버 지역 검색을 불러오지 못했어요. 지도에 보이는 업체도 목록에서 빠질 수 있어요. 잠시 후 다시 검색하거나 지도에서 지점을 직접 선택해 주세요.'
+        : more ? '추가 검색 결과가 없어요.' : intent.hasExplicitRegion
         ? `${intent.regionLabel}와 일치하는 지점이 검색 데이터에 없어요. 다른 지역의 동명 지점은 표시하지 않았어요. 아래 버튼으로 ${intent.regionLabel} 지도에 이동해 직접 선택할 수 있어요.`
         : activeScope === 'map'
           ? '현재 검색 데이터에는 지도 안에 일치하는 장소가 없어요. 네이버 지도에 보이는 가게와 별도로 수집되는 데이터이므로 직접 위치를 선택하거나 상호명과 지역명을 함께 검색해 주세요.'
@@ -386,7 +390,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
         const found = resultsRef.current[index];
         if (found) {
           ++lookupSequence.current;
-          setCandidate(found); setCandidateName(found.placeName);
+          setCandidate(found); setManualMapCandidate(false); setCandidateName(found.placeName);
           setCandidateAddress(found.address ?? '');
           setCandidateSearch(queryRef.current.trim());
           setPicking(false); setMessage('');
@@ -405,12 +409,13 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
         if (near) {
           // An independently searched place can supply its verified name and
           // location. A base-map label cannot be read through this click event.
-          setCandidate(near); setCandidateName(near.placeName);
+          setCandidate(near); setManualMapCandidate(false); setCandidateName(near.placeName);
           setCandidateAddress(near.address ?? ''); setCandidateSearch(searchName || near.placeName);
           setMessage('검색 결과의 지점을 선택했어요. 이름과 주소를 확인하고 추가해 주세요.');
           mapFocus(near);
         } else {
           setCandidate({ latitude, longitude, placeName: searchName || '선택한 위치' });
+          setManualMapCandidate(true);
           setCandidateName(searchName); setCandidateAddress('');
           setCandidateSearch(searchName);
           setMessage('지도에서 위치를 선택했어요. 지도에 표시된 가게 이름은 자동으로 확인할 수 없으니 이름과 주소를 확인해 주세요.');
@@ -464,7 +469,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
 
   const chooseResult = (item: LocationSearchResult) => {
     ++lookupSequence.current;
-    setCandidate(item); setCandidateName(item.placeName); setCandidateAddress(item.address ?? '');
+    setCandidate(item); setManualMapCandidate(false); setCandidateName(item.placeName); setCandidateAddress(item.address ?? '');
     setCandidateSearch(query.trim()); setPicking(false); setMessage('');
     mapFocus(item);
   };
