@@ -133,9 +133,9 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   }, []);
   // A point returned for a prior viewport must never appear as a current-map
   // result. Use the latest iframe rectangle even before React processes state.
-  const shownResults = searchedScope === 'map' && bounds
+  const shownResults = useMemo(() => searchedScope === 'map' && bounds
     ? results.filter((item) => insideMapBounds(item, bounds))
-    : results;
+    : results, [results, searchedScope, bounds]);
   const mapMovedSinceSearch = searchedScope === 'map' && searchedBounds && bounds
     ? !sameMapBounds(searchedBounds, bounds) : false;
   resultsRef.current = shownResults;
