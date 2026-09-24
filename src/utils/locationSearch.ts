@@ -83,7 +83,8 @@ async function overpassSearch(query: string, bounds: MapBounds, signal?: AbortSi
   if (width > 0.5 || height > 0.5 || width <= 0 || height <= 0) return [];
   const escaped = JSON.stringify(escapeOverpassRegex(query.trim().replace(/\s+/g, ' ').slice(0, 80)));
   const bbox = [bounds.south, bounds.west, bounds.north, bounds.east].join(',');
-  const statement = `[out:json][timeout:9];(nwr["name"~${escaped},i](${bbox});nwr["name:ko"~${escaped},i](${bbox}););out center 40;`;
+  // Some cinema POIs are indexed by brand=CGV rather than name=CGV.
+  const statement = `[out:json][timeout:9];(nwr["name"~${escaped},i](${bbox});nwr["name:ko"~${escaped},i](${bbox});nwr["name:en"~${escaped},i](${bbox});nwr["brand"~${escaped},i](${bbox}););out center 60;`;
   const response = await fetch('https://overpass-api.de/api/interpreter', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8', Accept: 'application/json' },
@@ -98,14 +99,18 @@ async function overpassSearch(query: string, bounds: MapBounds, signal?: AbortSi
   const results: LocationSearchResult[] = [];
   for (const row of data.elements) {
     const latitude = Number(row.lat ?? row.center?.lat), longitude = Number(row.lon ?? row.center?.lon);
-    const name = row.tags?.['name:ko'] || row.tags?.name || '';
-    if (!name.replace(/\s+/g, '').toLocaleLowerCase('ko-KR').includes(normalizedQuery)) continue;
+    const name = row.tags?.['name:ko'] || row.tags?.name || row.tags?.['name:en'] || '';
+    const brand = row.tags?.brand || '';
+    const nameMatches = name.replace(/\s+/g, '').toLocaleLowerCase('ko-KR').includes(normalizedQuery);
+    const brandMatches = brand.replace(/\s+/g, '').toLocaleLowerCase('ko-KR').includes(normalizedQuery);
+    if (!nameMatches && !brandMatches) continue;
+    const displayName = nameMatches ? name : name ? brand + ' · ' + name : brand;
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !insideMapBounds({ latitude, longitude }, bounds)) continue;
     const key = coordinateKey({ latitude, longitude });
     if (unique.has(key)) continue;
     unique.add(key);
     const address = [row.tags?.['addr:full'], row.tags?.['addr:street'], row.tags?.['addr:housenumber'], row.tags?.['addr:city']].filter(Boolean).join(' ').trim();
-    results.push({ latitude, longitude, placeName: name, address: address || '지도에서 정확한 위치를 확인해 주세요.' });
+    results.push({ latitude, longitude, placeName: displayName, address: address || '지도에서 정확한 위치를 확인해 주세요.' });
   }
   return results;
 }
