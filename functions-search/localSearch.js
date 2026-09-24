@@ -6,6 +6,7 @@
 const { getAuth } = require('firebase-admin/auth');
 const { defineSecret } = require('firebase-functions/params');
 const { onRequest } = require('firebase-functions/v2/https');
+const { buildLocalSearchQueries } = require('./localSearchQueries.cjs');
 
 const naverId = defineSecret('NAVER_LOCAL_SEARCH_ID');
 const naverSecret = defineSecret('NAVER_LOCAL_SEARCH_SECRET');
@@ -57,18 +58,11 @@ exports.searchDatePlaces = onRequest({
   const region = typeof req.query.region === 'string' ? req.query.region.trim() : '';
   if (!query || query.length > 100 || region.length > 50) return sendJson(res, 400, { error: 'invalid-query' });
   if (!naverId.value() || !naverSecret.value()) return sendJson(res, 503, { error: 'search-not-configured' });
-  // Search the smallest locality first: each NAVER response contains at most
-  // five businesses, so a district-wide page can omit the visible branch.
-  const regionParts = region.split(/\s+/).filter(Boolean);
-  const locality = regionParts.at(-1);
-  const queries = [...new Set([
-    regionParts.length > 2 ? locality + ' ' + query : '',
-    region ? region + ' ' + query : '',
-    query,
-  ].filter(Boolean))].slice(0, 3);
-  // Independent locality, district, and name searches run concurrently.
-  // Preserve their priority order when merging, so the visible branch wins
-  // over similarly named businesses elsewhere.
+  // One broad query has only five results. Search both locality- and district-
+  // first variants so a nearby CGV branch is not displaced by nationwide CGVs.
+  const queries = buildLocalSearchQueries(query, region);
+  // Independent nearby and name searches run concurrently. Preserve local
+  // priority when merging. The client will still require actual map bounds.
   const responses = await Promise.allSettled(queries.map(async (text) => {
     const url = new URL('https://naverapihub.apigw.ntruss.com/search/v1/local');
     url.search = new URLSearchParams({ query: text, display: '5', start: '1', sort: 'random', format: 'json' }).toString();
@@ -99,5 +93,5 @@ exports.searchDatePlaces = onRequest({
     }
   }
   if (!successfulQueries) return sendJson(res, 502, { error: 'search-provider-unavailable' });
-  return sendJson(res, 200, { results, provider: 'naver-local', pageSizeLimit: 5 });
+  return sendJson(res, 200, { results, provider: 'naver-local', pageSizeLimit: 5, queryVariants: queries.length });
 });

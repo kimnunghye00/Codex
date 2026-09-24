@@ -78,6 +78,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [candidate, setCandidate] = useState<LocationSearchResult | null>(null);
+  const [manualMapCandidate, setManualMapCandidate] = useState(false);
   const [results, setResults] = useState<LocationSearchResult[]>([]);
   const [picking, setPicking] = useState(false);
   const [candidateName, setCandidateName] = useState('');
@@ -217,7 +218,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     ++lookupSequence.current;
     clearMapFocus(); setTab('search'); setSearching(true); setPicking(false); setMessage('');
     if (!more) {
-      setCandidate(null); setResults([]); setHasMore(false); setExcludedIds([]);
+      setCandidate(null); setManualMapCandidate(false); setResults([]); setHasMore(false); setExcludedIds([]);
       if (intent.hasExplicitRegion) setScope('nationwide');
       setCandidateSearch(trimmed); setSearchedBounds(activeScope === 'map' ? activeBounds : null); setSearchedScope(activeScope);
     }
@@ -294,9 +295,12 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       if (sequence !== searchSequence.current) return;
       if (osm.status === 'rejected' && naver.status === 'rejected') throw osm.reason;
       const combined = combinedResults();
+      const naverUnavailable = Boolean(NAVER_LOCAL_SEARCH_URL && naver.status === 'rejected');
       if (activeScope === 'nationwide' && !more) nationwideResults.current = { query: trimmed, results: combined };
 
-      if (!combined.length) setMessage(more ? '추가 검색 결과가 없어요.' : intent.hasExplicitRegion
+      if (!combined.length) setMessage(naverUnavailable
+        ? '네이버 지역 검색을 불러오지 못했어요. 지도에 보이는 업체도 목록에서 빠질 수 있어요. 잠시 후 다시 검색하거나 지도에서 지점을 직접 선택해 주세요.'
+        : more ? '추가 검색 결과가 없어요.' : intent.hasExplicitRegion
         ? `${intent.regionLabel}와 일치하는 지점이 검색 데이터에 없어요. 다른 지역의 동명 지점은 표시하지 않았어요. 아래 버튼으로 ${intent.regionLabel} 지도에 이동해 직접 선택할 수 있어요.`
         : activeScope === 'map'
           ? '현재 검색 데이터에는 지도 안에 일치하는 장소가 없어요. 네이버 지도에 보이는 가게와 별도로 수집되는 데이터이므로 직접 위치를 선택하거나 상호명과 지역명을 함께 검색해 주세요.'
@@ -386,7 +390,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
         const found = resultsRef.current[index];
         if (found) {
           ++lookupSequence.current;
-          setCandidate(found); setCandidateName(found.placeName);
+          setCandidate(found); setManualMapCandidate(false); setCandidateName(found.placeName);
           setCandidateAddress(found.address ?? '');
           setCandidateSearch(queryRef.current.trim());
           setPicking(false); setMessage('');
@@ -405,12 +409,13 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
         if (near) {
           // An independently searched place can supply its verified name and
           // location. A base-map label cannot be read through this click event.
-          setCandidate(near); setCandidateName(near.placeName);
+          setCandidate(near); setManualMapCandidate(false); setCandidateName(near.placeName);
           setCandidateAddress(near.address ?? ''); setCandidateSearch(searchName || near.placeName);
           setMessage('검색 결과의 지점을 선택했어요. 이름과 주소를 확인하고 추가해 주세요.');
           mapFocus(near);
         } else {
           setCandidate({ latitude, longitude, placeName: searchName || '선택한 위치' });
+          setManualMapCandidate(true);
           setCandidateName(searchName); setCandidateAddress('');
           setCandidateSearch(searchName);
           setMessage('지도에서 위치를 선택했어요. 지도에 표시된 가게 이름은 자동으로 확인할 수 없으니 이름과 주소를 확인해 주세요.');
@@ -464,7 +469,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
 
   const chooseResult = (item: LocationSearchResult) => {
     ++lookupSequence.current;
-    setCandidate(item); setCandidateName(item.placeName); setCandidateAddress(item.address ?? '');
+    setCandidate(item); setManualMapCandidate(false); setCandidateName(item.placeName); setCandidateAddress(item.address ?? '');
     setCandidateSearch(query.trim()); setPicking(false); setMessage('');
     mapFocus(item);
   };
@@ -743,8 +748,15 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
         </div>
         <button className="date-map-view-all" type="button" disabled={!mapReady || !mapVisits.length} onClick={() => { clearMapFocus(); frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'fit-visits' }, MAP_ORIGIN); }}>{tab === 'courses' ? '코스 전체 지도에서 보기' : tab === 'plans' ? '후보 전체 지도에서 보기' : '목록 전체 지도에서 보기'}</button>
         {tab === 'search' && <div className="date-map-search-results">
-          <div className="date-map-panel-header"><strong>검색 결과 {results.length}곳</strong><button type="button" onClick={() => { setPicking((v) => !v); setMessage(''); }} disabled={!mapReady}>{picking ? '선택 안내 닫기' : '지도에서 직접 위치 선택'}</button></div>
-          {results.map((item, index) => <button key={`branch-${index}`} type="button" className={candidate === item ? 'date-map-branch active' : 'date-map-branch'} onClick={() => chooseResult(item)}>
+          <div className="date-map-panel-header"><strong>검색 결과 {results.length + (manualMapCandidate && candidate ? 1 : 0)}곳</strong><button type="button" onClick={() => { setPicking((v) => !v); setMessage(''); }} disabled={!mapReady}>{picking ? '선택 안내 닫기' : '지도에서 직접 위치 선택'}</button></div>
+          {manualMapCandidate && candidate && <button type="button" className="date-map-branch active" onClick={() => {
+             mapFocus({ ...candidate, placeName: candidateName || candidate.placeName, address: candidateAddress });
+             candidateCard.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+           }}>
+             <span className="date-map-result-number">✓</span><span><b>{candidateName || candidate.placeName} · 지도에서 지정</b>
+               <small>{candidateAddress || '주소 확인 중'} · 검색 API가 확인한 지점이 아니므로 상호와 주소를 확인해 주세요.</small></span>
+           </button>}
+           {results.map((item, index) => <button key={`branch-${index}`} type="button" className={candidate === item ? 'date-map-branch active' : 'date-map-branch'} onClick={() => chooseResult(item)}>
             <span className="date-map-result-number">{index + 1}</span><span><b>{item.placeName}</b><small>{item.address || '상세 주소 정보 없음'}</small></span>
           </button>)}
           {candidateSearch && <small>{searchedRegion ? `지역 조건: ${searchedRegion} · 다른 지역 지점 제외` : searchedScope === 'map' ? '검색 당시 지도 영역' : '전국'} · “{candidateSearch}”</small>}
@@ -758,8 +770,8 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
           <p className="date-map-pick-hint">지도에서 검색 결과 핀을 누르거나, 원하는 가게가 있는 위치를 직접 눌러 선택할 수 있어요. 검색 결과에 없는 가게는 상호명과 주소를 확인한 뒤 추가해 주세요.</p>
           {picking && <p className="date-map-add-hint" role="status">지도에 보이는 가게 글씨 자체에서 이름을 불러올 수는 없어요. 검색어를 입력한 뒤 해당 위치를 선택하면 편리해요.</p>}
           {!results.length && !candidate && !picking && <div className="date-map-empty date-map-empty-actions">
-            <p>원하는 가게가 지도에 보이나요? 해당 위치를 눌러 이름과 주소를 확인한 다음 저장할 수 있어요.</p>
-            <button type="button" className="date-map-primary" disabled={!mapReady} onClick={() => { setPicking(true); setMessage('지도에서 가게 위치를 눌러 주세요. 상호와 주소를 확인한 뒤 저장할 수 있어요.'); }}>
+                         <p>지도에는 {query.trim() ? '“' + query.trim() + '”' : '원하는 가게'}가 보이나요? 지도에 표시된 상호가 검색 API에는 빠질 수 있어요. 실제 지점을 지도에서 눌러 이름과 주소를 확인한 뒤 후보로 담을 수 있어요.</p>
+            <button type="button" className="date-map-primary" disabled={!mapReady} onClick={() => { setPicking(true); setMessage('지도에 보이는 ' + (query.trim() || '가게') + ' 지점을 눌러 주세요. 상호와 주소를 확인한 뒤 후보로 담을 수 있어요.'); }}>
               <MapPin size={15}/> 지도에서 위치 선택하기
             </button>
           </div>}
@@ -794,7 +806,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
           <label className="date-map-candidate-field date-map-candidate-memo">함께 가고 싶은 이유나 메모 <span>(선택)</span>
             <textarea value={candidateMemo} onChange={(e) => setCandidateMemo(e.target.value)} maxLength={1000} placeholder="예: 여기서 식사하고 근처 카페에 가기"/>
           </label>
-          <p className="date-map-candidate-note">검색어: {candidateSearch} · 저장하기 전에 위치가 맞는지 확인해 주세요.</p>
+                     <p className="date-map-candidate-note">{manualMapCandidate ? '지도에서 직접 지정한 위치예요. 검색 API가 확인한 업체가 아니므로 지점 이름과 주소가 정확한지 확인해 주세요.' : '검색어: ' + candidateSearch + ' · 저장하기 전에 위치가 맞는지 확인해 주세요.'}</p>
           <button className="date-map-primary date-map-candidate-submit" type="button" disabled={pending || !connection} onClick={() => void (addingToPlan && activePlan ? savePlanCandidate() : saveCandidate(addingToCourse))}><Plus size={17}/> {addingToPlan && activePlan ? '현재 데이트 후보에 담기' : addingToCourse ? '현재 코스에 장소 추가' : '가고 싶은 곳에 저장'}</button>
         </article>}
         {tab === 'places' && <>
