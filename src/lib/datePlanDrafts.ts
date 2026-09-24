@@ -1,6 +1,7 @@
-import { collection, deleteDoc, doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDocs, onSnapshot, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import type { DatePlanDraft, DatePlanCandidate } from './datePlanFoundation';
+import { datePlanCandidateId, isSameDatePlanPlace } from './datePlanCandidates';
 
 const planCollection = (coupleId: string) => collection(db, 'couples', coupleId, 'datePlans');
 const candidateCollection = (coupleId: string, planId: string) =>
@@ -58,7 +59,13 @@ export async function addDatePlanCandidate(
   input: Pick<DatePlanCandidate, 'name' | 'address' | 'latitude' | 'longitude' | 'category' | 'memo'> &
     { sourceSavedPlaceId?: string },
 ) {
-  const ref = doc(candidateCollection(coupleId, planId));
+  const candidates = candidateCollection(coupleId, planId);
+  // The existing snapshot covers legacy random IDs and slightly different provider coordinates.
+  // Do not write anything into the global datePlaces wishlist.
+  const existing = await getDocs(candidates);
+  const duplicate = existing.docs.find((item) => isSameDatePlanPlace(item.data() as DatePlanCandidate, input));
+  if (duplicate) return duplicate.id;
+  const ref = doc(candidates, datePlanCandidateId(input));
   const payload = {
     id: ref.id,
     name: input.name.trim().slice(0, 120),
@@ -72,7 +79,11 @@ export async function addDatePlanCandidate(
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
-  await setDoc(ref, payload);
+  // An identical concurrent write by the other partner must not replace its author or note.
+  await runTransaction(db, async (transaction) => {
+    const found = await transaction.get(ref);
+    if (!found.exists()) transaction.set(ref, payload);
+  });
   return ref.id;
 }
 
