@@ -818,6 +818,70 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
                 : '가고 싶은 곳에서 이 장소를 삭제할까요?')) void submit(async () => { await deleteDatePlace(coupleId, selected.id); clearMapFocus(); setSelectedId(''); }, '장소를 삭제했어요.'); }}><Trash2 size={14}/> 장소 삭제</button></div>
           </article>}
         </>}
+        {tab === 'plans' && <div className="date-map-plan-panel">
+          <div className="date-map-panel-header">
+            <strong>함께 만드는 데이트</strong>
+            <button type="button" disabled={!connection || !uid || pending} onClick={() => void submit(async () => {
+              const id = await createDatePlanDraft(coupleId, uid);
+              setActivePlanId(id); setPlanCandidates([]); setMobilePlanView('list');
+            }, '새로운 공동 데이트 초안을 만들었어요.')}>
+              <Plus size={14}/> 새 데이트
+            </button>
+          </div>
+          <p className="date-map-add-hint">완성되지 않아도 서로 볼 수 있는 공동 초안이에요. 기존에 저장한 코스는 '기존 코스'에 그대로 남아요.</p>
+          <div className="date-map-plan-choices" aria-label="공동 데이트 초안">
+            {datePlans.map((item) => <button key={item.id} type="button" aria-pressed={activePlanId === item.id}
+              className={activePlanId === item.id ? 'date-map-course-choice active' : 'date-map-course-choice'}
+              onClick={() => { clearMapFocus(); setActivePlanId(item.id); setPlanCandidates([]); setMobilePlanView('list'); setMessage(''); }}>
+              <CalendarDays size={17}/><span><b>{item.title || '이름 없는 데이트'}</b><small>{item.date || '날짜 미정'} · 공동 초안</small></span>
+            </button>)}
+          </div>
+          {!datePlans.length && <p className="date-map-empty">아직 공동 데이트 초안이 없어요. '새 데이트'를 눌러 시작해 보세요.</p>}
+          {activePlan && <div className="date-map-plan-editor">
+            <div className="date-map-panel-header"><strong>데이트 정보</strong><span>두 사람에게 공유됨</span></div>
+            <label className="date-map-label">데이트 이름
+              <input maxLength={100} value={planTitle} onChange={(event) => setPlanTitle(event.target.value)} placeholder="예: 부산 맛집 데이트"/>
+            </label>
+            <label className="date-map-label">데이트 날짜 (선택)
+              <input type="date" value={planDate} onChange={(event) => setPlanDate(event.target.value)}/>
+            </label>
+            <button type="button" className="date-map-primary" disabled={pending || (planTitle.trim() === activePlan.title && planDate === activePlan.date)}
+              onClick={() => void savePlanDetails()}>초안 정보 저장</button>
+            <div className="date-map-panel-header"><strong>이 데이트의 장소 후보</strong><span>{planCandidates.length}곳</span></div>
+            <div className="date-map-plan-actions">
+              <button type="button" className="date-map-primary" onClick={startPlanSearch}><Search size={15}/> 장소 검색해서 담기</button>
+            </div>
+            {!planCandidates.length && <p className="date-map-empty">아직 후보가 없어요. 장소를 검색하거나 기존 '가고 싶은 곳'에서 담아 보세요.</p>}
+            {planCandidates.map((item) => <article key={item.id} className={selectedPlanCandidateId === item.id ? 'date-map-plan-candidate active' : 'date-map-plan-candidate'}>
+              <button type="button" className="date-map-plan-location" onClick={() => {
+                setSelectedPlanCandidateId(item.id); mapFocus({ ...item, placeName: item.name }); setMobilePlanView('map');
+              }}><MapPin size={17}/><span><b>{item.name}</b><small>{item.category} · {item.address}</small></span></button>
+              {item.memo && <p>{item.memo}</p>}
+              <button type="button" className="date-map-plan-remove" disabled={pending} onClick={() => {
+                if (!window.confirm(item.name + '을(를) 이 데이트의 후보에서 제거할까요?')) return;
+                void submit(async () => {
+                  await deleteDatePlanCandidate(coupleId, activePlan.id, item.id);
+                  setSelectedPlanCandidateId((current) => current === item.id ? '' : current);
+                  clearMapFocus();
+                }, '이 데이트의 후보에서 제거했어요. 전체 보관함은 그대로예요.');
+              }}><Trash2 size={13}/> 후보 제거</button>
+            </article>)}
+            <details className="date-map-plan-saved">
+              <summary>가고 싶은 곳에서 후보 담기 ({places.length}곳) <ChevronDown size={15}/></summary>
+              {!places.length && <p className="date-map-empty">보관함에 저장한 장소가 없어요. 검색해서 직접 후보로 담을 수 있어요.</p>}
+              {places.map((item) => {
+                const included = planCandidates.some((current) => isSameDatePlanPlace(current, item));
+                return <div key={item.id} className="date-map-plan-saved-row">
+                  <span><b>{item.name}</b><small>{item.address}</small></span>
+                  <button type="button" disabled={pending || included} onClick={() => void addSavedToPlan(item)}>
+                    {included ? '담겨 있음' : '후보 담기'}
+                  </button>
+                </div>;
+              })}
+            </details>
+            <p className="date-map-add-hint">후보와 기존 보관함은 별개예요. 의견·방문 순서·시간표와 상대방 승인은 다음 단계에서 연결돼요.</p>
+          </div>}
+        </div>}
         {tab === 'courses' && <>
           <div className="date-map-panel-header"><strong>{coursePicking ? (courseId ? '장소 더 담기' : '코스에 담을 장소') : '함께 만드는 코스'}</strong><button type="button" onClick={newCourse}><Plus size={14}/> 새 코스</button></div>
           {!coursePicking && <>
