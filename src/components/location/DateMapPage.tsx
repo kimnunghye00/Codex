@@ -4,6 +4,9 @@ import { createPortal } from 'react-dom';
 import { CalendarDays, ChevronDown, ChevronUp, GripVertical, Heart, MapPin, MessageCircle, Plus, Search, Trash2, X } from 'lucide-react';
 import { auth } from '../../lib/firebase';
 import { appendPlaceToCourse, courseTimesFromSaved, encodeCourseTimeSlot, MAX_DATE_COURSE_PLACES, placesForDateMap, validateCourseTimes, type CourseTimeSlot } from '../../lib/dateCourseDraft';
+import { addDatePlanCandidate, createDatePlanDraft, deleteDatePlanCandidate, subscribeDatePlanCandidates, subscribeDatePlanDrafts, updateDatePlanDraft } from '../../lib/datePlanDrafts';
+import { isSameDatePlanPlace } from '../../lib/datePlanCandidates';
+import type { DatePlanDraft, DatePlanCandidate } from '../../lib/datePlanFoundation';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
 import { reverseGeocode, type LocationSearchResult } from '../../utils/location';
 import {
@@ -51,7 +54,15 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const coupleId = connection?.coupleId ?? '';
   const [places, setPlaces] = useState<DatePlace[]>([]);
   const [courses, setCourses] = useState<DateCourse[]>([]);
-  const [tab, setTab] = useState<'search' | 'places' | 'courses'>('places');
+  const [datePlans, setDatePlans] = useState<DatePlanDraft[]>([]);
+  const [activePlanId, setActivePlanId] = useState('');
+  const [planCandidates, setPlanCandidates] = useState<DatePlanCandidate[]>([]);
+  const [planTitle, setPlanTitle] = useState('');
+  const [planDate, setPlanDate] = useState('');
+  const [selectedPlanCandidateId, setSelectedPlanCandidateId] = useState('');
+  const [addingToPlan, setAddingToPlan] = useState(false);
+  const [mobilePlanView, setMobilePlanView] = useState<'list' | 'map'>('list');
+  const [tab, setTab] = useState<'search' | 'places' | 'courses' | 'plans'>('places');
   const [scope, setScope] = useState<'map' | 'nationwide'>('map');
   const [bounds, setBounds] = useState<MapBounds | null>(null);
   const [searchedBounds, setSearchedBounds] = useState<MapBounds | null>(null);
@@ -92,6 +103,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState(false);
   const frame = useRef<HTMLIFrameElement>(null);
+  const searchField = useRef<HTMLInputElement>(null);
   const queuedFocus = useRef<{ latitude: number; longitude: number; placeName: string; photoUrl?: string; address?: string } | null>(null);
   const panel = useRef<HTMLElement>(null);
   const candidateCard = useRef<HTMLElement>(null);
@@ -111,6 +123,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   queryRef.current = query;
   const selected = places.find((item) => item.id === selectedId);
   const course = courses.find((item) => item.id === courseId);
+  const activePlan = datePlans.find((item) => item.id === activePlanId);
   // A bookmarked place remains in the shared wishlist after it is added
   // to a course. A course only references its stable place ID.
   const courseUsage = useMemo(() => {
@@ -133,15 +146,31 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const courseRegions = useMemo(() => groupSavedPlaces(places), [places]);
   const picked = pickedIds.filter((id) => places.some((item) => item.id === id));
   const searchedRegion = parsePlaceSearchIntent(candidateSearch).regionLabel;
-  const mappedPlaces = useMemo(() => tab === 'search' ? [] : placesForDateMap(tab === 'courses' ? places : visible, tab, coursePlaceIds), [places, visible, tab, coursePlaceIds]);
+  const mappedPlaces = useMemo(() => tab === 'search' || tab === 'plans' ? [] : placesForDateMap(tab === 'courses' ? places : visible, tab, coursePlaceIds), [places, visible, tab, coursePlaceIds]);
 
   useEffect(() => {
-    setPlaces([]); setCourses([]); setPickedIds([]); setCoursePlaceIds([]); setSelectedId(''); setCourseId(''); setCourseTimes({}); setCoursePicking(false); setCourseEditorOpen(false); setAddingToCourse(false); setShowSchedule(false); setLikes([]); setOpinions([]);
+    setPlaces([]); setCourses([]); setDatePlans([]); setActivePlanId(''); setPlanCandidates([]); setAddingToPlan(false); setPickedIds([]); setCoursePlaceIds([]); setSelectedId(''); setCourseId(''); setCourseTimes({}); setCoursePicking(false); setCourseEditorOpen(false); setAddingToCourse(false); setShowSchedule(false); setLikes([]); setOpinions([]);
     if (!coupleId) return;
     const stopPlaces = subscribeDatePlaces(coupleId, setPlaces, (error) => setMessage(errorText(error)));
     const stopCourses = subscribeDateCourses(coupleId, setCourses, (error) => setMessage(errorText(error)));
     return () => { stopPlaces(); stopCourses(); };
   }, [coupleId]);
+
+  useEffect(() => {
+    if (!coupleId) return;
+    return subscribeDatePlanDrafts(coupleId, setDatePlans, (error) => setMessage(errorText(error)));
+  }, [coupleId]);
+
+  useEffect(() => {
+    setPlanCandidates([]); setSelectedPlanCandidateId('');
+    if (!coupleId || !activePlanId) return;
+    return subscribeDatePlanCandidates(coupleId, activePlanId, setPlanCandidates, (error) => setMessage(errorText(error)));
+  }, [coupleId, activePlanId]);
+
+  useEffect(() => {
+    if (!activePlan) return;
+    setPlanTitle(activePlan.title); setPlanDate(activePlan.date);
+  }, [activePlan?.id, activePlan?.title, activePlan?.date]);
 
   useEffect(() => {
     setLikes([]); setOpinions([]); setOpinion('');
@@ -305,6 +334,10 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       photoUrl: item.photoUrl, address: item.address,
       arrivedAt: '2026-01-01T00:00:00.000Z', leftAt: '2026-01-01T00:00:00.000Z',
     })),
+    ...(tab === 'plans' ? planCandidates : []).map((item) => ({
+      id: 'plan-' + item.id, latitude: item.latitude, longitude: item.longitude, placeName: item.name, address: item.address,
+      arrivedAt: '2026-01-01T00:00:00.000Z', leftAt: '2026-01-01T00:00:00.000Z',
+    })),
     // When searching, show all returned branches (not only the first) on the map.
     ...(tab === 'search' ? results : []).map((item, index) => ({
       id: `search-${index}`, latitude: item.latitude, longitude: item.longitude, placeName: item.placeName,
@@ -314,7 +347,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       ? [{ id: 'search-manual', latitude: candidate.latitude, longitude: candidate.longitude,
         placeName: candidateName || candidate.placeName, arrivedAt: '2026-01-01T00:00:00.000Z', leftAt: '2026-01-01T00:00:00.000Z' }]
       : []),
-  ], [mappedPlaces, results, candidate, candidateName, tab]);
+  ], [mappedPlaces, planCandidates, results, candidate, candidateName, tab]);
   useEffect(() => {
     const timer = window.setTimeout(() => { if (!mapReady) setMapError(true); }, 12000);
     const receive = (event: MessageEvent<{ source?: string; type?: string; id?: string; latitude?: number; longitude?: number; bounds?: MapBounds }>) => {
@@ -322,6 +355,15 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       if (event.data.type === 'ready') { setMapReady(true); setMapError(false); frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'request-viewport' }, MAP_ORIGIN); }
       if (event.data.type === 'viewport-changed' && event.data.bounds && validMapBounds(event.data.bounds)) setBounds(event.data.bounds);
       if (event.data.type === 'saved-marker-selected' && typeof event.data.id === 'string') {
+        if (tab === 'plans' && event.data.id.startsWith('plan-')) {
+          const found = planCandidates.find((item) => 'plan-' + item.id === event.data.id);
+          if (found) {
+            setSelectedPlanCandidateId(found.id);
+            mapFocus({ ...found, placeName: found.name });
+            panel.current?.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+          return;
+        }
         setSelectedId(event.data.id); setTab((current) => current === 'search' ? 'places' : current);
         setCandidate(null);
         setMessage('');
@@ -372,7 +414,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     };
     window.addEventListener('message', receive);
     return () => { window.clearTimeout(timer); window.removeEventListener('message', receive); };
-  }, [mapReady]);
+  }, [mapReady, tab, planCandidates]);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -481,6 +523,52 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     }, addToCurrentCourse
       ? '새 장소를 코스에 추가했어요. 마지막에 코스 저장을 눌러 주세요.'
       : '우리의 지도에 장소를 저장했어요.');
+  };
+
+  const startPlanSearch = () => {
+    if (!activePlan) { setMessage('먼저 데이트 초안을 만들어 주세요.'); return; }
+    setAddingToCourse(false); setAddingToPlan(true); setCandidate(null); setTab('search');
+    setMessage('검색 결과나 지도에서 지점을 확인한 뒤 이 데이트의 후보에 담아 주세요.');
+    searchField.current?.focus();
+  };
+
+  const savePlanCandidate = async () => {
+    if (!candidate || !activePlan || !coupleId || !uid || pending) return;
+    const name = candidateName.trim();
+    const address = candidateAddress.trim();
+    if (!name || !address) { setMessage('선택한 지점의 이름과 주소를 확인하고 입력해 주세요.'); return; }
+    const input = {
+      name, address, latitude: candidate.latitude, longitude: candidate.longitude,
+      category: candidateCategory, memo: candidateMemo.trim(),
+    };
+    if (planCandidates.some((item) => isSameDatePlanPlace(item, input))) {
+      setMessage('이미 이 데이트에 담긴 후보예요. 후보 목록에서 확인해 주세요.'); return;
+    }
+    await submit(async () => {
+      await addDatePlanCandidate(coupleId, activePlan.id, uid, input);
+      setCandidate(null); setResults([]); setCandidateMemo(''); clearMapFocus();
+      setAddingToPlan(false); setTab('plans'); setMobilePlanView('list');
+    }, '데이트 후보에 장소를 담았어요. 전체 가고 싶은 곳에는 저장하지 않았어요.');
+  };
+
+  const savePlanDetails = async () => {
+    if (!activePlan) return;
+    const change: { title?: string; date?: string } = {};
+    if (planTitle.trim() !== activePlan.title) change.title = planTitle;
+    if (planDate !== activePlan.date) change.date = planDate;
+    if (!Object.keys(change).length) { setMessage('변경된 정보가 없어요.'); return; }
+    await submit(() => updateDatePlanDraft(coupleId, activePlan.id, change), '데이트 초안을 저장했어요.');
+  };
+
+  const addSavedToPlan = async (item: DatePlace) => {
+    if (!activePlan || !coupleId || !uid || pending) return;
+    if (planCandidates.some((candidate) => isSameDatePlanPlace(candidate, item))) {
+      setMessage('이미 이 데이트에 담긴 후보예요.'); return;
+    }
+    await submit(() => addDatePlanCandidate(coupleId, activePlan.id, uid, {
+      name: item.name, address: item.address, latitude: item.latitude, longitude: item.longitude,
+      category: item.category, memo: item.memo, sourceSavedPlaceId: item.id,
+    }), '가고 싶은 곳에서 이 데이트의 후보로 담았어요.');
   };
 
   const resetCourseEditor = () => {
