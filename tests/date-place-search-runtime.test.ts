@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { searchLocations, searchLocationPage } from '../src/utils/locationSearch.ts';
+import { readFileSync } from 'node:fs';
+import { insideMapBounds, sameMapBounds, searchLocations, searchLocationPage } from '../src/utils/locationSearch.ts';
 import { matchesPlaceSearchIntent, parsePlaceSearchIntent } from '../src/utils/placeSearchIntent.ts';
 
 test('same-name places remain independently selectable with disambiguating addresses', async () => {
@@ -266,4 +267,28 @@ test('map CGV search finds a genuinely brand-tagged cinema without inventing a P
     assert.equal(page.results[0].placeName, 'CGV · 씨지브이 강변');
     assert.equal(page.results[0].address, '강변역로');
   } finally { globalThis.fetch = original; }
+});
+
+test('CGV results from Seoul city center cannot appear inside a Gangbyeon live viewport', () => {
+  const seoulCityHall = { west: 126.97, south: 37.56, east: 126.99, north: 37.57 };
+  const gangbyeon = { west: 127.07, south: 37.52, east: 127.11, north: 37.55 };
+  const data = [
+    { latitude: 37.563, longitude: 126.985, placeName: 'CGV 명동', address: '서울 중구 명동' },
+    { latitude: 37.535, longitude: 127.095, placeName: 'CGV 강변', address: '서울 광진구 구의동' },
+  ];
+  assert.equal(sameMapBounds(seoulCityHall, gangbyeon), false);
+  assert.equal(sameMapBounds(gangbyeon, { ...gangbyeon, west: gangbyeon.west + 0.00005 }), true);
+  assert.deepEqual(data.filter((item) => insideMapBounds(item, gangbyeon)).map((item) => item.placeName), ['CGV 강변']);
+  assert.deepEqual(data.filter((item) => insideMapBounds(item, seoulCityHall)).map((item) => item.placeName), ['CGV 명동']);
+});
+
+test('map host and date map use a correlated live viewport protocol rather than cached bounds for a new search', () => {
+  // This is the critical cross-iframe contract: a matching reply has to be
+  // returned before any provider requests begin.
+  const host = readFileSync('public/naver-map-host.html', 'utf8');
+  const parent = readFileSync('src/components/location/DateMapPage.tsx', 'utf8');
+  assert.match(host, /type === 'request-viewport'[\\s\\S]*?send\\('viewport-snapshot'/);
+  assert.match(parent, /await readLiveViewport\\(\\)/);
+  assert.match(parent, /pendingViewport\\.current\\?\\.id === event\\.data\\.requestId/);
+  assert.match(parent, /results\\.filter\\(\\(item\\) => insideMapBounds\\(item, bounds\\)\\)/);
 });
