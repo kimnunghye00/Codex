@@ -15,7 +15,7 @@ import {
   subscribePlaceLikes, subscribePlaceOpinions, updateDatePlace,
   type DateCourse, type DatePlace, type PlaceOpinion,
 } from '../../lib/dateMap';
-import { insideMapBounds, searchLocationPage, validMapBounds, type MapBounds } from '../../utils/locationSearch';
+import { insideMapBounds, sameMapBounds, searchLocationPage, validMapBounds, type MapBounds } from '../../utils/locationSearch';
 import { fetchNaverDatePlaces, type NaverSearchCoverage } from '../../utils/naverLocalSearch';
 import { groupSavedPlaces, placeRegion } from '../../utils/placeRegions';
 import { matchesPlaceSearchIntent, parsePlaceSearchIntent } from '../../utils/placeSearchIntent.ts';
@@ -68,6 +68,9 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const [tab, setTab] = useState<'search' | 'places' | 'courses' | 'plans'>('places');
   const [scope, setScope] = useState<'map' | 'nationwide'>('map');
   const [bounds, setBounds] = useState<MapBounds | null>(null);
+  const latestViewport = useRef<MapBounds | null>(null);
+  const viewportRequestNumber = useRef(0);
+  const pendingViewport = useRef<{ id: string; resolve: (value: MapBounds | null) => void } | null>(null);
   const [searchedBounds, setSearchedBounds] = useState<MapBounds | null>(null);
   const [searchedScope, setSearchedScope] = useState<'map' | 'nationwide'>('map');
   const [excludedIds, setExcludedIds] = useState<string[]>([]);
@@ -125,8 +128,17 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   useEffect(() => () => {
     ++searchSequence.current;
     searchAbort.current?.abort();
+    pendingViewport.current?.resolve(null);
+    pendingViewport.current = null;
   }, []);
-  resultsRef.current = results;
+  // A point returned for a prior viewport must never appear as a current-map
+  // result. Use the latest iframe rectangle even before React processes state.
+  const shownResults = searchedScope === 'map' && bounds
+    ? results.filter((item) => insideMapBounds(item, bounds))
+    : results;
+  const mapMovedSinceSearch = searchedScope === 'map' && searchedBounds && bounds
+    ? !sameMapBounds(searchedBounds, bounds) : false;
+  resultsRef.current = shownResults;
   queryRef.current = query;
   const selected = places.find((item) => item.id === selectedId);
   const course = courses.find((item) => item.id === courseId);
@@ -204,20 +216,51 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     setCourseTimes(courseTimesFromSaved(course.placeIds, course.timeSlots));
   }, [course?.id, course?.updatedAt]);
 
+  const readLiveViewport = (): Promise<MapBounds | null> => {
+    const target = frame.current?.contentWindow;
+    if (!target || !mapReady) return Promise.resolve(null);
+    pendingViewport.current?.resolve(null);
+    return new Promise((resolve) => {
+      const id = 'viewport-' + (++viewportRequestNumber.current);
+      let timer: number | undefined;
+      const finish = (value: MapBounds | null) => {
+        if (timer !== undefined) window.clearTimeout(timer);
+        if (pendingViewport.current?.id === id) pendingViewport.current = null;
+        resolve(value);
+      };
+      pendingViewport.current = { id, resolve: finish };
+      timer = window.setTimeout(() => finish(null), 2000);
+      target.postMessage({ source: 'route-map-parent', type: 'request-viewport', requestId: id }, MAP_ORIGIN);
+    });
+  };
+
   const search = async (value: string, more = false, requestedScope = scope) => {
     const trimmed = more ? candidateSearch : value.trim();
     if (!trimmed) { setMessage('검색할 장소나 주소를 입력해 주세요.'); return; }
     const intent = parsePlaceSearchIntent(trimmed);
     // A specific branch request should not be silently restricted to an unrelated viewport.
     const activeScope = more ? searchedScope : intent.hasExplicitRegion ? 'nationwide' : requestedScope;
-    const activeBounds = more ? searchedBounds : bounds;
-    if (activeScope === 'map' && !activeBounds) { setMessage('지도가 준비되면 검색해 주세요. 다른 지역은 전국 검색으로 찾을 수 있어요.'); return; }
     searchAbort.current?.abort();
     const controller = new AbortController();
     searchAbort.current = controller;
     const sequence = ++searchSequence.current;
     ++lookupSequence.current;
     clearMapFocus(); setTab('search'); setSearching(true); setPicking(false); setMessage('');
+    // Never rely on the last pushed React bounds: the iframe may have restored
+    // a different map position, or React has not committed its idle event yet.
+    const liveBounds = activeScope === 'map' ? await readLiveViewport() : null;
+    if (sequence !== searchSequence.current) return;
+    const activeBounds = more ? searchedBounds : liveBounds;
+    if (activeScope === 'map' && (!liveBounds || !activeBounds || !validMapBounds(activeBounds))) {
+      setMessage('현재 지도 범위를 확인하지 못했어요. 지도가 준비되면 다시 검색해 주세요.');
+      setSearching(false);
+      return;
+    }
+    if (more && activeScope === 'map' && liveBounds && activeBounds && !sameMapBounds(liveBounds, activeBounds)) {
+      setMessage('지도가 이동했어요. 「이 지역에서 다시 검색」으로 현재 지도에 맞는 장소를 찾아 주세요.');
+      setSearching(false);
+      return;
+    }
     if (!more) {
       setCandidate(null); setManualMapCandidate(false); setResults([]); setSearchCoverage(null); setHasMore(false); setExcludedIds([]);
       if (intent.hasExplicitRegion) setScope('nationwide');
@@ -240,9 +283,15 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       coverage.matched += stats.matched;
     };
     const unique = deduplicatePlaceResults;
-    const combinedResults = () => unique([...matchedSaved, ...cached, ...received.naver, ...received.osm]);
+    const combinedResults = () => unique([...matchedSaved, ...cached, ...received.naver, ...received.osm])
+      .filter((item) => !currentBounds || insideMapBounds(item, currentBounds));
     const publish = () => {
       if (sequence !== searchSequence.current) return;
+      // A drag/zoom while requests are pending invalidates this search.
+      if (currentBounds && latestViewport.current && !sameMapBounds(currentBounds, latestViewport.current)) {
+        setResults([]); setMessage('지도가 이동했어요. 「이 지역에서 다시 검색」을 눌러 주세요.');
+        return;
+      }
       const combined = combinedResults();
       setResults((previous) => more ? unique([...previous, ...combined]) : combined);
       // Unlock the search form as soon as useful results are available.
@@ -315,6 +364,10 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
         : Promise.resolve([] as LocationSearchResult[]);
       const [osm, naver] = await Promise.allSettled([osmRequest, naverRequest]);
       if (sequence !== searchSequence.current) return;
+      if (currentBounds && latestViewport.current && !sameMapBounds(currentBounds, latestViewport.current)) {
+        setResults([]); setMessage('지도가 이동했어요. 「이 지역에서 다시 검색」을 눌러 주세요.');
+        return;
+      }
       if (osm.status === 'rejected' && naver.status === 'rejected') throw osm.reason;
       const combined = combinedResults();
       if (!more) setSearchCoverage({ ...coverage });
