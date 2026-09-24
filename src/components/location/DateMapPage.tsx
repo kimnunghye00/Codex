@@ -448,8 +448,9 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
         && event.data.bounds && validMapBounds(event.data.bounds)) {
         latestViewport.current = event.data.bounds;
         setBounds(event.data.bounds);
-        if (event.data.type === 'viewport-snapshot' && pendingViewport.current?.id === event.data.requestId) {
-          pendingViewport.current.resolve(event.data.bounds);
+        const pending = pendingViewport.current;
+        if (event.data.type === 'viewport-snapshot' && pending && pending.id === event.data.requestId) {
+          pending.resolve(event.data.bounds);
         }
       }
       if (event.data.type === 'saved-marker-selected' && typeof event.data.id === 'string') {
