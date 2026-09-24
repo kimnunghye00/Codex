@@ -15,7 +15,7 @@ import {
   subscribePlaceLikes, subscribePlaceOpinions, updateDatePlace,
   type DateCourse, type DatePlace, type PlaceOpinion,
 } from '../../lib/dateMap';
-import { insideMapBounds, searchLocationPage, validMapBounds, type MapBounds } from '../../utils/locationSearch';
+import { insideMapBounds, sameMapBounds, searchLocationPage, validMapBounds, type MapBounds } from '../../utils/locationSearch';
 import { fetchNaverDatePlaces, type NaverSearchCoverage } from '../../utils/naverLocalSearch';
 import { groupSavedPlaces, placeRegion } from '../../utils/placeRegions';
 import { matchesPlaceSearchIntent, parsePlaceSearchIntent } from '../../utils/placeSearchIntent.ts';
@@ -27,7 +27,7 @@ type Category = DatePlace['category'];
 const CATEGORIES: Category[] = ['맛집', '카페', '놀거리', '여행', '기타'];
 const MAP_ORIGIN = typeof window !== 'undefined' && window.location.hostname === 'danduli.web.app'
   ? 'https://danduli.web.app' : 'https://meluni-f4e00.web.app';
-const MAP_HOST = `${MAP_ORIGIN}/naver-map-host.html?v=16`;
+const MAP_HOST = `${MAP_ORIGIN}/naver-map-host.html?v=17`;
 const ALL = '전체';
 // This URL is enabled only after the server has its own NAVER Search ID and secret.
 const NAVER_LOCAL_SEARCH_URL = String(import.meta.env.VITE_NAVER_LOCAL_SEARCH_URL || '').trim();
@@ -68,6 +68,9 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const [tab, setTab] = useState<'search' | 'places' | 'courses' | 'plans'>('places');
   const [scope, setScope] = useState<'map' | 'nationwide'>('map');
   const [bounds, setBounds] = useState<MapBounds | null>(null);
+  const latestViewport = useRef<MapBounds | null>(null);
+  const viewportRequestNumber = useRef(0);
+  const pendingViewport = useRef<{ id: string; resolve: (value: MapBounds | null) => void } | null>(null);
   const [searchedBounds, setSearchedBounds] = useState<MapBounds | null>(null);
   const [searchedScope, setSearchedScope] = useState<'map' | 'nationwide'>('map');
   const [excludedIds, setExcludedIds] = useState<string[]>([]);
@@ -125,8 +128,17 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   useEffect(() => () => {
     ++searchSequence.current;
     searchAbort.current?.abort();
+    pendingViewport.current?.resolve(null);
+    pendingViewport.current = null;
   }, []);
-  resultsRef.current = results;
+  // A point returned for a prior viewport must never appear as a current-map
+  // result. Use the latest iframe rectangle even before React processes state.
+  const shownResults = useMemo(() => searchedScope === 'map' && bounds
+    ? results.filter((item) => insideMapBounds(item, bounds))
+    : results, [results, searchedScope, bounds]);
+  const mapMovedSinceSearch = searchedScope === 'map' && searchedBounds && bounds
+    ? !sameMapBounds(searchedBounds, bounds) : false;
+  resultsRef.current = shownResults;
   queryRef.current = query;
   const selected = places.find((item) => item.id === selectedId);
   const course = courses.find((item) => item.id === courseId);
@@ -204,20 +216,51 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     setCourseTimes(courseTimesFromSaved(course.placeIds, course.timeSlots));
   }, [course?.id, course?.updatedAt]);
 
+  const readLiveViewport = (): Promise<MapBounds | null> => {
+    const target = frame.current?.contentWindow;
+    if (!target || !mapReady) return Promise.resolve(null);
+    pendingViewport.current?.resolve(null);
+    return new Promise((resolve) => {
+      const id = 'viewport-' + (++viewportRequestNumber.current);
+      let timer: number | undefined;
+      const finish = (value: MapBounds | null) => {
+        if (timer !== undefined) window.clearTimeout(timer);
+        if (pendingViewport.current?.id === id) pendingViewport.current = null;
+        resolve(value);
+      };
+      pendingViewport.current = { id, resolve: finish };
+      timer = window.setTimeout(() => finish(null), 2000);
+      target.postMessage({ source: 'route-map-parent', type: 'request-viewport', requestId: id }, MAP_ORIGIN);
+    });
+  };
+
   const search = async (value: string, more = false, requestedScope = scope) => {
     const trimmed = more ? candidateSearch : value.trim();
     if (!trimmed) { setMessage('검색할 장소나 주소를 입력해 주세요.'); return; }
     const intent = parsePlaceSearchIntent(trimmed);
     // A specific branch request should not be silently restricted to an unrelated viewport.
     const activeScope = more ? searchedScope : intent.hasExplicitRegion ? 'nationwide' : requestedScope;
-    const activeBounds = more ? searchedBounds : bounds;
-    if (activeScope === 'map' && !activeBounds) { setMessage('지도가 준비되면 검색해 주세요. 다른 지역은 전국 검색으로 찾을 수 있어요.'); return; }
     searchAbort.current?.abort();
     const controller = new AbortController();
     searchAbort.current = controller;
     const sequence = ++searchSequence.current;
     ++lookupSequence.current;
     clearMapFocus(); setTab('search'); setSearching(true); setPicking(false); setMessage('');
+    // Never rely on the last pushed React bounds: the iframe may have restored
+    // a different map position, or React has not committed its idle event yet.
+    const liveBounds = activeScope === 'map' ? await readLiveViewport() : null;
+    if (sequence !== searchSequence.current) return;
+    const activeBounds = more ? searchedBounds : liveBounds;
+    if (activeScope === 'map' && (!liveBounds || !activeBounds || !validMapBounds(activeBounds))) {
+      setMessage('현재 지도 범위를 확인하지 못했어요. 지도가 준비되면 다시 검색해 주세요.');
+      setSearching(false);
+      return;
+    }
+    if (more && activeScope === 'map' && liveBounds && activeBounds && !sameMapBounds(liveBounds, activeBounds)) {
+      setMessage('지도가 이동했어요. 「이 지역에서 다시 검색」으로 현재 지도에 맞는 장소를 찾아 주세요.');
+      setSearching(false);
+      return;
+    }
     if (!more) {
       setCandidate(null); setManualMapCandidate(false); setResults([]); setSearchCoverage(null); setHasMore(false); setExcludedIds([]);
       if (intent.hasExplicitRegion) setScope('nationwide');
@@ -240,9 +283,15 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       coverage.matched += stats.matched;
     };
     const unique = deduplicatePlaceResults;
-    const combinedResults = () => unique([...matchedSaved, ...cached, ...received.naver, ...received.osm]);
+    const combinedResults = () => unique([...matchedSaved, ...cached, ...received.naver, ...received.osm])
+      .filter((item) => !currentBounds || insideMapBounds(item, currentBounds));
     const publish = () => {
       if (sequence !== searchSequence.current) return;
+      // A drag/zoom while requests are pending invalidates this search.
+      if (currentBounds && latestViewport.current && !sameMapBounds(currentBounds, latestViewport.current)) {
+        setResults([]); setMessage('지도가 이동했어요. 「이 지역에서 다시 검색」을 눌러 주세요.');
+        return;
+      }
       const combined = combinedResults();
       setResults((previous) => more ? unique([...previous, ...combined]) : combined);
       // Unlock the search form as soon as useful results are available.
@@ -315,6 +364,10 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
         : Promise.resolve([] as LocationSearchResult[]);
       const [osm, naver] = await Promise.allSettled([osmRequest, naverRequest]);
       if (sequence !== searchSequence.current) return;
+      if (currentBounds && latestViewport.current && !sameMapBounds(currentBounds, latestViewport.current)) {
+        setResults([]); setMessage('지도가 이동했어요. 「이 지역에서 다시 검색」을 눌러 주세요.');
+        return;
+      }
       if (osm.status === 'rejected' && naver.status === 'rejected') throw osm.reason;
       const combined = combinedResults();
       if (!more) setSearchCoverage({ ...coverage });
@@ -377,21 +430,29 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       arrivedAt: '2026-01-01T00:00:00.000Z', leftAt: '2026-01-01T00:00:00.000Z',
     })),
     // When searching, show all returned branches (not only the first) on the map.
-    ...(tab === 'search' ? results : []).map((item, index) => ({
+    ...(tab === 'search' ? shownResults : []).map((item, index) => ({
       id: `search-${index}`, latitude: item.latitude, longitude: item.longitude, placeName: item.placeName,
       arrivedAt: '2026-01-01T00:00:00.000Z', leftAt: '2026-01-01T00:00:00.000Z',
     })),
-    ...(tab === 'search' && candidate && !results.some((item) => item.latitude === candidate.latitude && item.longitude === candidate.longitude)
+    ...(tab === 'search' && candidate && !shownResults.some((item) => item.latitude === candidate.latitude && item.longitude === candidate.longitude)
       ? [{ id: 'search-manual', latitude: candidate.latitude, longitude: candidate.longitude,
         placeName: candidateName || candidate.placeName, arrivedAt: '2026-01-01T00:00:00.000Z', leftAt: '2026-01-01T00:00:00.000Z' }]
       : []),
-  ], [mappedPlaces, planCandidates, results, candidate, candidateName, tab]);
+  ], [mappedPlaces, planCandidates, shownResults, candidate, candidateName, tab]);
   useEffect(() => {
     const timer = window.setTimeout(() => { if (!mapReady) setMapError(true); }, 12000);
-    const receive = (event: MessageEvent<{ source?: string; type?: string; id?: string; latitude?: number; longitude?: number; bounds?: MapBounds }>) => {
+    const receive = (event: MessageEvent<{ source?: string; type?: string; id?: string; requestId?: string; latitude?: number; longitude?: number; bounds?: MapBounds }>) => {
       if (event.origin !== MAP_ORIGIN || event.source !== frame.current?.contentWindow || event.data?.source !== 'route-map-host') return;
       if (event.data.type === 'ready') { setMapReady(true); setMapError(false); frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'request-viewport' }, MAP_ORIGIN); }
-      if (event.data.type === 'viewport-changed' && event.data.bounds && validMapBounds(event.data.bounds)) setBounds(event.data.bounds);
+      if ((event.data.type === 'viewport-changed' || event.data.type === 'viewport-snapshot')
+        && event.data.bounds && validMapBounds(event.data.bounds)) {
+        latestViewport.current = event.data.bounds;
+        setBounds(event.data.bounds);
+        const pending = pendingViewport.current;
+        if (event.data.type === 'viewport-snapshot' && pending && pending.id === event.data.requestId) {
+          pending.resolve(event.data.bounds);
+        }
+      }
       if (event.data.type === 'saved-marker-selected' && typeof event.data.id === 'string') {
         if (tab === 'plans' && event.data.id.startsWith('plan-')) {
           const found = planCandidates.find((item) => 'plan-' + item.id === event.data.id);
@@ -771,7 +832,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
         </div>
         <button className="date-map-view-all" type="button" disabled={!mapReady || !mapVisits.length} onClick={() => { clearMapFocus(); frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'fit-visits' }, MAP_ORIGIN); }}>{tab === 'courses' ? '코스 전체 지도에서 보기' : tab === 'plans' ? '후보 전체 지도에서 보기' : '목록 전체 지도에서 보기'}</button>
         {tab === 'search' && <div className="date-map-search-results">
-          <div className="date-map-panel-header"><strong>검색 결과 {results.length + (manualMapCandidate && candidate ? 1 : 0)}곳</strong><button type="button" onClick={() => { setPicking((v) => !v); setMessage(''); }} disabled={!mapReady}>{picking ? '선택 안내 닫기' : '지도에서 직접 위치 선택'}</button></div>
+          <div className="date-map-panel-header"><strong>검색 결과 {shownResults.length + (manualMapCandidate && candidate ? 1 : 0)}곳</strong><button type="button" onClick={() => { setPicking((v) => !v); setMessage(''); }} disabled={!mapReady}>{picking ? '선택 안내 닫기' : '지도에서 직접 위치 선택'}</button></div>
           {manualMapCandidate && candidate && <button type="button" className="date-map-branch active" onClick={() => {
              mapFocus({ ...candidate, placeName: candidateName || candidate.placeName, address: candidateAddress });
              candidateCard.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -779,15 +840,16 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
              <span className="date-map-result-number">✓</span><span><b>{candidateName || candidate.placeName} · 지도에서 지정</b>
                <small>{candidateAddress || '주소 확인 중'} · 검색 API가 확인한 지점이 아니므로 상호와 주소를 확인해 주세요.</small></span>
            </button>}
-           {results.map((item, index) => <button key={`branch-${index}`} type="button" className={candidate === item ? 'date-map-branch active' : 'date-map-branch'} onClick={() => chooseResult(item)}>
+           {shownResults.map((item, index) => <button key={`branch-${index}`} type="button" className={candidate === item ? 'date-map-branch active' : 'date-map-branch'} onClick={() => chooseResult(item)}>
             <span className="date-map-result-number">{index + 1}</span><span><b>{item.placeName}</b><small>{item.address || '상세 주소 정보 없음'}</small></span>
           </button>)}
           {candidateSearch && <small>{searchedRegion ? `지역 조건: ${searchedRegion} · 다른 지역 지점 제외` : searchedScope === 'map' ? '검색 당시 지도 영역' : '전국'} · “{candidateSearch}”</small>}
-          {!searching && !results.length && searchCoverage && NAVER_LOCAL_SEARCH_URL && <p className="date-map-add-hint" role="status">
+          {mapMovedSinceSearch && !searching && <p className="date-map-add-hint" role="status">지도가 이동했어요. 현재 화면 기준 결과를 보려면 지도 위 「이 지역에서 다시 검색」을 눌러 주세요.</p>}
+          {!searching && !shownResults.length && searchCoverage && NAVER_LOCAL_SEARCH_URL && <p className="date-map-add-hint" role="status">
             실제 검색 확인: 네이버 제공 {searchCoverage.received}건 · 좌표 유효 {searchCoverage.valid}건 · 현재 지도 안 {searchCoverage.inBounds}건 · 검색어 일치 {searchCoverage.matched}건.
             {searchCoverage.received > 0 && searchCoverage.inBounds === 0 ? ' 검색 결과의 위치가 현재 지도 밖이어서 표시하지 않았어요.' : ' 지도에 인쇄된 업체명이 지역 검색 API 결과에 포함되지 않을 수 있어요.'}
           </p>}
-          {searchedRegion && !results.length && <button type="button" className="date-map-primary date-map-region-navigate" disabled={!mapReady || searching} onClick={() => void goToSearchedRegion()}>
+          {searchedRegion && !shownResults.length && <button type="button" className="date-map-primary date-map-region-navigate" disabled={!mapReady || searching} onClick={() => void goToSearchedRegion()}>
             <MapPin size={15}/> {searchedRegion} 지도로 이동해 직접 선택
           </button>}
           {hasMore && <button type="button" className="date-map-primary" disabled={searching} onClick={() => void search(candidateSearch, true)}>{searching ? '불러오는 중…' : '검색 결과 더 보기'}</button>}
@@ -796,7 +858,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             : '현재 지도와 장소 검색은 별도 데이터예요. 네이버 지도에 보이는 모든 업체를 검색할 수 없어요. 지점은 “명륜진사갈비 삼척점”처럼 검색하고, 누락된 곳은 지도에서 직접 위치를 지정해 주세요.'}</p>
           <p className="date-map-pick-hint">지도에서 검색 결과 핀을 누르거나, 원하는 가게가 있는 위치를 직접 눌러 선택할 수 있어요. 검색 결과에 없는 가게는 상호명과 주소를 확인한 뒤 추가해 주세요.</p>
           {picking && <p className="date-map-add-hint" role="status">지도에 보이는 가게 글씨 자체에서 이름을 불러올 수는 없어요. 검색어를 입력한 뒤 해당 위치를 선택하면 편리해요.</p>}
-          {!results.length && !candidate && !picking && <div className="date-map-empty date-map-empty-actions">
+          {!shownResults.length && !candidate && !picking && <div className="date-map-empty date-map-empty-actions">
                          <p>지도에는 {query.trim() ? '“' + query.trim() + '”' : '원하는 가게'}가 보이나요? 지도에 표시된 상호가 검색 API에는 빠질 수 있어요. 실제 지점을 지도에서 눌러 이름과 주소를 확인한 뒤 후보로 담을 수 있어요.</p>
             <button type="button" className="date-map-primary" disabled={!mapReady} onClick={() => { setPicking(true); setMessage('지도에 보이는 ' + (query.trim() || '가게') + ' 지점을 눌러 주세요. 상호와 주소를 확인한 뒤 후보로 담을 수 있어요.'); }}>
               <MapPin size={15}/> 지도에서 위치 선택하기

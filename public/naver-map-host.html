@@ -344,8 +344,14 @@
           }
         }
         if (data.type === 'request-viewport' && map) {
+          // Reply with the CURRENT map rectangle. A previously pushed idle
+          // event can refer to the default Seoul map before viewport restore.
           const sw = map.getBounds().getSW(), ne = map.getBounds().getNE();
-          send('viewport-changed', { bounds: { west: sw.lng(), south: sw.lat(), east: ne.lng(), north: ne.lat() } });
+          const bounds = { west: sw.lng(), south: sw.lat(), east: ne.lng(), north: ne.lat() };
+          send('viewport-changed', { bounds });
+          if (typeof data.requestId === 'string' && /^viewport-\d+$/.test(data.requestId)) {
+            send('viewport-snapshot', { requestId: data.requestId, bounds });
+          }
         }
         if (data.type === 'pan-to' && map && hasMapSdk()) {
           const latitude = Number(data.latitude), longitude = Number(data.longitude);
