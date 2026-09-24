@@ -8,6 +8,11 @@ export function validMapBounds(b: MapBounds): boolean {
 export function insideMapBounds(p: { latitude: number; longitude: number }, b: MapBounds): boolean {
   return p.latitude >= b.south && p.latitude <= b.north && p.longitude >= b.west && p.longitude <= b.east;
 }
+/** Compare actual map rectangles, not just their centers or cached search terms. */
+export function sameMapBounds(a: MapBounds, b: MapBounds, tolerance = 0.00012): boolean {
+  return validMapBounds(a) && validMapBounds(b)
+    && (['west', 'south', 'east', 'north'] as const).every((key) => Math.abs(a[key] - b[key]) <= tolerance);
+}
 export type PlaceSearchPage = { results: LocationSearchResult[]; excludedIds: string[]; hasMore: boolean };
 export type PlaceSearchOptions = { bounds?: MapBounds; excludedIds?: string[]; signal?: AbortSignal; cache?: boolean };
 
