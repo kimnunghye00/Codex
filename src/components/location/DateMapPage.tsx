@@ -667,8 +667,8 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   return <div className="page date-map-page">
     <Header title="지도" />
     <div className="date-map-heading"><div><small>OUR DATE MAP</small><h1>우리의 데이트 지도 ♡</h1><p>가고 싶은 곳을 모아두고, 함께 갈 순서로 데이트 코스를 만들어요.</p></div></div>
-    <form className="date-map-search" onSubmit={(event) => { event.preventDefault(); if (tab === 'courses') setAddingToCourse(true); void search(query); }}>
-      <Search size={19} aria-hidden="true"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="가게 이름, 주소, 지역 검색" aria-label="데이트 장소 검색"/>
+    <form className="date-map-search" onSubmit={(event) => { event.preventDefault(); if (tab === 'courses') setAddingToCourse(true); if (tab === 'plans' && activePlan) setAddingToPlan(true); void search(query); }}>
+      <Search size={19} aria-hidden="true"/><input ref={searchField} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="가게 이름, 주소, 지역 검색" aria-label="데이트 장소 검색"/>
       <button type="submit" disabled={searching}>{searching ? '검색 중…' : '검색'}</button>
     </form>
     <div className="date-map-search-scope" aria-label="검색 범위">
@@ -679,20 +679,29 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     {message && <p className="date-map-feedback" role="status">{message}</p>}
     {!connection && <p className="date-map-connect">두 사람이 함께 사용할 장소·코스 저장은 커플 연결 후 이용할 수 있어요. 지도 검색은 먼저 사용해 볼 수 있어요.</p>}
 
-    <div className="date-map-workspace">
+    {tab === 'search' && addingToPlan && activePlan && <div className="date-map-plan-context" role="status">
+      <span><b>{activePlan.title || '이름 없는 데이트'}</b> 후보를 찾는 중 · 전체 가고 싶은 곳에 자동 저장하지 않아요.</span>
+      <button type="button" onClick={() => { setAddingToPlan(false); setMessage('데이트 후보 담기를 종료했어요.'); }}>후보 담기 종료</button>
+    </div>}
+    {tab === 'plans' && <div className="date-map-plan-mobile-switch" aria-label="데이트 후보 화면 보기">
+      <button type="button" aria-pressed={mobilePlanView === 'list'} onClick={() => setMobilePlanView('list')}>후보 목록</button>
+      <button type="button" aria-pressed={mobilePlanView === 'map'} onClick={() => setMobilePlanView('map')}>지도 보기</button>
+    </div>}
+    <div className={'date-map-workspace' + (tab === 'plans' ? ' date-map-plan-view-' + mobilePlanView : '')}>
       <section className="date-map-map" aria-label="데이트 장소 지도">
         <iframe ref={frame} title="단둘이 데이트 지도" src={MAP_HOST} referrerPolicy="strict-origin-when-cross-origin" onError={() => setMapError(true)} />
         {!mapReady && <div className="date-map-loading">{mapError ? '지도를 불러오지 못했어요. 네트워크 또는 지도 인증을 확인해 주세요.' : '네이버 지도를 불러오는 중이에요…'}</div>}
         {mapReady && query.trim() && bounds && <button className="date-map-research" type="button" disabled={searching} onClick={() => { setScope('map'); void search(query, false, 'map'); }}>이 지역에서 다시 검색</button>}
-        <div className="date-map-caption">📍 저장한 장소 {places.length}곳 · 방문 기록과 분리된 계획 지도</div>
+        <div className="date-map-caption">{tab === 'plans' ? '📍 이 데이트의 후보 ' + planCandidates.length + '곳' : '📍 저장한 장소 ' + places.length + '곳 · 방문 기록과 분리된 계획 지도'}</div>
       </section>
       <section className="date-map-panel" ref={panel}>
         <div className="date-map-tabs" role="tablist" aria-label="데이트 지도 보기">
-          <button type="button" role="tab" aria-selected={tab === 'search'} className={tab === 'search' ? 'active' : ''} onClick={() => { clearMapFocus(); setAddingToCourse(false); setTab('search'); }}>검색 결과</button>
-          <button type="button" role="tab" aria-selected={tab === 'places'} className={tab === 'places' ? 'active' : ''} onClick={() => { clearMapFocus(); setTab('places'); }}>가고 싶은 곳</button>
-          <button type="button" role="tab" aria-selected={tab === 'courses'} className={tab === 'courses' ? 'active' : ''} onClick={() => { clearMapFocus(); setTab('courses'); }}>데이트 코스</button>
+          <button type="button" role="tab" aria-selected={tab === 'search'} className={tab === 'search' ? 'active' : ''} onClick={() => { clearMapFocus(); setAddingToCourse(false); setAddingToPlan(false); setTab('search'); }}>검색 결과</button>
+          <button type="button" role="tab" aria-selected={tab === 'places'} className={tab === 'places' ? 'active' : ''} onClick={() => { clearMapFocus(); setAddingToPlan(false); setTab('places'); }}>가고 싶은 곳</button>
+          <button type="button" role="tab" aria-selected={tab === 'courses'} className={tab === 'courses' ? 'active' : ''} onClick={() => { clearMapFocus(); setAddingToPlan(false); setTab('courses'); }}>기존 코스</button>
+          <button type="button" role="tab" aria-selected={tab === 'plans'} className={tab === 'plans' ? 'active' : ''} onClick={() => { clearMapFocus(); setAddingToPlan(false); setTab('plans'); }}>데이트 초안</button>
         </div>
-        <button className="date-map-view-all" type="button" disabled={!mapReady || !mapVisits.length} onClick={() => { clearMapFocus(); frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'fit-visits' }, MAP_ORIGIN); }}>{tab === 'courses' ? '코스 전체 지도에서 보기' : '목록 전체 지도에서 보기'}</button>
+        <button className="date-map-view-all" type="button" disabled={!mapReady || !mapVisits.length} onClick={() => { clearMapFocus(); frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'fit-visits' }, MAP_ORIGIN); }}>{tab === 'courses' ? '코스 전체 지도에서 보기' : tab === 'plans' ? '후보 전체 지도에서 보기' : '목록 전체 지도에서 보기'}</button>
         {tab === 'search' && <div className="date-map-search-results">
           <div className="date-map-panel-header"><strong>검색 결과 {results.length}곳</strong><button type="button" onClick={() => { setPicking((v) => !v); setMessage(''); }} disabled={!mapReady}>{picking ? '선택 안내 닫기' : '지도에서 직접 위치 선택'}</button></div>
           {results.map((item, index) => <button key={`branch-${index}`} type="button" className={candidate === item ? 'date-map-branch active' : 'date-map-branch'} onClick={() => chooseResult(item)}>
@@ -717,7 +726,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
         </div>}
         {tab === 'search' && candidate && <article ref={candidateCard} className="date-map-candidate" aria-label="선택한 장소 확인">
           <div className="date-map-candidate-header">
-            <div><h2>선택한 장소</h2><p>{addingToCourse ? '위치를 확인하고 편집 중인 코스에 담아요.' : '가고 싶은 곳으로 보관한 뒤 언제든 코스에 담을 수 있어요.'}</p></div>
+            <div><h2>선택한 장소</h2><p>{addingToPlan && activePlan ? '선택한 데이트에만 후보로 담아요. 전체 보관함에는 자동 저장하지 않아요.' : addingToCourse ? '위치를 확인하고 편집 중인 코스에 담아요.' : '가고 싶은 곳으로 보관한 뒤 언제든 코스에 담을 수 있어요.'}</p></div>
             <button type="button" className="date-map-candidate-close" aria-label="선택한 장소 닫기" onClick={() => { setCandidate(null); clearMapFocus(); }}><X size={18}/></button>
           </div>
           <div className="date-map-candidate-summary">
@@ -746,7 +755,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             <textarea value={candidateMemo} onChange={(e) => setCandidateMemo(e.target.value)} maxLength={1000} placeholder="예: 여기서 식사하고 근처 카페에 가기"/>
           </label>
           <p className="date-map-candidate-note">검색어: {candidateSearch} · 저장하기 전에 위치가 맞는지 확인해 주세요.</p>
-          <button className="date-map-primary date-map-candidate-submit" type="button" disabled={pending || !connection} onClick={() => void saveCandidate(addingToCourse)}><Plus size={17}/> {addingToCourse ? '현재 코스에 장소 추가' : '가고 싶은 곳에 저장'}</button>
+          <button className="date-map-primary date-map-candidate-submit" type="button" disabled={pending || !connection} onClick={() => void (addingToPlan && activePlan ? savePlanCandidate() : saveCandidate(addingToCourse))}><Plus size={17}/> {addingToPlan && activePlan ? '현재 데이트 후보에 담기' : addingToCourse ? '현재 코스에 장소 추가' : '가고 싶은 곳에 저장'}</button>
         </article>}
         {tab === 'places' && <>
           <div className="date-map-panel-header"><strong>우리의 가고 싶은 곳</strong><span>총 {places.length}곳</span></div>
