@@ -60,7 +60,9 @@ exports.searchDatePlaces = onRequest({
   if (!naverId.value() || !naverSecret.value()) return sendJson(res, 503, { error: 'search-not-configured' });
   // One broad query has only five results. Search both locality- and district-
   // first variants so a nearby CGV branch is not displaced by nationwide CGVs.
-  const queries = buildLocalSearchQueries(query, region);
+  // Corner/edge follow-up searches use fewer variants to respect API quotas.
+  const focus = req.query.focus === '1';
+  const queries = buildLocalSearchQueries(query, region).slice(0, focus ? 4 : 7);
   // Independent nearby and name searches run concurrently. Preserve local
   // priority when merging. The client will still require actual map bounds.
   const responses = await Promise.allSettled(queries.map(async (text) => {
