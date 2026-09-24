@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { CalendarDays, ChevronDown, ChevronUp, GripVertical, Heart, MapPin, MessageCircle, Plus, Search, Trash2, X } from 'lucide-react';
 import { auth } from '../../lib/firebase';
 import { appendPlaceToCourse, courseTimesFromSaved, encodeCourseTimeSlot, MAX_DATE_COURSE_PLACES, placesForDateMap, validateCourseTimes, type CourseTimeSlot } from '../../lib/dateCourseDraft';
-import { addDatePlanCandidate, createDatePlanDraft, deleteDatePlanCandidate, subscribeDatePlanCandidates, subscribeDatePlanDrafts, updateDatePlanDraft } from '../../lib/datePlanDrafts';
+import { addDatePlanCandidate, createDatePlanDraft, deleteDatePlanCandidate, readDatePlanCandidates, subscribeDatePlanCandidates, subscribeDatePlanDrafts, updateDatePlanDraft } from '../../lib/datePlanDrafts';
 import { isSameDatePlanPlace } from '../../lib/datePlanCandidates';
 import type { DatePlanDraft, DatePlanCandidate } from '../../lib/datePlanFoundation';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
@@ -35,6 +35,7 @@ const NAVER_LOCAL_SEARCH_URL = String(import.meta.env.VITE_NAVER_LOCAL_SEARCH_UR
 function errorText(error: unknown) {
   const code = String((error as { code?: string })?.code ?? '');
   if (code.includes('permission-denied')) return '두 사람의 연결 상태 또는 장소 접근 권한을 확인해 주세요.';
+  if (String((error as Error)?.message ?? '').includes('date-plan-candidate-not-visible')) return '저장 확인에 실패했어요. 다시 불러온 후보 목록을 확인해 주세요.';
   return '작업을 완료하지 못했어요. 네트워크를 확인하고 다시 시도해 주세요.';
 }
 
@@ -57,6 +58,8 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const [datePlans, setDatePlans] = useState<DatePlanDraft[]>([]);
   const [activePlanId, setActivePlanId] = useState('');
   const [planCandidates, setPlanCandidates] = useState<DatePlanCandidate[]>([]);
+  const [planCandidatesLoading, setPlanCandidatesLoading] = useState(false);
+  const [planCandidatesError, setPlanCandidatesError] = useState(false);
   const [planTitle, setPlanTitle] = useState('');
   const [planDate, setPlanDate] = useState('');
   const [selectedPlanCandidateId, setSelectedPlanCandidateId] = useState('');
@@ -115,6 +118,8 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const nationwideResults = useRef<{ query: string; results: LocationSearchResult[] } | null>(null);
   const regionLookup = useRef<{ key: string; expires: number; region: string } | null>(null);
   const queryRef = useRef(query);
+  const activePlanIdRef = useRef(activePlanId);
+  activePlanIdRef.current = activePlanId;
   useEffect(() => () => {
     ++searchSequence.current;
     searchAbort.current?.abort();
@@ -163,8 +168,14 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
 
   useEffect(() => {
     setPlanCandidates([]); setSelectedPlanCandidateId('');
+    setPlanCandidatesLoading(Boolean(coupleId && activePlanId)); setPlanCandidatesError(false);
     if (!coupleId || !activePlanId) return;
-    return subscribeDatePlanCandidates(coupleId, activePlanId, setPlanCandidates, (error) => setMessage(errorText(error)));
+    return subscribeDatePlanCandidates(coupleId, activePlanId, (items) => {
+      setPlanCandidates(items);
+      setPlanCandidatesLoading(false); setPlanCandidatesError(false);
+    }, (error) => {
+      setPlanCandidatesLoading(false); setPlanCandidatesError(true); setMessage(errorText(error));
+    });
   }, [coupleId, activePlanId]);
 
   useEffect(() => {
@@ -541,6 +552,14 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     searchField.current?.focus();
   };
 
+  const refreshPlanCandidates = async (planId: string) => {
+    const items = await readDatePlanCandidates(coupleId, planId);
+    if (activePlanIdRef.current === planId) {
+      setPlanCandidates(items); setPlanCandidatesLoading(false); setPlanCandidatesError(false);
+    }
+    return items;
+  };
+
   const savePlanCandidate = async () => {
     if (!candidate || !activePlan || !coupleId || !uid || pending) return;
     const name = candidateName.trim();
@@ -554,7 +573,10 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       setMessage('이미 이 데이트에 담긴 후보예요. 후보 목록에서 확인해 주세요.'); return;
     }
     await submit(async () => {
-      await addDatePlanCandidate(coupleId, activePlan.id, uid, input);
+      const planId = activePlan.id;
+      const savedId = await addDatePlanCandidate(coupleId, planId, uid, input);
+      const confirmed = await refreshPlanCandidates(planId);
+      if (!confirmed.some((item) => item.id === savedId)) throw new Error('date-plan-candidate-not-visible');
       setCandidate(null); setResults([]); setCandidateMemo(''); clearMapFocus();
       setAddingToPlan(false); setTab('plans'); setMobilePlanView('list');
     }, '데이트 후보에 장소를 담았어요. 전체 가고 싶은 곳에는 저장하지 않았어요.');
@@ -574,10 +596,15 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     if (planCandidates.some((candidate) => isSameDatePlanPlace(candidate, item))) {
       setMessage('이미 이 데이트에 담긴 후보예요.'); return;
     }
-    await submit(() => addDatePlanCandidate(coupleId, activePlan.id, uid, {
-      name: item.name, address: item.address, latitude: item.latitude, longitude: item.longitude,
-      category: item.category, memo: item.memo, sourceSavedPlaceId: item.id,
-    }), '가고 싶은 곳에서 이 데이트의 후보로 담았어요.');
+    await submit(async () => {
+      const planId = activePlan.id;
+      const savedId = await addDatePlanCandidate(coupleId, planId, uid, {
+        name: item.name, address: item.address, latitude: item.latitude, longitude: item.longitude,
+        category: item.category, memo: item.memo, sourceSavedPlaceId: item.id,
+      });
+      const confirmed = await refreshPlanCandidates(planId);
+      if (!confirmed.some((candidate) => candidate.id === savedId)) throw new Error('date-plan-candidate-not-visible');
+    }, '가고 싶은 곳에서 이 데이트의 후보로 담았어요.');
   };
 
   const resetCourseEditor = () => {
@@ -860,11 +887,17 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             </label>
             <button type="button" className="date-map-primary" disabled={pending || (planTitle.trim() === activePlan.title && planDate === activePlan.date)}
               onClick={() => void savePlanDetails()}>초안 정보 저장</button>
-            <div className="date-map-panel-header"><strong>이 데이트의 장소 후보</strong><span>{planCandidates.length}곳</span></div>
+            <div className="date-map-panel-header"><strong>이 데이트의 장소 후보</strong><span>{planCandidates.length}곳</span>
+              <button type="button" disabled={pending || planCandidatesLoading} onClick={() => void submit(async () => {
+                await refreshPlanCandidates(activePlan.id);
+              }, '후보 목록을 다시 불러왔어요.')}>새로고침</button>
+            </div>
             <div className="date-map-plan-actions">
               <button type="button" className="date-map-primary" onClick={startPlanSearch}><Search size={15}/> 장소 검색해서 담기</button>
             </div>
-            {!planCandidates.length && <p className="date-map-empty">아직 후보가 없어요. 장소를 검색하거나 기존 '가고 싶은 곳'에서 담아 보세요.</p>}
+            {planCandidatesLoading && <p className="date-map-empty" role="status">이 데이트의 후보를 불러오는 중이에요…</p>}
+            {planCandidatesError && <div className="date-map-empty" role="alert">후보 목록을 불러오지 못했어요. <button type="button" disabled={pending} onClick={() => void submit(async () => { await refreshPlanCandidates(activePlan.id); }, '후보 목록을 다시 불러왔어요.')}>다시 불러오기</button></div>}
+            {!planCandidatesLoading && !planCandidatesError && !planCandidates.length && <p className="date-map-empty">아직 후보가 없어요. 장소를 검색하거나 기존 '가고 싶은 곳'에서 담아 보세요.</p>}
             {planCandidates.map((item) => <article key={item.id} className={selectedPlanCandidateId === item.id ? 'date-map-plan-candidate active' : 'date-map-plan-candidate'}>
               <button type="button" className="date-map-plan-location" onClick={() => {
                 setSelectedPlanCandidateId(item.id); mapFocus({ ...item, placeName: item.name }); setMobilePlanView('map');

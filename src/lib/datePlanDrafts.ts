@@ -1,4 +1,4 @@
-import { collection, deleteDoc, doc, getDocs, onSnapshot, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDocFromServer, getDocsFromServer, onSnapshot, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import type { DatePlanDraft, DatePlanCandidate } from './datePlanFoundation';
 import { datePlanCandidateId, isSameDatePlanPlace } from './datePlanCandidates';
@@ -8,8 +8,7 @@ const candidateCollection = (coupleId: string, planId: string) =>
   collection(db, 'couples', coupleId, 'datePlans', planId, 'candidates');
 
 /**
- * Opt-in V2 API. Current date-map screens deliberately continue to use
- * dateCourses/datePlaces; stage 1 never rewrites or migrates those collections.
+ * Isolated date-plan V2 API. Legacy dateCourses/datePlaces are never rewritten.
  */
 export function subscribeDatePlanDrafts(
   coupleId: string, onChange: (plans: DatePlanDraft[]) => void, onError: (error: unknown) => void,
@@ -54,6 +53,13 @@ export function subscribeDatePlanCandidates(
       .sort((a, b) => a.name.localeCompare(b.name, 'ko-KR'))), onError);
 }
 
+/** Fetch the complete server list to repair missed/late local snapshot updates. */
+export async function readDatePlanCandidates(coupleId: string, planId: string): Promise<DatePlanCandidate[]> {
+  const snapshot = await getDocsFromServer(candidateCollection(coupleId, planId));
+  return snapshot.docs.map((item) => ({ ...item.data(), id: item.id } as DatePlanCandidate))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ko-KR'));
+}
+
 export async function addDatePlanCandidate(
   coupleId: string, planId: string, uid: string,
   input: Pick<DatePlanCandidate, 'name' | 'address' | 'latitude' | 'longitude' | 'category' | 'memo'> &
@@ -62,7 +68,7 @@ export async function addDatePlanCandidate(
   const candidates = candidateCollection(coupleId, planId);
   // The existing snapshot covers legacy random IDs and slightly different provider coordinates.
   // Do not write anything into the global datePlaces wishlist.
-  const existing = await getDocs(candidates);
+  const existing = await getDocsFromServer(candidates);
   const duplicate = existing.docs.find((item) => isSameDatePlanPlace(item.data() as DatePlanCandidate, input));
   if (duplicate) return duplicate.id;
   const ref = doc(candidates, datePlanCandidateId(input));
@@ -84,6 +90,9 @@ export async function addDatePlanCandidate(
     const found = await transaction.get(ref);
     if (!found.exists()) transaction.set(ref, payload);
   });
+  // A resolved write is not sufficient if the selected plan cannot read it.
+  const verified = await getDocFromServer(ref);
+  if (!verified.exists()) throw new Error('date-plan-candidate-not-visible');
   return ref.id;
 }
 
