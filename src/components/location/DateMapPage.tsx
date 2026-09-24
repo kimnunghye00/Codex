@@ -16,7 +16,7 @@ import {
   type DateCourse, type DatePlace, type PlaceOpinion,
 } from '../../lib/dateMap';
 import { insideMapBounds, searchLocationPage, validMapBounds, type MapBounds } from '../../utils/locationSearch';
-import { fetchNaverDatePlaces } from '../../utils/naverLocalSearch';
+import { fetchNaverDatePlaces, type NaverSearchCoverage } from '../../utils/naverLocalSearch';
 import { groupSavedPlaces, placeRegion } from '../../utils/placeRegions';
 import { matchesPlaceSearchIntent, parsePlaceSearchIntent } from '../../utils/placeSearchIntent.ts';
 import { deduplicatePlaceResults } from '../../utils/placeSearchDedup.ts';
@@ -80,6 +80,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const [candidate, setCandidate] = useState<LocationSearchResult | null>(null);
   const [manualMapCandidate, setManualMapCandidate] = useState(false);
   const [results, setResults] = useState<LocationSearchResult[]>([]);
+  const [searchCoverage, setSearchCoverage] = useState<NaverSearchCoverage | null>(null);
   const [picking, setPicking] = useState(false);
   const [candidateName, setCandidateName] = useState('');
   const [candidateAddress, setCandidateAddress] = useState('');
@@ -218,7 +219,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     ++lookupSequence.current;
     clearMapFocus(); setTab('search'); setSearching(true); setPicking(false); setMessage('');
     if (!more) {
-      setCandidate(null); setManualMapCandidate(false); setResults([]); setHasMore(false); setExcludedIds([]);
+      setCandidate(null); setManualMapCandidate(false); setResults([]); setSearchCoverage(null); setHasMore(false); setExcludedIds([]);
       if (intent.hasExplicitRegion) setScope('nationwide');
       setCandidateSearch(trimmed); setSearchedBounds(activeScope === 'map' ? activeBounds : null); setSearchedScope(activeScope);
     }
@@ -231,6 +232,13 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       ? nationwideResults.current.results.filter((item) => insideMapBounds(item, activeBounds!)) : [];
 
     const received: { osm: LocationSearchResult[]; naver: LocationSearchResult[] } = { osm: [], naver: [] };
+    const coverage: NaverSearchCoverage = { received: 0, valid: 0, inBounds: 0, matched: 0 };
+    const collectCoverage = (stats: NaverSearchCoverage) => {
+      coverage.received += stats.received;
+      coverage.valid += stats.valid;
+      coverage.inBounds += stats.inBounds;
+      coverage.matched += stats.matched;
+    };
     const unique = deduplicatePlaceResults;
     const combinedResults = () => unique([...matchedSaved, ...cached, ...received.naver, ...received.osm]);
     const publish = () => {
@@ -276,7 +284,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             }
           }
           if (controller.signal.aborted) return [] as LocationSearchResult[];
-          const options = { endpoint: NAVER_LOCAL_SEARCH_URL, token, bounds: currentBounds, signal: controller.signal };
+          const options = { endpoint: NAVER_LOCAL_SEARCH_URL, token, bounds: currentBounds, signal: controller.signal, onCoverage: collectCoverage };
           const primary = await fetchNaverDatePlaces(trimmed, { ...options, region });
           if (primary.length || !currentBounds || controller.signal.aborted) return primary;
           // A viewport can span more than one district, with the desired
@@ -309,6 +317,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
       if (sequence !== searchSequence.current) return;
       if (osm.status === 'rejected' && naver.status === 'rejected') throw osm.reason;
       const combined = combinedResults();
+      if (!more) setSearchCoverage({ ...coverage });
       const naverUnavailable = Boolean(NAVER_LOCAL_SEARCH_URL && naver.status === 'rejected');
       if (activeScope === 'nationwide' && !more) nationwideResults.current = { query: trimmed, results: combined };
 
@@ -774,6 +783,10 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             <span className="date-map-result-number">{index + 1}</span><span><b>{item.placeName}</b><small>{item.address || '상세 주소 정보 없음'}</small></span>
           </button>)}
           {candidateSearch && <small>{searchedRegion ? `지역 조건: ${searchedRegion} · 다른 지역 지점 제외` : searchedScope === 'map' ? '검색 당시 지도 영역' : '전국'} · “{candidateSearch}”</small>}
+          {!searching && !results.length && searchCoverage && NAVER_LOCAL_SEARCH_URL && <p className="date-map-add-hint" role="status">
+            실제 검색 확인: 네이버 제공 {searchCoverage.received}건 · 좌표 유효 {searchCoverage.valid}건 · 현재 지도 안 {searchCoverage.inBounds}건 · 검색어 일치 {searchCoverage.matched}건.
+            {searchCoverage.received > 0 && searchCoverage.inBounds === 0 ? ' 검색 결과의 위치가 현재 지도 밖이어서 표시하지 않았어요.' : ' 지도에 인쇄된 업체명이 지역 검색 API 결과에 포함되지 않을 수 있어요.'}
+          </p>}
           {searchedRegion && !results.length && <button type="button" className="date-map-primary date-map-region-navigate" disabled={!mapReady || searching} onClick={() => void goToSearchedRegion()}>
             <MapPin size={15}/> {searchedRegion} 지도로 이동해 직접 선택
           </button>}
