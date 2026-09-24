@@ -432,6 +432,15 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'set-pick-mode', enabled: tab === 'search' }, MAP_ORIGIN);
   }, [mapReady, picking, tab]);
 
+  // A hidden mobile iframe can measure zero width; resize NAVER after revealing it.
+  useEffect(() => {
+    if (tab !== 'plans' || mobilePlanView !== 'map' || !mapReady) return;
+    const animationFrame = window.requestAnimationFrame(() => {
+      frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'resize' }, MAP_ORIGIN);
+    });
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [tab, mobilePlanView, mapReady]);
+
   useEffect(() => {
     if (tab !== 'search' || !candidate) return;
     // The confirmation form may sit below a long list of search results.
@@ -693,6 +702,10 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
         {!mapReady && <div className="date-map-loading">{mapError ? '지도를 불러오지 못했어요. 네트워크 또는 지도 인증을 확인해 주세요.' : '네이버 지도를 불러오는 중이에요…'}</div>}
         {mapReady && query.trim() && bounds && <button className="date-map-research" type="button" disabled={searching} onClick={() => { setScope('map'); void search(query, false, 'map'); }}>이 지역에서 다시 검색</button>}
         <div className="date-map-caption">{tab === 'plans' ? '📍 이 데이트의 후보 ' + planCandidates.length + '곳' : '📍 저장한 장소 ' + places.length + '곳 · 방문 기록과 분리된 계획 지도'}</div>
+        {tab === 'plans' && planCandidates.length > 0 && <button className="date-map-plan-mobile-fit" type="button" onClick={() => {
+          clearMapFocus();
+          frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'fit-visits' }, MAP_ORIGIN);
+        }}>후보 전체 지도 보기</button>}
       </section>
       <section className="date-map-panel" ref={panel}>
         <div className="date-map-tabs" role="tablist" aria-label="데이트 지도 보기">
