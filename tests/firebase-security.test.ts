@@ -17,7 +17,7 @@ import { disconnectCouple } from '../src/lib/coupleDisconnect';
 import { sendCoupleMessage, toggleCoupleMessageReaction, setCoupleMessageReactions, hideCoupleMessageForMe, deleteCoupleMessageForEveryone, clearCoupleChatForMe } from '../src/lib/chatRealtime';
 import { uploadChatAttachment, uploadChatMedia } from '../src/lib/chatMedia';
 import { addDatePlace, saveDateCourse, setPlaceLike, addPlaceOpinion } from '../src/lib/dateMap';
-import { addDatePlanCandidate, createDatePlanDraft, updateDatePlanCandidateMemo, updateDatePlanDraft } from '../src/lib/datePlanDrafts';
+import { addDatePlanCandidate, createDatePlanDraft, readDatePlanCandidates, subscribeDatePlanCandidates, updateDatePlanCandidateMemo, updateDatePlanDraft } from '../src/lib/datePlanDrafts';
 
 const projectId = 'demo-danduli-security';
 let env: RulesTestEnvironment;
@@ -363,6 +363,17 @@ test('date plan V2: unfinished drafts and date-only candidates stay isolated and
     category: '맛집', memo: '점심 후보',
   });
   const candidatePath = `${planPath}/candidates/${candidateId}`;
+  // Query reads and the actual listener are required by the UI; a direct getDoc alone
+  // can pass even when the list stays empty or the collection listener is denied.
+  expect((await readDatePlanCandidates(coupleId, planId)).map((item) => item.id)).toEqual([candidateId]);
+  const observed = await new Promise<string[]>((resolve, reject) => {
+    let unsubscribe: () => void = () => {};
+    unsubscribe = subscribeDatePlanCandidates(coupleId, planId, (items) => {
+      resolve(items.map((item) => item.id));
+      queueMicrotask(() => unsubscribe());
+    }, reject);
+  });
+  expect(observed).toEqual([candidateId]);
   const plan = (await getDocFromServer(doc(client.db, planPath))).data();
   expect(plan?.status).toBe('draft');
   expect(plan?.schemaVersion).toBe(2);
@@ -373,6 +384,14 @@ test('date plan V2: unfinished drafts and date-only candidates stay isolated and
 
   as('bob');
   expect((await getDocFromServer(doc(client.db, candidatePath))).data()?.name).toBe('니뽕내뽕');
+  expect((await readDatePlanCandidates(coupleId, planId)).map((item) => item.id)).toEqual([candidateId]);
+  const again = await addDatePlanCandidate(coupleId, planId, 'bob', {
+    name: '니뽕내뽕', address: '강릉시', latitude: 37.75, longitude: 128.88,
+    category: '맛집', memo: '다른 사람의 중복 제출',
+  });
+  expect(again).toBe(candidateId);
+  expect((await readDatePlanCandidates(coupleId, planId)).length).toBe(1);
+  expect((await getDocFromServer(doc(client.db, candidatePath))).data()?.memo).toBe('점심 후보');
   await updateDatePlanDraft(coupleId, planId, { title: '함께 만드는 초안', date: '2026-11-21' });
   await updateDatePlanCandidateMemo(coupleId, planId, candidateId, '예비 식당으로');
   expect((await getDocFromServer(doc(client.db, planPath))).data()?.title).toBe('함께 만드는 초안');
