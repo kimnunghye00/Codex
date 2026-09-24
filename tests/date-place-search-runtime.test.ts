@@ -289,6 +289,6 @@ test('map host and date map use a correlated live viewport protocol rather than 
   const parent = readFileSync('src/components/location/DateMapPage.tsx', 'utf8');
   assert.match(host, /type === 'request-viewport'[\s\S]*?send\('viewport-snapshot'/);
   assert.match(parent, /await readLiveViewport\(\)/);
-  assert.match(parent, /pendingViewport\.current\?\.id === event\.data\.requestId/);
+  assert.match(parent, /pending\.id === event\.data\.requestId/);
   assert.match(parent, /results\.filter\(\(item\) => insideMapBounds\(item, bounds\)\)/);
 });
