@@ -247,3 +247,23 @@ test('superseded map searches abort the active Nominatim request without startin
     assert.equal(requests, 1, 'an aborted request must not retry nationwide or hit Overpass');
   } finally { globalThis.fetch = original; }
 });
+
+
+test('map CGV search finds a genuinely brand-tagged cinema without inventing a POI', async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes('overpass-api')) return new Response(JSON.stringify({ elements: [
+      { type: 'node', id: 1, lat: 37.535, lon: 127.095, tags: { name: '씨지브이 강변', brand: 'CGV', 'addr:street': '강변역로' } },
+      { type: 'node', id: 2, lat: 35.1, lon: 129.0, tags: { name: 'CGV 다른 지역', brand: 'CGV' } },
+    ] }));
+    return new Response(JSON.stringify([]));
+  };
+  try {
+    const page = await searchLocationPage('cgv', { bounds: {
+      west: 127.08, east: 127.10, south: 37.53, north: 37.54,
+    } });
+    assert.equal(page.results.length, 1);
+    assert.equal(page.results[0].placeName, 'CGV · 씨지브이 강변');
+    assert.equal(page.results[0].address, '강변역로');
+  } finally { globalThis.fetch = original; }
+});
