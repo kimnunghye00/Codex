@@ -887,7 +887,11 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             </label>
             <button type="button" className="date-map-primary" disabled={pending || (planTitle.trim() === activePlan.title && planDate === activePlan.date)}
               onClick={() => void savePlanDetails()}>초안 정보 저장</button>
-            <div className="date-map-panel-header"><strong>이 데이트의 장소 후보</strong><span>{planCandidates.length}곳</span></div>
+            <div className="date-map-panel-header"><strong>이 데이트의 장소 후보</strong><span>{planCandidates.length}곳</span>
+              <button type="button" disabled={pending || planCandidatesLoading} onClick={() => void submit(async () => {
+                await refreshPlanCandidates(activePlan.id);
+              }, '후보 목록을 다시 불러왔어요.')}>새로고침</button>
+            </div>
             <div className="date-map-plan-actions">
               <button type="button" className="date-map-primary" onClick={startPlanSearch}><Search size={15}/> 장소 검색해서 담기</button>
             </div>
