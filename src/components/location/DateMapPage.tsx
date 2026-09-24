@@ -8,7 +8,7 @@ import { addDatePlanCandidate, createDatePlanDraft, deleteDatePlanCandidate, rea
 import { isSameDatePlanPlace } from '../../lib/datePlanCandidates';
 import type { DatePlanDraft, DatePlanCandidate } from '../../lib/datePlanFoundation';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
-import { reverseGeocode, type LocationSearchResult } from '../../utils/location';
+import { reverseGeocode, reverseGeocodeMapRegion, type LocationSearchResult } from '../../utils/location';
 import {
   addDatePlace, addPlaceOpinion, deleteDateCourse, deleteDatePlace, deletePlaceOpinion,
   saveDateCourse, setPlaceLike, subscribeDateCourses, subscribeDatePlaces,
@@ -268,23 +268,37 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             if (memo && memo.key === regionKey && memo.expires > Date.now()) {
               region = memo.region;
             } else {
-              const address = await reverseGeocode(latitude, longitude);
+              // Reverse-geocoding's display label contains POI names and can
+              // omit the province. Use structured administrative fields instead.
+              region = await reverseGeocodeMapRegion(latitude, longitude, controller.signal);
               if (controller.signal.aborted) return [] as LocationSearchResult[];
-              if (address) {
-                const parsed = placeRegion(address);
-                region = parsed.province !== '지역 미분류' ? parsed.province : '';
-                if (parsed.district && parsed.district !== '시·군·구 미분류') region += ' ' + parsed.district;
-                // Reverse geocoding also provides the neighbourhood. A district-wide
-                // five-item API page often misses a branch in a small viewport.
-                const locality = address.split('·')[0]?.trim().split(/\s+/).at(-1) ?? '';
-                if (/^[가-힣]+(?:동|읍|면|리)$/.test(locality)) region += ' ' + locality;
-                region = region.trim();
-              }
               if (region) regionLookup.current = { key: regionKey, expires: Date.now() + 90_000, region };
             }
           }
           if (controller.signal.aborted) return [] as LocationSearchResult[];
-          return fetchNaverDatePlaces(trimmed, { endpoint: NAVER_LOCAL_SEARCH_URL, token, region, bounds: currentBounds, signal: controller.signal });
+          const options = { endpoint: NAVER_LOCAL_SEARCH_URL, token, bounds: currentBounds, signal: controller.signal };
+          const primary = await fetchNaverDatePlaces(trimmed, { ...options, region });
+          if (primary.length || !currentBounds || controller.signal.aborted) return primary;
+          // A viewport can span more than one district, with the desired
+          // cinema near an edge while the centre geocodes to another dong.
+          // Only search extra areas after the primary search has zero visible hits.
+          const width = currentBounds.east - currentBounds.west;
+          const height = currentBounds.north - currentBounds.south;
+          if (width > 0.12 || height > 0.12) return primary;
+          const latitude = currentBounds.south + height * 0.25;
+          const points = [
+            { latitude, longitude: currentBounds.west + width * 0.12 },
+            { latitude, longitude: currentBounds.east - width * 0.12 },
+          ];
+          const extraRegions = await Promise.all(points.map((point) =>
+            reverseGeocodeMapRegion(point.latitude, point.longitude, controller.signal)));
+          if (controller.signal.aborted) return primary;
+          const distinct = [...new Set(extraRegions.filter((item) => item && item !== region))];
+          const nearby = await Promise.allSettled(distinct.map((item) =>
+            fetchNaverDatePlaces(trimmed, { ...options, region: item, focus: true })));
+          if (controller.signal.aborted) return primary;
+          return deduplicatePlaceResults([...primary, ...nearby.flatMap((item) =>
+            item.status === 'fulfilled' ? item.value : [])]);
         })().then((naverResults) => {
           received.naver = naverResults;
           publish();
