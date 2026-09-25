@@ -442,8 +442,10 @@ service cloud.firestore {
         allow update: if memberOf(coupleId) && canEditUnapproved() && validDraft()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'date', 'updatedAt'])
           && request.resource.data.updatedAt == request.time;
-        // Preserve candidate subcollections and avoid accidental orphaning.
-        allow delete: if false;
+        // Only an unapproved draft may be removed. The client deletes all owned
+        // subdocuments in the same atomic batch so comments/schedule do not orphan.
+        allow delete: if memberOf(coupleId) && canEditUnapproved()
+          && resource.data.status == 'draft';
 
         match /candidates/{candidateId} {
           function editableDraft() {
@@ -659,7 +661,8 @@ service cloud.firestore {
             && request.resource.data.revision == 1;
           allow update: if memberOf(coupleId) && editableSchedule() && canEditUnapproved() && validSchedule()
             && request.resource.data.revision == resource.data.revision + 1;
-          allow delete: if false;
+          allow delete: if memberOf(coupleId) && editableSchedule() && canEditUnapproved()
+            && scheduleId == 'draft';
         }
       }
 
