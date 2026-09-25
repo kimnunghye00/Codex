@@ -1035,7 +1035,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
                 if (!window.confirm(item.name + '을(를) 이 데이트의 후보에서 제거할까요?')) return;
                 void submit(async () => {
                   const schedule = await readDatePlanSchedule(coupleId, activePlan.id);
-                  if (schedule.blocks.some((block) => block.primaryCandidateId === item.id || block.backupCandidateIds.includes(item.id))) {
+                  if (schedule.globalBackupCandidateIds.includes(item.id) || schedule.blocks.some((block) => block.primaryCandidateId === item.id || block.backupCandidateIds.includes(item.id))) {
                     throw new Error('date-plan-candidate-scheduled');
                   }
                   await removeDatePlanCandidateWithFeedback(coupleId, activePlan.id, item.id);
