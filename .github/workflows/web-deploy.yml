@@ -56,6 +56,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install default Cloud Function dependencies
+        run: npm install --prefix functions --no-audit --no-fund
+
       - name: Verify default Cloud Functions syntax
         run: node --check functions/index.js
 
