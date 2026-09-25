@@ -146,8 +146,6 @@ public class AppIconPlugin extends Plugin {
                 return;
             }
 
-            prepareSwap(selectedAlias, previousAlias);
-
             boolean saved = getContext().getSharedPreferences(PREFS, 0)
                     .edit()
                     .putString(PREF_ICON, icon)
@@ -167,13 +165,16 @@ public class AppIconPlugin extends Plugin {
                     try {
                         activity.moveTaskToBack(true);
                     } catch (Exception ignored) {
-                        // The final component swap below still forces package refresh.
+                        // Continue with the deferred launcher update.
                     }
                 }
-                mainHandler.postDelayed(
-                        () -> finishSwap(selectedAlias, previousAlias),
-                        FINAL_SWAP_DELAY_MS
-                );
+                mainHandler.postDelayed(() -> {
+                    prepareSwap(selectedAlias, previousAlias);
+                    mainHandler.postDelayed(
+                            () -> finishSwap(selectedAlias, previousAlias),
+                            FINAL_SWAP_DELAY_MS
+                    );
+                }, 350L);
             }, MOVE_HOME_DELAY_MS);
         } catch (Exception error) {
             call.reject("ICON_CHANGE_FAILED", error);
