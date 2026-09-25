@@ -2,6 +2,7 @@ import { MessageCircle, Palette, ShoppingBag, Smartphone, Sparkles, Sticker, Use
 import { useEffect, useMemo, useState } from 'react';
 import { auth } from '../../lib/firebaseAuth';
 import { normalizeRouteAppIcon, updateRouteFavicon, type RouteAppIconId } from '../../utils/appIcon';
+import { getNativeRouteAppIcon, setNativeRouteAppIcon, supportsNativeRouteAppIcon } from '../../app-icon-native';
 import { applyRouteProfileStyle, normalizeRouteProfileStyle, type RouteProfileStyle } from '../../utils/profileStyle';
 import {
   loadChatPreferences,
@@ -64,13 +65,10 @@ const PROFILE_STYLES: Array<{ id: RouteProfileStyle; label: string; description:
 ];
 
 function AppIconGlyph({ id }: { id: AppIconId }) {
-  const src = id === 'heart-chat'
-    ? '/danduli-icon-chat.webp'
-    : id === 'couple-love'
-      ? '/danduli-character-love.webp'
-      : id === 'couple-date'
-        ? '/danduli-character-date.webp'
-        : '/danduli-icon-heart.webp';
+  if (id === 'couple-love' || id === 'couple-date') {
+    return <span className={`danduli-app-icon-character ${id}`} aria-hidden="true" />;
+  }
+  const src = id === 'heart-chat' ? '/danduli-icon-chat.webp' : '/danduli-icon-heart.webp';
   return <img src={src} alt="" className="danduli-app-icon-image" draggable={false} />;
 }
 
@@ -93,6 +91,9 @@ export function MoreServices({
     return saved === 'lavender' || saved === 'dark' ? saved : 'default';
   });
   const [appIcon, setAppIcon] = useState<AppIconId>(() => normalizeRouteAppIcon(localStorage.getItem('route-app-icon')));
+  const nativeAppIconSupported = supportsNativeRouteAppIcon();
+  const [appIconStateLoading, setAppIconStateLoading] = useState(nativeAppIconSupported);
+  const [appIconChanging, setAppIconChanging] = useState(false);
   const [owned, setOwned] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('route-owned-emoticons') || '["daily"]') as string[]; } catch { return ['daily']; }
   });
@@ -107,6 +108,36 @@ export function MoreServices({
     setChatPreferences(loadChatPreferences(auth.currentUser?.uid ?? 'guest'));
   }, []);
 
+  useEffect(() => {
+    const handleIconChange = (event: Event) => {
+      const next = normalizeRouteAppIcon(String((event as CustomEvent<string>).detail ?? ''));
+      setAppIcon(next);
+      updateRouteFavicon(next);
+      setAppIconStateLoading(false);
+    };
+    window.addEventListener('route-app-icon-changed', handleIconChange);
+    if (nativeAppIconSupported) {
+      setAppIconStateLoading(true);
+      void getNativeRouteAppIcon()
+        .then((icon) => { if (icon) setAppIcon(icon); })
+        .catch((cause) => {
+          console.warn('[DANDULI current launcher icon]', cause);
+          setNotice('현재 홈 화면 아이콘을 확인하지 못했어요. 다시 열어 확인해 주세요.');
+        })
+        .finally(() => setAppIconStateLoading(false));
+    }
+    return () => window.removeEventListener('route-app-icon-changed', handleIconChange);
+  }, [nativeAppIconSupported]);
+
+  useEffect(() => {
+    if (sheet !== 'app-icon' || !nativeAppIconSupported) return;
+    setAppIconStateLoading(true);
+    void getNativeRouteAppIcon()
+      .then((icon) => { if (icon) setAppIcon(icon); })
+      .catch((cause) => console.warn('[DANDULI current launcher icon refresh]', cause))
+      .finally(() => setAppIconStateLoading(false));
+  }, [sheet, nativeAppIconSupported]);
+
   const openSheet = (next: MoreSheet) => {
     setNotice('');
     setSheet(next);
@@ -119,11 +150,37 @@ export function MoreServices({
     setNotice('테마를 바로 적용했어요.');
   };
 
-  const chooseIcon = (next: AppIconId) => {
-    setAppIcon(next);
-    localStorage.setItem('route-app-icon', next);
-    updateRouteFavicon(next);
-    setNotice('앱 아이콘 미리보기와 브라우저 아이콘에 적용했어요.');
+  const chooseIcon = async (next: AppIconId) => {
+    if (appIconChanging) return;
+    const option = APP_ICONS.find((item) => item.id === next) ?? APP_ICONS[0];
+    setAppIconChanging(true);
+    setNotice(nativeAppIconSupported ? '휴대폰 홈 화면 앱 아이콘을 변경하고 있어요…' : '웹에서는 미리보기 아이콘만 변경돼요.');
+    try {
+      if (nativeAppIconSupported) {
+        const applied = await setNativeRouteAppIcon(next);
+        setAppIcon(applied);
+        localStorage.setItem('route-app-icon', applied);
+        updateRouteFavicon(applied);
+        setNotice(`휴대폰 홈 화면 아이콘을 “${option.label}”로 변경했어요. 홈 화면 반영에는 몇 초 걸릴 수 있어요.`);
+      } else {
+        setAppIcon(next);
+        localStorage.setItem('route-app-icon', next);
+        updateRouteFavicon(next);
+        setNotice('웹 미리보기에 적용했어요. 실제 휴대폰 홈 화면 아이콘 변경은 Android 앱에서 사용할 수 있어요.');
+      }
+    } catch (cause) {
+      console.error('[DANDULI app icon change]', cause);
+      setNotice('홈 화면 앱 아이콘 변경에 실패했어요. 실제 사용 중인 아이콘을 다시 확인했어요.');
+      try {
+        const actual = await getNativeRouteAppIcon();
+        if (actual) setAppIcon(actual);
+      } catch (syncCause) {
+        console.warn('[DANDULI app icon resync]', syncCause);
+      }
+    } finally {
+      setAppIconChanging(false);
+      setAppIconStateLoading(false);
+    }
   };
 
   const addPack = (id: string, price: string) => {
@@ -176,8 +233,13 @@ export function MoreServices({
           {(['default','lavender','dark'] as ThemeId[]).map((item) => <button type="button" key={item} className={theme === item ? 'active' : ''} onClick={() => chooseTheme(item)}><i className={item} /><span><b>{item === 'default' ? '기본' : item === 'lavender' ? '라벤더' : '다크'}</b><small>{item === 'default' ? '네이비 + 코랄' : item === 'lavender' ? '부드러운 보라' : '어두운 화면'}</small></span></button>)}
         </div></>}
 
-        {sheet === 'app-icon' && <><HeaderBar title="앱 아이콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">4가지 단둘이 아이콘 중 원하는 스타일을 선택해요.</p><div className="app-icon-picker !grid !grid-cols-2 !gap-2.5 sm:!grid-cols-2">
-          {APP_ICONS.map((item) => <button data-icon-id={item.id} type="button" key={item.id} className={`${appIcon === item.id ? 'active' : ''} !min-w-0`} onClick={() => chooseIcon(item.id)}><span className={`more-app-icon-preview ${item.id} ${item.className} !grid place-items-center`}><AppIconGlyph id={item.id} /></span><b className="!w-full !truncate !text-center">{item.label}</b>{appIcon === item.id && <small>사용 중</small>}</button>)}
+        {sheet === 'app-icon' && <><HeaderBar title="앱 아이콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">4가지 단둘이 아이콘 중 원하는 스타일을 선택해요.</p>
+          <div className="app-icon-current-status" role="status" aria-live="polite">
+            <span className={`more-app-icon-preview ${appIcon} ${activeIcon.className} !grid place-items-center`}><AppIconGlyph id={appIcon} /></span>
+            <span><small>{nativeAppIconSupported ? '휴대폰 홈 화면에서 현재 사용 중' : '현재 웹 미리보기'}</small><b>{appIconStateLoading ? '아이콘 확인 중…' : activeIcon.label}</b><em>{nativeAppIconSupported ? 'Android가 실제로 활성화한 런처 아이콘 기준' : '홈 화면 변경은 Android 앱에서 가능'}</em></span>
+          </div>
+          <div className="app-icon-picker !grid !grid-cols-2 !gap-2.5 sm:!grid-cols-2" aria-busy={appIconChanging}>
+          {APP_ICONS.map((item) => <button data-icon-id={item.id} type="button" key={item.id} aria-pressed={appIcon === item.id} disabled={appIconChanging} className={`${appIcon === item.id ? 'active' : ''} !min-w-0`} onClick={() => void chooseIcon(item.id)}><span className={`more-app-icon-preview ${item.id} ${item.className} !grid place-items-center`}><AppIconGlyph id={item.id} /></span><b className="!w-full !truncate !text-center">{item.label}</b>{appIcon === item.id && !appIconStateLoading && <small>✓ 현재 사용 중</small>}</button>)}
         </div></>}
 
         {sheet === 'emoticon' && <><HeaderBar title="이모티콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">대화에서 사용할 단둘이 이모티콘을 모아보세요.</p><div className="emoticon-store">

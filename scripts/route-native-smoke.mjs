@@ -18,6 +18,9 @@ const required = [
   'src/route-stability-v15.css',
   'android/app/src/main/AndroidManifest.xml',
   'android/app/src/main/java/com/route/couple/LauncherRepairReceiver.java',
+  'android/app/src/main/java/com/route/couple/AppIconPlugin.java',
+  'src/components/more/MoreServices.tsx',
+  'scripts/prepare_character_launcher_icons.py',
   'capacitor.config.ts',
 ];
 
@@ -37,6 +40,9 @@ const ime = read('src/input-ime-stability.ts');
 const stabilityCss = read('src/route-stability-v15.css');
 const manifest = read('android/app/src/main/AndroidManifest.xml');
 const launcherRepair = read('android/app/src/main/java/com/route/couple/LauncherRepairReceiver.java');
+const iconPlugin = read('android/app/src/main/java/com/route/couple/AppIconPlugin.java');
+const moreServices = read('src/components/more/MoreServices.tsx');
+const iconPrep = read('scripts/prepare_character_launcher_icons.py');
 const capacitorConfig = read('capacitor.config.ts');
 
 check('native bootstrap is wired', main.includes('initializeNativeApp') && (main.includes('await initializeNativeApp()') || main.includes('void initializeNativeApp()')));
@@ -70,10 +76,14 @@ check('Android notification permission exists', manifest.includes('android.permi
 check('Android background location is not requested', !manifest.includes('ACCESS_BACKGROUND_LOCATION'));
 check('Android broad media permission is not requested', !manifest.includes('READ_MEDIA_IMAGES') && !manifest.includes('READ_MEDIA_VIDEO'));
 
-check('Android alternate launcher aliases exist', ['RouteDefaultIcon','RouteHeartIcon','RouteNightIcon','RouteCreamIcon'].every((name) => manifest.includes(name)));
+check('Android alternate launcher aliases exist', ['RouteDefaultIcon','RouteHeartChatIcon','DanduliCoupleLoveIcon','DanduliCoupleDateIcon'].every((name) => manifest.includes(name)));
 check('launcher repair receiver is registered', manifest.includes('LauncherRepairReceiver') && manifest.includes('android.intent.action.MY_PACKAGE_REPLACED'));
-check('launcher repair falls back to default alias', launcherRepair.includes('ensureLauncherAvailable') && launcherRepair.includes('RouteDefaultIcon'));
+check('launcher repair preserves the saved launcher icon', launcherRepair.includes('selected_icon') && launcherRepair.includes('applyIconState'));
 check('app icon plugin registration exists', icon.includes("registerPlugin<RouteAppIconPlugin>('RouteAppIcon')"));
+check('app icon bridge exposes verified native read/write', icon.includes('getNativeRouteAppIcon') && icon.includes('setNativeRouteAppIcon') && icon.includes('ICON_STATE_MISMATCH'));
+check('app icon picker displays actual Android launcher state', moreServices.includes('Android가 실제로 활성화한 런처 아이콘 기준') && moreServices.includes('getNativeRouteAppIcon'));
+check('Android 13+ launcher aliases switch atomically', iconPlugin.includes('setComponentEnabledSettings') && iconPlugin.includes('verifyIconState'));
+check('character launcher build uses transparent clean artwork', iconPrep.includes('danduli-stickers-v3-clean.webp') && iconPrep.includes('Clean DANDULI sticker sheet lost transparency'));
 check('deleted appearance wrapper is not referenced by icon bridge', !icon.includes('appearance-stability'));
 
 console.log(`\nROUTE native smoke gate: ${passes.length} checks passed.`);

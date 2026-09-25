@@ -80,6 +80,11 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Prepare transparent character launcher icons
+        run: |
+          python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0
+          python3 scripts/prepare_character_launcher_icons.py
+
       - name: Make Gradle executable
         run: chmod +x android/gradlew
 

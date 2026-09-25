@@ -307,3 +307,58 @@
   user-select: none;
   pointer-events: none;
 }
+.more-app-icon-preview.couple-love,
+.more-app-icon-preview.couple-date {
+  overflow: visible;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.danduli-app-icon-character {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background-color: transparent !important;
+  background-image: url('/danduli-stickers-v3-clean.webp');
+  background-repeat: no-repeat;
+  background-size: 400% 400%;
+  user-select: none;
+  pointer-events: none;
+}
+.danduli-app-icon-character.couple-love { background-position: 100% 100%; }
+.danduli-app-icon-character.couple-date { background-position: 66.6667% 66.6667%; }
+.app-icon-current-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 11px 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--border) 72%);
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--primary-soft) 45%, var(--surface) 55%);
+}
+.app-icon-current-status > .more-app-icon-preview {
+  width: 54px;
+  height: 54px;
+  flex: 0 0 54px;
+  border-radius: 16px;
+}
+.app-icon-current-status > span:last-child {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.app-icon-current-status small {
+  color: var(--primary);
+  font-size: 8px;
+  font-weight: 850;
+}
+.app-icon-current-status b { font-size: 12px; }
+.app-icon-current-status em {
+  color: var(--text-secondary);
+  font-size: 8px;
+  font-style: normal;
+  line-height: 1.35;
+}
+.app-icon-picker button:disabled { cursor: wait; opacity: .68; }
