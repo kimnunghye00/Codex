@@ -55,9 +55,12 @@ export function DatePlanScheduleEditor({ coupleId, planId, uid, candidates, onRe
   }, [coupleId, planId]);
 
   const localRevision = useRef(0);
+  const scheduleReady = !loading && !saving && !dirty && !conflict && !saveFailed && !error
+    && draft.revision > 0 && Boolean(draft.startTime) && draft.blocks.length > 0
+    && timeline.every((item) => !item.conflict && !item.overflow && item.start !== null && item.end !== null);
   useEffect(() => {
-    onReadyChange?.(!loading && !saving && !dirty && !conflict && !saveFailed && !error);
-  }, [onReadyChange, loading, saving, dirty, conflict, saveFailed, error]);
+    onReadyChange?.(scheduleReady);
+  }, [onReadyChange, scheduleReady]);
   const edit = (update: (current: DatePlanSchedule) => DatePlanSchedule) => {
     if (loading || saving || conflict) return;
     setDraft((current) => update(current));
