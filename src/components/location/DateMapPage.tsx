@@ -4,9 +4,11 @@ import { createPortal } from 'react-dom';
 import { CalendarDays, ChevronDown, ChevronUp, GripVertical, Heart, MapPin, MessageCircle, Plus, Search, Trash2, X } from 'lucide-react';
 import { auth } from '../../lib/firebase';
 import { appendPlaceToCourse, courseTimesFromSaved, encodeCourseTimeSlot, MAX_DATE_COURSE_PLACES, placesForDateMap, validateCourseTimes, type CourseTimeSlot } from '../../lib/dateCourseDraft';
-import { addDatePlanCandidate, createDatePlanDraft, deleteDatePlanCandidate, readDatePlanCandidates, subscribeDatePlanCandidates, subscribeDatePlanDrafts, updateDatePlanDraft } from '../../lib/datePlanDrafts';
+import { addDatePlanCandidate, createDatePlanDraft, readDatePlanCandidates, subscribeDatePlanCandidates, subscribeDatePlanDrafts, updateDatePlanDraft } from '../../lib/datePlanDrafts';
+import { removeDatePlanCandidateWithFeedback, setDatePlanCandidatePreference } from '../../lib/datePlanOpinions';
+import { DatePlanCandidateFeedback } from './DatePlanCandidateFeedback';
 import { isSameDatePlanPlace } from '../../lib/datePlanCandidates';
-import type { DatePlanDraft, DatePlanCandidate } from '../../lib/datePlanFoundation';
+import { CANDIDATE_PREFERENCE_LABELS, type CandidatePreference, type DatePlanDraft, type DatePlanCandidate } from '../../lib/datePlanFoundation';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
 import { reverseGeocode, reverseGeocodeMapRegion, type LocationSearchResult } from '../../utils/location';
 import {
@@ -1004,10 +1006,30 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
                 setSelectedPlanCandidateId(item.id); mapFocus({ ...item, placeName: item.name }); setMobilePlanView('map');
               }}><MapPin size={17}/><span><b>{item.name}</b><small>{item.category} · {item.address}</small></span></button>
               {item.memo && <p>{item.memo}</p>}
+              <div className="date-map-plan-votes">
+                <span className="date-map-plan-votes-heading">내 의견</span>
+                <div className="date-map-plan-vote-options" role="group" aria-label={item.name + ' 내 의견 선택'}>
+                  {(Object.keys(CANDIDATE_PREFERENCE_LABELS) as CandidatePreference[]).map((choice) =>
+                    <button key={choice} type="button" aria-pressed={item.votes?.[uid] === choice} disabled={pending || !uid}
+                      onClick={() => void submit(
+                        () => setDatePlanCandidatePreference(coupleId, activePlan.id, item.id, uid, item.votes?.[uid] === choice ? null : choice),
+                        item.votes?.[uid] === choice ? '내 의견을 취소했어요.' : '내 의견을 저장했어요.',
+                      )}>{CANDIDATE_PREFERENCE_LABELS[choice]}</button>)}
+                </div>
+                <small>상대방: {Object.entries(item.votes ?? {}).filter(([other]) => other !== uid)
+                  .map(([, vote]) => CANDIDATE_PREFERENCE_LABELS[vote]).join(', ') || '아직 선택하지 않았어요'}</small>
+              </div>
+              <button type="button" className="date-map-plan-feedback-toggle" aria-expanded={selectedPlanCandidateId === item.id}
+                onClick={() => { setSelectedPlanCandidateId((current) => current === item.id ? '' : item.id); setMobilePlanView('list'); }}>
+                <MessageCircle size={14}/> {selectedPlanCandidateId === item.id ? '댓글 접기' : '댓글 및 의견 보기'}
+              </button>
+              {selectedPlanCandidateId === item.id &&
+                <DatePlanCandidateFeedback key={activePlan.id + ':' + item.id} coupleId={coupleId} planId={activePlan.id}
+                  candidateId={item.id} uid={uid}/>}
               <button type="button" className="date-map-plan-remove" disabled={pending} onClick={() => {
                 if (!window.confirm(item.name + '을(를) 이 데이트의 후보에서 제거할까요?')) return;
                 void submit(async () => {
-                  await deleteDatePlanCandidate(coupleId, activePlan.id, item.id);
+                  await removeDatePlanCandidateWithFeedback(coupleId, activePlan.id, item.id);
                   setSelectedPlanCandidateId((current) => current === item.id ? '' : current);
                   clearMapFocus();
                 }, '이 데이트의 후보에서 제거했어요. 전체 보관함은 그대로예요.');
@@ -1026,7 +1048,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
                 </div>;
               })}
             </details>
-            <p className="date-map-add-hint">후보와 기존 보관함은 별개예요. 의견·방문 순서·시간표와 상대방 승인은 다음 단계에서 연결돼요.</p>
+            <p className="date-map-add-hint">후보별 의견과 댓글은 두 사람에게 공유돼요. 방문 순서·시간표와 공동 승인은 다음 단계에서 연결돼요.</p>
           </div>}
         </div>}
         {tab === 'courses' && <>
