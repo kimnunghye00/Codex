@@ -547,13 +547,22 @@ test('date plan V2: both members share unfinished timetable without lost edits o
 });
 
 
-test('date plan V2: final approval reports a missing saved timetable instead of a fake approval conflict', async () => {
+test('date plan V2: a named draft can be jointly confirmed before optional date/time/timetable are decided', async () => {
   const { coupleId } = await pair();
   as('alice');
-  const planId = await createDatePlanDraft(coupleId,'alice',{title:'아직 준비 중',date:'2026-10-22'});
-  await expect(requestDatePlanApproval(coupleId,planId,'alice',[]))
-    .rejects.toThrow('date-plan-schedule-missing');
-  expect(await readDatePlanApproval(coupleId,planId)).toBeNull();
+  const planId = await createDatePlanDraft(coupleId,'alice',{title:'아직 준비 중',date:''});
+  await requestDatePlanApproval(coupleId,planId,'alice',[]);
+  let approval = await readDatePlanApproval(coupleId,planId);
+  expect(approval?.status).toBe('review');
+  expect(approval?.confirmedSnapshot.date).toBe('');
+  expect(approval?.confirmedSnapshot.startTime).toBe('');
+  expect(approval?.confirmedSnapshot.blocks).toEqual([]);
+  expect(approval?.confirmedSnapshot.scheduleRevision).toBe(0);
+  as('bob');
+  await approveDatePlan(coupleId,planId,'bob');
+  approval = await readDatePlanApproval(coupleId,planId);
+  expect(approval?.status).toBe('confirmed');
+  expect(approval?.approvedBy).toEqual({alice:true,bob:true});
 });
 
 test('date plan V2: two real members must approve, reviewed drafts freeze, and revisions preserve accepted content', async () => {
