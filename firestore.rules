@@ -412,10 +412,12 @@ service cloud.firestore {
             && snapshot.keys().hasAll(['title', 'date', 'startTime', 'blocks', 'globalBackupCandidateIds', 'scheduleRevision'])
             && snapshot.title is string && snapshot.title.size() > 0 && snapshot.title.size() <= 100
             && snapshot.date is string
-            && (snapshot.date == '' || snapshot.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}
-            && snapshot.blocks is list && snapshot.blocks.size() > 0 && snapshot.blocks.size() <= 20
+            && (snapshot.date == '' || snapshot.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'))
+            && snapshot.startTime is string
+            && (snapshot.startTime == '' || snapshot.startTime.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$'))
+            && snapshot.blocks is list && snapshot.blocks.size() <= 20
             && snapshot.globalBackupCandidateIds is list && snapshot.globalBackupCandidateIds.size() <= 20
-            && snapshot.scheduleRevision is int && snapshot.scheduleRevision >= 1;
+            && snapshot.scheduleRevision is int && snapshot.scheduleRevision >= 0;
         }
         function validDraft() {
           return request.resource.data.keys().hasOnly([
@@ -556,7 +558,8 @@ service cloud.firestore {
           }
           function initialReview() {
             let draft = get(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId)).data;
-            let schedule = get(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId)/schedule/draft).data;
+            let schedulePath = /databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId)/schedule/draft;
+            let snapshot = request.resource.data.confirmedSnapshot;
             return request.resource.data.status == 'review'
               && request.resource.data.revision == 1
               && request.resource.data.requestedBy == request.auth.uid
@@ -565,12 +568,20 @@ service cloud.firestore {
               && request.resource.data.approvedBy.keys().hasAll([request.auth.uid])
               && request.resource.data.approvedBy[request.auth.uid] == true
               && request.resource.data.confirmedSnapshot == request.resource.data.proposedSnapshot
-              && request.resource.data.confirmedSnapshot.title == draft.title
-              && request.resource.data.confirmedSnapshot.date == draft.date
-              && request.resource.data.confirmedSnapshot.startTime == schedule.startTime
-              && request.resource.data.confirmedSnapshot.blocks == schedule.blocks
-              && request.resource.data.confirmedSnapshot.globalBackupCandidateIds == schedule.globalBackupCandidateIds
-              && request.resource.data.confirmedSnapshot.scheduleRevision == schedule.revision;
+              && snapshot.title == draft.title
+              && snapshot.date == draft.date
+              && (
+                (!exists(schedulePath)
+                  && snapshot.startTime == ''
+                  && snapshot.blocks.size() == 0
+                  && snapshot.globalBackupCandidateIds.size() == 0
+                  && snapshot.scheduleRevision == 0)
+                || (exists(schedulePath)
+                  && snapshot.startTime == get(schedulePath).data.startTime
+                  && snapshot.blocks == get(schedulePath).data.blocks
+                  && snapshot.globalBackupCandidateIds == get(schedulePath).data.globalBackupCandidateIds
+                  && snapshot.scheduleRevision == get(schedulePath).data.revision)
+              );
           }
           function partnerApproval() {
             return resource.data.status in ['review', 'change-review']
