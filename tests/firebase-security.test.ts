@@ -667,10 +667,6 @@ test('actionable activity: partners see genuine messages, source spoofing and ou
   as('alice');
   const msg = { id: 983217, sender: 'me' as const, type: 'text' as const, text: '안녕!', timestamp: new Date().toISOString(), read: false };
   await sendCoupleMessage(coupleId, 'alice', msg);
-  await publishCoupleActivity(coupleId, 'alice', {
-    id:'chat-983217', kind:'chat', sourceId:'983217', revision:0,
-    title:'새 메시지가 왔어요', detail:'안녕!', target:{ screen:'chat', itemId:'983217' },
-  });
   const record = 'couples/' + coupleId + '/activity/chat-983217';
   expect((await getDocFromServer(doc(client.db, record))).data()?.target)
     .toEqual({screen:'chat',itemId:'983217'});
