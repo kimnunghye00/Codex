@@ -18,6 +18,7 @@ import { sendCoupleMessage, toggleCoupleMessageReaction, setCoupleMessageReactio
 import { uploadChatAttachment, uploadChatMedia } from '../src/lib/chatMedia';
 import { addDatePlace, saveDateCourse, setPlaceLike, addPlaceOpinion } from '../src/lib/dateMap';
 import { addDatePlanCandidate, createDatePlanDraft, readDatePlanCandidates, subscribeDatePlanCandidates, updateDatePlanCandidateMemo, updateDatePlanDraft } from '../src/lib/datePlanDrafts';
+import { readDatePlanSchedule, saveDatePlanSchedule, subscribeDatePlanSchedule } from '../src/lib/datePlanSchedule';
 import { addDatePlanCandidateComment, deleteDatePlanCandidateComment, removeDatePlanCandidateWithFeedback,
   setDatePlanCandidatePreference, subscribeDatePlanCandidateComments } from '../src/lib/datePlanOpinions';
 
@@ -487,4 +488,58 @@ test('date plan V2: partner choices, comments and atomic candidate deletion stay
   expect((await getDocFromServer(doc(client.db, candidatePath))).exists()).toBe(false);
   await assertFails(getDocFromServer(doc(client.db, bobCommentPath)));
   expect((await getDocFromServer(doc(client.db, 'couples/' + coupleId + '/datePlans/' + planId))).exists()).toBe(true);
+});
+
+
+test('date plan V2: both members share unfinished timetable without lost edits or outsider access', async () => {
+  const { coupleId } = await pair();
+  as('alice');
+  const oldPlace = await addDatePlace(coupleId, 'alice', {
+    name: '예전 저장 장소', address: '강릉', latitude: 37.75, longitude: 128.89, category: '기타', memo: '',
+  });
+  const planId = await createDatePlanDraft(coupleId, 'alice');
+  const candidateId = await addDatePlanCandidate(coupleId, planId, 'alice', {
+    name: 'CGV 강변', address: '서울 광진구', latitude: 37.535, longitude: 127.095,
+    category: '놀거리', memo: '함께 가고 싶어',
+  });
+  const path = 'couples/' + coupleId + '/datePlans/' + planId + '/schedule/draft';
+  const block = {
+    id:'first', position:0, kind:'activity' as const, title:'영화 보기', primaryCandidateId:candidateId,
+    backupCandidateIds:[], activityMinutes:120, travelMinutes:20, fixedStart:null,
+  };
+  expect((await readDatePlanSchedule(coupleId,planId)).revision).toBe(0);
+  const version = await saveDatePlanSchedule(coupleId,planId,'alice',0,'10:00',[block],[candidateId]);
+  expect(version).toBe(1);
+  const observed = await new Promise<number>((resolve,reject) => {
+    let stop: () => void = () => {};
+    stop = subscribeDatePlanSchedule(coupleId,planId,(schedule) => {
+      if (schedule.revision !== 1) return;
+      resolve(schedule.blocks[0].travelMinutes);
+      queueMicrotask(() => stop());
+    },reject);
+  });
+  expect(observed).toBe(20);
+  as('bob');
+  const bobDraft = await readDatePlanSchedule(coupleId,planId);
+  expect(bobDraft.startTime).toBe('10:00');
+  const revision2 = await saveDatePlanSchedule(coupleId,planId,'bob',bobDraft.revision,'11:00',
+    [{...block,activityMinutes:90,travelMinutes:25}],[candidateId]);
+  expect(revision2).toBe(2);
+  as('alice');
+  await expect(saveDatePlanSchedule(coupleId,planId,'alice',1,'09:00',[block],[candidateId]))
+    .rejects.toThrow('date-plan-schedule-conflict');
+  const latest = await readDatePlanSchedule(coupleId,planId);
+  expect(latest.startTime).toBe('11:00');
+  expect(latest.blocks[0].travelMinutes).toBe(25);
+  expect(latest.updatedBy).toBe('bob');
+  expect((await getDocFromServer(doc(client.db,'couples',coupleId,'datePlaces',oldPlace))).exists()).toBe(true);
+
+  await assertFails(updateDoc(doc(client.db,path), {revision:3,updatedBy:'bob',updatedAt:serverTimestamp()}));
+  await assertFails(updateDoc(doc(client.db,path), {revision:4,updatedBy:'alice',updatedAt:serverTimestamp()}));
+  await assertFails(setDoc(doc(client.db,path), {startTime:'28:00',blocks:[block],revision:3,updatedBy:'alice',updatedAt:serverTimestamp()}));
+  await assertFails(deleteDoc(doc(client.db,path)));
+  await signup('eve');
+  const outsider = as('eve');
+  await assertFails(getDocFromServer(doc(outsider.db,path)));
+  await assertFails(setDoc(doc(outsider.db,path), {startTime:'',blocks:[],revision:3,updatedBy:'eve',updatedAt:serverTimestamp()}));
 });
