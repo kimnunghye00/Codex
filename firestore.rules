@@ -403,8 +403,13 @@ service cloud.firestore {
         function approvalPath() {
           return /databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId)/approval/state;
         }
+        function planPath() {
+          return /databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId);
+        }
         function canEditUnapproved() {
-          return !exists(approvalPath());
+          return !exists(approvalPath())
+            && (!exists(planPath())
+              || !get(planPath()).data.keys().hasAny(['deletionRequestedAt', 'deletionRequestedBy']));
         }
         function approvalSnapshotValid(snapshot) {
           return snapshot is map
@@ -442,15 +447,15 @@ service cloud.firestore {
         allow update: if memberOf(coupleId) && canEditUnapproved() && validDraft()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'date', 'updatedAt'])
           && request.resource.data.updatedAt == request.time;
-        // Only an unapproved draft may be removed. The client deletes all owned
-        // subdocuments in the same atomic batch so comments/schedule do not orphan.
-        allow delete: if memberOf(coupleId) && canEditUnapproved()
-          && resource.data.status == 'draft';
+        // Plan roots are deleted only by the authenticated server endpoint.
+        allow delete: if false;
 
         match /candidates/{candidateId} {
           function editableDraft() {
             return exists(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId))
-              && get(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId)).data.status == 'draft';
+              && get(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId)).data.status == 'draft'
+              && !get(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId)).data.keys()
+                .hasAny(['deletionRequestedAt', 'deletionRequestedBy']);
           }
           function validCandidate() {
             return request.resource.data.keys().hasOnly([
@@ -626,7 +631,7 @@ service cloud.firestore {
               ]);
           }
           allow read: if memberOf(coupleId) && approvalId == 'state';
-          allow create: if memberOf(coupleId) && validApproval()
+          allow create: if memberOf(coupleId) && canEditUnapproved() && validApproval()
             && request.resource.data.createdAt == request.time
             && initialReview();
           allow update: if memberOf(coupleId) && validApproval()
@@ -638,7 +643,9 @@ service cloud.firestore {
         match /schedule/{scheduleId} {
           function editableSchedule() {
             return exists(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId))
-              && get(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId)).data.status == 'draft';
+              && get(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId)).data.status == 'draft'
+              && !get(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId)).data.keys()
+                .hasAny(['deletionRequestedAt', 'deletionRequestedBy']);
           }
           function validSchedule() {
             return scheduleId == 'draft'
@@ -661,8 +668,7 @@ service cloud.firestore {
             && request.resource.data.revision == 1;
           allow update: if memberOf(coupleId) && editableSchedule() && canEditUnapproved() && validSchedule()
             && request.resource.data.revision == resource.data.revision + 1;
-          allow delete: if memberOf(coupleId) && editableSchedule() && canEditUnapproved()
-            && scheduleId == 'draft';
+          allow delete: if false;
         }
       }
 
