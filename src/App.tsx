@@ -577,8 +577,19 @@ function App({ user, profile, onProfileChange }: AppProps) {
       saveNotifications(user.uid, next);
       return next;
     });
-    if (item.target) setPendingRoute(item.target);
-  }, [user.uid]);
+    if (item.target) {
+      setPendingRoute(item.target);
+      return;
+    }
+    // Historical local notifications predate destination IDs. Open the
+    // appropriate feature even when the exact older item is unavailable.
+    setNotificationsOpen(false);
+    if (item.kind === 'chat' || item.kind === 'call') navigateTab('chat');
+    else if (item.kind === 'memory') { setRequestedHubTab('album'); navigateTab('memories'); }
+    else if (item.kind === 'location') navigateTab('location');
+    else if (item.kind === 'anniversary') navigateTab('anniversary');
+    else if (item.kind === 'profile' || item.kind === 'couple') navigateTab('home');
+  }, [user.uid, navigateTab]);
 
   const enableActivityAlerts = useCallback(() => {
     void requestActivityAlerts().then((allowed) => {
