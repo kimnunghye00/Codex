@@ -17,7 +17,7 @@ import { disconnectCouple } from '../src/lib/coupleDisconnect';
 import { sendCoupleMessage, toggleCoupleMessageReaction, setCoupleMessageReactions, hideCoupleMessageForMe, deleteCoupleMessageForEveryone, clearCoupleChatForMe } from '../src/lib/chatRealtime';
 import { uploadChatAttachment, uploadChatMedia } from '../src/lib/chatMedia';
 import { addDatePlace, saveDateCourse, setPlaceLike, addPlaceOpinion } from '../src/lib/dateMap';
-import { addDatePlanCandidate, createDatePlanDraft, readDatePlanCandidates, subscribeDatePlanCandidates, updateDatePlanCandidateMemo, updateDatePlanDraft } from '../src/lib/datePlanDrafts';
+import { addDatePlanCandidate, createDatePlanDraft, deleteDatePlanDraft, readDatePlanCandidates, subscribeDatePlanCandidates, updateDatePlanCandidateMemo, updateDatePlanDraft } from '../src/lib/datePlanDrafts';
 import { readDatePlanSchedule, saveDatePlanSchedule, subscribeDatePlanSchedule } from '../src/lib/datePlanSchedule';
 import { publishCoupleActivity, subscribeCoupleActivities } from '../src/lib/coupleActivity';
 import { approveDatePlan, proposeDatePlanChange, readDatePlanApproval, requestDatePlanApproval, subscribeDatePlanApproval, withdrawDatePlanReview } from '../src/lib/datePlanApproval';
@@ -727,4 +727,46 @@ test('actionable activity: partners see genuine messages, source spoofing and ou
   await signup('eve');
   const outsider = as('eve');
   await assertFails(getDocFromServer(doc(outsider.db, record)));
+});
+
+
+test('date plan V2: deleting an unapproved draft atomically removes nested data but keeps the shared wish list', async () => {
+  const { coupleId } = await pair();
+  as('alice');
+  const savedPlaceId = await addDatePlace(coupleId, 'alice', {
+    name:'그대로 둘 장소',address:'서울',latitude:37.5,longitude:127.0,category:'기타',memo:'',
+  });
+  const planId = await createDatePlanDraft(coupleId,'alice',{title:'삭제할 초안',date:''});
+  const candidateId = await addDatePlanCandidate(coupleId,planId,'alice',{
+    name:'후보 장소',address:'서울',latitude:37.51,longitude:127.01,category:'놀거리',memo:'',
+  });
+  const aliceComment = await addDatePlanCandidateComment(coupleId,planId,candidateId,'alice','내 댓글');
+  as('bob');
+  const bobComment = await addDatePlanCandidateComment(coupleId,planId,candidateId,'bob','상대방 댓글');
+  await saveDatePlanSchedule(coupleId,planId,'bob',0,'13:00',[{
+    id:'visit',position:0,kind:'activity',title:'후보 장소',primaryCandidateId:candidateId,
+    backupCandidateIds:[],activityMinutes:60,travelMinutes:0,fixedStart:null,
+  }],[candidateId]);
+
+  await deleteDatePlanDraft(coupleId,planId);
+
+  const root = 'couples/' + coupleId + '/datePlans/' + planId;
+  expect((await getDocFromServer(doc(client.db,root))).exists()).toBe(false);
+  expect((await getDocFromServer(doc(client.db,root,'candidates',candidateId))).exists()).toBe(false);
+  expect((await getDocFromServer(doc(client.db,root,'candidates',candidateId,'comments',aliceComment))).exists()).toBe(false);
+  expect((await getDocFromServer(doc(client.db,root,'candidates',candidateId,'comments',bobComment))).exists()).toBe(false);
+  expect((await getDocFromServer(doc(client.db,root,'schedule','draft'))).exists()).toBe(false);
+  expect((await getDocFromServer(doc(client.db,'couples',coupleId,'datePlaces',savedPlaceId))).exists()).toBe(true);
+});
+
+test('date plan V2: a review or confirmed plan cannot be deleted as a draft', async () => {
+  const { coupleId } = await pair();
+  as('alice');
+  const planId = await createDatePlanDraft(coupleId,'alice',{title:'승인 중인 데이트',date:''});
+  await requestDatePlanApproval(coupleId,planId,'alice',[]);
+  await expect(deleteDatePlanDraft(coupleId,planId)).rejects.toThrow('date-plan-delete-locked');
+  await assertFails(deleteDoc(doc(client.db,'couples',coupleId,'datePlans',planId)));
+  as('bob');
+  await approveDatePlan(coupleId,planId,'bob');
+  await expect(deleteDatePlanDraft(coupleId,planId)).rejects.toThrow('date-plan-delete-locked');
 });
