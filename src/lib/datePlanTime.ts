@@ -7,6 +7,7 @@ const pad = (minutes: number): string => `${String(Math.floor(minutes / 60)).pad
 export type DatePlanSchedule = {
   startTime: string;
   blocks: DatePlanTimeBlock[];
+  globalBackupCandidateIds: string[];
   revision: number;
   updatedBy: string;
   updatedAt?: unknown;
@@ -36,10 +37,14 @@ export function normalizeTimeBlocks(blocks: DatePlanTimeBlock[]): DatePlanTimeBl
   return blocks.map((block, position) => ({ ...block, position, backupCandidateIds: [...block.backupCandidateIds] }));
 }
 
-export function validateDatePlanSchedule(startTime: string, blocks: DatePlanTimeBlock[], candidateIds: readonly string[]): void {
+export function validateDatePlanSchedule(startTime: string, blocks: DatePlanTimeBlock[], candidateIds: readonly string[], globalBackupCandidateIds: readonly string[] = []): void {
   if (startTime !== '' && !isClock(startTime)) throw new RangeError('시작 시간을 확인해 주세요.');
   if (blocks.length > MAX_DATE_PLAN_BLOCKS) throw new RangeError('시간표는 최대 20개까지 추가할 수 있어요.');
   const known = new Set(candidateIds);
+  if (globalBackupCandidateIds.length > 20 || new Set(globalBackupCandidateIds).size !== globalBackupCandidateIds.length
+    || globalBackupCandidateIds.some((id) => !known.has(id))) {
+    throw new RangeError('전체 예비 장소는 후보 중 최대 20곳까지 중복 없이 선택해 주세요.');
+  }
   const ids = new Set<string>();
   blocks.forEach((block, index) => {
     if (!block.id || block.id.length > 100 || ids.has(block.id) || block.position !== index) {
