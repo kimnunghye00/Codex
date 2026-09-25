@@ -1,6 +1,9 @@
 name: Build Android Release QA APK
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 concurrency:
@@ -109,7 +112,7 @@ jobs:
         run: |
           echo '### 단둘이 Android Release QA APK' >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Source: current main branch' >> "$GITHUB_STEP_SUMMARY"
+          echo "- Source: main @ `${GITHUB_SHA}`" >> "$GITHUB_STEP_SUMMARY"
           echo '- Stability suite: passed before native build' >> "$GITHUB_STEP_SUMMARY"
           echo '- Package: com.route.couple' >> "$GITHUB_STEP_SUMMARY"
           echo '- Uses monotonic Android versionCode for update installs' >> "$GITHUB_STEP_SUMMARY"
@@ -121,4 +124,4 @@ jobs:
           name: DANDULI-release-qa-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-          retention-days: 5
+          retention-days: 14
