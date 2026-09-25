@@ -449,6 +449,45 @@ service cloud.firestore {
               && (resource.data.authorUid == request.auth.uid || !existsAfter(candidatePath()));
           }
         }
+
+        // The unfinished shared timetable is a single versioned document.
+        // A compare-and-swap revision prevents silent lost edits between accounts.
+        match /schedule/{scheduleId} {
+          function editableSchedule() {
+            return exists(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId))
+              && get(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId)).data.status == 'draft';
+          }
+          function validSchedule() {
+            return scheduleId == 'draft'
+              && request.resource.data.keys().hasOnly(['startTime', 'blocks', 'revision', 'updatedBy', 'updatedAt'])
+              && request.resource.data.keys().hasAll(['startTime', 'blocks', 'revision', 'updatedBy', 'updatedAt'])
+              && request.resource.data.startTime is string
+              && (request.resource.data.startTime == ''
+                || request.resource.data.startTime.matches('^([01][0-9]|2[0-3]):[0-5][0-9]
+        allow read: if memberOf(coupleId);
+        allow create: if memberOf(coupleId)
+          && request.resource.data.ownerId == request.auth.uid;
+        allow update, delete: if memberOf(coupleId)
+          && resource.data.ownerId == request.auth.uid;
+      }
+    }
+  }
+}
+))
+              && request.resource.data.blocks is list
+              && request.resource.data.blocks.size() <= 20
+              && request.resource.data.revision is int
+              && request.resource.data.revision >= 1
+              && request.resource.data.updatedBy == request.auth.uid
+              && request.resource.data.updatedAt == request.time;
+          }
+          allow read: if memberOf(coupleId) && editableSchedule() && scheduleId == 'draft';
+          allow create: if memberOf(coupleId) && editableSchedule() && validSchedule()
+            && request.resource.data.revision == 1;
+          allow update: if memberOf(coupleId) && editableSchedule() && validSchedule()
+            && request.resource.data.revision == resource.data.revision + 1;
+          allow delete: if false;
+        }
       }
 
       match /schedules/{scheduleId} {
