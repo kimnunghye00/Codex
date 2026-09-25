@@ -71,7 +71,7 @@ export function validateDatePlanSchedule(startTime: string, blocks: DatePlanTime
 }
 
 export function datePlanScheduleReadyForApproval(schedule: DatePlanSchedule): boolean {
-  if (schedule.revision < 1 || schedule.blocks.length === 0) return false;
+  if (!Number.isSafeInteger(schedule.revision) || schedule.revision < 0) return false;
   try {
     validateDatePlanSchedule(schedule.startTime, schedule.blocks,
       schedule.blocks.flatMap((block) => [
