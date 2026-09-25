@@ -1,5 +1,5 @@
 import { collection, deleteDoc, doc, getDocFromServer, getDocsFromServer, onSnapshot, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore';
-import { db } from './firebase';
+import { auth, db } from './firebase';
 import type { DatePlanDraft, DatePlanCandidate } from './datePlanFoundation';
 import { datePlanCandidateId, isSameDatePlanPlace } from './datePlanCandidates';
 
@@ -107,4 +107,28 @@ export async function updateDatePlanCandidateMemo(
 
 export async function deleteDatePlanCandidate(coupleId: string, planId: string, candidateId: string) {
   await deleteDoc(doc(candidateCollection(coupleId, planId), candidateId));
+}
+
+
+const DELETE_DATE_PLAN_URL = String(import.meta.env.VITE_DELETE_DATE_PLAN_URL
+  || 'https://asia-northeast3-meluni-f4e00.cloudfunctions.net/deleteDatePlanDraft').trim();
+
+/**
+ * Delete through the authenticated server endpoint. Firestore clients retain
+ * zero permission to delete a plan root or its timetable directly.
+ */
+export async function deleteDatePlanDraft(coupleId: string, planId: string) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('authentication-required');
+  const response = await fetch(DELETE_DATE_PLAN_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${await user.getIdToken()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ coupleId, planId }),
+  });
+  let payload: { error?: string } = {};
+  try { payload = await response.json() as { error?: string }; } catch { /* non-json server failure */ }
+  if (!response.ok) throw new Error(payload.error || 'date-plan-delete-failed');
 }

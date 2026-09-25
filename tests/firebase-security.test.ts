@@ -728,3 +728,30 @@ test('actionable activity: partners see genuine messages, source spoofing and ou
   const outsider = as('eve');
   await assertFails(getDocFromServer(doc(outsider.db, record)));
 });
+
+
+
+test('date plan V2: a server deletion marker freezes edits while direct client deletes remain forbidden', async () => {
+  const { coupleId } = await pair();
+  as('alice');
+  const planId = await createDatePlanDraft(coupleId,'alice',{title:'삭제 중 초안',date:''});
+  const candidateId = await addDatePlanCandidate(coupleId,planId,'alice',{
+    name:'후보',address:'서울',latitude:37.5,longitude:127.0,category:'기타',memo:'',
+  });
+  await saveDatePlanSchedule(coupleId,planId,'alice',0,'10:00',[{
+    id:'visit',position:0,kind:'activity',title:'후보',primaryCandidateId:candidateId,
+    backupCandidateIds:[],activityMinutes:60,travelMinutes:0,fixedStart:null,
+  }],[candidateId]);
+  const planPath = 'couples/' + coupleId + '/datePlans/' + planId;
+  const before = (await getDocFromServer(doc(client.db,planPath))).data()!;
+  await seed(planPath, { ...before, deletionRequestedAt: Timestamp.now(), deletionRequestedBy:'alice' });
+
+  await assertFails(updateDatePlanDraft(coupleId,planId,{title:'삭제 중 수정'}));
+  await assertFails(addDatePlanCandidate(coupleId,planId,'alice',{
+    name:'추가 금지',address:'서울',latitude:37.6,longitude:127.1,category:'기타',memo:'',
+  }));
+  await assertFails(requestDatePlanApproval(coupleId,planId,'alice',[]));
+  await assertFails(deleteDoc(doc(client.db,planPath)));
+  await assertFails(deleteDoc(doc(client.db,planPath,'schedule','draft')));
+  expect((await getDocFromServer(doc(client.db,planPath))).exists()).toBe(true);
+});

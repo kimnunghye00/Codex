@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { CalendarDays, ChevronDown, ChevronUp, GripVertical, Heart, MapPin, MessageCircle, Plus, Search, Trash2, X } from 'lucide-react';
 import { auth } from '../../lib/firebase';
 import { appendPlaceToCourse, courseTimesFromSaved, encodeCourseTimeSlot, MAX_DATE_COURSE_PLACES, placesForDateMap, validateCourseTimes, type CourseTimeSlot } from '../../lib/dateCourseDraft';
-import { addDatePlanCandidate, createDatePlanDraft, readDatePlanCandidates, subscribeDatePlanCandidates, subscribeDatePlanDrafts, updateDatePlanDraft } from '../../lib/datePlanDrafts';
+import { addDatePlanCandidate, createDatePlanDraft, deleteDatePlanDraft, readDatePlanCandidates, subscribeDatePlanCandidates, subscribeDatePlanDrafts, updateDatePlanDraft } from '../../lib/datePlanDrafts';
 import { removeDatePlanCandidateWithFeedback, setDatePlanCandidatePreference } from '../../lib/datePlanOpinions';
 import { DatePlanCandidateFeedback } from './DatePlanCandidateFeedback';
 import { DatePlanScheduleEditor } from './DatePlanScheduleEditor';
@@ -43,6 +43,8 @@ function errorText(error: unknown) {
   if (code.includes('permission-denied')) return '두 사람의 연결 상태 또는 장소 접근 권한을 확인해 주세요.';
   if (String((error as Error)?.message ?? '').includes('date-plan-candidate-not-visible')) return '저장 확인에 실패했어요. 다시 불러온 후보 목록을 확인해 주세요.';
   if (String((error as Error)?.message ?? '').includes('date-plan-candidate-scheduled')) return '이 장소가 시간표에 사용 중이에요. 시간표에서 해당 일정이나 예비 장소를 먼저 제거해 주세요.';
+  if (String((error as Error)?.message ?? '').includes('date-plan-delete-locked')) return '승인 요청을 보낸 초안은 바로 삭제할 수 없어요. 먼저 승인 요청을 취소해 주세요.';
+  if (String((error as Error)?.message ?? '').includes('date-plan-delete-too-large')) return '이 초안의 데이터가 너무 많아 한 번에 안전하게 삭제할 수 없어요.';
   return '작업을 완료하지 못했어요. 네트워크를 확인하고 다시 시도해 주세요.';
 }
 
@@ -1035,7 +1037,18 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus, init
           </div>
           {!datePlans.length && <p className="date-map-empty">아직 공동 데이트 초안이 없어요. '새 데이트'를 눌러 시작해 보세요.</p>}
           {activePlan && <div className="date-map-plan-editor">
-            <div className="date-map-panel-header"><strong>데이트 정보</strong><span>두 사람에게 공유됨</span></div>
+            <div className="date-map-panel-header"><strong>데이트 정보</strong><span>두 사람에게 공유됨</span>
+              <button type="button" className="date-map-plan-delete-draft" disabled={pending || approvalLocked} onClick={() => {
+                const label = planTitle.trim() || activePlan.title || '이름 없는 데이트';
+                if (!window.confirm('“' + label + '” 초안을 삭제할까요?\n\n장소 후보·댓글·시간표도 함께 삭제되며, 가고 싶은 곳과 기존 코스는 그대로 유지돼요.')) return;
+                void submit(async () => {
+                  await deleteDatePlanDraft(coupleId, activePlan.id);
+                  setActivePlanId(''); setPlanCandidates([]); setSelectedPlanCandidateId('');
+                  setPlanApproval(null); setApprovalLoading(false); setScheduleReady(false);
+                  setPlanTitle(''); setPlanDate(''); clearMapFocus();
+                }, '공동 데이트 초안을 삭제했어요.');
+              }}><Trash2 size={13}/> 초안 삭제</button>
+            </div>
             <label className="date-map-label">데이트 이름
               <input maxLength={100} value={planTitle} disabled={approvalLocked} onChange={(event) => setPlanTitle(event.target.value)} placeholder="예: 부산 맛집 데이트"/>
             </label>

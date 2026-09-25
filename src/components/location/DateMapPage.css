@@ -749,3 +749,12 @@
 .date-plan-approval-actions { display:flex; gap:6px; flex-wrap:wrap; }
 .date-plan-approval-actions button { flex:1; min-height:38px; min-width:100px; border:1px solid var(--border); border-radius:9px; padding:8px; background:var(--primary-soft); color:var(--text-primary); font-size:11px; font-weight:750; }
 .date-plan-approval-actions button:last-child { border:0; background:var(--primary); color:#fff; }
+
+
+.date-map-plan-delete-draft {
+  display:inline-flex; align-items:center; gap:5px; margin-left:auto;
+  min-height:32px; padding:6px 9px; border:1px solid var(--border); border-radius:9px;
+  background:var(--surface); color:var(--text-secondary); font-size:11px; font-weight:700;
+}
+.date-map-plan-delete-draft:not(:disabled):hover { background:var(--primary-soft); color:var(--text-primary); }
+.date-map-plan-delete-draft:disabled { opacity:.45; cursor:not-allowed; }
