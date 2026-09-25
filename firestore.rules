@@ -337,6 +337,424 @@ service cloud.firestore {
       // A plan can be unfinished and shared by both members; final approvals
       // and revision proposals will be introduced with separate guarded rules.
       match /datePlans/{planId} {
+        function approvalPath() {
+          return /databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId)/approval/state;
+        }
+        function canEditUnapproved() {
+          return !exists(approvalPath());
+        }
+        function approvalSnapshotValid(snapshot) {
+          return snapshot is map
+            && snapshot.keys().hasOnly(['title', 'date', 'startTime', 'blocks', 'globalBackupCandidateIds', 'scheduleRevision'])
+            && snapshot.keys().hasAll(['title', 'date', 'startTime', 'blocks', 'globalBackupCandidateIds', 'scheduleRevision'])
+            && snapshot.title is string && snapshot.title.size() > 0 && snapshot.title.size() <= 100
+            && snapshot.date is string && snapshot.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}
+          return request.resource.data.keys().hasOnly([
+            'id', 'title', 'date', 'status', 'schemaVersion', 'createdBy', 'createdAt', 'updatedAt'
+          ])
+          && request.resource.data.keys().hasAll([
+            'id', 'title', 'date', 'status', 'schemaVersion', 'createdBy', 'createdAt', 'updatedAt'
+          ])
+          && request.resource.data.id == planId
+          && request.resource.data.title is string && request.resource.data.title.size() <= 100
+          && request.resource.data.date is string
+          && (request.resource.data.date == '' || request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'))
+          && request.resource.data.status == 'draft'
+          && request.resource.data.schemaVersion == 2
+          && request.resource.data.createdBy is string;
+        }
+        allow read: if memberOf(coupleId);
+        allow create: if memberOf(coupleId) && validDraft()
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+        allow update: if memberOf(coupleId) && canEditUnapproved() && validDraft()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'date', 'updatedAt'])
+          && request.resource.data.updatedAt == request.time;
+        // Preserve candidate subcollections and avoid accidental orphaning.
+        allow delete: if false;
+
+        match /candidates/{candidateId} {
+          function editableDraft() {
+            return exists(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId))
+              && get(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId)).data.status == 'draft';
+          }
+          function validCandidate() {
+            return request.resource.data.keys().hasOnly([
+              'id', 'name', 'address', 'latitude', 'longitude', 'category', 'memo',
+              'sourceSavedPlaceId', 'createdBy', 'createdAt', 'updatedAt', 'votes'
+            ])
+            && request.resource.data.keys().hasAll([
+              'id', 'name', 'address', 'latitude', 'longitude', 'category', 'memo',
+              'createdBy', 'createdAt', 'updatedAt'
+            ])
+            && request.resource.data.id == candidateId
+            && request.resource.data.name is string
+            && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
+            && request.resource.data.address is string && request.resource.data.address.size() <= 240
+            && request.resource.data.memo is string && request.resource.data.memo.size() <= 1000
+            && request.resource.data.category in ['맛집', '카페', '놀거리', '여행', '기타']
+            && request.resource.data.latitude is number
+            && request.resource.data.latitude >= -90 && request.resource.data.latitude <= 90
+            && request.resource.data.longitude is number
+            && request.resource.data.longitude >= -180 && request.resource.data.longitude <= 180
+            && request.resource.data.createdBy is string
+            && (!request.resource.data.keys().hasAny(['votes']) || (
+              request.resource.data.votes is map
+              && request.resource.data.votes.size() <= 2
+            ))
+            && (!request.resource.data.keys().hasAny(['sourceSavedPlaceId'])
+              || (request.resource.data.sourceSavedPlaceId is string
+                && request.resource.data.sourceSavedPlaceId.size() > 0
+                && request.resource.data.sourceSavedPlaceId.size() <= 120));
+          }
+          allow read: if memberOf(coupleId) && editableDraft();
+          // Only the authenticated UID can change its own vote. Existing partner
+          // votes and the original candidate fields are immutable through this path.
+          function ownVoteChange() {
+            return request.resource.data.keys().hasAll(['votes'])
+              && request.resource.data.votes is map
+              && request.resource.data.votes.diff(resource.data.get('votes', {}))
+                .affectedKeys().hasOnly([request.auth.uid])
+              && request.resource.data.votes.diff(resource.data.get('votes', {}))
+                .affectedKeys().hasAll([request.auth.uid])
+              && (!request.resource.data.votes.keys().hasAny([request.auth.uid])
+                || request.resource.data.votes[request.auth.uid] in ['want', 'considering', 'pass']);
+          }
+          allow create: if memberOf(coupleId) && editableDraft() && canEditUnapproved() && validCandidate()
+            && !request.resource.data.keys().hasAny(['votes'])
+            && request.resource.data.createdBy == request.auth.uid
+            && request.resource.data.createdAt == request.time
+            && request.resource.data.updatedAt == request.time;
+          allow update: if memberOf(coupleId) && editableDraft() && validCandidate()
+            && request.resource.data.updatedAt == request.time
+            && (
+              canEditUnapproved() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memo', 'updatedAt'])
+              || (
+                request.resource.data.diff(resource.data).affectedKeys().hasOnly(['votes', 'updatedAt'])
+                && ownVoteChange()
+              )
+            );
+          allow delete: if memberOf(coupleId) && editableDraft() && canEditUnapproved();
+
+          match /comments/{commentId} {
+            function candidatePath() {
+              return /databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId)/candidates/$(candidateId);
+            }
+            function validComment() {
+              return request.resource.data.keys().hasOnly(['id', 'authorUid', 'text', 'createdAt'])
+                && request.resource.data.keys().hasAll(['id', 'authorUid', 'text', 'createdAt'])
+                && request.resource.data.id == commentId
+                && request.resource.data.authorUid == request.auth.uid
+                && request.resource.data.text is string
+                && request.resource.data.text.size() > 0
+                && request.resource.data.text.size() <= 500
+                && request.resource.data.createdAt == request.time;
+            }
+            allow read: if memberOf(coupleId) && editableDraft() && exists(candidatePath());
+            allow create: if memberOf(coupleId) && editableDraft() && exists(candidatePath()) && validComment();
+            allow update: if false;
+            // An author may delete their comment; either partner may delete
+            // comments ONLY in the same atomic batch that removes the candidate.
+            allow delete: if memberOf(coupleId) && editableDraft()
+              && (resource.data.authorUid == request.auth.uid || !existsAfter(candidatePath()));
+          }
+        }
+
+        // A reviewed or confirmed snapshot is immutable until both members agree.
+        match /approval/{approvalId} {
+          function validApproval() {
+            return approvalId == 'state'
+              && request.resource.data.keys().hasOnly([
+                'status', 'requestedBy', 'proposedBy', 'approvedBy',
+                'confirmedSnapshot', 'proposedSnapshot', 'revision', 'createdAt', 'updatedAt'
+              ])
+              && request.resource.data.keys().hasAll([
+                'status', 'requestedBy', 'proposedBy', 'approvedBy',
+                'confirmedSnapshot', 'proposedSnapshot', 'revision', 'createdAt', 'updatedAt'
+              ])
+              && request.resource.data.status in ['review', 'confirmed', 'change-review']
+              && request.resource.data.requestedBy is string
+              && request.resource.data.requestedBy in get(/databases/$(database)/documents/couples/$(coupleId)).data.memberUids
+              && request.resource.data.proposedBy is string
+              && request.resource.data.proposedBy in get(/databases/$(database)/documents/couples/$(coupleId)).data.memberUids
+              && request.resource.data.approvedBy is map
+              && request.resource.data.approvedBy.size() <= 2
+              && request.resource.data.revision is int && request.resource.data.revision >= 1
+              && approvalSnapshotValid(request.resource.data.confirmedSnapshot)
+              && approvalSnapshotValid(request.resource.data.proposedSnapshot)
+              && request.resource.data.updatedAt == request.time;
+          }
+          function initialReview() {
+            let draft = get(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId)).data;
+            let schedule = get(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId)/schedule/draft).data;
+            return request.resource.data.status == 'review'
+              && request.resource.data.revision == 1
+              && request.resource.data.requestedBy == request.auth.uid
+              && request.resource.data.proposedBy == request.auth.uid
+              && request.resource.data.approvedBy.keys().hasOnly([request.auth.uid])
+              && request.resource.data.approvedBy.keys().hasAll([request.auth.uid])
+              && request.resource.data.approvedBy[request.auth.uid] == true
+              && request.resource.data.confirmedSnapshot == request.resource.data.proposedSnapshot
+              && request.resource.data.confirmedSnapshot.title == draft.title
+              && request.resource.data.confirmedSnapshot.date == draft.date
+              && request.resource.data.confirmedSnapshot.startTime == schedule.startTime
+              && request.resource.data.confirmedSnapshot.blocks == schedule.blocks
+              && request.resource.data.confirmedSnapshot.globalBackupCandidateIds == schedule.globalBackupCandidateIds
+              && request.resource.data.confirmedSnapshot.scheduleRevision == schedule.revision;
+          }
+          function partnerApproval() {
+            return resource.data.status in ['review', 'change-review']
+              && request.auth.uid != resource.data.proposedBy
+              && request.resource.data.status == 'confirmed'
+              && request.resource.data.revision == resource.data.revision + 1
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                'status', 'approvedBy', 'confirmedSnapshot', 'revision', 'updatedAt'
+              ])
+              && request.resource.data.approvedBy.keys().size() == 2
+              && request.resource.data.approvedBy.keys()
+                .hasAll(get(/databases/$(database)/documents/couples/$(coupleId)).data.memberUids)
+              && request.resource.data.approvedBy[request.auth.uid] == true
+              && resource.data.approvedBy[resource.data.proposedBy] == true
+              && request.resource.data.approvedBy[resource.data.proposedBy] == true
+              && request.resource.data.approvedBy.diff(resource.data.approvedBy)
+                .affectedKeys().hasOnly([request.auth.uid])
+              && request.resource.data.confirmedSnapshot == resource.data.proposedSnapshot;
+          }
+          function proposeChange() {
+            return resource.data.status == 'confirmed'
+              && request.resource.data.status == 'change-review'
+              && request.resource.data.proposedBy == request.auth.uid
+              && request.resource.data.approvedBy.keys().hasOnly([request.auth.uid])
+              && request.resource.data.approvedBy.keys().hasAll([request.auth.uid])
+              && request.resource.data.approvedBy[request.auth.uid] == true
+              && request.resource.data.confirmedSnapshot == resource.data.confirmedSnapshot
+              && request.resource.data.proposedSnapshot != resource.data.confirmedSnapshot
+              && request.resource.data.revision == resource.data.revision + 1
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                'status', 'proposedBy', 'approvedBy', 'proposedSnapshot', 'revision', 'updatedAt'
+              ]);
+          }
+          function discardChange() {
+            return resource.data.status == 'change-review'
+              && request.resource.data.status == 'confirmed'
+              && request.resource.data.revision == resource.data.revision + 1
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                'status', 'revision', 'updatedAt'
+              ]);
+          }
+          allow read: if memberOf(coupleId) && approvalId == 'state';
+          allow create: if memberOf(coupleId) && validApproval()
+            && request.resource.data.createdAt == request.time
+            && exists(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId)/schedule/draft)
+            && initialReview();
+          allow update: if memberOf(coupleId) && validApproval()
+            && (partnerApproval() || proposeChange() || discardChange());
+          allow delete: if memberOf(coupleId) && approvalId == 'state' && resource.data.status == 'review';
+        }
+
+        // A versioned, couple-private unfinished timetable.
+        match /schedule/{scheduleId} {
+          function editableSchedule() {
+            return exists(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId))
+              && get(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId)).data.status == 'draft';
+          }
+          function validSchedule() {
+            return scheduleId == 'draft'
+              && request.resource.data.keys().hasOnly(['startTime', 'blocks', 'globalBackupCandidateIds', 'revision', 'updatedBy', 'updatedAt'])
+              && request.resource.data.keys().hasAll(['startTime', 'blocks', 'globalBackupCandidateIds', 'revision', 'updatedBy', 'updatedAt'])
+              && request.resource.data.startTime is string
+              && (request.resource.data.startTime == ''
+                  || request.resource.data.startTime.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$'))
+              && request.resource.data.blocks is list
+              && request.resource.data.blocks.size() <= 20
+              && request.resource.data.globalBackupCandidateIds is list
+              && request.resource.data.globalBackupCandidateIds.size() <= 20
+              && request.resource.data.revision is int
+              && request.resource.data.revision >= 1
+              && request.resource.data.updatedBy == request.auth.uid
+              && request.resource.data.updatedAt == request.time;
+          }
+          allow read: if memberOf(coupleId) && editableSchedule() && scheduleId == 'draft';
+          allow create: if memberOf(coupleId) && editableSchedule() && canEditUnapproved() && validSchedule()
+            && request.resource.data.revision == 1;
+          allow update: if memberOf(coupleId) && editableSchedule() && canEditUnapproved() && validSchedule()
+            && request.resource.data.revision == resource.data.revision + 1;
+          allow delete: if false;
+        }
+      }
+
+      match /schedules/{scheduleId} {
+        allow read: if memberOf(coupleId);
+        allow create: if memberOf(coupleId)
+          && request.resource.data.ownerId == request.auth.uid;
+        allow update, delete: if memberOf(coupleId)
+          && resource.data.ownerId == request.auth.uid;
+      }
+    }
+  }
+}
+)
+            && snapshot.startTime is string
+            && snapshot.startTime.matches('^([01][0-9]|2[0-3]):[0-5][0-9]
+          return request.resource.data.keys().hasOnly([
+            'id', 'title', 'date', 'status', 'schemaVersion', 'createdBy', 'createdAt', 'updatedAt'
+          ])
+          && request.resource.data.keys().hasAll([
+            'id', 'title', 'date', 'status', 'schemaVersion', 'createdBy', 'createdAt', 'updatedAt'
+          ])
+          && request.resource.data.id == planId
+          && request.resource.data.title is string && request.resource.data.title.size() <= 100
+          && request.resource.data.date is string
+          && (request.resource.data.date == '' || request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'))
+          && request.resource.data.status == 'draft'
+          && request.resource.data.schemaVersion == 2
+          && request.resource.data.createdBy is string;
+        }
+        allow read: if memberOf(coupleId);
+        allow create: if memberOf(coupleId) && validDraft()
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+        allow update: if memberOf(coupleId) && validDraft()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'date', 'updatedAt'])
+          && request.resource.data.updatedAt == request.time;
+        // Preserve candidate subcollections and avoid accidental orphaning.
+        allow delete: if false;
+
+        match /candidates/{candidateId} {
+          function editableDraft() {
+            return exists(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId))
+              && get(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId)).data.status == 'draft';
+          }
+          function validCandidate() {
+            return request.resource.data.keys().hasOnly([
+              'id', 'name', 'address', 'latitude', 'longitude', 'category', 'memo',
+              'sourceSavedPlaceId', 'createdBy', 'createdAt', 'updatedAt', 'votes'
+            ])
+            && request.resource.data.keys().hasAll([
+              'id', 'name', 'address', 'latitude', 'longitude', 'category', 'memo',
+              'createdBy', 'createdAt', 'updatedAt'
+            ])
+            && request.resource.data.id == candidateId
+            && request.resource.data.name is string
+            && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
+            && request.resource.data.address is string && request.resource.data.address.size() <= 240
+            && request.resource.data.memo is string && request.resource.data.memo.size() <= 1000
+            && request.resource.data.category in ['맛집', '카페', '놀거리', '여행', '기타']
+            && request.resource.data.latitude is number
+            && request.resource.data.latitude >= -90 && request.resource.data.latitude <= 90
+            && request.resource.data.longitude is number
+            && request.resource.data.longitude >= -180 && request.resource.data.longitude <= 180
+            && request.resource.data.createdBy is string
+            && (!request.resource.data.keys().hasAny(['votes']) || (
+              request.resource.data.votes is map
+              && request.resource.data.votes.size() <= 2
+            ))
+            && (!request.resource.data.keys().hasAny(['sourceSavedPlaceId'])
+              || (request.resource.data.sourceSavedPlaceId is string
+                && request.resource.data.sourceSavedPlaceId.size() > 0
+                && request.resource.data.sourceSavedPlaceId.size() <= 120));
+          }
+          allow read: if memberOf(coupleId) && editableDraft();
+          // Only the authenticated UID can change its own vote. Existing partner
+          // votes and the original candidate fields are immutable through this path.
+          function ownVoteChange() {
+            return request.resource.data.keys().hasAll(['votes'])
+              && request.resource.data.votes is map
+              && request.resource.data.votes.diff(resource.data.get('votes', {}))
+                .affectedKeys().hasOnly([request.auth.uid])
+              && request.resource.data.votes.diff(resource.data.get('votes', {}))
+                .affectedKeys().hasAll([request.auth.uid])
+              && (!request.resource.data.votes.keys().hasAny([request.auth.uid])
+                || request.resource.data.votes[request.auth.uid] in ['want', 'considering', 'pass']);
+          }
+          allow create: if memberOf(coupleId) && editableDraft() && validCandidate()
+            && !request.resource.data.keys().hasAny(['votes'])
+            && request.resource.data.createdBy == request.auth.uid
+            && request.resource.data.createdAt == request.time
+            && request.resource.data.updatedAt == request.time;
+          allow update: if memberOf(coupleId) && editableDraft() && validCandidate()
+            && request.resource.data.updatedAt == request.time
+            && (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memo', 'updatedAt'])
+              || (
+                request.resource.data.diff(resource.data).affectedKeys().hasOnly(['votes', 'updatedAt'])
+                && ownVoteChange()
+              )
+            );
+          allow delete: if memberOf(coupleId) && editableDraft();
+
+          match /comments/{commentId} {
+            function candidatePath() {
+              return /databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId)/candidates/$(candidateId);
+            }
+            function validComment() {
+              return request.resource.data.keys().hasOnly(['id', 'authorUid', 'text', 'createdAt'])
+                && request.resource.data.keys().hasAll(['id', 'authorUid', 'text', 'createdAt'])
+                && request.resource.data.id == commentId
+                && request.resource.data.authorUid == request.auth.uid
+                && request.resource.data.text is string
+                && request.resource.data.text.size() > 0
+                && request.resource.data.text.size() <= 500
+                && request.resource.data.createdAt == request.time;
+            }
+            allow read: if memberOf(coupleId) && editableDraft() && exists(candidatePath());
+            allow create: if memberOf(coupleId) && editableDraft() && exists(candidatePath()) && validComment();
+            allow update: if false;
+            // An author may delete their comment; either partner may delete
+            // comments ONLY in the same atomic batch that removes the candidate.
+            allow delete: if memberOf(coupleId) && editableDraft()
+              && (resource.data.authorUid == request.auth.uid || !existsAfter(candidatePath()));
+          }
+        }
+
+        // A versioned, couple-private unfinished timetable.
+        match /schedule/{scheduleId} {
+          function editableSchedule() {
+            return exists(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId))
+              && get(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId)).data.status == 'draft';
+          }
+          function validSchedule() {
+            return scheduleId == 'draft'
+              && request.resource.data.keys().hasOnly(['startTime', 'blocks', 'globalBackupCandidateIds', 'revision', 'updatedBy', 'updatedAt'])
+              && request.resource.data.keys().hasAll(['startTime', 'blocks', 'globalBackupCandidateIds', 'revision', 'updatedBy', 'updatedAt'])
+              && request.resource.data.startTime is string
+              && (request.resource.data.startTime == ''
+                  || request.resource.data.startTime.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$'))
+              && request.resource.data.blocks is list
+              && request.resource.data.blocks.size() <= 20
+              && request.resource.data.globalBackupCandidateIds is list
+              && request.resource.data.globalBackupCandidateIds.size() <= 20
+              && request.resource.data.revision is int
+              && request.resource.data.revision >= 1
+              && request.resource.data.updatedBy == request.auth.uid
+              && request.resource.data.updatedAt == request.time;
+          }
+          allow read: if memberOf(coupleId) && editableSchedule() && scheduleId == 'draft';
+          allow create: if memberOf(coupleId) && editableSchedule() && validSchedule()
+            && request.resource.data.revision == 1;
+          allow update: if memberOf(coupleId) && editableSchedule() && validSchedule()
+            && request.resource.data.revision == resource.data.revision + 1;
+          allow delete: if false;
+        }
+      }
+
+      match /schedules/{scheduleId} {
+        allow read: if memberOf(coupleId);
+        allow create: if memberOf(coupleId)
+          && request.resource.data.ownerId == request.auth.uid;
+        allow update, delete: if memberOf(coupleId)
+          && resource.data.ownerId == request.auth.uid;
+      }
+    }
+  }
+}
+)
+            && snapshot.blocks is list && snapshot.blocks.size() > 0 && snapshot.blocks.size() <= 20
+            && snapshot.globalBackupCandidateIds is list && snapshot.globalBackupCandidateIds.size() <= 20
+            && snapshot.scheduleRevision is int && snapshot.scheduleRevision >= 1;
+        }
         function validDraft() {
           return request.resource.data.keys().hasOnly([
             'id', 'title', 'date', 'status', 'schemaVersion', 'createdBy', 'createdAt', 'updatedAt'
