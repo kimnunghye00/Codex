@@ -200,11 +200,12 @@ export function DatePlanApprovalPanel({ coupleId, planId, uid, candidates, appro
     {loading && <p role="status">승인 상태를 확인하고 있어요…</p>}
     {!loading && !approval && <>
       <p className="date-map-add-hint">데이트 이름을 저장하면 승인 요청을 보낼 수 있어요. 날짜·시작 시각·시간표는 미정이어도 괜찮고, 나중에 변경 제안으로 함께 확정할 수 있어요.</p>
-      <button className="date-map-primary" type="button" disabled={busy || !draftReady || !detailsReady} onClick={() =>
+      <button className="date-map-primary" type="button" disabled={busy || !detailsReady} onClick={() =>
         void act(() => requestDatePlanApproval(coupleId, planId, uid, candidates), '상대방에게 최종 확정을 요청했어요.', true)}>
         <Send size={15}/> 최종 확정 요청
       </button>
-      {(!draftReady || !detailsReady) && <small>데이트 이름의 저장을 완료하면 요청할 수 있어요.</small>}
+      {!detailsReady && <small>데이트 이름의 저장을 완료하면 요청할 수 있어요.</small>}
+      {detailsReady && !draftReady && <small>날짜·시작 시각·시간표가 아직 미정이어도 먼저 최종 확정 요청을 보낼 수 있어요.</small>}
     </>}
     {!loading && approval && <>
       <Preview snapshot={approval.confirmedSnapshot} candidates={candidates}/>
