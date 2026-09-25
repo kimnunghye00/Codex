@@ -9,7 +9,8 @@ import {
 type Kind = DatePlanTimeBlock['kind'];
 const KINDS: Record<Kind, string> = { activity: '활동', meal: '식사', other: '기타' };
 const copy = (schedule: DatePlanSchedule): DatePlanSchedule => ({
-  ...schedule, blocks: schedule.blocks.map((block) => ({ ...block, backupCandidateIds: [...block.backupCandidateIds] })),
+  ...schedule, globalBackupCandidateIds: [...(schedule.globalBackupCandidateIds ?? [])],
+  blocks: schedule.blocks.map((block) => ({ ...block, backupCandidateIds: [...block.backupCandidateIds] })),
 });
 
 export function DatePlanScheduleEditor({ coupleId, planId, uid, candidates }: {
@@ -68,6 +69,7 @@ export function DatePlanScheduleEditor({ coupleId, planId, uid, candidates }: {
       savingRef.current = true; setSaving(true); setStatus('자동 저장 중…');
       void saveDatePlanSchedule(
         coupleId, planId, uid, draft.revision, draft.startTime, draft.blocks, candidateIdsKey ? candidateIdsKey.split('\u0001') : [],
+        draft.globalBackupCandidateIds,
       ).then((revision) => {
         localRevision.current = revision;
         dirtyRef.current = false; setDirty(false);
@@ -149,6 +151,18 @@ export function DatePlanScheduleEditor({ coupleId, planId, uid, candidates }: {
         <button type="button" disabled={!customName.trim() || saving || conflict || draft.blocks.length >= MAX_DATE_PLAN_BLOCKS}
           onClick={() => addBlock(null, customName, 'other')}><Plus size={15}/> 일반 일정 추가</button>
       </div>
+      <details className="date-map-time-backups date-map-time-global-backups">
+        <summary>데이트 전체 예비 장소 ({draft.globalBackupCandidateIds.length}곳)</summary>
+        <p className="date-map-add-hint">시간대와 관계없이 예비로 보관할 후보를 선택해 주세요. 시간대별 예비 장소는 각 일정에서도 따로 설정할 수 있어요.</p>
+        {candidates.map((item) => <label key={item.id}>
+          <input type="checkbox" checked={draft.globalBackupCandidateIds.includes(item.id)}
+            disabled={saving || conflict || (!draft.globalBackupCandidateIds.includes(item.id) && draft.globalBackupCandidateIds.length >= 20)}
+            onChange={(event) => edit((current) => ({ ...current, globalBackupCandidateIds: event.target.checked
+              ? [...current.globalBackupCandidateIds, item.id] : current.globalBackupCandidateIds.filter((id) => id !== item.id) }))}/>
+          {item.name}
+        </label>)}
+        {!candidates.length && <p>먼저 데이트 후보를 담아 주세요.</p>}
+      </details>
       {!draft.blocks.length && <p className="date-map-empty">아직 일정이 없어요. 후보 장소를 선택해서 첫 일정을 추가해 보세요.</p>}
       {draft.blocks.map((block, index) => {
         const times = timeline[index];
