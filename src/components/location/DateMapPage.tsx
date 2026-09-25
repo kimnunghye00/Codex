@@ -52,11 +52,12 @@ function kmApprox(a: { latitude: number; longitude: number }, b: { latitude: num
   return Math.hypot(lat, lon);
 }
 
-export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
+export function DateMapPage({ Header, connection, focusPlace, onClearFocus, initialPlanId }: {
   Header: ({ title }: { title?: string }) => React.ReactNode;
   connection: RealCoupleConnection | null;
   focusPlace?: string;
   onClearFocus: () => void;
+  initialPlanId?: string;
 }) {
   const uid = auth.currentUser?.uid ?? '';
   const coupleId = connection?.coupleId ?? '';
@@ -191,6 +192,10 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     if (!coupleId) return;
     return subscribeDatePlanDrafts(coupleId, setDatePlans, (error) => setMessage(errorText(error)));
   }, [coupleId]);
+  useEffect(() => {
+    if (!initialPlanId || !coupleId) return;
+    setTab('plans'); setActivePlanId(initialPlanId); setMobilePlanView('list');
+  }, [initialPlanId, coupleId]);
 
   useEffect(() => {
     setPlanApproval(null); setApprovalLoading(true); setScheduleReady(false);
