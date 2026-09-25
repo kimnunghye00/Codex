@@ -508,7 +508,7 @@ test('date plan V2: both members share unfinished timetable without lost edits o
     backupCandidateIds:[], activityMinutes:120, travelMinutes:20, fixedStart:null,
   };
   expect((await readDatePlanSchedule(coupleId,planId)).revision).toBe(0);
-  const version = await saveDatePlanSchedule(coupleId,planId,'alice',0,'10:00',[block],[candidateId]);
+  const version = await saveDatePlanSchedule(coupleId,planId,'alice',0,'10:00',[block],[candidateId],[candidateId]);
   expect(version).toBe(1);
   const observed = await new Promise<number>((resolve,reject) => {
     let stop: () => void = () => {};
