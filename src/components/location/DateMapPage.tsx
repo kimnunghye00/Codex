@@ -9,7 +9,7 @@ import { removeDatePlanCandidateWithFeedback, setDatePlanCandidatePreference } f
 import { DatePlanCandidateFeedback } from './DatePlanCandidateFeedback';
 import { DatePlanScheduleEditor } from './DatePlanScheduleEditor';
 import { readDatePlanSchedule } from '../../lib/datePlanSchedule';
-import { subscribeDatePlanApproval, type DatePlanApproval } from '../../lib/datePlanApproval';
+import { readDatePlanApproval, subscribeDatePlanApproval, type DatePlanApproval } from '../../lib/datePlanApproval';
 import { DatePlanApprovalPanel } from './DatePlanApprovalPanel';
 import { isSameDatePlanPlace } from '../../lib/datePlanCandidates';
 import { CANDIDATE_PREFERENCE_LABELS, type CandidatePreference, type DatePlanDraft, type DatePlanCandidate } from '../../lib/datePlanFoundation';
@@ -201,10 +201,32 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus, init
   useEffect(() => {
     setPlanApproval(null); setApprovalLoading(true); setScheduleReady(false);
     if (!coupleId || !activePlanId) { setApprovalLoading(false); return; }
-    return subscribeDatePlanApproval(coupleId, activePlanId,
-      (approval) => { setPlanApproval(approval); setApprovalLoading(false); },
-      (error) => { setApprovalLoading(false); setMessage(errorText(error)); });
+    let disposed = false;
+    let listenerDelivered = false;
+    const apply = (approval: DatePlanApproval | null) => {
+      if (disposed) return;
+      setPlanApproval(approval); setApprovalLoading(false);
+    };
+    const stop = subscribeDatePlanApproval(coupleId, activePlanId,
+      (approval) => { listenerDelivered = true; apply(approval); },
+      (error) => { if (!disposed) { setApprovalLoading(false); setMessage(errorText(error)); } });
+    // Force one server read as recovery for a stale/offline cached "missing"
+    // approval. Do not overwrite a newer listener event that arrived first.
+    void readDatePlanApproval(coupleId, activePlanId).then((approval) => {
+      if (!listenerDelivered) apply(approval);
+    }).catch((error) => {
+      if (!listenerDelivered && !disposed) { setApprovalLoading(false); setMessage(errorText(error)); }
+    });
+    return () => { disposed = true; stop(); };
   }, [coupleId, activePlanId]);
+
+  const refreshPlanApproval = async () => {
+    if (!coupleId || !activePlanId) return;
+    setApprovalLoading(true);
+    try { setPlanApproval(await readDatePlanApproval(coupleId, activePlanId)); }
+    catch (error) { setMessage(errorText(error)); }
+    finally { setApprovalLoading(false); }
+  };
 
   useEffect(() => {
     setPlanCandidates([]); setSelectedPlanCandidateId('');
@@ -1077,7 +1099,9 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus, init
                 uid={uid} candidates={planCandidates} onReadyChange={setScheduleReady}/>}
               <DatePlanApprovalPanel key={activePlan.id} coupleId={coupleId} planId={activePlan.id}
                 uid={uid} candidates={planCandidates} approval={planApproval} loading={approvalLoading}
-                draftReady={scheduleReady} detailsReady={planTitle.trim() === activePlan.title && planDate === activePlan.date && !pending && !planCandidatesLoading}/>
+                draftReady={scheduleReady}
+                detailsReady={Boolean(planTitle.trim() && planDate) && planTitle.trim() === activePlan.title && planDate === activePlan.date && !pending && !planCandidatesLoading}
+                onRefreshApproval={refreshPlanApproval}/>
             </div>
             <details className="date-map-plan-saved">
               <summary>가고 싶은 곳에서 후보 담기 ({places.length}곳) <ChevronDown size={15}/></summary>
