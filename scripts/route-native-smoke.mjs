@@ -77,12 +77,14 @@ check('Android background location is not requested', !manifest.includes('ACCESS
 check('Android broad media permission is not requested', !manifest.includes('READ_MEDIA_IMAGES') && !manifest.includes('READ_MEDIA_VIDEO'));
 
 check('Android V2 launcher aliases exist', ['DanduliRouteIconV2','DanduliHeartChatIconV2','DanduliCoupleLoveIconV2','DanduliCoupleDateIconV2'].every((name) => manifest.includes(name)));
+check('V3/V4 aliases let an already-selected icon refresh again', ['DanduliRouteIconV3','DanduliRouteIconV4','DanduliHeartChatIconV3','DanduliHeartChatIconV4','DanduliCoupleLoveIconV3','DanduliCoupleLoveIconV4','DanduliCoupleDateIconV3','DanduliCoupleDateIconV4'].every((name) => manifest.includes(name)));
 check('launcher repair receiver is registered', manifest.includes('LauncherRepairReceiver') && manifest.includes('android.intent.action.MY_PACKAGE_REPLACED'));
 check('launcher repair migrates legacy cached aliases', launcherRepair.includes('selected_icon') && launcherRepair.includes('LEGACY_ALIASES') && launcherRepair.includes('DanduliRouteIconV2'));
 check('app icon plugin registration exists', icon.includes("registerPlugin<RouteAppIconPlugin>('RouteAppIcon')"));
 check('app icon bridge supports deferred Samsung launcher swap', icon.includes('getNativeRouteAppIcon') && icon.includes('setNativeRouteAppIcon') && !icon.includes('ICON_STATE_MISMATCH'));
 check('app icon picker displays selected Android launcher state', moreServices.includes('현재 선택된 홈 화면 아이콘') && moreServices.includes('getNativeRouteAppIcon'));
 check('launcher aliases use Samsung-compatible deferred restart switching', iconPlugin.includes('moveTaskToBack') && iconPlugin.includes('finishSwap') && iconPlugin.includes('setComponentEnabledSetting') && iconPlugin.includes('PackageManager.COMPONENT_ENABLED_STATE_DISABLED, 0'));
+check('reselecting an icon rotates to a different launcher component', iconPlugin.includes('selectTargetAlias(icon, previousAlias)') && iconPlugin.includes('ICON_CHANGE_IN_PROGRESS') && iconPlugin.includes('DanduliCoupleLoveIconV3') && iconPlugin.includes('DanduliCoupleLoveIconV4'));
 check('character launcher build uses transparent clean artwork', iconPrep.includes('danduli-stickers-v3-clean.webp') && iconPrep.includes('Clean DANDULI sticker sheet lost transparency'));
 check('deleted appearance wrapper is not referenced by icon bridge', !icon.includes('appearance-stability'));
 
