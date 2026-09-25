@@ -688,3 +688,40 @@
 .date-map-plan-comment-form button { min-height:34px; padding:7px 12px; border:0; border-radius:9px; background:var(--primary); color:#fff; font-weight:750; font-size:11px; }
 .date-map-plan-comment-form button:disabled { opacity:.55; }
 .date-map-plan-feedback .date-map-plan-feedback-error { color:#b52c4a; }
+
+
+/* Date plan V2 stage 4: shared, auto-saved timetable. */
+.date-map-plan-schedule-anchor { scroll-margin:16px; }
+.date-map-timetable { display:flex; flex-direction:column; gap:11px; min-width:0; padding:12px 0; border-top:1px solid var(--border); color:var(--text-primary); }
+.date-map-timetable .date-map-panel-header strong { display:flex; align-items:center; gap:6px; }
+.date-map-timetable input,.date-map-timetable select { box-sizing:border-box; width:100%; min-width:0; min-height:38px; padding:7px 9px; border:1px solid var(--border); border-radius:9px; color:var(--text-primary); background:var(--surface); font:inherit; font-size:12px; }
+.date-map-timetable label { display:flex; flex-direction:column; gap:5px; min-width:0; font-size:11px; font-weight:700; color:var(--text-primary); }
+.date-map-timetable label > span { color:var(--text-secondary); font-weight:400; }
+.date-map-timetable button { cursor:pointer; }
+.date-map-timetable button:disabled { opacity:.48; cursor:not-allowed; }
+.date-map-timetable-add { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:7px; align-items:end; padding:10px; border:1px solid var(--border); border-radius:12px; background:var(--surface); }
+.date-map-timetable-add > button { display:inline-flex; align-items:center; justify-content:center; gap:4px; min-height:38px; padding:7px 9px; border:1px solid var(--border); border-radius:9px; background:var(--primary-soft); color:var(--text-primary); font-size:11px; font-weight:750; }
+.date-map-time-block { display:flex; flex-direction:column; gap:10px; min-width:0; padding:11px; background:var(--surface); border:1px solid var(--border); border-radius:12px; }
+.date-map-time-block-head { display:flex; align-items:flex-start; justify-content:space-between; gap:6px; }
+.date-map-time-block-head b { flex:1; min-width:0; font-size:12px; overflow-wrap:anywhere; }
+.date-map-time-block-head > div { display:flex; flex-shrink:0; gap:3px; }
+.date-map-time-block-head button { display:grid; place-items:center; width:29px; height:29px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text-primary); }
+.date-map-time-summary { display:flex; flex-wrap:wrap; justify-content:space-between; gap:4px; color:var(--primary); font-weight:750; font-size:12px; }
+.date-map-time-summary small { font-size:10px; color:var(--text-secondary); font-weight:400; }
+.date-map-time-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.date-map-time-grid label:first-child { grid-column:1 / -1; }
+.date-map-time-duration { display:flex; align-items:center; gap:3px; }
+.date-map-time-duration input { padding:6px 3px; text-align:center; font-variant-numeric:tabular-nums; }
+.date-map-time-duration span { flex-shrink:0; color:var(--text-secondary); font-size:10px; }
+.date-map-time-backups { border-top:1px solid var(--border); padding-top:8px; }
+.date-map-time-backups summary { font-size:11px; font-weight:750; cursor:pointer; }
+.date-map-time-backups label { display:flex; align-items:center; gap:7px; padding:6px 0; font-weight:400; }
+.date-map-time-backups input { width:17px; min-height:17px; height:17px; flex-shrink:0; accent-color:var(--primary); }
+.date-map-time-backups p { font-size:10px; }
+.date-map-timetable-status { color:var(--text-secondary); font-size:11px; }
+.date-map-time-warning { margin:0; border:1px solid var(--border); border-radius:9px; padding:8px; background:var(--primary-soft); color:var(--text-primary); font-size:11px; line-height:1.5; }
+.date-map-time-reload { align-self:flex-start; padding:6px 9px; border:1px solid var(--border); border-radius:9px; background:var(--surface); color:var(--text-secondary); font-size:11px; }
+@media (max-width:760px) {
+  .date-map-time-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .date-map-timetable-add { grid-template-columns:minmax(0,1fr) auto; }
+}
