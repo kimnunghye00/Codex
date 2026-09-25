@@ -111,7 +111,7 @@ export async function deleteDatePlanCandidate(coupleId: string, planId: string, 
 
 
 const DELETE_DATE_PLAN_URL = String(import.meta.env.VITE_DELETE_DATE_PLAN_URL
-  || 'https://asia-northeast3-meluni-f4e00.cloudfunctions.net/deleteDatePlanDraft').trim();
+  || 'https://asia-northeast3-meluni-f4e00.cloudfunctions.net/deleteDatePlanDraftV2').trim();
 
 /**
  * Delete through the authenticated server endpoint. Firestore clients retain
