@@ -70,6 +70,16 @@ export function validateDatePlanSchedule(startTime: string, blocks: DatePlanTime
   });
 }
 
+export function datePlanScheduleReadyForApproval(schedule: DatePlanSchedule): boolean {
+  if (schedule.revision < 1 || !schedule.startTime || schedule.blocks.length === 0) return false;
+  try {
+    const timeline = calculateDatePlanTimeline(schedule.startTime, schedule.blocks);
+    return timeline.every((item) => !item.conflict && !item.overflow && item.start !== null && item.end !== null);
+  } catch {
+    return false;
+  }
+}
+
 export function calculateDatePlanTimeline(startTime: string, blocks: DatePlanTimeBlock[]): DatePlanTiming[] {
   let next: number | null = startTime ? parseClock(startTime) : null;
   return blocks.map((block) => {
