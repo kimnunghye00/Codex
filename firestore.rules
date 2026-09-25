@@ -209,6 +209,63 @@ service cloud.firestore {
         ]));
       allow delete: if false;
 
+      // Persist partner activity so notification taps can navigate after reload.
+      match /activity/{eventId} {
+        function validEvent() {
+          let pair = get(/databases/$(database)/documents/couples/$(coupleId)).data.memberUids;
+          return request.resource.data.keys().hasOnly([
+              'id', 'authorUid', 'recipientUid', 'kind', 'title', 'detail',
+              'target', 'sourceId', 'revision', 'createdAt'
+            ])
+            && request.resource.data.keys().hasAll([
+              'id', 'authorUid', 'recipientUid', 'kind', 'title', 'detail',
+              'target', 'sourceId', 'revision', 'createdAt'
+            ])
+            && request.resource.data.id == eventId
+            && request.resource.data.authorUid == request.auth.uid
+            && request.resource.data.recipientUid in pair
+            && request.resource.data.recipientUid != request.auth.uid
+            && request.resource.data.kind in ['chat', 'memory', 'date-plan']
+            && request.resource.data.title is string && request.resource.data.title.size() > 0
+            && request.resource.data.title.size() <= 100
+            && request.resource.data.detail is string && request.resource.data.detail.size() <= 200
+            && request.resource.data.sourceId is string && request.resource.data.sourceId.size() > 0
+            && request.resource.data.sourceId.size() <= 160
+            && request.resource.data.revision is int && request.resource.data.revision >= 0
+            && request.resource.data.target is map
+            && request.resource.data.target.keys().hasOnly(['screen', 'itemId'])
+            && request.resource.data.target.keys().hasAll(['screen', 'itemId'])
+            && request.resource.data.target.itemId == request.resource.data.sourceId
+            && request.resource.data.createdAt == request.time;
+        }
+        function verifiedSource() {
+          let kind = request.resource.data.kind;
+          let sourceId = request.resource.data.sourceId;
+          return (kind == 'chat'
+              && request.resource.data.target.screen == 'chat'
+              && request.resource.data.revision == 0
+              && eventId == 'chat-' + sourceId
+              && existsAfter(/databases/$(database)/documents/couples/$(coupleId)/messages/$(sourceId))
+              && getAfter(/databases/$(database)/documents/couples/$(coupleId)/messages/$(sourceId)).data.authorUid == request.auth.uid
+            ) || (kind == 'memory'
+              && request.resource.data.target.screen == 'album'
+              && request.resource.data.revision == 0
+              && eventId == 'memory-' + sourceId
+              && existsAfter(/databases/$(database)/documents/couples/$(coupleId)/memories/$(sourceId))
+              && getAfter(/databases/$(database)/documents/couples/$(coupleId)/memories/$(sourceId)).data.ownerUid == request.auth.uid
+            ) || (kind == 'date-plan'
+              && request.resource.data.target.screen == 'date-plan'
+              && eventId == 'plan-' + sourceId + '-' + string(request.resource.data.revision)
+              && existsAfter(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(sourceId)/approval/state)
+              && getAfter(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(sourceId)/approval/state).data.revision == request.resource.data.revision
+              && getAfter(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(sourceId)/approval/state).data.proposedBy == request.auth.uid
+            );
+        }
+        allow read: if memberOf(coupleId);
+        allow create: if memberOf(coupleId) && validEvent() && verifiedSource();
+        allow update, delete: if false;
+      }
+
       match /messages/{messageId} {
         allow read: if memberOf(coupleId);
         allow create: if memberOf(coupleId)
