@@ -19,6 +19,7 @@ import { uploadChatAttachment, uploadChatMedia } from '../src/lib/chatMedia';
 import { addDatePlace, saveDateCourse, setPlaceLike, addPlaceOpinion } from '../src/lib/dateMap';
 import { addDatePlanCandidate, createDatePlanDraft, readDatePlanCandidates, subscribeDatePlanCandidates, updateDatePlanCandidateMemo, updateDatePlanDraft } from '../src/lib/datePlanDrafts';
 import { readDatePlanSchedule, saveDatePlanSchedule, subscribeDatePlanSchedule } from '../src/lib/datePlanSchedule';
+import { publishCoupleActivity, subscribeCoupleActivities } from '../src/lib/coupleActivity';
 import { approveDatePlan, proposeDatePlanChange, requestDatePlanApproval, subscribeDatePlanApproval, withdrawDatePlanReview } from '../src/lib/datePlanApproval';
 import { addDatePlanCandidateComment, deleteDatePlanCandidateComment, removeDatePlanCandidateWithFeedback,
   setDatePlanCandidatePreference, subscribeDatePlanCandidateComments } from '../src/lib/datePlanOpinions';
@@ -658,4 +659,37 @@ test('date plan V2: withdrawing initial review restores editable shared draft, n
   expect((await getDocFromServer(doc(client.db,path,'approval','state'))).exists()).toBe(false);
   await updateDatePlanDraft(coupleId,planId,{title:'수정 가능한 초안'});
   expect((await getDocFromServer(doc(client.db,path))).data()?.title).toBe('수정 가능한 초안');
+});
+
+
+test('actionable activity: partners see genuine messages, source spoofing and outsider reads are blocked', async () => {
+  const { coupleId } = await pair();
+  as('alice');
+  const msg = { id: 983217, sender: 'me' as const, type: 'text' as const, text: '안녕!', timestamp: new Date().toISOString(), read: false };
+  await sendCoupleMessage(coupleId, 'alice', msg);
+  await publishCoupleActivity(coupleId, 'alice', {
+    id:'chat-983217', kind:'chat', sourceId:'983217', revision:0,
+    title:'새 메시지가 왔어요', detail:'안녕!', target:{ screen:'chat', itemId:'983217' },
+  });
+  const record = 'couples/' + coupleId + '/activity/chat-983217';
+  expect((await getDocFromServer(doc(client.db, record))).data()?.target)
+    .toEqual({screen:'chat',itemId:'983217'});
+  as('bob');
+  const partnerFeed = await new Promise<string[]>((resolve, reject) => {
+    let stop: () => void = () => {};
+    stop = subscribeCoupleActivities(coupleId,'bob',(items) => {
+      if (!items.some((item) => item.id === 'chat-983217')) return;
+      resolve(items.map((item) => item.id));
+      queueMicrotask(() => stop());
+    },reject);
+  });
+  expect(partnerFeed).toContain('chat-983217');
+  await assertFails(setDoc(doc(client.db, 'couples', coupleId, 'activity', 'chat-spoof'), {
+    id:'chat-spoof',kind:'chat',sourceId:'spoof',revision:0,authorUid:'bob',recipientUid:'alice',
+    title:'가짜 알림',detail:'',target:{screen:'chat',itemId:'spoof'},createdAt:serverTimestamp(),
+  }));
+  await assertFails(deleteDoc(doc(client.db, record)));
+  await signup('eve');
+  const outsider = as('eve');
+  await assertFails(getDocFromServer(doc(outsider.db, record)));
 });
