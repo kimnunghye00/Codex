@@ -25,3 +25,12 @@
 .notification-empty span { font-size: 10px; }
 .header-actions .notification-button { position: relative; }
 .header-actions .notification-count { position: absolute; top: 5px; right: 3px; min-width: 17px; height: 17px; display: grid; place-items: center; padding: 0 4px; border: 2px solid var(--background); border-radius: 99px; color: white; background: var(--emotion); font-size: 7px; font-style: normal; font-weight: 800; }
+
+.notification-list article .notification-item-action { display:flex; flex:1; min-width:0; flex-direction:column; align-items:stretch; gap:3px; padding:0; border:0; background:transparent; color:var(--text-primary); text-align:left; cursor:pointer; }
+.notification-list article .notification-item-action > span { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+.notification-list article .notification-item-action p { white-space:normal; overflow-wrap:anywhere; }
+.notification-list article .notification-item-action:disabled { cursor:default; }
+.notification-list article .notification-item-action:not(:disabled):focus-visible { outline:2px solid var(--primary); outline-offset:5px; border-radius:6px; }
+.notification-list article .notification-item-action small { color:var(--text-secondary); font-size:10px; }
+.notification-actions { gap:4px; flex-wrap:wrap; }
+.notification-actions button:first-child { border:1px solid var(--border); border-radius:10px; background:var(--primary-soft); }

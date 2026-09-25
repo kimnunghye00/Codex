@@ -162,11 +162,13 @@ function mediaErrorMessage(cause: unknown, kind: 'photo' | 'gif') {
   return kind === 'photo' ? '사진을 전송하지 못했어요. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.' : '움짤을 전송하지 못했어요. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.';
 }
 
-export function ChatPage({ Header, messages, setMessages, connection }: {
+export function ChatPage({ Header, messages, setMessages, connection, initialMessageId, notificationRequest }: {
   Header: ({ title }: { title?: string }) => React.ReactNode;
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   connection: RealCoupleConnection | null;
+  initialMessageId?: number;
+  notificationRequest?: number;
 }) {
   const currentUid = auth.currentUser?.uid ?? '';
   const [draft, setDraft] = useState('');
@@ -782,6 +784,16 @@ export function ChatPage({ Header, messages, setMessages, connection }: {
     setHighlighted(id);
     window.setTimeout(() => setHighlighted(undefined), 1400);
   };
+  useEffect(() => {
+    if (initialMessageId === undefined) return;
+    const index = rows.findIndex((row) => row.kind === 'message' && row.message.id === initialMessageId);
+    if (index < 0) return;
+    rowVirtualizer.scrollToIndex(index, { align: 'center' });
+    setHighlighted(initialMessageId);
+    const timer = window.setTimeout(() => setHighlighted(undefined), 2200);
+    return () => window.clearTimeout(timer);
+  }, [initialMessageId, notificationRequest, rows, rowVirtualizer]);
+
   const beginDeleteSelection = (message: Message) => {
     setActive(undefined);
     setDeleteSelection(new Set([message.id]));

@@ -7,6 +7,7 @@ const iconFor = (kind: AppNotification['kind']) => {
   if (kind === 'profile') return <UserRound size={17} />;
   if (kind === 'couple') return <Heart size={17} />;
   if (kind === 'call') return <PhoneCall size={17} />;
+  if (kind === 'date-plan') return <Heart size={17} />;
   return <Bell size={17} />;
 };
 
@@ -21,11 +22,14 @@ function timeLabel(value: string) {
   return `${date.getMonth() + 1}월 ${date.getDate()}일`;
 }
 
-export function NotificationPanel({ items, onClose, onReadAll, onClear }: {
+export function NotificationPanel({ items, onClose, onReadAll, onClear, onSelect, onEnableAlerts, alertStatus }: {
   items: AppNotification[];
   onClose: () => void;
   onReadAll: () => void;
   onClear: () => void;
+  onSelect: (item: AppNotification) => void;
+  onEnableAlerts: () => void;
+  alertStatus: string;
 }) {
   return <div className="notification-backdrop" role="dialog" aria-modal="true" aria-label="단둘이 알림">
     <section className="notification-panel">
@@ -34,6 +38,7 @@ export function NotificationPanel({ items, onClose, onReadAll, onClear }: {
         <button className="notification-close" onClick={onClose} aria-label="닫기"><X /></button>
       </header>
       <div className="notification-actions">
+        <button onClick={onEnableAlerts}>{alertStatus}</button>
         <button onClick={onReadAll}><CheckCheck size={15} />모두 읽음</button>
         <button onClick={onClear}>전체 삭제</button>
       </div>
@@ -41,7 +46,12 @@ export function NotificationPanel({ items, onClose, onReadAll, onClear }: {
         {!items.length && <div className="notification-empty"><Bell size={24} /><strong>아직 알림이 없어요</strong><span>채팅, 프로필, 추억 등의 활동이 여기에 쌓여요.</span></div>}
         {items.map((item) => <article key={item.id} className={item.read ? '' : 'unread'}>
           <span className={`notification-icon ${item.actor}`}>{iconFor(item.kind)}</span>
-          <div><div><strong>{item.title}</strong><time>{timeLabel(item.createdAt)}</time></div>{item.detail && <p>{item.detail}</p>}<small>{item.actor === 'me' ? '나' : item.actor === 'partner' ? '상대방' : '단둘이'}</small></div>
+          <button type="button" className="notification-item-action" onClick={() => onSelect(item)}
+            aria-label={item.title + ' · 해당 화면 열기'}>
+            <span><strong>{item.title}</strong><time>{timeLabel(item.createdAt)}</time></span>
+            {item.detail && <p>{item.detail}</p>}
+            <small>{item.actor === 'me' ? '나' : item.actor === 'partner' ? '상대방' : '단둘이'} · 눌러서 보기 →</small>
+          </button>
         </article>)}
       </div>
     </section>

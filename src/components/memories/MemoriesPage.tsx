@@ -179,6 +179,11 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
     if (!requestedTab) return;
     setActiveTab(requestedTab);
   }, [requestedTab]);
+  useEffect(() => {
+    if (initialMemoryId === undefined) return;
+    setActiveTab('album');
+    setSelected(initialMemoryId);
+  }, [initialMemoryId]);
 
   useEffect(() => {
     const handleBack = (event: Event) => {

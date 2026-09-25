@@ -2,6 +2,7 @@ import { collection, doc, onSnapshot, runTransaction, serverTimestamp } from 'fi
 import { db } from './firebase';
 import { calculateDatePlanTimeline, validateDatePlanSchedule } from './datePlanTime';
 import type { DatePlanTimeBlock, DatePlanCandidate } from './datePlanFoundation';
+import { activityRef } from './coupleActivity';
 
 export type DatePlanApprovalSnapshot = {
   title: string;
@@ -63,6 +64,7 @@ export async function requestDatePlanApproval(coupleId: string, planId: string, 
     const plan = await tx.get(planRef(coupleId, planId));
     const schedule = await tx.get(scheduleRef(coupleId, planId));
     const approval = await tx.get(approvalRef(coupleId, planId));
+    const couple = await tx.get(doc(db, 'couples', coupleId));
     if (!plan.exists() || !schedule.exists() || approval.exists()) throw new Error('date-plan-approval-changed');
     const planData = plan.data();
     const data = schedule.data();
@@ -72,6 +74,14 @@ export async function requestDatePlanApproval(coupleId: string, planId: string, 
       scheduleRevision: data.revision,
     };
     validateApprovalSnapshot(snapshot, candidates);
+    const recipientUid = (couple.data()?.memberUids as string[] | undefined)?.find((member) => member !== uid);
+    if (!recipientUid) throw new Error('couple-membership-required');
+    tx.set(activityRef(coupleId, 'plan-' + planId + '-1'), {
+      id: 'plan-' + planId + '-1', authorUid: uid, recipientUid,
+      kind: 'date-plan', sourceId: planId, revision: 1,
+      title: '데이트 최종 확정 요청', detail: snapshot.title.slice(0, 100),
+      target: { screen: 'date-plan', itemId: planId }, createdAt: serverTimestamp(),
+    });
     tx.set(approvalRef(coupleId, planId), {
       status: 'review', requestedBy: uid, proposedBy: uid, approvedBy: { [uid]: true },
       confirmedSnapshot: snapshot, proposedSnapshot: snapshot,
@@ -89,6 +99,14 @@ export async function approveDatePlan(coupleId: string, planId: string, uid: str
     if ((value.status !== 'review' && value.status !== 'change-review') || value.proposedBy === uid) {
       throw new Error('date-plan-approval-changed');
     }
+    const nextRevision = value.revision + 1;
+    tx.set(activityRef(coupleId, 'plan-' + planId + '-' + nextRevision), {
+      id: 'plan-' + planId + '-' + nextRevision, authorUid: uid, recipientUid: value.proposedBy,
+      kind: 'date-plan', sourceId: planId, revision: nextRevision,
+      title: value.status === 'review' ? '데이트 최종 확정 완료' : '데이트 변경안 승인 완료',
+      detail: value.proposedSnapshot.title.slice(0, 100),
+      target: { screen: 'date-plan', itemId: planId }, createdAt: serverTimestamp(),
+    });
     tx.update(ref, {
       status: 'confirmed',
       approvedBy: { ...value.approvedBy, [uid]: true },
@@ -122,6 +140,16 @@ export async function proposeDatePlanChange(coupleId: string, planId: string, ui
     const approval = current.data() as DatePlanApproval;
     if (approval.status !== 'confirmed') throw new Error('date-plan-approval-changed');
     if (JSON.stringify(approval.confirmedSnapshot) === JSON.stringify(proposed)) throw new Error('date-plan-no-changes');
+    const nextRevision = approval.revision + 1;
+    const pair = await tx.get(doc(db, 'couples', coupleId));
+    const recipientUid = (pair.data()?.memberUids as string[] | undefined)?.find((member) => member !== uid);
+    if (!recipientUid) throw new Error('couple-membership-required');
+    tx.set(activityRef(coupleId, 'plan-' + planId + '-' + nextRevision), {
+      id: 'plan-' + planId + '-' + nextRevision, authorUid: uid, recipientUid,
+      kind: 'date-plan', sourceId: planId, revision: nextRevision,
+      title: '데이트 변경 제안', detail: proposed.title.slice(0, 100),
+      target: { screen: 'date-plan', itemId: planId }, createdAt: serverTimestamp(),
+    });
     // Keep original accepted schedule intact. Only a separate proposal is updated.
     tx.update(ref, {
       status: 'change-review', proposedBy: uid, approvedBy: { [uid]: true },
