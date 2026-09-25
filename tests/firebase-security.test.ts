@@ -570,6 +570,22 @@ test('date plan V2: two real members must approve, reviewed drafts freeze, and r
   const candidatePath = infoPath + '/candidates/' + candidateId;
 
   await requestDatePlanApproval(coupleId,planId,'alice',[candidate]);
+  const requestActivityPath = 'couples/' + coupleId + '/activity/plan-' + planId + '-1';
+  const requestActivity = (await getDocFromServer(doc(client.db,requestActivityPath))).data()!;
+  expect(requestActivity.recipientUid).toBe('bob');
+  expect(requestActivity.title).toBe('데이트 최종 확정 요청이 왔어요');
+  expect(requestActivity.target).toEqual({screen:'date-plan',itemId:planId});
+  as('bob');
+  const requestFeed = await new Promise<string[]>((resolve,reject) => {
+    let stop: () => void = () => {};
+    stop = subscribeCoupleActivities(coupleId,'bob',(items) => {
+      if (!items.some((item) => item.id === 'plan-' + planId + '-1')) return;
+      resolve(items.map((item) => item.id));
+      queueMicrotask(() => stop());
+    },reject);
+  });
+  expect(requestFeed).toContain('plan-' + planId + '-1');
+  as('alice');
   let state = (await getDocFromServer(doc(client.db,statePath))).data()!;
   expect(state.status).toBe('review');
   expect(state.approvedBy).toEqual({alice:true});

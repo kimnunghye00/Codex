@@ -240,10 +240,28 @@ function App({ user, profile, onProfileChange }: AppProps) {
     navigateTab('location');
   }, [navigateTab]);
 
+  const addActivity = useCallback((input: Omit<AppNotification, 'id' | 'createdAt' | 'read'>) => {
+    setNotifications((items) => {
+      const next = [makeNotification(input), ...items].slice(0, 200);
+      saveNotifications(user.uid, next);
+      return next;
+    });
+  }, [user.uid]);
+
   useEffect(() => installActivityAlertClicks(), []);
   useEffect(() => {
     void activityAlertEnabled().then((enabled) => setAlertStatus(enabled ? '기기 알림 켜짐' : '기기 알림 받기'));
   }, []);
+
+  useEffect(() => {
+    const handleLocalNotification = (event: Event) => {
+      const detail = (event as CustomEvent<Omit<AppNotification, 'id' | 'createdAt' | 'read'>>).detail;
+      if (!detail || !detail.kind || !detail.title) return;
+      addActivity(detail);
+    };
+    window.addEventListener('route-local-notification', handleLocalNotification);
+    return () => window.removeEventListener('route-local-notification', handleLocalNotification);
+  }, [addActivity]);
 
   useEffect(() => {
     const coupleId = connection?.coupleId;
@@ -272,14 +290,6 @@ function App({ user, profile, onProfileChange }: AppProps) {
         .forEach((item) => void showPartnerActivityAlert(item));
     }, (cause) => console.warn('[DANDULI partner activity]', cause));
   }, [connection?.coupleId, user.uid]);
-
-    const addActivity = useCallback((input: Omit<AppNotification, 'id' | 'createdAt' | 'read'>) => {
-    setNotifications((items) => {
-      const next = [makeNotification(input), ...items].slice(0, 200);
-      saveNotifications(user.uid, next);
-      return next;
-    });
-  }, [user.uid]);
 
   useEffect(() => {
     let disposed = false;

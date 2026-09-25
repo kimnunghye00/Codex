@@ -79,7 +79,7 @@ export async function requestDatePlanApproval(coupleId: string, planId: string, 
     tx.set(activityRef(coupleId, 'plan-' + planId + '-1'), {
       id: 'plan-' + planId + '-1', authorUid: uid, recipientUid,
       kind: 'date-plan', sourceId: planId, revision: 1,
-      title: '데이트 최종 확정 요청', detail: snapshot.title.slice(0, 100),
+      title: '데이트 최종 확정 요청이 왔어요', detail: snapshot.title.slice(0, 100),
       target: { screen: 'date-plan', itemId: planId }, createdAt: serverTimestamp(),
     });
     tx.set(approvalRef(coupleId, planId), {
