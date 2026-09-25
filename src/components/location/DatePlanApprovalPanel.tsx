@@ -180,7 +180,11 @@ export function DatePlanApprovalPanel({ coupleId, planId, uid, candidates, appro
   const ownApproval = Boolean(approval?.approvedBy?.[uid]);
   return <section className="date-plan-approval-panel" aria-label="데이트 공동 승인">
     <div className="date-map-panel-header"><strong><ShieldCheck size={16}/> 최종 공동 승인</strong>
-      <span>{loading ? '불러오는 중…' : approval?.status === 'confirmed' ? '두 사람 승인 완료' : approval ? '상대방 확인 대기' : '미확정 초안'}</span></div>
+      <span>{loading ? '불러오는 중…'
+        : approval?.status === 'confirmed' ? '두 사람 승인 완료'
+        : approval?.status === 'review' ? (ownApproval ? '상대방 확인 대기' : '최종 확정 요청 도착')
+        : approval?.status === 'change-review' ? (ownApproval ? '상대방 승인 대기' : '변경 제안 도착')
+        : '미확정 초안'}</span></div>
     {loading && <p role="status">승인 상태를 확인하고 있어요…</p>}
     {!loading && !approval && <>
       <p className="date-map-add-hint">이름·날짜·시작 시각과 시간표를 저장한 뒤 승인 요청을 보내세요. 요청하면 현재 일정이 잠기고 상대방의 승인을 기다려요.</p>
@@ -193,10 +197,10 @@ export function DatePlanApprovalPanel({ coupleId, planId, uid, candidates, appro
     {!loading && approval && <>
       <Preview snapshot={approval.confirmedSnapshot} candidates={candidates}/>
       {approval.status === 'review' && <>
-        <p className="date-map-add-hint">{ownApproval ? '내 승인 완료 · 상대방의 확인을 기다리고 있어요.' : '상대방이 보낸 최종 확정 요청이에요. 내용 확인 후 승인해 주세요.'}</p>
+        <p className="date-map-add-hint">{ownApproval ? '내 승인 완료 · 상대방의 확인을 기다리고 있어요.' : '상대방이 보낸 최종 확정 요청이에요. 내용을 확인한 뒤 최종 확정을 수락해 주세요.'}</p>
         {!ownApproval && <button type="button" className="date-map-primary" disabled={busy} onClick={() =>
           void act(() => approveDatePlan(coupleId, planId, uid), '두 사람의 최종 승인이 완료됐어요.')}>
-          <Check size={15}/> 최종 확정 승인
+          <Check size={15}/> 최종 확정 수락
         </button>}
         <button type="button" disabled={busy} onClick={() =>
           void act(() => withdrawDatePlanReview(coupleId, planId), '승인 요청을 취소했어요. 다시 초안을 수정할 수 있어요.')}>승인 요청 취소 / 수정 요청</button>
