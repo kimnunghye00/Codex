@@ -214,8 +214,12 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
 
   useEffect(() => {
     if (!activePlan) return;
-    setPlanTitle(activePlan.title); setPlanDate(activePlan.date);
-  }, [activePlan?.id, activePlan?.title, activePlan?.date]);
+    // Approved revisions are canonical snapshots; the original draft stays
+    // immutable so it may retain its initial name and date.
+    setPlanTitle(planApproval?.confirmedSnapshot.title ?? activePlan.title);
+    setPlanDate(planApproval?.confirmedSnapshot.date ?? activePlan.date);
+  }, [activePlan?.id, activePlan?.title, activePlan?.date,
+      planApproval?.confirmedSnapshot.title, planApproval?.confirmedSnapshot.date]);
 
   useEffect(() => {
     setLikes([]); setOpinions([]); setOpinion('');
@@ -998,7 +1002,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             {datePlans.map((item) => <button key={item.id} type="button" aria-pressed={activePlanId === item.id}
               className={activePlanId === item.id ? 'date-map-course-choice active' : 'date-map-course-choice'}
               onClick={() => { clearMapFocus(); setActivePlanId(item.id); setPlanCandidates([]); setMobilePlanView('list'); setMessage(''); }}>
-              <CalendarDays size={17}/><span><b>{item.title || '이름 없는 데이트'}</b><small>{item.date || '날짜 미정'} · {activePlanId === item.id && approvalLoading ? '승인 상태 확인 중' : activePlanId === item.id && planApproval?.status === 'confirmed' ? '공동 확정' : activePlanId === item.id && planApproval ? '승인 대기' : '공동 초안'}</small></span>
+              <CalendarDays size={17}/><span><b>{(activePlanId === item.id && planApproval?.confirmedSnapshot.title) || item.title || '이름 없는 데이트'}</b><small>{(activePlanId === item.id && planApproval?.confirmedSnapshot.date) || item.date || '날짜 미정'} · {activePlanId === item.id && approvalLoading ? '승인 상태 확인 중' : activePlanId === item.id && planApproval?.status === 'confirmed' ? '공동 확정' : activePlanId === item.id && planApproval ? '승인 대기' : '공동 초안'}</small></span>
             </button>)}
           </div>
           {!datePlans.length && <p className="date-map-empty">아직 공동 데이트 초안이 없어요. '새 데이트'를 눌러 시작해 보세요.</p>}
