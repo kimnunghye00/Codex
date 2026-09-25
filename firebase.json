@@ -7,6 +7,10 @@
     {
       "source": "functions-search",
       "codebase": "naver-search"
+    },
+    {
+      "source": "functions-date-plan",
+      "codebase": "date-plan-delete"
     }
   ],
   "firestore": {
