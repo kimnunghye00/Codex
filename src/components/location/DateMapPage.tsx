@@ -1029,11 +1029,27 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus, init
           </div>
           <p className="date-map-add-hint">완성되지 않아도 서로 볼 수 있는 공동 초안이에요. 기존에 저장한 코스는 '기존 코스'에 그대로 남아요.</p>
           <div className="date-map-plan-choices" aria-label="공동 데이트 초안">
-            {datePlans.map((item) => <button key={item.id} type="button" aria-pressed={activePlanId === item.id}
-              className={activePlanId === item.id ? 'date-map-course-choice active' : 'date-map-course-choice'}
-              onClick={() => { clearMapFocus(); setActivePlanId(item.id); setPlanCandidates([]); setMobilePlanView('list'); setMessage(''); }}>
-              <CalendarDays size={17}/><span><b>{(activePlanId === item.id && planApproval?.confirmedSnapshot.title) || item.title || '이름 없는 데이트'}</b><small>{(activePlanId === item.id && planApproval?.confirmedSnapshot.date) || item.date || '날짜 미정'} · {activePlanId === item.id && approvalLoading ? '승인 상태 확인 중' : activePlanId === item.id && planApproval?.status === 'confirmed' ? '공동 확정' : activePlanId === item.id && planApproval ? '승인 대기' : '공동 초안'}</small></span>
-            </button>)}
+            {datePlans.map((item) => <div key={item.id} className="date-map-plan-choice-row">
+              <button type="button" aria-pressed={activePlanId === item.id}
+                className={activePlanId === item.id ? 'date-map-course-choice active' : 'date-map-course-choice'}
+                onClick={() => { clearMapFocus(); setActivePlanId(item.id); setPlanCandidates([]); setMobilePlanView('list'); setMessage(''); }}>
+                <CalendarDays size={17}/><span><b>{(activePlanId === item.id && planApproval?.confirmedSnapshot.title) || item.title || '이름 없는 데이트'}</b><small>{(activePlanId === item.id && planApproval?.confirmedSnapshot.date) || item.date || '날짜 미정'} · {activePlanId === item.id && approvalLoading ? '승인 상태 확인 중' : activePlanId === item.id && planApproval?.status === 'confirmed' ? '공동 확정' : activePlanId === item.id && planApproval ? '승인 대기' : '공동 초안'}</small></span>
+              </button>
+              <button type="button" className="date-map-plan-choice-delete" disabled={pending}
+                aria-label={(item.title || '이름 없는 데이트') + ' 초안 삭제'} title="초안 삭제"
+                onClick={() => {
+                  const label = item.title || '이름 없는 데이트';
+                  if (!window.confirm('“' + label + '” 초안을 삭제할까요?\n\n장소 후보·댓글·시간표도 함께 삭제되며, 가고 싶은 곳과 기존 코스는 그대로 유지돼요.')) return;
+                  void submit(async () => {
+                    await deleteDatePlanDraft(coupleId, item.id);
+                    if (activePlanIdRef.current === item.id) {
+                      setActivePlanId(''); setPlanCandidates([]); setSelectedPlanCandidateId('');
+                      setPlanApproval(null); setApprovalLoading(false); setScheduleReady(false);
+                      setPlanTitle(''); setPlanDate(''); clearMapFocus();
+                    }
+                  }, '공동 데이트 초안을 삭제했어요.');
+                }}><Trash2 size={15}/></button>
+            </div>)}
           </div>
           {!datePlans.length && <p className="date-map-empty">아직 공동 데이트 초안이 없어요. '새 데이트'를 눌러 시작해 보세요.</p>}
           {activePlan && <div className="date-map-plan-editor">
