@@ -7,6 +7,7 @@ on:
     paths:
       - 'src/**'
       - 'functions/**'
+      - 'functions-date-plan/**'
       - 'public/**'
       - 'index.html'
       - 'package.json'
@@ -56,11 +57,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install default Cloud Function dependencies
-        run: npm install --prefix functions --no-audit --no-fund
+      - name: Install date-plan delete Function dependencies
+        run: npm install --prefix functions-date-plan --no-audit --no-fund
 
-      - name: Verify default Cloud Functions syntax
-        run: node --check functions/index.js
+      - name: Verify date-plan delete Function syntax
+        run: node --check functions-date-plan/index.js
 
       - name: Verify Firebase permissions and two-account flow
         run: npm run test:security
@@ -163,10 +164,10 @@ jobs:
             --only firestore:rules,storage \
             --project meluni-f4e00 \
             --non-interactive
-          # Deploy only the authenticated deletion endpoint from the default
-          # codebase; do not redeploy unrelated TURN/search functions.
+          # The delete endpoint is isolated from TURN/search codebases so this
+          # deployment never needs access to unrelated Secret Manager values.
           npx --yes firebase-tools@15.29.0 deploy \
-            --only functions:default:deleteDatePlanDraft \
+            --only functions:date-plan-delete:deleteDatePlanDraftV2 \
             --project meluni-f4e00 \
             --non-interactive
           npx --yes firebase-tools@15.29.0 deploy \
