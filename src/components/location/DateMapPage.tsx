@@ -7,6 +7,8 @@ import { appendPlaceToCourse, courseTimesFromSaved, encodeCourseTimeSlot, MAX_DA
 import { addDatePlanCandidate, createDatePlanDraft, readDatePlanCandidates, subscribeDatePlanCandidates, subscribeDatePlanDrafts, updateDatePlanDraft } from '../../lib/datePlanDrafts';
 import { removeDatePlanCandidateWithFeedback, setDatePlanCandidatePreference } from '../../lib/datePlanOpinions';
 import { DatePlanCandidateFeedback } from './DatePlanCandidateFeedback';
+import { DatePlanScheduleEditor } from './DatePlanScheduleEditor';
+import { readDatePlanSchedule } from '../../lib/datePlanSchedule';
 import { isSameDatePlanPlace } from '../../lib/datePlanCandidates';
 import { CANDIDATE_PREFERENCE_LABELS, type CandidatePreference, type DatePlanDraft, type DatePlanCandidate } from '../../lib/datePlanFoundation';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
@@ -38,6 +40,7 @@ function errorText(error: unknown) {
   const code = String((error as { code?: string })?.code ?? '');
   if (code.includes('permission-denied')) return '두 사람의 연결 상태 또는 장소 접근 권한을 확인해 주세요.';
   if (String((error as Error)?.message ?? '').includes('date-plan-candidate-not-visible')) return '저장 확인에 실패했어요. 다시 불러온 후보 목록을 확인해 주세요.';
+  if (String((error as Error)?.message ?? '').includes('date-plan-candidate-scheduled')) return '이 장소가 시간표에 사용 중이에요. 시간표에서 해당 일정이나 예비 장소를 먼저 제거해 주세요.';
   return '작업을 완료하지 못했어요. 네트워크를 확인하고 다시 시도해 주세요.';
 }
 
@@ -117,6 +120,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const queuedFocus = useRef<{ latitude: number; longitude: number; placeName: string; photoUrl?: string; address?: string } | null>(null);
   const panel = useRef<HTMLElement>(null);
   const candidateCard = useRef<HTMLElement>(null);
+  const planScheduleSection = useRef<HTMLDivElement>(null);
   const courseDialog = useRef<HTMLElement>(null);
   const searchSequence = useRef(0);
   const searchAbort = useRef<AbortController | null>(null);
@@ -991,6 +995,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             <button type="button" className="date-map-primary" disabled={pending || (planTitle.trim() === activePlan.title && planDate === activePlan.date)}
               onClick={() => void savePlanDetails()}>초안 정보 저장</button>
             <div className="date-map-panel-header"><strong>이 데이트의 장소 후보</strong><span>{planCandidates.length}곳</span>
+              <button type="button" onClick={() => planScheduleSection.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>시간표 ↓</button>
               <button type="button" disabled={pending || planCandidatesLoading} onClick={() => void submit(async () => {
                 await refreshPlanCandidates(activePlan.id);
               }, '후보 목록을 다시 불러왔어요.')}>새로고침</button>
@@ -1029,12 +1034,20 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
               <button type="button" className="date-map-plan-remove" disabled={pending} onClick={() => {
                 if (!window.confirm(item.name + '을(를) 이 데이트의 후보에서 제거할까요?')) return;
                 void submit(async () => {
+                  const schedule = await readDatePlanSchedule(coupleId, activePlan.id);
+                  if (schedule.blocks.some((block) => block.primaryCandidateId === item.id || block.backupCandidateIds.includes(item.id))) {
+                    throw new Error('date-plan-candidate-scheduled');
+                  }
                   await removeDatePlanCandidateWithFeedback(coupleId, activePlan.id, item.id);
                   setSelectedPlanCandidateId((current) => current === item.id ? '' : current);
                   clearMapFocus();
                 }, '이 데이트의 후보에서 제거했어요. 전체 보관함은 그대로예요.');
               }}><Trash2 size={13}/> 후보 제거</button>
             </article>)}
+            <div className="date-map-plan-schedule-anchor" ref={planScheduleSection}>
+              <DatePlanScheduleEditor key={activePlan.id} coupleId={coupleId} planId={activePlan.id}
+                uid={uid} candidates={planCandidates}/>
+            </div>
             <details className="date-map-plan-saved">
               <summary>가고 싶은 곳에서 후보 담기 ({places.length}곳) <ChevronDown size={15}/></summary>
               {!places.length && <p className="date-map-empty">보관함에 저장한 장소가 없어요. 검색해서 직접 후보로 담을 수 있어요.</p>}
@@ -1048,7 +1061,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
                 </div>;
               })}
             </details>
-            <p className="date-map-add-hint">후보별 의견과 댓글은 두 사람에게 공유돼요. 방문 순서·시간표와 공동 승인은 다음 단계에서 연결돼요.</p>
+            <p className="date-map-add-hint">후보·의견·댓글·시간표는 두 사람에게 공유돼요. 최종 공동 승인 및 확정 이후 변경 제안은 다음 단계에서 연결돼요.</p>
           </div>}
         </div>}
         {tab === 'courses' && <>
