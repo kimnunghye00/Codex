@@ -13,8 +13,9 @@ const copy = (schedule: DatePlanSchedule): DatePlanSchedule => ({
   blocks: schedule.blocks.map((block) => ({ ...block, backupCandidateIds: [...block.backupCandidateIds] })),
 });
 
-export function DatePlanScheduleEditor({ coupleId, planId, uid, candidates }: {
+export function DatePlanScheduleEditor({ coupleId, planId, uid, candidates, onReadyChange }: {
   coupleId: string; planId: string; uid: string; candidates: DatePlanCandidate[];
+  onReadyChange?: (ready: boolean) => void;
 }) {
   const [draft, setDraft] = useState<DatePlanSchedule>(() => copy(EMPTY_DATE_PLAN_SCHEDULE));
   const [loading, setLoading] = useState(true);
@@ -54,6 +55,9 @@ export function DatePlanScheduleEditor({ coupleId, planId, uid, candidates }: {
   }, [coupleId, planId]);
 
   const localRevision = useRef(0);
+  useEffect(() => {
+    onReadyChange?.(!loading && !saving && !dirty && !conflict && !saveFailed && !error);
+  }, [onReadyChange, loading, saving, dirty, conflict, saveFailed, error]);
   const edit = (update: (current: DatePlanSchedule) => DatePlanSchedule) => {
     if (loading || saving || conflict) return;
     setDraft((current) => update(current));

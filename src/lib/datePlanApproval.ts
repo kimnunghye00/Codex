@@ -1,0 +1,131 @@
+import { collection, doc, onSnapshot, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { db } from './firebase';
+import { calculateDatePlanTimeline, validateDatePlanSchedule } from './datePlanTime';
+import type { DatePlanTimeBlock, DatePlanCandidate } from './datePlanFoundation';
+
+export type DatePlanApprovalSnapshot = {
+  title: string;
+  date: string;
+  startTime: string;
+  blocks: DatePlanTimeBlock[];
+  globalBackupCandidateIds: string[];
+  scheduleRevision: number;
+};
+
+export type DatePlanApproval = {
+  status: 'review' | 'confirmed' | 'change-review';
+  requestedBy: string;
+  proposedBy: string;
+  approvedBy: Record<string, boolean>;
+  confirmedSnapshot: DatePlanApprovalSnapshot;
+  proposedSnapshot: DatePlanApprovalSnapshot;
+  revision: number;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+};
+
+const planRef = (coupleId: string, planId: string) =>
+  doc(db, 'couples', coupleId, 'datePlans', planId);
+const scheduleRef = (coupleId: string, planId: string) =>
+  doc(db, 'couples', coupleId, 'datePlans', planId, 'schedule', 'draft');
+const approvalRef = (coupleId: string, planId: string) =>
+  doc(db, 'couples', coupleId, 'datePlans', planId, 'approval', 'state');
+
+export function subscribeDatePlanApproval(
+  coupleId: string, planId: string,
+  onChange: (approval: DatePlanApproval | null) => void, onError: (error: unknown) => void,
+) {
+  return onSnapshot(approvalRef(coupleId, planId), (snapshot) =>
+    onChange(snapshot.exists() ? snapshot.data() as DatePlanApproval : null), onError);
+}
+
+export function validateApprovalSnapshot(snapshot: DatePlanApprovalSnapshot, candidates: readonly DatePlanCandidate[]) {
+  if (!snapshot.title.trim() || snapshot.title.length > 100) throw new RangeError('최종 확정할 데이트 이름을 입력해 주세요.');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(snapshot.date) ||
+    Number.isNaN(Date.parse(snapshot.date + 'T00:00:00Z'))) throw new RangeError('최종 확정할 데이트 날짜를 입력해 주세요.');
+  if (!Number.isSafeInteger(snapshot.scheduleRevision) || snapshot.scheduleRevision < 1) {
+    throw new RangeError('시간표가 아직 저장되지 않았어요.');
+  }
+  if (snapshot.blocks.length === 0 || !snapshot.startTime) {
+    throw new RangeError('일정과 데이트 시작 시각을 입력해 주세요.');
+  }
+  validateDatePlanSchedule(snapshot.startTime, snapshot.blocks, candidates.map((candidate) => candidate.id),
+    snapshot.globalBackupCandidateIds);
+  const timeline = calculateDatePlanTimeline(snapshot.startTime, snapshot.blocks);
+  if (timeline.some((item) => item.conflict || item.overflow || item.start === null || item.end === null)) {
+    throw new RangeError('시간표에 겹치는 일정이나 자정을 넘긴 일정이 있어요. 시간을 다시 확인해 주세요.');
+  }
+}
+
+export async function requestDatePlanApproval(coupleId: string, planId: string, uid: string,
+  candidates: readonly DatePlanCandidate[]) {
+  return runTransaction(db, async (tx) => {
+    const plan = await tx.get(planRef(coupleId, planId));
+    const schedule = await tx.get(scheduleRef(coupleId, planId));
+    const approval = await tx.get(approvalRef(coupleId, planId));
+    if (!plan.exists() || !schedule.exists() || approval.exists()) throw new Error('date-plan-approval-changed');
+    const planData = plan.data();
+    const data = schedule.data();
+    const snapshot: DatePlanApprovalSnapshot = {
+      title: planData.title, date: planData.date, startTime: data.startTime,
+      blocks: data.blocks, globalBackupCandidateIds: data.globalBackupCandidateIds ?? [],
+      scheduleRevision: data.revision,
+    };
+    validateApprovalSnapshot(snapshot, candidates);
+    tx.set(approvalRef(coupleId, planId), {
+      status: 'review', requestedBy: uid, proposedBy: uid, approvedBy: { [uid]: true },
+      confirmedSnapshot: snapshot, proposedSnapshot: snapshot,
+      revision: 1, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    });
+  });
+}
+
+export async function approveDatePlan(coupleId: string, planId: string, uid: string) {
+  return runTransaction(db, async (tx) => {
+    const ref = approvalRef(coupleId, planId);
+    const existing = await tx.get(ref);
+    if (!existing.exists()) throw new Error('date-plan-approval-changed');
+    const value = existing.data() as DatePlanApproval;
+    if ((value.status !== 'review' && value.status !== 'change-review') || value.proposedBy === uid) {
+      throw new Error('date-plan-approval-changed');
+    }
+    tx.update(ref, {
+      status: 'confirmed',
+      approvedBy: { ...value.approvedBy, [uid]: true },
+      confirmedSnapshot: value.status === 'change-review' ? value.proposedSnapshot : value.confirmedSnapshot,
+      revision: value.revision + 1, updatedAt: serverTimestamp(),
+    });
+  });
+}
+
+export async function withdrawDatePlanReview(coupleId: string, planId: string) {
+  return runTransaction(db, async (tx) => {
+    const ref = approvalRef(coupleId, planId);
+    const existing = await tx.get(ref);
+    if (!existing.exists()) throw new Error('date-plan-approval-changed');
+    const value = existing.data() as DatePlanApproval;
+    if (value.status === 'review') tx.delete(ref);
+    else if (value.status === 'change-review') tx.update(ref, {
+      status: 'confirmed', revision: value.revision + 1, updatedAt: serverTimestamp(),
+    });
+    else throw new Error('date-plan-approval-changed');
+  });
+}
+
+export async function proposeDatePlanChange(coupleId: string, planId: string, uid: string,
+  proposed: DatePlanApprovalSnapshot, candidates: readonly DatePlanCandidate[]) {
+  validateApprovalSnapshot(proposed, candidates);
+  return runTransaction(db, async (tx) => {
+    const ref = approvalRef(coupleId, planId);
+    const current = await tx.get(ref);
+    if (!current.exists()) throw new Error('date-plan-approval-changed');
+    const approval = current.data() as DatePlanApproval;
+    if (approval.status !== 'confirmed') throw new Error('date-plan-approval-changed');
+    if (JSON.stringify(approval.confirmedSnapshot) === JSON.stringify(proposed)) throw new Error('date-plan-no-changes');
+    // Keep original accepted schedule intact. Only a separate proposal is updated.
+    tx.update(ref, {
+      status: 'change-review', proposedBy: uid, approvedBy: { [uid]: true },
+      proposedSnapshot: proposed, revision: approval.revision + 1, updatedAt: serverTimestamp(),
+    });
+  });
+}

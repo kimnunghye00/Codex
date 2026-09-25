@@ -725,3 +725,27 @@
   .date-map-time-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .date-map-timetable-add { grid-template-columns:minmax(0,1fr) auto; }
 }
+
+
+/* Date plan V2 stage 5: reviewed snapshots and partner-approved revisions. */
+.date-plan-approval-panel,.date-plan-revision { display:flex; flex-direction:column; gap:10px; min-width:0; padding:12px; border:1px solid var(--border); border-radius:12px; background:var(--surface); color:var(--text-primary); }
+.date-plan-approval-panel > button,.date-plan-revision > button { min-height:38px; padding:8px; border:1px solid var(--border); border-radius:9px; background:var(--primary-soft); color:var(--text-primary); font-size:11px; font-weight:750; }
+.date-plan-approval-panel > button.date-map-primary { background:var(--primary); color:#fff; border:0; }
+.date-plan-approval-panel button:disabled,.date-plan-revision button:disabled { opacity:.5; }
+.date-plan-approval-panel > small { font-size:10px; line-height:1.5; color:var(--text-secondary); }
+.date-plan-approval-panel h4,.date-plan-revision h4 { margin:2px 0; font-size:12px; }
+.date-plan-approval-preview { display:flex; flex-direction:column; gap:7px; padding:9px; border:1px solid var(--border); border-radius:9px; background:var(--primary-soft); min-width:0; }
+.date-plan-approval-preview > strong { font-size:12px; overflow-wrap:anywhere; }
+.date-plan-approval-preview-row { display:flex; flex-direction:column; gap:3px; padding:6px 0; border-top:1px solid var(--border); }
+.date-plan-approval-preview-row span { font-size:11px; font-weight:750; overflow-wrap:anywhere; }
+.date-plan-approval-preview-row small,.date-plan-approval-preview > small { font-size:10px; color:var(--text-secondary); line-height:1.5; }
+.date-plan-approval-success { margin:0; padding:7px; border-radius:8px; background:var(--primary-soft); font-size:11px; }
+.date-plan-revision label { display:flex; flex-direction:column; gap:5px; min-width:0; font-size:11px; font-weight:700; }
+.date-plan-revision input:not([type="checkbox"]),.date-plan-revision select { box-sizing:border-box; width:100%; min-width:0; min-height:38px; padding:8px; border:1px solid var(--border); border-radius:9px; background:var(--surface); color:var(--text-primary); font:inherit; font-size:12px; }
+.date-plan-revision-block { display:flex; flex-direction:column; gap:9px; padding:9px; border:1px solid var(--border); border-radius:10px; }
+.date-plan-revision-block > small { color:var(--text-secondary); font-size:10px; }
+.date-plan-revision-times { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; }
+.date-plan-revision-times > div { display:flex; flex-direction:column; gap:5px; min-width:0; font-size:10px; }
+.date-plan-approval-actions { display:flex; gap:6px; flex-wrap:wrap; }
+.date-plan-approval-actions button { flex:1; min-height:38px; min-width:100px; border:1px solid var(--border); border-radius:9px; padding:8px; background:var(--primary-soft); color:var(--text-primary); font-size:11px; font-weight:750; }
+.date-plan-approval-actions button:last-child { border:0; background:var(--primary); color:#fff; }
