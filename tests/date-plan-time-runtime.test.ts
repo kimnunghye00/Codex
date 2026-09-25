@@ -64,11 +64,11 @@ test('reject invalid fixed starts, unsupported backup IDs, duplicate IDs and exc
 });
 
 
-test('final approval readiness requires a saved non-empty schedule with a real start time', () => {
+test('final approval readiness allows an unscheduled draft but still rejects invalid timing', () => {
   const complete = { startTime:'10:00', blocks:[block('a',0,90,20)], globalBackupCandidateIds:[], revision:1, updatedBy:'alice' };
   assert.equal(datePlanScheduleReadyForApproval(complete), true);
-  assert.equal(datePlanScheduleReadyForApproval({ ...complete, revision:0 }), false);
-  assert.equal(datePlanScheduleReadyForApproval({ ...complete, startTime:'' }), false);
-  assert.equal(datePlanScheduleReadyForApproval({ ...complete, blocks:[] }), false);
+  assert.equal(datePlanScheduleReadyForApproval({ ...complete, startTime:'' }), true);
+  assert.equal(datePlanScheduleReadyForApproval({ ...complete, startTime:'', blocks:[], revision:0 }), true);
+  assert.equal(datePlanScheduleReadyForApproval({ ...complete, revision:-1 }), false);
   assert.equal(datePlanScheduleReadyForApproval({ ...complete, startTime:'23:40', blocks:[block('a',0,40,0)] }), false);
 });

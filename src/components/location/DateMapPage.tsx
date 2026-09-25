@@ -1100,7 +1100,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus, init
               <DatePlanApprovalPanel key={activePlan.id} coupleId={coupleId} planId={activePlan.id}
                 uid={uid} candidates={planCandidates} approval={planApproval} loading={approvalLoading}
                 draftReady={scheduleReady}
-                detailsReady={Boolean(planTitle.trim() && planDate) && planTitle.trim() === activePlan.title && planDate === activePlan.date && !pending && !planCandidatesLoading}
+                detailsReady={Boolean(planTitle.trim()) && planTitle.trim() === activePlan.title && planDate === activePlan.date && !pending && !planCandidatesLoading}
                 onRefreshApproval={refreshPlanApproval}/>
             </div>
             <details className="date-map-plan-saved">

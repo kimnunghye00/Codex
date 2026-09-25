@@ -37,12 +37,14 @@ function Preview({ snapshot, candidates }: { snapshot: DatePlanApprovalSnapshot;
   const names = new Map(candidates.map((c) => [c.id, c.name]));
   const times = calculateDatePlanTimeline(snapshot.startTime, snapshot.blocks);
   return <div className="date-plan-approval-preview">
-    <strong>{snapshot.title} · {snapshot.date}</strong>
+    <strong>{snapshot.title} · {snapshot.date || '날짜 미정'}</strong>
     {snapshot.blocks.map((block, index) => <div key={block.id} className="date-plan-approval-preview-row">
       <span>{index + 1}. {names.get(block.primaryCandidateId ?? '') || block.title}</span>
       <small>{times[index].start || '미정'}–{times[index].end || '미정'} · 활동 {durationAsHoursMinutes(block.activityMinutes).hours}시 {durationAsHoursMinutes(block.activityMinutes).minutes}분 · 이동 {durationAsHoursMinutes(block.travelMinutes).hours}시 {durationAsHoursMinutes(block.travelMinutes).minutes}분</small>
     </div>)}
-    <small>전체 예비 {snapshot.globalBackupCandidateIds.length}곳 · 저장된 시간표 기준 버전 {snapshot.scheduleRevision}</small>
+    {snapshot.blocks.length
+      ? <small>전체 예비 {snapshot.globalBackupCandidateIds.length}곳 · 저장된 시간표 기준 버전 {snapshot.scheduleRevision}</small>
+      : <small>시간표 미정 · 장소 후보와 데이트 정보만 먼저 확정할 수 있어요.</small>}
   </div>;
 }
 
@@ -197,12 +199,12 @@ export function DatePlanApprovalPanel({ coupleId, planId, uid, candidates, appro
         : '미확정 초안'}</span></div>
     {loading && <p role="status">승인 상태를 확인하고 있어요…</p>}
     {!loading && !approval && <>
-      <p className="date-map-add-hint">이름·날짜·시작 시각과 시간표를 저장한 뒤 승인 요청을 보내세요. 요청하면 현재 일정이 잠기고 상대방의 승인을 기다려요.</p>
+      <p className="date-map-add-hint">데이트 이름을 저장하면 승인 요청을 보낼 수 있어요. 날짜·시작 시각·시간표는 미정이어도 괜찮고, 나중에 변경 제안으로 함께 확정할 수 있어요.</p>
       <button className="date-map-primary" type="button" disabled={busy || !draftReady || !detailsReady} onClick={() =>
         void act(() => requestDatePlanApproval(coupleId, planId, uid, candidates), '상대방에게 최종 확정을 요청했어요.', true)}>
         <Send size={15}/> 최종 확정 요청
       </button>
-      {(!draftReady || !detailsReady) && <small>데이트 이름·날짜·시작 시각·일정을 입력하고 시간표 자동 저장이 완료되어야 요청할 수 있어요.</small>}
+      {(!draftReady || !detailsReady) && <small>데이트 이름의 저장을 완료하면 요청할 수 있어요.</small>}
     </>}
     {!loading && approval && <>
       <Preview snapshot={approval.confirmedSnapshot} candidates={candidates}/>

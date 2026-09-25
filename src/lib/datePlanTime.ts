@@ -71,10 +71,16 @@ export function validateDatePlanSchedule(startTime: string, blocks: DatePlanTime
 }
 
 export function datePlanScheduleReadyForApproval(schedule: DatePlanSchedule): boolean {
-  if (schedule.revision < 1 || !schedule.startTime || schedule.blocks.length === 0) return false;
+  if (!Number.isSafeInteger(schedule.revision) || schedule.revision < 0) return false;
   try {
+    validateDatePlanSchedule(schedule.startTime, schedule.blocks,
+      schedule.blocks.flatMap((block) => [
+        ...(block.primaryCandidateId ? [block.primaryCandidateId] : []),
+        ...block.backupCandidateIds,
+      ]).concat(schedule.globalBackupCandidateIds),
+      schedule.globalBackupCandidateIds);
     const timeline = calculateDatePlanTimeline(schedule.startTime, schedule.blocks);
-    return timeline.every((item) => !item.conflict && !item.overflow && item.start !== null && item.end !== null);
+    return timeline.every((item) => !item.conflict && !item.overflow);
   } catch {
     return false;
   }

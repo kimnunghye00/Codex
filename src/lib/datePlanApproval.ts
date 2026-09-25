@@ -52,18 +52,15 @@ export function subscribeDatePlanApproval(
 
 export function validateApprovalSnapshot(snapshot: DatePlanApprovalSnapshot, candidates: readonly DatePlanCandidate[]) {
   if (!snapshot.title.trim() || snapshot.title.length > 100) throw new RangeError('최종 확정할 데이트 이름을 입력해 주세요.');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(snapshot.date) ||
-    Number.isNaN(Date.parse(snapshot.date + 'T00:00:00Z'))) throw new RangeError('최종 확정할 데이트 날짜를 입력해 주세요.');
-  if (!Number.isSafeInteger(snapshot.scheduleRevision) || snapshot.scheduleRevision < 1) {
-    throw new RangeError('시간표가 아직 저장되지 않았어요.');
-  }
-  if (snapshot.blocks.length === 0 || !snapshot.startTime) {
-    throw new RangeError('일정과 데이트 시작 시각을 입력해 주세요.');
+  if (snapshot.date !== '' && (!/^\d{4}-\d{2}-\d{2}$/.test(snapshot.date) ||
+    Number.isNaN(Date.parse(snapshot.date + 'T00:00:00Z')))) throw new RangeError('데이트 날짜를 확인해 주세요.');
+  if (!Number.isSafeInteger(snapshot.scheduleRevision) || snapshot.scheduleRevision < 0) {
+    throw new RangeError('시간표 저장 상태를 확인해 주세요.');
   }
   validateDatePlanSchedule(snapshot.startTime, snapshot.blocks, candidates.map((candidate) => candidate.id),
     snapshot.globalBackupCandidateIds);
   const timeline = calculateDatePlanTimeline(snapshot.startTime, snapshot.blocks);
-  if (timeline.some((item) => item.conflict || item.overflow || item.start === null || item.end === null)) {
+  if (timeline.some((item) => item.conflict || item.overflow)) {
     throw new RangeError('시간표에 겹치는 일정이나 자정을 넘긴 일정이 있어요. 시간을 다시 확인해 주세요.');
   }
 }
@@ -76,14 +73,13 @@ export async function requestDatePlanApproval(coupleId: string, planId: string, 
     const approval = await tx.get(approvalRef(coupleId, planId));
     const couple = await tx.get(doc(db, 'couples', coupleId));
     if (!plan.exists()) throw new Error('date-plan-missing');
-    if (!schedule.exists()) throw new Error('date-plan-schedule-missing');
     if (approval.exists()) throw new Error('date-plan-approval-exists');
     const planData = plan.data();
-    const data = schedule.data();
+    const data = schedule.exists() ? schedule.data() : null;
     const snapshot: DatePlanApprovalSnapshot = {
-      title: planData.title, date: planData.date, startTime: data.startTime,
-      blocks: data.blocks, globalBackupCandidateIds: data.globalBackupCandidateIds ?? [],
-      scheduleRevision: data.revision,
+      title: planData.title, date: planData.date, startTime: data?.startTime ?? '',
+      blocks: data?.blocks ?? [], globalBackupCandidateIds: data?.globalBackupCandidateIds ?? [],
+      scheduleRevision: data?.revision ?? 0,
     };
     validateApprovalSnapshot(snapshot, candidates);
     const recipientUid = (couple.data()?.memberUids as string[] | undefined)?.find((member) => member !== uid);
