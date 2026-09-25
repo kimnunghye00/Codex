@@ -581,6 +581,11 @@ test('date plan V2: two real members must approve, reviewed drafts freeze, and r
 
   as('bob');
   await assertFails(updateDoc(doc(client.db,statePath), {status:'confirmed',revision:2,updatedAt:serverTimestamp()}));
+  as('alice');
+  await assertFails(updateDoc(doc(client.db,statePath), {
+    status:'confirmed', approvedBy:{alice:true,bob:true}, revision:2, updatedAt:serverTimestamp(),
+  }));
+  as('bob');
   await approveDatePlan(coupleId,planId,'bob');
   state = (await getDocFromServer(doc(client.db,statePath))).data()!;
   expect(state.status).toBe('confirmed');
