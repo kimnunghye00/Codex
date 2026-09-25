@@ -9,6 +9,8 @@ import { removeDatePlanCandidateWithFeedback, setDatePlanCandidatePreference } f
 import { DatePlanCandidateFeedback } from './DatePlanCandidateFeedback';
 import { DatePlanScheduleEditor } from './DatePlanScheduleEditor';
 import { readDatePlanSchedule } from '../../lib/datePlanSchedule';
+import { subscribeDatePlanApproval, type DatePlanApproval } from '../../lib/datePlanApproval';
+import { DatePlanApprovalPanel } from './DatePlanApprovalPanel';
 import { isSameDatePlanPlace } from '../../lib/datePlanCandidates';
 import { CANDIDATE_PREFERENCE_LABELS, type CandidatePreference, type DatePlanDraft, type DatePlanCandidate } from '../../lib/datePlanFoundation';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
@@ -63,6 +65,10 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const [datePlans, setDatePlans] = useState<DatePlanDraft[]>([]);
   const [activePlanId, setActivePlanId] = useState('');
   const [planCandidates, setPlanCandidates] = useState<DatePlanCandidate[]>([]);
+  const [planApproval, setPlanApproval] = useState<DatePlanApproval | null>(null);
+  const [approvalLoading, setApprovalLoading] = useState(true);
+  const [scheduleReady, setScheduleReady] = useState(false);
+  const approvalLocked = approvalLoading || planApproval !== null;
   const [planCandidatesLoading, setPlanCandidatesLoading] = useState(false);
   const [planCandidatesError, setPlanCandidatesError] = useState(false);
   const [planTitle, setPlanTitle] = useState('');
@@ -174,7 +180,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
   const mappedPlaces = useMemo(() => tab === 'search' || tab === 'plans' ? [] : placesForDateMap(tab === 'courses' ? places : visible, tab, coursePlaceIds), [places, visible, tab, coursePlaceIds]);
 
   useEffect(() => {
-    setPlaces([]); setCourses([]); setDatePlans([]); setActivePlanId(''); setPlanCandidates([]); setAddingToPlan(false); setPickedIds([]); setCoursePlaceIds([]); setSelectedId(''); setCourseId(''); setCourseTimes({}); setCoursePicking(false); setCourseEditorOpen(false); setAddingToCourse(false); setShowSchedule(false); setLikes([]); setOpinions([]);
+    setPlaces([]); setCourses([]); setDatePlans([]); setActivePlanId(''); setPlanCandidates([]); setPlanApproval(null); setApprovalLoading(true); setScheduleReady(false); setAddingToPlan(false); setPickedIds([]); setCoursePlaceIds([]); setSelectedId(''); setCourseId(''); setCourseTimes({}); setCoursePicking(false); setCourseEditorOpen(false); setAddingToCourse(false); setShowSchedule(false); setLikes([]); setOpinions([]);
     if (!coupleId) return;
     const stopPlaces = subscribeDatePlaces(coupleId, setPlaces, (error) => setMessage(errorText(error)));
     const stopCourses = subscribeDateCourses(coupleId, setCourses, (error) => setMessage(errorText(error)));
@@ -185,6 +191,14 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
     if (!coupleId) return;
     return subscribeDatePlanDrafts(coupleId, setDatePlans, (error) => setMessage(errorText(error)));
   }, [coupleId]);
+
+  useEffect(() => {
+    setPlanApproval(null); setApprovalLoading(true); setScheduleReady(false);
+    if (!coupleId || !activePlanId) { setApprovalLoading(false); return; }
+    return subscribeDatePlanApproval(coupleId, activePlanId,
+      (approval) => { setPlanApproval(approval); setApprovalLoading(false); },
+      (error) => { setApprovalLoading(false); setMessage(errorText(error)); });
+  }, [coupleId, activePlanId]);
 
   useEffect(() => {
     setPlanCandidates([]); setSelectedPlanCandidateId('');
@@ -642,6 +656,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
 
   const startPlanSearch = () => {
     if (!activePlan) { setMessage('먼저 데이트 초안을 만들어 주세요.'); return; }
+    if (approvalLocked) { setMessage('확정 요청 중이거나 확정된 데이트예요. 장소 후보를 직접 변경할 수 없어요.'); return; }
     setAddingToCourse(false); setAddingToPlan(true); setCandidate(null); setTab('search');
     setMessage('검색 결과나 지도에서 지점을 확인한 뒤 이 데이트의 후보에 담아 주세요.');
     searchField.current?.focus();
@@ -657,6 +672,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
 
   const savePlanCandidate = async () => {
     if (!candidate || !activePlan || !coupleId || !uid || pending) return;
+    if (approvalLocked) { setMessage('확정 요청 이후에는 장소를 직접 추가할 수 없어요.'); return; }
     const name = candidateName.trim();
     const address = candidateAddress.trim();
     if (!name || !address) { setMessage('선택한 지점의 이름과 주소를 확인하고 입력해 주세요.'); return; }
@@ -679,6 +695,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
 
   const savePlanDetails = async () => {
     if (!activePlan) return;
+    if (approvalLocked) { setMessage('확정 요청 이후에는 데이트 정보를 직접 변경할 수 없어요.'); return; }
     const change: { title?: string; date?: string } = {};
     if (planTitle.trim() !== activePlan.title) change.title = planTitle;
     if (planDate !== activePlan.date) change.date = planDate;
@@ -688,6 +705,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
 
   const addSavedToPlan = async (item: DatePlace) => {
     if (!activePlan || !coupleId || !uid || pending) return;
+    if (approvalLocked) { setMessage('확정 요청 이후에는 후보를 직접 추가할 수 없어요.'); return; }
     if (planCandidates.some((candidate) => isSameDatePlanPlace(candidate, item))) {
       setMessage('이미 이 데이트에 담긴 후보예요.'); return;
     }
@@ -980,19 +998,19 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
             {datePlans.map((item) => <button key={item.id} type="button" aria-pressed={activePlanId === item.id}
               className={activePlanId === item.id ? 'date-map-course-choice active' : 'date-map-course-choice'}
               onClick={() => { clearMapFocus(); setActivePlanId(item.id); setPlanCandidates([]); setMobilePlanView('list'); setMessage(''); }}>
-              <CalendarDays size={17}/><span><b>{item.title || '이름 없는 데이트'}</b><small>{item.date || '날짜 미정'} · 공동 초안</small></span>
+              <CalendarDays size={17}/><span><b>{item.title || '이름 없는 데이트'}</b><small>{item.date || '날짜 미정'} · {activePlanId === item.id && approvalLoading ? '승인 상태 확인 중' : activePlanId === item.id && planApproval?.status === 'confirmed' ? '공동 확정' : activePlanId === item.id && planApproval ? '승인 대기' : '공동 초안'}</small></span>
             </button>)}
           </div>
           {!datePlans.length && <p className="date-map-empty">아직 공동 데이트 초안이 없어요. '새 데이트'를 눌러 시작해 보세요.</p>}
           {activePlan && <div className="date-map-plan-editor">
             <div className="date-map-panel-header"><strong>데이트 정보</strong><span>두 사람에게 공유됨</span></div>
             <label className="date-map-label">데이트 이름
-              <input maxLength={100} value={planTitle} onChange={(event) => setPlanTitle(event.target.value)} placeholder="예: 부산 맛집 데이트"/>
+              <input maxLength={100} value={planTitle} disabled={approvalLocked} onChange={(event) => setPlanTitle(event.target.value)} placeholder="예: 부산 맛집 데이트"/>
             </label>
             <label className="date-map-label">데이트 날짜 (선택)
-              <input type="date" value={planDate} onChange={(event) => setPlanDate(event.target.value)}/>
+              <input type="date" value={planDate} disabled={approvalLocked} onChange={(event) => setPlanDate(event.target.value)}/>
             </label>
-            <button type="button" className="date-map-primary" disabled={pending || (planTitle.trim() === activePlan.title && planDate === activePlan.date)}
+            <button type="button" className="date-map-primary" disabled={pending || approvalLocked || (planTitle.trim() === activePlan.title && planDate === activePlan.date)}
               onClick={() => void savePlanDetails()}>초안 정보 저장</button>
             <div className="date-map-panel-header"><strong>이 데이트의 장소 후보</strong><span>{planCandidates.length}곳</span>
               <button type="button" onClick={() => planScheduleSection.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>시간표 ↓</button>
@@ -1001,7 +1019,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
               }, '후보 목록을 다시 불러왔어요.')}>새로고침</button>
             </div>
             <div className="date-map-plan-actions">
-              <button type="button" className="date-map-primary" onClick={startPlanSearch}><Search size={15}/> 장소 검색해서 담기</button>
+              <button type="button" className="date-map-primary" disabled={approvalLocked} onClick={startPlanSearch}><Search size={15}/> 장소 검색해서 담기</button>
             </div>
             {planCandidatesLoading && <p className="date-map-empty" role="status">이 데이트의 후보를 불러오는 중이에요…</p>}
             {planCandidatesError && <div className="date-map-empty" role="alert">후보 목록을 불러오지 못했어요. <button type="button" disabled={pending} onClick={() => void submit(async () => { await refreshPlanCandidates(activePlan.id); }, '후보 목록을 다시 불러왔어요.')}>다시 불러오기</button></div>}
@@ -1031,7 +1049,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
               {selectedPlanCandidateId === item.id &&
                 <DatePlanCandidateFeedback key={activePlan.id + ':' + item.id} coupleId={coupleId} planId={activePlan.id}
                   candidateId={item.id} uid={uid}/>}
-              <button type="button" className="date-map-plan-remove" disabled={pending} onClick={() => {
+              <button type="button" className="date-map-plan-remove" disabled={pending || approvalLocked} onClick={() => {
                 if (!window.confirm(item.name + '을(를) 이 데이트의 후보에서 제거할까요?')) return;
                 void submit(async () => {
                   const schedule = await readDatePlanSchedule(coupleId, activePlan.id);
@@ -1045,8 +1063,11 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
               }}><Trash2 size={13}/> 후보 제거</button>
             </article>)}
             <div className="date-map-plan-schedule-anchor" ref={planScheduleSection}>
-              <DatePlanScheduleEditor key={activePlan.id} coupleId={coupleId} planId={activePlan.id}
-                uid={uid} candidates={planCandidates}/>
+              {!approvalLoading && !planApproval && <DatePlanScheduleEditor key={activePlan.id} coupleId={coupleId} planId={activePlan.id}
+                uid={uid} candidates={planCandidates} onReadyChange={setScheduleReady}/>}
+              <DatePlanApprovalPanel key={activePlan.id} coupleId={coupleId} planId={activePlan.id}
+                uid={uid} candidates={planCandidates} approval={planApproval} loading={approvalLoading}
+                draftReady={scheduleReady} detailsReady={planTitle.trim() === activePlan.title && planDate === activePlan.date && !pending && !planCandidatesLoading}/>
             </div>
             <details className="date-map-plan-saved">
               <summary>가고 싶은 곳에서 후보 담기 ({places.length}곳) <ChevronDown size={15}/></summary>
@@ -1055,13 +1076,13 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus }: {
                 const included = planCandidates.some((current) => isSameDatePlanPlace(current, item));
                 return <div key={item.id} className="date-map-plan-saved-row">
                   <span><b>{item.name}</b><small>{item.address}</small></span>
-                  <button type="button" disabled={pending || included} onClick={() => void addSavedToPlan(item)}>
+                  <button type="button" disabled={pending || included || approvalLocked} onClick={() => void addSavedToPlan(item)}>
                     {included ? '담겨 있음' : '후보 담기'}
                   </button>
                 </div>;
               })}
             </details>
-            <p className="date-map-add-hint">후보·의견·댓글·시간표는 두 사람에게 공유돼요. 최종 공동 승인 및 확정 이후 변경 제안은 다음 단계에서 연결돼요.</p>
+            <p className="date-map-add-hint">초안은 자유롭게 공유하고, 최종 확정 및 확정 후 변경은 두 사람의 승인 후 반영돼요.</p>
           </div>}
         </div>}
         {tab === 'courses' && <>
