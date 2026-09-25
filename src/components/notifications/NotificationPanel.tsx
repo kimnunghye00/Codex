@@ -46,11 +46,11 @@ export function NotificationPanel({ items, onClose, onReadAll, onClear, onSelect
         {!items.length && <div className="notification-empty"><Bell size={24} /><strong>아직 알림이 없어요</strong><span>채팅, 프로필, 추억 등의 활동이 여기에 쌓여요.</span></div>}
         {items.map((item) => <article key={item.id} className={item.read ? '' : 'unread'}>
           <span className={`notification-icon ${item.actor}`}>{iconFor(item.kind)}</span>
-          <button type="button" className="notification-item-action" onClick={() => onSelect(item)} disabled={!item.target}
-            aria-label={item.title + (item.target ? ' · 해당 항목 열기' : ' · 이동할 항목 없음')}>
+          <button type="button" className="notification-item-action" onClick={() => onSelect(item)}
+            aria-label={item.title + ' · 해당 화면 열기'}>
             <span><strong>{item.title}</strong><time>{timeLabel(item.createdAt)}</time></span>
             {item.detail && <p>{item.detail}</p>}
-            <small>{item.actor === 'me' ? '나' : item.actor === 'partner' ? '상대방' : '단둘이'}{item.target ? ' · 눌러서 보기 →' : ''}</small>
+            <small>{item.actor === 'me' ? '나' : item.actor === 'partner' ? '상대방' : '단둘이'} · 눌러서 보기 →</small>
           </button>
         </article>)}
       </div>
