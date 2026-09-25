@@ -30,7 +30,7 @@ public class MediaSaverPlugin extends Plugin {
             return;
         }
 
-        getBridge().executeOnThreadPool(() -> {
+        new Thread(() -> {
             HttpURLConnection connection = null;
             Uri inserted = null;
             try {
@@ -90,6 +90,6 @@ public class MediaSaverPlugin extends Plugin {
             } finally {
                 if (connection != null) connection.disconnect();
             }
-        });
+        }, "route-media-saver").start();
     }
 }
