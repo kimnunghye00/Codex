@@ -25,9 +25,24 @@ export type DatePlanCandidate = {
   createdBy: string;
   createdAt?: unknown;
   updatedAt?: unknown;
+  /** One independent choice per partner. Never shared with the global wish list. */
+  votes?: Record<string, CandidatePreference>;
 };
 
 export type CandidatePreference = 'want' | 'considering' | 'pass';
+
+export type DatePlanCandidateComment = {
+  id: string;
+  authorUid: string;
+  text: string;
+  createdAt?: unknown;
+};
+
+export const CANDIDATE_PREFERENCE_LABELS: Record<CandidatePreference, string> = {
+  want: '가고 싶어',
+  considering: '고민 중',
+  pass: '별로야',
+};
 
 export type DatePlanTimeBlock = {
   id: string;
