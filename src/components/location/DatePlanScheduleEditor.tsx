@@ -3,7 +3,7 @@ import { ArrowDown, ArrowUp, CalendarClock, Plus, Trash2 } from 'lucide-react';
 import { durationAsHoursMinutes, durationFromHoursMinutes, type DatePlanCandidate, type DatePlanTimeBlock } from '../../lib/datePlanFoundation';
 import { EMPTY_DATE_PLAN_SCHEDULE, readDatePlanSchedule, saveDatePlanSchedule, subscribeDatePlanSchedule } from '../../lib/datePlanSchedule';
 import {
-  calculateDatePlanTimeline, MAX_DATE_PLAN_BLOCKS, moveDatePlanBlock, normalizeTimeBlocks, type DatePlanSchedule,
+  calculateDatePlanTimeline, datePlanScheduleReadyForApproval, MAX_DATE_PLAN_BLOCKS, moveDatePlanBlock, normalizeTimeBlocks, type DatePlanSchedule,
 } from '../../lib/datePlanTime';
 
 type Kind = DatePlanTimeBlock['kind'];
@@ -56,8 +56,7 @@ export function DatePlanScheduleEditor({ coupleId, planId, uid, candidates, onRe
 
   const localRevision = useRef(0);
   const scheduleReady = !loading && !saving && !dirty && !conflict && !saveFailed && !error
-    && draft.revision > 0 && Boolean(draft.startTime) && draft.blocks.length > 0
-    && timeline.every((item) => !item.conflict && !item.overflow && item.start !== null && item.end !== null);
+    && datePlanScheduleReadyForApproval(draft);
   useEffect(() => {
     onReadyChange?.(scheduleReady);
   }, [onReadyChange, scheduleReady]);
