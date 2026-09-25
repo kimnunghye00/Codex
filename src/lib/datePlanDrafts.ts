@@ -1,5 +1,5 @@
-import { collection, deleteDoc, doc, getDocFromServer, getDocsFromServer, onSnapshot, runTransaction, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
-import { db } from './firebase';
+import { collection, deleteDoc, doc, getDocFromServer, getDocsFromServer, onSnapshot, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore';
+import { auth, db } from './firebase';
 import type { DatePlanDraft, DatePlanCandidate } from './datePlanFoundation';
 import { datePlanCandidateId, isSameDatePlanPlace } from './datePlanCandidates';
 
@@ -110,31 +110,25 @@ export async function deleteDatePlanCandidate(coupleId: string, planId: string, 
 }
 
 
+const DELETE_DATE_PLAN_URL = String(import.meta.env.VITE_DELETE_DATE_PLAN_URL
+  || 'https://asia-northeast3-meluni-f4e00.cloudfunctions.net/deleteDatePlanDraft').trim();
+
 /**
- * Delete an unapproved shared date draft and every nested document we own.
- * datePlaces/dateCourses are deliberately untouched.
+ * Delete through the authenticated server endpoint. Firestore clients retain
+ * zero permission to delete a plan root or its timetable directly.
  */
 export async function deleteDatePlanDraft(coupleId: string, planId: string) {
-  const planRef = doc(planCollection(coupleId), planId);
-  const approvalRef = doc(planRef, 'approval', 'state');
-  const scheduleRef = doc(planRef, 'schedule', 'draft');
-
-  const approval = await getDocFromServer(approvalRef);
-  if (approval.exists()) throw new Error('date-plan-delete-locked');
-
-  const candidates = await getDocsFromServer(candidateCollection(coupleId, planId));
-  const comments = await Promise.all(candidates.docs.map((candidate) =>
-    getDocsFromServer(collection(candidate.ref, 'comments'))));
-  const schedule = await getDocFromServer(scheduleRef);
-
-  const operationCount = comments.reduce((sum, snapshot) => sum + snapshot.size, 0)
-    + candidates.size + (schedule.exists() ? 1 : 0) + 1;
-  if (operationCount > 450) throw new Error('date-plan-delete-too-large');
-
-  const batch = writeBatch(db);
-  comments.forEach((snapshot) => snapshot.docs.forEach((item) => batch.delete(item.ref)));
-  candidates.docs.forEach((item) => batch.delete(item.ref));
-  if (schedule.exists()) batch.delete(scheduleRef);
-  batch.delete(planRef);
-  await batch.commit();
+  const user = auth.currentUser;
+  if (!user) throw new Error('authentication-required');
+  const response = await fetch(DELETE_DATE_PLAN_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${await user.getIdToken()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ coupleId, planId }),
+  });
+  let payload: { error?: string } = {};
+  try { payload = await response.json() as { error?: string }; } catch { /* non-json server failure */ }
+  if (!response.ok) throw new Error(payload.error || 'date-plan-delete-failed');
 }
