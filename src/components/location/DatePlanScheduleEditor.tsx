@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, CalendarClock, Plus, Trash2 } from 'lucide-react';
-import type { DatePlanCandidate, DatePlanTimeBlock } from '../../lib/datePlanFoundation';
+import { durationAsHoursMinutes, durationFromHoursMinutes, type DatePlanCandidate, type DatePlanTimeBlock } from '../../lib/datePlanFoundation';
 import { EMPTY_DATE_PLAN_SCHEDULE, readDatePlanSchedule, saveDatePlanSchedule, subscribeDatePlanSchedule } from '../../lib/datePlanSchedule';
 import {
-  calculateDatePlanTimeline, durationAsHoursMinutes, durationFromHoursMinutes,
-  MAX_DATE_PLAN_BLOCKS, moveDatePlanBlock, normalizeTimeBlocks, type DatePlanSchedule,
+  calculateDatePlanTimeline, MAX_DATE_PLAN_BLOCKS, moveDatePlanBlock, normalizeTimeBlocks, type DatePlanSchedule,
 } from '../../lib/datePlanTime';
 
 type Kind = DatePlanTimeBlock['kind'];
@@ -28,7 +27,6 @@ export function DatePlanScheduleEditor({ coupleId, planId, uid, candidates }: {
   const dirtyRef = useRef(false);
   const savingRef = useRef(false);
   const conflictRef = useRef(false);
-  const currentRevision = useRef(0);
   const changedCandidateIds = candidates.map((item) => item.id);
   const candidateIdsKey = changedCandidateIds.join('\u0001');
   const timeline = useMemo(() => calculateDatePlanTimeline(draft.startTime, draft.blocks), [draft]);
@@ -36,11 +34,9 @@ export function DatePlanScheduleEditor({ coupleId, planId, uid, candidates }: {
 
   useEffect(() => {
     dirtyRef.current = false; savingRef.current = false; conflictRef.current = false;
-    currentRevision.current = 0;
     setDraft(copy(EMPTY_DATE_PLAN_SCHEDULE)); setLoading(true); setSaving(false);
     setDirty(false); setConflict(false); setError(''); setStatus('');
     return subscribeDatePlanSchedule(coupleId, planId, (remote) => {
-      currentRevision.current = remote.revision;
       if (savingRef.current) return;
       if (dirtyRef.current) {
         if (remote.revision !== localRevision.current) {
@@ -95,7 +91,7 @@ export function DatePlanScheduleEditor({ coupleId, planId, uid, candidates }: {
     setLoading(true); setError('');
     try {
       const remote = await readDatePlanSchedule(coupleId, planId);
-      localRevision.current = remote.revision; currentRevision.current = remote.revision;
+      localRevision.current = remote.revision;
       dirtyRef.current = false; conflictRef.current = false;
       setDraft(copy(remote)); setDirty(false); setConflict(false);
       setStatus('최신 초안을 불러왔어요');
