@@ -76,13 +76,13 @@ check('Android notification permission exists', manifest.includes('android.permi
 check('Android background location is not requested', !manifest.includes('ACCESS_BACKGROUND_LOCATION'));
 check('Android broad media permission is not requested', !manifest.includes('READ_MEDIA_IMAGES') && !manifest.includes('READ_MEDIA_VIDEO'));
 
-check('Android alternate launcher aliases exist', ['RouteDefaultIcon','RouteHeartChatIcon','DanduliCoupleLoveIcon','DanduliCoupleDateIcon'].every((name) => manifest.includes(name)));
+check('Android V2 launcher aliases exist', ['DanduliRouteIconV2','DanduliHeartChatIconV2','DanduliCoupleLoveIconV2','DanduliCoupleDateIconV2'].every((name) => manifest.includes(name)));
 check('launcher repair receiver is registered', manifest.includes('LauncherRepairReceiver') && manifest.includes('android.intent.action.MY_PACKAGE_REPLACED'));
-check('launcher repair preserves the saved launcher icon', launcherRepair.includes('selected_icon') && launcherRepair.includes('applyIconState'));
+check('launcher repair migrates legacy cached aliases', launcherRepair.includes('selected_icon') && launcherRepair.includes('LEGACY_ALIASES') && launcherRepair.includes('DanduliRouteIconV2'));
 check('app icon plugin registration exists', icon.includes("registerPlugin<RouteAppIconPlugin>('RouteAppIcon')"));
 check('app icon bridge exposes verified native read/write', icon.includes('getNativeRouteAppIcon') && icon.includes('setNativeRouteAppIcon') && icon.includes('ICON_STATE_MISMATCH'));
-check('app icon picker displays actual Android launcher state', moreServices.includes('Android가 실제로 활성화한 런처 아이콘 기준') && moreServices.includes('getNativeRouteAppIcon'));
-check('Android 13+ launcher aliases switch atomically', iconPlugin.includes('setComponentEnabledSettings') && iconPlugin.includes('verifyIconState'));
+check('app icon picker displays selected Android launcher state', moreServices.includes('현재 선택된 홈 화면 아이콘') && moreServices.includes('getNativeRouteAppIcon'));
+check('launcher aliases use Samsung-compatible per-component switching', iconPlugin.includes('setComponentEnabledSetting') && iconPlugin.includes('LEGACY_ALIASES') && !iconPlugin.includes('setComponentEnabledSettings'));
 check('character launcher build uses transparent clean artwork', iconPrep.includes('danduli-stickers-v3-clean.webp') && iconPrep.includes('Clean DANDULI sticker sheet lost transparency'));
 check('deleted appearance wrapper is not referenced by icon bridge', !icon.includes('appearance-stability'));
 
@@ -96,3 +96,5 @@ if (failures.length) {
 }
 
 console.log('\nCritical Android/native wiring is intact.');
+
+check('manifest uses mipmap launcher resources', manifest.includes('@mipmap/danduli_route_launcher') && manifest.includes('@mipmap/danduli_couple_date_launcher'));

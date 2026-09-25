@@ -10,9 +10,9 @@
 
     <application
         android:allowBackup="false"
-        android:icon="@drawable/ic_route_signature_launcher"
+        android:icon="@mipmap/danduli_route_launcher"
         android:label="@string/app_name"
-        android:roundIcon="@drawable/ic_route_signature_launcher"
+        android:roundIcon="@mipmap/danduli_route_launcher"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
@@ -25,11 +25,15 @@
             android:launchMode="singleTask"
             android:exported="true" />
 
+        <!-- Current launcher aliases. V2 names intentionally differ from older builds so
+             Samsung/One UI treats an icon change as a new launcher component instead
+             of reusing a stale cached icon for the package. -->
         <activity-alias
-            android:name=".RouteDefaultIcon"
+            android:name=".DanduliRouteIconV2"
             android:enabled="true"
             android:exported="true"
-            android:icon="@drawable/ic_route_signature_launcher"
+            android:icon="@mipmap/danduli_route_launcher"
+            android:roundIcon="@mipmap/danduli_route_launcher"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
             <intent-filter>
@@ -39,10 +43,11 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".RouteHeartIcon"
+            android:name=".DanduliHeartChatIconV2"
             android:enabled="false"
             android:exported="true"
-            android:icon="@drawable/ic_route_heart_launcher"
+            android:icon="@mipmap/danduli_heart_chat_launcher"
+            android:roundIcon="@mipmap/danduli_heart_chat_launcher"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
             <intent-filter>
@@ -52,10 +57,11 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".RoutePinDuoIcon"
+            android:name=".DanduliCoupleLoveIconV2"
             android:enabled="false"
             android:exported="true"
-            android:icon="@drawable/ic_route_pin_duo_launcher"
+            android:icon="@mipmap/danduli_couple_love_launcher"
+            android:roundIcon="@mipmap/danduli_couple_love_launcher"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
             <intent-filter>
@@ -65,10 +71,11 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".RouteHeartChatIcon"
+            android:name=".DanduliCoupleDateIconV2"
             android:enabled="false"
             android:exported="true"
-            android:icon="@drawable/ic_route_heart_chat_launcher"
+            android:icon="@mipmap/danduli_couple_date_launcher"
+            android:roundIcon="@mipmap/danduli_couple_date_launcher"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
             <intent-filter>
@@ -77,84 +84,37 @@
             </intent-filter>
         </activity-alias>
 
-        <activity-alias
-            android:name=".RouteOurRouteIcon"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@drawable/ic_route_our_route_launcher"
-            android:label="@string/app_name"
-            android:targetActivity=".MainActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
+        <!-- Legacy aliases stay declared but disabled so update installs can safely
+             migrate an old enabled component to the V2 launcher entry. -->
+        <activity-alias android:name=".RouteDefaultIcon" android:enabled="false" android:exported="true" android:icon="@drawable/ic_route_signature_launcher" android:label="@string/app_name" android:targetActivity=".MainActivity">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity-alias>
-
-        <activity-alias
-            android:name=".RouteNightIcon"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@drawable/ic_route_night_launcher"
-            android:label="@string/app_name"
-            android:targetActivity=".MainActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
+        <activity-alias android:name=".RouteHeartIcon" android:enabled="false" android:exported="true" android:icon="@drawable/ic_route_heart_launcher" android:label="@string/app_name" android:targetActivity=".MainActivity">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity-alias>
-
-        <activity-alias
-            android:name=".RouteCreamIcon"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@drawable/ic_route_cream_launcher"
-            android:label="@string/app_name"
-            android:targetActivity=".MainActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
+        <activity-alias android:name=".RoutePinDuoIcon" android:enabled="false" android:exported="true" android:icon="@drawable/ic_route_pin_duo_launcher" android:label="@string/app_name" android:targetActivity=".MainActivity">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity-alias>
-
-        <activity-alias
-            android:name=".RouteMinimalIcon"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@drawable/ic_route_minimal_launcher"
-            android:label="@string/app_name"
-            android:targetActivity=".MainActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
+        <activity-alias android:name=".RouteHeartChatIcon" android:enabled="false" android:exported="true" android:icon="@drawable/ic_route_heart_chat_launcher" android:label="@string/app_name" android:targetActivity=".MainActivity">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity-alias>
-
-        <activity-alias
-            android:name=".DanduliCoupleLoveIcon"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@drawable/danduli_character_love"
-            android:roundIcon="@drawable/danduli_character_love"
-            android:label="@string/app_name"
-            android:targetActivity=".MainActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
+        <activity-alias android:name=".RouteOurRouteIcon" android:enabled="false" android:exported="true" android:icon="@drawable/ic_route_our_route_launcher" android:label="@string/app_name" android:targetActivity=".MainActivity">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity-alias>
-
-        <activity-alias
-            android:name=".DanduliCoupleDateIcon"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@drawable/danduli_character_date"
-            android:roundIcon="@drawable/danduli_character_date"
-            android:label="@string/app_name"
-            android:targetActivity=".MainActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
+        <activity-alias android:name=".RouteNightIcon" android:enabled="false" android:exported="true" android:icon="@drawable/ic_route_night_launcher" android:label="@string/app_name" android:targetActivity=".MainActivity">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".RouteCreamIcon" android:enabled="false" android:exported="true" android:icon="@drawable/ic_route_cream_launcher" android:label="@string/app_name" android:targetActivity=".MainActivity">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".RouteMinimalIcon" android:enabled="false" android:exported="true" android:icon="@drawable/ic_route_minimal_launcher" android:label="@string/app_name" android:targetActivity=".MainActivity">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".DanduliCoupleLoveIcon" android:enabled="false" android:exported="true" android:icon="@drawable/danduli_character_love" android:roundIcon="@drawable/danduli_character_love" android:label="@string/app_name" android:targetActivity=".MainActivity">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".DanduliCoupleDateIcon" android:enabled="false" android:exported="true" android:icon="@drawable/danduli_character_date" android:roundIcon="@drawable/danduli_character_date" android:label="@string/app_name" android:targetActivity=".MainActivity">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity-alias>
 
         <receiver

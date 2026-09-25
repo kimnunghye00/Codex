@@ -236,7 +236,7 @@ export function MoreServices({
         {sheet === 'app-icon' && <><HeaderBar title="앱 아이콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">4가지 단둘이 아이콘 중 원하는 스타일을 선택해요.</p>
           <div className="app-icon-current-status" role="status" aria-live="polite">
             <span className={`more-app-icon-preview ${appIcon} ${activeIcon.className} !grid place-items-center`}><AppIconGlyph id={appIcon} /></span>
-            <span><small>{nativeAppIconSupported ? '휴대폰 홈 화면에서 현재 사용 중' : '현재 웹 미리보기'}</small><b>{appIconStateLoading ? '아이콘 확인 중…' : activeIcon.label}</b><em>{nativeAppIconSupported ? 'Android가 실제로 활성화한 런처 아이콘 기준' : '홈 화면 변경은 Android 앱에서 가능'}</em></span>
+            <span><small>{nativeAppIconSupported ? '현재 선택된 홈 화면 아이콘' : '현재 웹 미리보기'}</small><b>{appIconStateLoading ? '아이콘 확인 중…' : activeIcon.label}</b><em>{nativeAppIconSupported ? 'Android 런처 구성요소 기준 · 홈 화면 표시는 기기 런처가 갱신해요' : '홈 화면 변경은 Android 앱에서 가능'}</em></span>
           </div>
           <div className="app-icon-picker !grid !grid-cols-2 !gap-2.5 sm:!grid-cols-2" aria-busy={appIconChanging}>
           {APP_ICONS.map((item) => <button data-icon-id={item.id} type="button" key={item.id} aria-pressed={appIcon === item.id} disabled={appIconChanging} className={`${appIcon === item.id ? 'active' : ''} !min-w-0`} onClick={() => void chooseIcon(item.id)}><span className={`more-app-icon-preview ${item.id} ${item.className} !grid place-items-center`}><AppIconGlyph id={item.id} /></span><b className="!w-full !truncate !text-center">{item.label}</b>{appIcon === item.id && !appIconStateLoading && <small>✓ 현재 사용 중</small>}</button>)}
