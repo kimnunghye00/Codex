@@ -758,3 +758,28 @@
 }
 .date-map-plan-delete-draft:not(:disabled):hover { background:var(--primary-soft); color:var(--text-primary); }
 .date-map-plan-delete-draft:disabled { opacity:.45; cursor:not-allowed; }
+
+
+.date-map-plan-choice-row {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 38px;
+  gap:6px;
+  align-items:stretch;
+}
+.date-map-plan-choice-row .date-map-course-choice { margin-bottom:0; min-width:0; }
+.date-map-plan-choice-delete {
+  display:grid;
+  place-items:center;
+  width:38px;
+  min-height:100%;
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:var(--surface);
+  color:var(--text-secondary);
+  cursor:pointer;
+}
+.date-map-plan-choice-delete:not(:disabled):hover {
+  background:var(--primary-soft);
+  color:var(--text-primary);
+}
+.date-map-plan-choice-delete:disabled { opacity:.45; cursor:not-allowed; }
