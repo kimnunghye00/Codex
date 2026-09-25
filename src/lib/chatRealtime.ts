@@ -309,7 +309,7 @@ export async function sendCoupleMessage(coupleId: string, currentUid: string, me
   // A failed activity write must not roll back an already delivered message.
   // Calls and scheduled drafts are not ordinary partner chat notifications.
   if (message.type !== 'call' && !message.scheduledFor) {
-    void publishCoupleActivity(coupleId, currentUid, {
+    await publishCoupleActivity(coupleId, currentUid, {
       id: 'chat-' + message.id, kind: 'chat', sourceId: String(message.id), revision: 0,
       title: '새 메시지가 왔어요',
       detail: (message.type === 'text' ? message.text || '' : '사진·파일 또는 이모티콘을 보냈어요.').slice(0, 200),
