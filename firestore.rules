@@ -458,13 +458,15 @@ service cloud.firestore {
           }
           function validSchedule() {
             return scheduleId == 'draft'
-              && request.resource.data.keys().hasOnly(['startTime', 'blocks', 'revision', 'updatedBy', 'updatedAt'])
-              && request.resource.data.keys().hasAll(['startTime', 'blocks', 'revision', 'updatedBy', 'updatedAt'])
+              && request.resource.data.keys().hasOnly(['startTime', 'blocks', 'globalBackupCandidateIds', 'revision', 'updatedBy', 'updatedAt'])
+              && request.resource.data.keys().hasAll(['startTime', 'blocks', 'globalBackupCandidateIds', 'revision', 'updatedBy', 'updatedAt'])
               && request.resource.data.startTime is string
               && (request.resource.data.startTime == ''
                   || request.resource.data.startTime.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$'))
               && request.resource.data.blocks is list
               && request.resource.data.blocks.size() <= 20
+              && request.resource.data.globalBackupCandidateIds is list
+              && request.resource.data.globalBackupCandidateIds.size() <= 20
               && request.resource.data.revision is int
               && request.resource.data.revision >= 1
               && request.resource.data.updatedBy == request.auth.uid
