@@ -371,7 +371,7 @@ service cloud.firestore {
           function validCandidate() {
             return request.resource.data.keys().hasOnly([
               'id', 'name', 'address', 'latitude', 'longitude', 'category', 'memo',
-              'sourceSavedPlaceId', 'createdBy', 'createdAt', 'updatedAt'
+              'sourceSavedPlaceId', 'createdBy', 'createdAt', 'updatedAt', 'votes'
             ])
             && request.resource.data.keys().hasAll([
               'id', 'name', 'address', 'latitude', 'longitude', 'category', 'memo',
@@ -388,20 +388,66 @@ service cloud.firestore {
             && request.resource.data.longitude is number
             && request.resource.data.longitude >= -180 && request.resource.data.longitude <= 180
             && request.resource.data.createdBy is string
+            && (!request.resource.data.keys().hasAny(['votes']) || (
+              request.resource.data.votes is map
+              && request.resource.data.votes.size() <= 2
+            ))
             && (!request.resource.data.keys().hasAny(['sourceSavedPlaceId'])
               || (request.resource.data.sourceSavedPlaceId is string
                 && request.resource.data.sourceSavedPlaceId.size() > 0
                 && request.resource.data.sourceSavedPlaceId.size() <= 120));
           }
           allow read: if memberOf(coupleId) && editableDraft();
+          // Only the authenticated UID can change its own vote. Existing partner
+          // votes and the original candidate fields are immutable through this path.
+          function ownVoteChange() {
+            return request.resource.data.keys().hasAll(['votes'])
+              && request.resource.data.votes is map
+              && request.resource.data.votes.diff(resource.data.get('votes', {}))
+                .affectedKeys().hasOnly([request.auth.uid])
+              && request.resource.data.votes.diff(resource.data.get('votes', {}))
+                .affectedKeys().hasAll([request.auth.uid])
+              && (!request.resource.data.votes.keys().hasAny([request.auth.uid])
+                || request.resource.data.votes[request.auth.uid] in ['want', 'considering', 'pass']);
+          }
           allow create: if memberOf(coupleId) && editableDraft() && validCandidate()
+            && !request.resource.data.keys().hasAny(['votes'])
             && request.resource.data.createdBy == request.auth.uid
             && request.resource.data.createdAt == request.time
             && request.resource.data.updatedAt == request.time;
           allow update: if memberOf(coupleId) && editableDraft() && validCandidate()
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memo', 'updatedAt'])
-            && request.resource.data.updatedAt == request.time;
+            && request.resource.data.updatedAt == request.time
+            && (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memo', 'updatedAt'])
+              || (
+                request.resource.data.diff(resource.data).affectedKeys().hasOnly(['votes', 'updatedAt'])
+                && ownVoteChange()
+              )
+            );
           allow delete: if memberOf(coupleId) && editableDraft();
+
+          match /comments/{commentId} {
+            function candidatePath() {
+              return /databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId)/candidates/$(candidateId);
+            }
+            function validComment() {
+              return request.resource.data.keys().hasOnly(['id', 'authorUid', 'text', 'createdAt'])
+                && request.resource.data.keys().hasAll(['id', 'authorUid', 'text', 'createdAt'])
+                && request.resource.data.id == commentId
+                && request.resource.data.authorUid == request.auth.uid
+                && request.resource.data.text is string
+                && request.resource.data.text.size() > 0
+                && request.resource.data.text.size() <= 500
+                && request.resource.data.createdAt == request.time;
+            }
+            allow read: if memberOf(coupleId) && editableDraft() && exists(candidatePath());
+            allow create: if memberOf(coupleId) && editableDraft() && exists(candidatePath()) && validComment();
+            allow update: if false;
+            // An author may delete their comment; either partner may delete
+            // comments ONLY in the same atomic batch that removes the candidate.
+            allow delete: if memberOf(coupleId) && editableDraft()
+              && (resource.data.authorUid == request.auth.uid || !existsAfter(candidatePath()));
+          }
         }
       }
 
