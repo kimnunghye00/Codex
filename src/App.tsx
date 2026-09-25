@@ -190,7 +190,9 @@ function App({ user, profile, onProfileChange }: AppProps) {
   const [pendingRoute, setPendingRoute] = useState<NotificationDestination | null>(() =>
     typeof window !== 'undefined' ? openActivityFromUrl() : null);
   const [notificationMessageId, setNotificationMessageId] = useState<number>();
+  const [notificationMessageRequest, setNotificationMessageRequest] = useState(0);
   const [notificationPlanId, setNotificationPlanId] = useState<string>();
+  const [notificationPlanRequest, setNotificationPlanRequest] = useState(0);
   const [notifications, setNotifications] = useState<AppNotification[]>(() => loadNotifications(user.uid));
   const [tab, setTab] = useState<Tab>('home');
   const [messages, setMessages] = useState<Message[]>(() => loadMessages(initialMessages));
@@ -553,11 +555,13 @@ function App({ user, profile, onProfileChange }: AppProps) {
     setNotificationsOpen(false);
     if (route.screen === 'chat') {
       setNotificationMessageId(Number(route.itemId));
+      setNotificationMessageRequest((current) => current + 1);
       navigateTab('chat');
     } else if (route.screen === 'album') {
       openMemory(Number(route.itemId));
     } else {
       setNotificationPlanId(route.itemId);
+      setNotificationPlanRequest((current) => current + 1);
       navigateTab('location');
     }
   }, [pendingRoute, connection?.coupleId, navigateTab, openMemory]);
@@ -621,8 +625,8 @@ function App({ user, profile, onProfileChange }: AppProps) {
       {tab === 'home' && <HomePage uid={user.uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} memories={memories} onNavigate={navigateTab} onOpenMemory={openMemory} onOpenFootprints={() => openFootprints()} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'memories' && <MemoriesPage requestedTab={requestedHubTab} Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={(place) => { setLocationFocus(place); navigateTab('location'); }} onOpenFootprints={(memoryId) => openFootprints(memoryId)} sharedProfile={profile} sharedConnection={connection} sharedRelationshipStartDate={relationshipStartDate} />}
       {tab === 'footprints' && <FootprintsPage uid={user.uid} memories={memories} initialMemoryId={footprintMemoryId} onOpenMemory={openMemory} onBack={closeFootprints} Header={AppHeader} />}
-      {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} connection={connection} initialMessageId={notificationMessageId}/>}
-      {tab === 'location' && <DateMapPage Header={AppHeader} connection={connection} focusPlace={locationFocus} onClearFocus={() => setLocationFocus(undefined)} initialPlanId={notificationPlanId}/>}
+      {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} connection={connection} initialMessageId={notificationMessageId} notificationRequest={notificationMessageRequest}/>}
+      {tab === 'location' && <DateMapPage Header={AppHeader} connection={connection} focusPlace={locationFocus} onClearFocus={() => setLocationFocus(undefined)} initialPlanId={notificationPlanId} notificationRequest={notificationPlanRequest}/>}
       {tab === 'anniversary' && <AnniversaryPage connected={Boolean(connection)} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} onSaveStartDate={saveStartDate} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'more' && <MorePage onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} onNavigate={navigateMoreTarget} />}
     </Suspense></main><BottomNav tab={tab === 'footprints' ? 'home' : tab} onNavigate={navigateTab} /></div>
