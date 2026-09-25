@@ -162,9 +162,18 @@ export function DatePlanApprovalPanel({ coupleId, planId, uid, candidates, appro
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [editing, setEditing] = useState(false);
-  const act = async (task: () => Promise<unknown>, success: string) => {
+  const act = async (task: () => Promise<unknown>, success: string, sentNotification?: boolean) => {
     setBusy(true); setError(''); setMessage('');
-    try { await task(); setEditing(false); setMessage(success); }
+    try {
+      await task(); setEditing(false); setMessage(success);
+      if (sentNotification) {
+        window.dispatchEvent(new CustomEvent('route-local-notification', { detail: {
+          actor: 'me', kind: 'date-plan', title: '최종 확정 요청을 보냈어요',
+          detail: '상대방이 확인하면 이 데이트가 최종 확정돼요.',
+          target: { screen: 'date-plan', itemId: planId },
+        }}));
+      }
+    }
     catch (reason) { setError(friendlyError(reason)); }
     finally { setBusy(false); }
   };
@@ -176,7 +185,7 @@ export function DatePlanApprovalPanel({ coupleId, planId, uid, candidates, appro
     {!loading && !approval && <>
       <p className="date-map-add-hint">이름·날짜·시작 시각과 시간표를 저장한 뒤 승인 요청을 보내세요. 요청하면 현재 일정이 잠기고 상대방의 승인을 기다려요.</p>
       <button className="date-map-primary" type="button" disabled={busy || !draftReady || !detailsReady} onClick={() =>
-        void act(() => requestDatePlanApproval(coupleId, planId, uid, candidates), '상대방에게 최종 확정을 요청했어요.')}>
+        void act(() => requestDatePlanApproval(coupleId, planId, uid, candidates), '상대방에게 최종 확정을 요청했어요.', true)}>
         <Send size={15}/> 최종 확정 요청
       </button>
       {(!draftReady || !detailsReady) && <small>시간표의 자동 저장이 완료되고 데이트 정보에 미저장 변경이 없어야 요청할 수 있어요.</small>}
