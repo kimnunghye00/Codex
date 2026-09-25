@@ -20,6 +20,7 @@ export function DatePlanScheduleEditor({ coupleId, planId, uid, candidates }: {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [conflict, setConflict] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
   const [candidateToAdd, setCandidateToAdd] = useState('');
@@ -35,7 +36,7 @@ export function DatePlanScheduleEditor({ coupleId, planId, uid, candidates }: {
   useEffect(() => {
     dirtyRef.current = false; savingRef.current = false; conflictRef.current = false;
     setDraft(copy(EMPTY_DATE_PLAN_SCHEDULE)); setLoading(true); setSaving(false);
-    setDirty(false); setConflict(false); setError(''); setStatus('');
+    setDirty(false); setConflict(false); setSaveFailed(false); setError(''); setStatus('');
     return subscribeDatePlanSchedule(coupleId, planId, (remote) => {
       if (savingRef.current) return;
       if (dirtyRef.current) {
@@ -55,13 +56,13 @@ export function DatePlanScheduleEditor({ coupleId, planId, uid, candidates }: {
   const edit = (update: (current: DatePlanSchedule) => DatePlanSchedule) => {
     if (loading || saving || conflict) return;
     setDraft((current) => update(current));
-    dirtyRef.current = true; setDirty(true); setStatus('자동 저장 대기 중…'); setError('');
+    dirtyRef.current = true; setDirty(true); setSaveFailed(false); setStatus('자동 저장 대기 중…'); setError('');
   };
   const setBlock = (id: string, update: (current: DatePlanTimeBlock) => DatePlanTimeBlock) =>
     edit((current) => ({ ...current, blocks: current.blocks.map((block) => block.id === id ? update(block) : block) }));
 
   useEffect(() => {
-    if (!dirty || loading || saving || conflict) return;
+    if (!dirty || loading || saving || conflict || saveFailed) return;
     const timer = window.setTimeout(() => {
       if (savingRef.current || conflictRef.current) return;
       savingRef.current = true; setSaving(true); setStatus('자동 저장 중…');
@@ -78,13 +79,14 @@ export function DatePlanScheduleEditor({ coupleId, planId, uid, candidates }: {
           conflictRef.current = true; setConflict(true);
           setError('상대방이 먼저 시간표를 저장했어요. 내 변경은 보존했으며 아래에서 최신 초안을 불러올 수 있어요.');
         } else {
-          setError(message.includes('삭제된 장소') ? message : '시간표를 저장하지 못했어요. 연결을 확인한 뒤 다시 시도해 주세요.');
+          setSaveFailed(true);
+          setError(reason instanceof RangeError || message.includes('삭제된 장소') ? message : '시간표를 저장하지 못했어요. 연결을 확인한 뒤 다시 시도해 주세요.');
         }
         setStatus('저장되지 않은 변경 있음');
       }).finally(() => { savingRef.current = false; setSaving(false); });
     }, 950);
     return () => window.clearTimeout(timer);
-  }, [draft, dirty, loading, saving, conflict, coupleId, planId, uid, candidateIdsKey]);
+  }, [draft, dirty, loading, saving, conflict, saveFailed, coupleId, planId, uid, candidateIdsKey]);
 
   const reload = async () => {
     if ((dirty || conflict) && !window.confirm('미저장 변경을 버리고 상대방의 최신 시간표를 불러올까요?')) return;
@@ -93,7 +95,7 @@ export function DatePlanScheduleEditor({ coupleId, planId, uid, candidates }: {
       const remote = await readDatePlanSchedule(coupleId, planId);
       localRevision.current = remote.revision;
       dirtyRef.current = false; conflictRef.current = false;
-      setDraft(copy(remote)); setDirty(false); setConflict(false);
+      setDraft(copy(remote)); setDirty(false); setConflict(false); setSaveFailed(false);
       setStatus('최신 초안을 불러왔어요');
     } catch { setError('시간표를 다시 불러오지 못했어요.'); }
     finally { setLoading(false); }
@@ -216,6 +218,7 @@ export function DatePlanScheduleEditor({ coupleId, planId, uid, candidates }: {
       <div className="date-map-timetable-status" role="status">{status}{dirty && !saving ? ' · 미저장 변경 있음' : ''}</div>
       {error && <p className="date-map-time-warning" role="alert">{error}</p>}
       {conflict && <button type="button" className="date-map-primary" onClick={() => void reload()}>상대방의 최신 시간표 불러오기</button>}
+      {saveFailed && !conflict && <button type="button" className="date-map-primary" onClick={() => { setSaveFailed(false); setError(''); }}>시간표 저장 다시 시도</button>}
       {!conflict && !dirty && <button type="button" className="date-map-time-reload" onClick={() => void reload()}>다른 기기의 변경 확인하기</button>}
       <p className="date-map-add-hint">아직 공동 확정 전 초안이에요. 최종 승인 및 승인 후 변경 제안 기능은 다음 단계에서 제공해요.</p>
     </>}
