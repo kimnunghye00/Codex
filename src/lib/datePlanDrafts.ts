@@ -1,4 +1,4 @@
-import { collection, deleteDoc, doc, getDocFromServer, getDocsFromServer, onSnapshot, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDocFromServer, getDocsFromServer, onSnapshot, runTransaction, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
 import { db } from './firebase';
 import type { DatePlanDraft, DatePlanCandidate } from './datePlanFoundation';
 import { datePlanCandidateId, isSameDatePlanPlace } from './datePlanCandidates';
@@ -107,4 +107,34 @@ export async function updateDatePlanCandidateMemo(
 
 export async function deleteDatePlanCandidate(coupleId: string, planId: string, candidateId: string) {
   await deleteDoc(doc(candidateCollection(coupleId, planId), candidateId));
+}
+
+
+/**
+ * Delete an unapproved shared date draft and every nested document we own.
+ * datePlaces/dateCourses are deliberately untouched.
+ */
+export async function deleteDatePlanDraft(coupleId: string, planId: string) {
+  const planRef = doc(planCollection(coupleId), planId);
+  const approvalRef = doc(planRef, 'approval', 'state');
+  const scheduleRef = doc(planRef, 'schedule', 'draft');
+
+  const approval = await getDocFromServer(approvalRef);
+  if (approval.exists()) throw new Error('date-plan-delete-locked');
+
+  const candidates = await getDocsFromServer(candidateCollection(coupleId, planId));
+  const comments = await Promise.all(candidates.docs.map((candidate) =>
+    getDocsFromServer(collection(candidate.ref, 'comments'))));
+  const schedule = await getDocFromServer(scheduleRef);
+
+  const operationCount = comments.reduce((sum, snapshot) => sum + snapshot.size, 0)
+    + candidates.size + (schedule.exists() ? 1 : 0) + 1;
+  if (operationCount > 450) throw new Error('date-plan-delete-too-large');
+
+  const batch = writeBatch(db);
+  comments.forEach((snapshot) => snapshot.docs.forEach((item) => batch.delete(item.ref)));
+  candidates.docs.forEach((item) => batch.delete(item.ref));
+  if (schedule.exists()) batch.delete(scheduleRef);
+  batch.delete(planRef);
+  await batch.commit();
 }
