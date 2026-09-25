@@ -169,7 +169,8 @@ jobs:
           npx --yes firebase-tools@15.29.0 deploy \
             --only functions:date-plan-delete:deleteDatePlanDraftV2 \
             --project meluni-f4e00 \
-            --non-interactive
+            --non-interactive \
+            --force
           npx --yes firebase-tools@15.29.0 deploy \
             --only hosting:legacy,hosting:danduli \
             --project meluni-f4e00 \
