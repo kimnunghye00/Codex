@@ -659,3 +659,32 @@
 @media (max-width:760px) {
   .date-map-plan-mobile-fit { display:block; position:absolute; top:12px; right:12px; z-index:3; border:1px solid var(--border); border-radius:10px; background:var(--surface); color:var(--text-primary); padding:9px 11px; font-size:11px; font-weight:750; box-shadow:0 2px 12px #1c20321a; }
 }
+
+
+/* Date plan V2 stage 3: independent partner choices and per-candidate comments. */
+.date-map-plan-votes { display:flex; flex-direction:column; gap:7px; padding:10px 0; border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
+.date-map-plan-votes-heading { font-size:11px; font-weight:750; color:var(--text-primary); }
+.date-map-plan-vote-options { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; }
+.date-map-plan-vote-options button { min-width:0; min-height:38px; padding:6px 3px; background:var(--surface); color:var(--text-primary); border:1px solid var(--border); border-radius:9px; font-size:11px; font-weight:700; cursor:pointer; }
+.date-map-plan-vote-options button[aria-pressed="true"] { background:var(--primary); color:#fff; border-color:var(--primary); }
+.date-map-plan-vote-options button:disabled { opacity:.55; cursor:not-allowed; }
+.date-map-plan-votes > small { color:var(--text-secondary); font-size:10px; line-height:1.5; overflow-wrap:anywhere; }
+.date-map-plan-feedback-toggle { display:inline-flex; align-items:center; gap:6px; align-self:flex-start; min-height:32px; padding:5px 9px; background:var(--primary-soft); color:var(--text-primary); border:1px solid var(--border); border-radius:9px; font-size:11px; font-weight:750; }
+.date-map-plan-feedback { display:flex; flex-direction:column; gap:10px; padding:10px; border:1px solid var(--border); border-radius:10px; background:var(--surface); min-width:0; }
+.date-map-plan-feedback-title { display:flex; align-items:center; gap:5px; color:var(--text-primary); }
+.date-map-plan-feedback-title strong { font-size:11px; }
+.date-map-plan-feedback-title span { margin-left:auto; font-size:10px; color:var(--text-secondary); }
+.date-map-plan-feedback > p { margin:0; font-size:11px; color:var(--text-secondary); overflow-wrap:anywhere; }
+.date-map-plan-comment { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; padding:8px; border:1px solid var(--border); border-radius:9px; }
+.date-map-plan-comment > div { min-width:0; }
+.date-map-plan-comment b { font-size:10px; }
+.date-map-plan-comment p { margin:4px 0 0; font-size:11px; color:var(--text-primary); line-height:1.5; white-space:pre-wrap; overflow-wrap:anywhere; }
+.date-map-plan-comment button { display:grid; place-items:center; flex-shrink:0; min-width:28px; min-height:28px; border:0; border-radius:8px; background:var(--primary-soft); color:var(--text-secondary); }
+.date-map-plan-comment-form { display:flex; flex-direction:column; gap:6px; }
+.date-map-plan-comment-form label { font-size:11px; font-weight:700; color:var(--text-primary); }
+.date-map-plan-comment-form textarea { box-sizing:border-box; width:100%; min-height:65px; padding:9px; border:1px solid var(--border); border-radius:9px; resize:vertical; background:var(--surface); color:var(--text-primary); font:inherit; font-size:12px; }
+.date-map-plan-comment-form > div { display:flex; justify-content:flex-end; align-items:center; gap:10px; }
+.date-map-plan-comment-form > div span { font-size:10px; color:var(--text-secondary); }
+.date-map-plan-comment-form button { min-height:34px; padding:7px 12px; border:0; border-radius:9px; background:var(--primary); color:#fff; font-weight:750; font-size:11px; }
+.date-map-plan-comment-form button:disabled { opacity:.55; }
+.date-map-plan-feedback .date-map-plan-feedback-error { color:#b52c4a; }

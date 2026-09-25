@@ -18,6 +18,8 @@ import { sendCoupleMessage, toggleCoupleMessageReaction, setCoupleMessageReactio
 import { uploadChatAttachment, uploadChatMedia } from '../src/lib/chatMedia';
 import { addDatePlace, saveDateCourse, setPlaceLike, addPlaceOpinion } from '../src/lib/dateMap';
 import { addDatePlanCandidate, createDatePlanDraft, readDatePlanCandidates, subscribeDatePlanCandidates, updateDatePlanCandidateMemo, updateDatePlanDraft } from '../src/lib/datePlanDrafts';
+import { addDatePlanCandidateComment, deleteDatePlanCandidateComment, removeDatePlanCandidateWithFeedback,
+  setDatePlanCandidatePreference, subscribeDatePlanCandidateComments } from '../src/lib/datePlanOpinions';
 
 const projectId = 'demo-danduli-security';
 let env: RulesTestEnvironment;
@@ -420,4 +422,69 @@ test('date plan V2: unfinished drafts and date-only candidates stay isolated and
   await assertFails(updateDoc(doc(outsider.db, candidatePath), { memo: '변조', updatedAt: serverTimestamp() }));
   expect((await getDocFromServer(doc(as('alice').db, 'couples', coupleId, 'dateCourses', oldCourse))).data()?.timeSlots)
     .toEqual(['08:00-09:00']);
+});
+
+
+test('date plan V2: partner choices, comments and atomic candidate deletion stay couple-private', async () => {
+  const { coupleId } = await pair();
+  const planId = await createDatePlanDraft(coupleId, 'bob');
+  const candidateId = await addDatePlanCandidate(coupleId, planId, 'bob', {
+    name: 'CGV 강변', address: '서울 광진구', latitude: 37.535, longitude: 127.095,
+    category: '놀거리', memo: '후보 그대로',
+  });
+  const candidatePath = 'couples/' + coupleId + '/datePlans/' + planId + '/candidates/' + candidateId;
+  as('alice');
+  await setDatePlanCandidatePreference(coupleId, planId, candidateId, 'alice', 'want');
+  expect((await getDocFromServer(doc(client.db, candidatePath))).data()?.votes).toEqual({ alice: 'want' });
+  as('bob');
+  await setDatePlanCandidatePreference(coupleId, planId, candidateId, 'bob', 'considering');
+  expect((await getDocFromServer(doc(client.db, candidatePath))).data()?.votes)
+    .toEqual({ alice: 'want', bob: 'considering' });
+  await setDatePlanCandidatePreference(coupleId, planId, candidateId, 'bob', 'pass');
+  expect((await getDocFromServer(doc(client.db, candidatePath))).data()?.votes)
+    .toEqual({ alice: 'want', bob: 'pass' });
+  await assertFails(updateDoc(doc(client.db, candidatePath), { 'votes.alice': 'pass', updatedAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(client.db, candidatePath), { 'votes.bob': 'invalid', updatedAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(client.db, candidatePath), { 'votes.alice': 'pass', 'votes.bob': 'want', updatedAt: serverTimestamp() }));
+  expect((await getDocFromServer(doc(client.db, candidatePath))).data()?.memo).toBe('후보 그대로');
+
+  const bobComment = await addDatePlanCandidateComment(coupleId, planId, candidateId, 'bob', '여긴 자리 예매하자');
+  const bobCommentPath = candidatePath + '/comments/' + bobComment;
+  as('alice');
+  const aliceComment = await addDatePlanCandidateComment(coupleId, planId, candidateId, 'alice', '좋아! 🎬');
+  const aliceCommentPath = candidatePath + '/comments/' + aliceComment;
+  const observed = await new Promise<string[]>((resolve, reject) => {
+    let unsubscribe: () => void = () => {};
+    unsubscribe = subscribeDatePlanCandidateComments(coupleId, planId, candidateId, (items) => {
+      if (items.length !== 2) return;
+      resolve(items.map((item) => item.text));
+      queueMicrotask(() => unsubscribe());
+    }, reject);
+  });
+  expect(observed).toContain('여긴 자리 예매하자');
+  expect(observed).toContain('좋아! 🎬');
+  await assertFails(deleteDatePlanCandidateComment(coupleId, planId, candidateId, bobComment));
+  await assertFails(updateDoc(doc(client.db, bobCommentPath), { text: '남의 댓글 변경' }));
+  await assertFails(setDoc(doc(client.db, candidatePath, 'comments', 'spoof'), {
+    id: 'spoof', authorUid: 'bob', text: '가짜', createdAt: serverTimestamp(),
+  }));
+  await assertFails(setDoc(doc(client.db, candidatePath, 'comments', 'too-long'), {
+    id: 'too-long', authorUid: 'alice', text: '가'.repeat(501), createdAt: serverTimestamp(),
+  }));
+
+  await setDatePlanCandidatePreference(coupleId, planId, candidateId, 'alice', null);
+  expect((await getDocFromServer(doc(client.db, candidatePath))).data()?.votes).toEqual({ bob: 'pass' });
+  await deleteDatePlanCandidateComment(coupleId, planId, candidateId, aliceComment);
+  expect((await getDocFromServer(doc(client.db, aliceCommentPath))).exists()).toBe(false);
+  await signup('eve');
+  const outsider = as('eve');
+  await assertFails(getDocFromServer(doc(outsider.db, bobCommentPath)));
+  await assertFails(setDatePlanCandidatePreference(coupleId, planId, candidateId, 'eve', 'want'));
+  await assertFails(addDatePlanCandidateComment(coupleId, planId, candidateId, 'eve', '남의 후보'));
+
+  as('alice');
+  await removeDatePlanCandidateWithFeedback(coupleId, planId, candidateId);
+  expect((await getDocFromServer(doc(client.db, candidatePath))).exists()).toBe(false);
+  await assertFails(getDocFromServer(doc(client.db, bobCommentPath)));
+  expect((await getDocFromServer(doc(client.db, 'couples/' + coupleId + '/datePlans/' + planId))).exists()).toBe(true);
 });
