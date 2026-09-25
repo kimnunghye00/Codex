@@ -1,4 +1,5 @@
-import { collection, deleteDoc, doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDocFromServer, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
+import { publishCoupleActivity } from './coupleActivity';
 import type { Memory } from '../types';
 import { db } from './firebase';
 
@@ -197,12 +198,24 @@ export async function upsertCoupleMemory(coupleId: string, currentUid: string, m
     return;
   }
 
-  const promise = setDoc(memoryRef(coupleId, memory.id), {
-    ...payload,
-    updatedAt: serverTimestamp(),
-  }, { merge: true }).then(() => {
+  // Only genuinely NEW memories generate notifications. Editing an album's
+  // favorite, metadata or synchronizing a cached existing memory must not spam.
+  const promise = (async () => {
+    let isNew = false;
+    if (!remoteMemorySignatures.has(key)) {
+      try { isNew = !(await getDocFromServer(memoryRef(coupleId, memory.id))).exists(); }
+      catch { /* Save the memory normally even if the optional check failed. */ }
+    }
+    await setDoc(memoryRef(coupleId, memory.id), { ...payload, updatedAt: serverTimestamp() }, { merge: true });
     remoteMemorySignatures.set(key, signature);
-  }).finally(() => {
+    if (isNew && payload.ownerUid === currentUid) {
+      void publishCoupleActivity(coupleId, currentUid, {
+        id: 'memory-' + memory.id, kind: 'memory', sourceId: String(memory.id), revision: 0,
+        title: '새 추억이 올라왔어요', detail: String(memory.title || '우리의 추억').slice(0, 200),
+        target: { screen: 'album', itemId: String(memory.id) },
+      }).catch((cause) => console.warn('[DANDULI memory activity]', cause));
+    }
+  })().finally(() => {
     const current = inFlightMemoryWrites.get(key);
     if (current?.promise === promise) inFlightMemoryWrites.delete(key);
   });
