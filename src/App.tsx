@@ -15,9 +15,14 @@ import {
   loadNotifications,
   makeNotification,
   markAllNotificationsRead,
+  mergePartnerNotifications,
+  notificationDestination,
+  type NotificationDestination,
   saveNotifications,
   type AppNotification,
 } from './utils/notifications';
+import { subscribeCoupleActivities } from './lib/coupleActivity';
+import { activityAlertEnabled, installActivityAlertClicks, openActivityFromUrl, requestActivityAlerts, showPartnerActivityAlert } from './lib/activityAlerts';
 import { ChevronRight, Heart, Image, MapPin, MapPinned, Plus } from 'lucide-react';
 import './home-simple.css';
 import './home-dashboard.css';
@@ -181,6 +186,11 @@ function App({ user, profile, onProfileChange }: AppProps) {
   const [relationshipStartDate, setRelationshipStartDate] = useState<string>();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [alertStatus, setAlertStatus] = useState('기기 알림 받기');
+  const [pendingRoute, setPendingRoute] = useState<NotificationDestination | null>(() =>
+    typeof window !== 'undefined' ? openActivityFromUrl() : null);
+  const [notificationMessageId, setNotificationMessageId] = useState<number>();
+  const [notificationPlanId, setNotificationPlanId] = useState<string>();
   const [notifications, setNotifications] = useState<AppNotification[]>(() => loadNotifications(user.uid));
   const [tab, setTab] = useState<Tab>('home');
   const [messages, setMessages] = useState<Message[]>(() => loadMessages(initialMessages));
@@ -196,6 +206,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
   const syncedCoupleMemoriesRef = useRef<Memory[]>([]);
   const coupleMemoriesReadyRef = useRef(false);
   const chatClearAllActivityRef = useRef(false);
+  const knownActivityIds = useRef<Set<string> | null>(null);
   const tabHistory = useRef<Tab[]>(['home']);
   const unreadCount = useMemo(() => notifications.filter((item) => !item.read).length, [notifications]);
   const coupleDay = useMemo(() => {
@@ -227,7 +238,40 @@ function App({ user, profile, onProfileChange }: AppProps) {
     navigateTab('location');
   }, [navigateTab]);
 
-  const addActivity = useCallback((input: Omit<AppNotification, 'id' | 'createdAt' | 'read'>) => {
+  useEffect(() => installActivityAlertClicks(), []);
+  useEffect(() => {
+    void activityAlertEnabled().then((enabled) => setAlertStatus(enabled ? '기기 알림 켜짐' : '기기 알림 받기'));
+  }, []);
+
+  useEffect(() => {
+    const coupleId = connection?.coupleId;
+    knownActivityIds.current = null;
+    if (!coupleId) return;
+    return subscribeCoupleActivities(coupleId, user.uid, (events) => {
+      const mapped: AppNotification[] = events.map((event) => {
+        const target = notificationDestination(event.target);
+        const timestamp = event.createdAt as { toDate?: () => Date } | undefined;
+        return {
+          id: 'cloud:' + event.id, actor: 'partner', kind: event.kind,
+          title: event.title, detail: event.detail, createdAt: timestamp?.toDate?.()?.toISOString() || new Date().toISOString(),
+          read: false, ...(target ? { target } : {}),
+        };
+      });
+      const existing = knownActivityIds.current;
+      knownActivityIds.current = new Set(mapped.map((item) => item.id));
+      setNotifications((current) => {
+        const next = mergePartnerNotifications(current, mapped);
+        saveNotifications(user.uid, next);
+        return next;
+      });
+      // Only alert for events arriving after the first historical snapshot.
+      // Multiple devices may see a new activity; each device alerts only once.
+      if (existing) mapped.filter((item) => !existing.has(item.id) && Date.now() - Date.parse(item.createdAt) < 90_000)
+        .forEach((item) => void showPartnerActivityAlert(item));
+    }, (cause) => console.warn('[DANDULI partner activity]', cause));
+  }, [connection?.coupleId, user.uid]);
+
+    const addActivity = useCallback((input: Omit<AppNotification, 'id' | 'createdAt' | 'read'>) => {
     setNotifications((items) => {
       const next = [makeNotification(input), ...items].slice(0, 200);
       saveNotifications(user.uid, next);
@@ -440,7 +484,14 @@ function App({ user, profile, onProfileChange }: AppProps) {
     const newestBeforeTime = before.reduce((latest, message) => Math.max(latest, messageTimestamp(message.timestamp)), 0);
     messages
       .filter((message) => !beforeById.has(message.id) && (before.length === 0 || messageTimestamp(message.timestamp) >= newestBeforeTime))
-      .forEach((message) => addActivity({ actor: message.sender === 'me' ? 'me' : 'partner', kind: 'chat', title: message.sender === 'me' ? '메시지를 보냈어요' : '새 메시지가 왔어요', detail: message.type === 'image' ? '사진을 보냈어요.' : message.text?.slice(0, 70) }));
+      .forEach((message) => {
+        // Connected partner events arrive via the durable shared activity log.
+        if (connection?.coupleId && message.sender !== 'me') return;
+        addActivity({ actor: message.sender === 'me' ? 'me' : 'partner', kind: 'chat',
+          title: message.sender === 'me' ? '메시지를 보냈어요' : '새 메시지가 왔어요',
+          detail: message.type === 'image' ? '사진을 보냈어요.' : message.text?.slice(0, 70),
+          target: { screen: 'chat', itemId: String(message.id) } });
+      });
     const removedMessages = before.filter((message) => !afterById.has(message.id));
     if (chatClearAllActivityRef.current && removedMessages.length) {
       addActivity({ actor: 'me', kind: 'chat', title: '채팅 내용을 모두 삭제했어요', detail: `${removedMessages.length}개의 메시지를 내 대화에서 삭제했어요.` });
@@ -449,7 +500,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
       removedMessages.forEach((message) => addActivity({ actor: 'me', kind: 'chat', title: '메시지를 삭제했어요', detail: message.text?.slice(0, 60) }));
     }
     previousMessages.current = messages;
-  }, [addActivity, messages]);
+  }, [addActivity, messages, connection?.coupleId]);
 
   useEffect(() => {
     const handleRemoteMemories = (event: Event) => {
@@ -466,18 +517,23 @@ function App({ user, profile, onProfileChange }: AppProps) {
     const before = previousMemories.current;
     const beforeById = new Map(before.map((memory) => [memory.id, memory]));
     const afterById = new Map(memories.map((memory) => [memory.id, memory]));
-    memories.filter((memory) => !beforeById.has(memory.id)).forEach((memory) => addActivity({ actor: memory.createdBy === 'me' ? 'me' : 'partner', kind: 'memory', title: '새 추억을 추가했어요', detail: memory.title }));
+    memories.filter((memory) => !beforeById.has(memory.id)).forEach((memory) => {
+      if (connection?.coupleId && memory.createdBy !== 'me') return;
+      addActivity({ actor: memory.createdBy === 'me' ? 'me' : 'partner', kind: 'memory',
+        title: '새 추억을 추가했어요', detail: memory.title,
+        target: { screen: 'album', itemId: String(memory.id) } });
+    });
     before.filter((memory) => !afterById.has(memory.id)).forEach((memory) => addActivity({ actor: 'me', kind: 'memory', title: '추억을 삭제했어요', detail: memory.title }));
     previousMemories.current = memories;
-  }, [addActivity, memories]);
+  }, [addActivity, memories, connection?.coupleId]);
 
-  const openNotifications = useCallback(() => {
+  const openNotifications = useCallback(() => setNotificationsOpen(true), []);
+  const readAllNotifications = useCallback(() => {
     setNotifications((items) => {
       const next = markAllNotificationsRead(items);
       saveNotifications(user.uid, next);
       return next;
     });
-    setNotificationsOpen(true);
   }, [user.uid]);
   const clearNotifications = useCallback(() => {
     setNotifications([]);
@@ -489,7 +545,48 @@ function App({ user, profile, onProfileChange }: AppProps) {
     setRequestedHubTab('album');
     navigateTab('memories');
   }, [navigateTab]);
-  const openFootprints = (memoryId?: number) => {
+  useEffect(() => {
+    if (!pendingRoute) return;
+    if (pendingRoute.screen === 'date-plan' && !connection?.coupleId) return;
+    const route = pendingRoute;
+    setPendingRoute(null);
+    setNotificationsOpen(false);
+    if (route.screen === 'chat') {
+      setNotificationMessageId(Number(route.itemId));
+      navigateTab('chat');
+    } else if (route.screen === 'album') {
+      openMemory(Number(route.itemId));
+    } else {
+      setNotificationPlanId(route.itemId);
+      navigateTab('location');
+    }
+  }, [pendingRoute, connection?.coupleId, navigateTab, openMemory]);
+
+  useEffect(() => {
+    const open = (event: Event) => {
+      const target = notificationDestination((event as CustomEvent<unknown>).detail);
+      if (target) setPendingRoute(target);
+    };
+    window.addEventListener('route-notification-open', open);
+    return () => window.removeEventListener('route-notification-open', open);
+  }, []);
+
+  const selectNotification = useCallback((item: AppNotification) => {
+    setNotifications((items) => {
+      const next = items.map((entry) => entry.id === item.id ? { ...entry, read: true } : entry);
+      saveNotifications(user.uid, next);
+      return next;
+    });
+    if (item.target) setPendingRoute(item.target);
+  }, [user.uid]);
+
+  const enableActivityAlerts = useCallback(() => {
+    void requestActivityAlerts().then((allowed) => {
+      setAlertStatus(allowed ? '기기 알림 켜짐' : '알림이 차단됨 · 설정 확인');
+    });
+  }, []);
+
+    const openFootprints = (memoryId?: number) => {
     setFootprintMemoryId(memoryId);
     navigateTab('footprints');
   };
@@ -513,15 +610,16 @@ function App({ user, profile, onProfileChange }: AppProps) {
       {tab === 'home' && <HomePage uid={user.uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} memories={memories} onNavigate={navigateTab} onOpenMemory={openMemory} onOpenFootprints={() => openFootprints()} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'memories' && <MemoriesPage requestedTab={requestedHubTab} Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={(place) => { setLocationFocus(place); navigateTab('location'); }} onOpenFootprints={(memoryId) => openFootprints(memoryId)} sharedProfile={profile} sharedConnection={connection} sharedRelationshipStartDate={relationshipStartDate} />}
       {tab === 'footprints' && <FootprintsPage uid={user.uid} memories={memories} initialMemoryId={footprintMemoryId} onOpenMemory={openMemory} onBack={closeFootprints} Header={AppHeader} />}
-      {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} connection={connection} />}
-      {tab === 'location' && <DateMapPage Header={AppHeader} connection={connection} focusPlace={locationFocus} onClearFocus={() => setLocationFocus(undefined)} />}
+      {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} connection={connection} initialMessageId={notificationMessageId}/>}
+      {tab === 'location' && <DateMapPage Header={AppHeader} connection={connection} focusPlace={locationFocus} onClearFocus={() => setLocationFocus(undefined)} initialPlanId={notificationPlanId}/>}
       {tab === 'anniversary' && <AnniversaryPage connected={Boolean(connection)} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} onSaveStartDate={saveStartDate} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'more' && <MorePage onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} onNavigate={navigateMoreTarget} />}
     </Suspense></main><BottomNav tab={tab === 'footprints' ? 'home' : tab} onNavigate={navigateTab} /></div>
 
     <Suspense fallback={null}>
       {settingsOpen && <AccountSettings user={user} profile={profile} onProfileChange={onProfileChange} onClose={() => setSettingsOpen(false)} />}
-      {notificationsOpen && <NotificationPanel items={notifications} onClose={() => setNotificationsOpen(false)} onReadAll={openNotifications} onClear={clearNotifications} />}
+      {notificationsOpen && <NotificationPanel items={notifications} onClose={() => setNotificationsOpen(false)} onReadAll={readAllNotifications}
+        onClear={clearNotifications} onSelect={selectNotification} onEnableAlerts={enableActivityAlerts} alertStatus={alertStatus} />}
     </Suspense>
   </>;
 }
