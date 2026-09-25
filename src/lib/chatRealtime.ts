@@ -1,6 +1,7 @@
 import { collection, deleteDoc, doc, limitToLast, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Message, Reaction } from '../types';
+import { publishCoupleActivity } from './coupleActivity';
 import { mergePagedSnapshot, messageTimeValue } from './messageSnapshot';
 import { createUiTaskScope } from '../utils/uiTaskScope';
 
@@ -305,6 +306,16 @@ export async function sendCoupleMessage(coupleId: string, currentUid: string, me
   if (message.replyTo) payload.replyTo = message.replyTo;
   if (message.scheduledFor) payload.scheduledFor = message.scheduledFor;
   await setDoc(messageRef(coupleId, message.id), payload);
+  // A failed activity write must not roll back an already delivered message.
+  // Calls and scheduled drafts are not ordinary partner chat notifications.
+  if (message.type !== 'call' && !message.scheduledFor) {
+    void publishCoupleActivity(coupleId, currentUid, {
+      id: 'chat-' + message.id, kind: 'chat', sourceId: String(message.id), revision: 0,
+      title: '새 메시지가 왔어요',
+      detail: (message.type === 'text' ? message.text || '' : '사진·파일 또는 이모티콘을 보냈어요.').slice(0, 200),
+      target: { screen: 'chat', itemId: String(message.id) },
+    }).catch((cause) => console.warn('[DANDULI chat activity]', cause));
+  }
 }
 
 export async function toggleCoupleMessageReaction(
