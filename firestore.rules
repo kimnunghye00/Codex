@@ -258,7 +258,13 @@ service cloud.firestore {
               && eventId == 'plan-' + sourceId + '-' + string(request.resource.data.revision)
               && existsAfter(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(sourceId)/approval/state)
               && getAfter(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(sourceId)/approval/state).data.revision == request.resource.data.revision
-              && getAfter(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(sourceId)/approval/state).data.proposedBy == request.auth.uid
+              && (
+                (getAfter(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(sourceId)/approval/state).data.status in ['review', 'change-review']
+                  && getAfter(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(sourceId)/approval/state).data.proposedBy == request.auth.uid)
+                || (getAfter(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(sourceId)/approval/state).data.status == 'confirmed'
+                  && getAfter(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(sourceId)/approval/state).data.proposedBy == request.resource.data.recipientUid
+                  && getAfter(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(sourceId)/approval/state).data.approvedBy[request.auth.uid] == true)
+              )
             );
         }
         allow read: if memberOf(coupleId);
