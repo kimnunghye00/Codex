@@ -15,6 +15,7 @@ type Props = {
   loading: boolean;
   draftReady: boolean;
   detailsReady: boolean;
+  onRefreshApproval: () => Promise<void>;
 };
 
 const clone = (source: DatePlanApprovalSnapshot): DatePlanApprovalSnapshot => ({
@@ -26,7 +27,10 @@ const friendlyError = (reason: unknown) => {
   if (reason instanceof RangeError) return text;
   if (text.includes('permission-denied')) return '권한이나 승인 상태가 변경되었어요. 화면을 새로 열어 확인해 주세요.';
   if (text.includes('date-plan-no-changes')) return '변경된 내용이 없어요.';
-  if (text.includes('date-plan-approval-changed')) return '상대방이 먼저 승인 상태를 변경했어요. 최신 상태를 확인해 주세요.';
+  if (text.includes('date-plan-schedule-missing')) return '시간표가 아직 서버에 저장되지 않았어요. 시작 시각과 일정을 입력하고 자동 저장 완료 후 다시 요청해 주세요.';
+  if (text.includes('date-plan-missing')) return '이 데이트 초안을 찾지 못했어요. 데이트 목록을 다시 열어 주세요.';
+  if (text.includes('date-plan-approval-exists')) return '이미 최종 확정 요청이 있어 서버의 최신 승인 상태를 불러왔어요.';
+  if (text.includes('date-plan-approval-changed')) return '승인 상태가 변경되어 서버의 최신 상태를 다시 불러왔어요.';
   return '승인 상태를 저장하지 못했어요. 연결 상태를 확인하고 다시 시도해 주세요.';
 };
 function Preview({ snapshot, candidates }: { snapshot: DatePlanApprovalSnapshot; candidates: DatePlanCandidate[] }) {
@@ -157,7 +161,7 @@ function RevisionEditor({ base, candidates, busy, onSubmit, onClose }: {
   </section>;
 }
 
-export function DatePlanApprovalPanel({ coupleId, planId, uid, candidates, approval, loading, draftReady, detailsReady }: Props) {
+export function DatePlanApprovalPanel({ coupleId, planId, uid, candidates, approval, loading, draftReady, detailsReady, onRefreshApproval }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -174,7 +178,13 @@ export function DatePlanApprovalPanel({ coupleId, planId, uid, candidates, appro
         }}));
       }
     }
-    catch (reason) { setError(friendlyError(reason)); }
+    catch (reason) {
+      const text = String((reason as Error)?.message ?? '');
+      if (text.includes('date-plan-approval-exists') || text.includes('date-plan-approval-changed')) {
+        await onRefreshApproval();
+      }
+      setError(friendlyError(reason));
+    }
     finally { setBusy(false); }
   };
   const ownApproval = Boolean(approval?.approvedBy?.[uid]);
@@ -192,7 +202,7 @@ export function DatePlanApprovalPanel({ coupleId, planId, uid, candidates, appro
         void act(() => requestDatePlanApproval(coupleId, planId, uid, candidates), '상대방에게 최종 확정을 요청했어요.', true)}>
         <Send size={15}/> 최종 확정 요청
       </button>
-      {(!draftReady || !detailsReady) && <small>시간표의 자동 저장이 완료되고 데이트 정보에 미저장 변경이 없어야 요청할 수 있어요.</small>}
+      {(!draftReady || !detailsReady) && <small>데이트 이름·날짜·시작 시각·일정을 입력하고 시간표 자동 저장이 완료되어야 요청할 수 있어요.</small>}
     </>}
     {!loading && approval && <>
       <Preview snapshot={approval.confirmedSnapshot} candidates={candidates}/>
