@@ -209,7 +209,7 @@ export async function upsertCoupleMemory(coupleId: string, currentUid: string, m
     await setDoc(memoryRef(coupleId, memory.id), { ...payload, updatedAt: serverTimestamp() }, { merge: true });
     remoteMemorySignatures.set(key, signature);
     if (isNew && payload.ownerUid === currentUid) {
-      void publishCoupleActivity(coupleId, currentUid, {
+      await publishCoupleActivity(coupleId, currentUid, {
         id: 'memory-' + memory.id, kind: 'memory', sourceId: String(memory.id), revision: 0,
         title: '새 추억이 올라왔어요', detail: String(memory.title || '우리의 추억').slice(0, 200),
         target: { screen: 'album', itemId: String(memory.id) },
