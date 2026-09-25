@@ -1,4 +1,4 @@
-import { collection, doc, onSnapshot, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, getDocFromServer, onSnapshot, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 import { calculateDatePlanTimeline, validateDatePlanSchedule } from './datePlanTime';
 import type { DatePlanTimeBlock, DatePlanCandidate } from './datePlanFoundation';
@@ -32,12 +32,22 @@ const scheduleRef = (coupleId: string, planId: string) =>
 const approvalRef = (coupleId: string, planId: string) =>
   doc(db, 'couples', coupleId, 'datePlans', planId, 'approval', 'state');
 
+export async function readDatePlanApproval(coupleId: string, planId: string): Promise<DatePlanApproval | null> {
+  const snapshot = await getDocFromServer(approvalRef(coupleId, planId));
+  return snapshot.exists() ? snapshot.data() as DatePlanApproval : null;
+}
+
 export function subscribeDatePlanApproval(
   coupleId: string, planId: string,
   onChange: (approval: DatePlanApproval | null) => void, onError: (error: unknown) => void,
 ) {
-  return onSnapshot(approvalRef(coupleId, planId), (snapshot) =>
-    onChange(snapshot.exists() ? snapshot.data() as DatePlanApproval : null), onError);
+  return onSnapshot(approvalRef(coupleId, planId), { includeMetadataChanges: true }, (snapshot) => {
+    // Do not turn an initial cache miss into "미확정 초안" before Firestore
+    // has checked the server. That race made both devices show a request button
+    // while an approval document already existed remotely.
+    if (snapshot.metadata.fromCache && !snapshot.exists()) return;
+    onChange(snapshot.exists() ? snapshot.data() as DatePlanApproval : null);
+  }, onError);
 }
 
 export function validateApprovalSnapshot(snapshot: DatePlanApprovalSnapshot, candidates: readonly DatePlanCandidate[]) {
@@ -65,7 +75,9 @@ export async function requestDatePlanApproval(coupleId: string, planId: string, 
     const schedule = await tx.get(scheduleRef(coupleId, planId));
     const approval = await tx.get(approvalRef(coupleId, planId));
     const couple = await tx.get(doc(db, 'couples', coupleId));
-    if (!plan.exists() || !schedule.exists() || approval.exists()) throw new Error('date-plan-approval-changed');
+    if (!plan.exists()) throw new Error('date-plan-missing');
+    if (!schedule.exists()) throw new Error('date-plan-schedule-missing');
+    if (approval.exists()) throw new Error('date-plan-approval-exists');
     const planData = plan.data();
     const data = schedule.data();
     const snapshot: DatePlanApprovalSnapshot = {

@@ -3,7 +3,7 @@ import { ArrowDown, ArrowUp, CalendarClock, Plus, Trash2 } from 'lucide-react';
 import { durationAsHoursMinutes, durationFromHoursMinutes, type DatePlanCandidate, type DatePlanTimeBlock } from '../../lib/datePlanFoundation';
 import { EMPTY_DATE_PLAN_SCHEDULE, readDatePlanSchedule, saveDatePlanSchedule, subscribeDatePlanSchedule } from '../../lib/datePlanSchedule';
 import {
-  calculateDatePlanTimeline, MAX_DATE_PLAN_BLOCKS, moveDatePlanBlock, normalizeTimeBlocks, type DatePlanSchedule,
+  calculateDatePlanTimeline, datePlanScheduleReadyForApproval, MAX_DATE_PLAN_BLOCKS, moveDatePlanBlock, normalizeTimeBlocks, type DatePlanSchedule,
 } from '../../lib/datePlanTime';
 
 type Kind = DatePlanTimeBlock['kind'];
@@ -55,9 +55,11 @@ export function DatePlanScheduleEditor({ coupleId, planId, uid, candidates, onRe
   }, [coupleId, planId]);
 
   const localRevision = useRef(0);
+  const scheduleReady = !loading && !saving && !dirty && !conflict && !saveFailed && !error
+    && datePlanScheduleReadyForApproval(draft);
   useEffect(() => {
-    onReadyChange?.(!loading && !saving && !dirty && !conflict && !saveFailed && !error);
-  }, [onReadyChange, loading, saving, dirty, conflict, saveFailed, error]);
+    onReadyChange?.(scheduleReady);
+  }, [onReadyChange, scheduleReady]);
   const edit = (update: (current: DatePlanSchedule) => DatePlanSchedule) => {
     if (loading || saving || conflict) return;
     setDraft((current) => update(current));

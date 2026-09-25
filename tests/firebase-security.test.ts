@@ -20,7 +20,7 @@ import { addDatePlace, saveDateCourse, setPlaceLike, addPlaceOpinion } from '../
 import { addDatePlanCandidate, createDatePlanDraft, readDatePlanCandidates, subscribeDatePlanCandidates, updateDatePlanCandidateMemo, updateDatePlanDraft } from '../src/lib/datePlanDrafts';
 import { readDatePlanSchedule, saveDatePlanSchedule, subscribeDatePlanSchedule } from '../src/lib/datePlanSchedule';
 import { publishCoupleActivity, subscribeCoupleActivities } from '../src/lib/coupleActivity';
-import { approveDatePlan, proposeDatePlanChange, requestDatePlanApproval, subscribeDatePlanApproval, withdrawDatePlanReview } from '../src/lib/datePlanApproval';
+import { approveDatePlan, proposeDatePlanChange, readDatePlanApproval, requestDatePlanApproval, subscribeDatePlanApproval, withdrawDatePlanReview } from '../src/lib/datePlanApproval';
 import { addDatePlanCandidateComment, deleteDatePlanCandidateComment, removeDatePlanCandidateWithFeedback,
   setDatePlanCandidatePreference, subscribeDatePlanCandidateComments } from '../src/lib/datePlanOpinions';
 
@@ -547,6 +547,15 @@ test('date plan V2: both members share unfinished timetable without lost edits o
 });
 
 
+test('date plan V2: final approval reports a missing saved timetable instead of a fake approval conflict', async () => {
+  const { coupleId } = await pair();
+  as('alice');
+  const planId = await createDatePlanDraft(coupleId,'alice',{title:'아직 준비 중',date:'2026-10-22'});
+  await expect(requestDatePlanApproval(coupleId,planId,'alice',[]))
+    .rejects.toThrow('date-plan-schedule-missing');
+  expect(await readDatePlanApproval(coupleId,planId)).toBeNull();
+});
+
 test('date plan V2: two real members must approve, reviewed drafts freeze, and revisions preserve accepted content', async () => {
   const { coupleId } = await pair();
   as('alice');
@@ -589,6 +598,11 @@ test('date plan V2: two real members must approve, reviewed drafts freeze, and r
   let state = (await getDocFromServer(doc(client.db,statePath))).data()!;
   expect(state.status).toBe('review');
   expect(state.approvedBy).toEqual({alice:true});
+  as('bob');
+  expect((await readDatePlanApproval(coupleId,planId))?.approvedBy).toEqual({alice:true});
+  as('alice');
+  await expect(requestDatePlanApproval(coupleId,planId,'alice',[candidate]))
+    .rejects.toThrow('date-plan-approval-exists');
   expect(state.confirmedSnapshot.blocks[0].title).toBe('영화');
   await assertFails(updateDoc(doc(client.db,infoPath), {title:'독단적 변경',updatedAt:serverTimestamp()}));
   await assertFails(updateDoc(doc(client.db,schedulePath), {startTime:'09:00',revision:2,updatedBy:'alice',updatedAt:serverTimestamp()}));

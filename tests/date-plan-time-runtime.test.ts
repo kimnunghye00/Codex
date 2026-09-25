@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { DatePlanTimeBlock } from '../src/lib/datePlanFoundation.ts';
 import { durationFromHoursMinutes, durationAsHoursMinutes } from '../src/lib/datePlanFoundation.ts';
-import { calculateDatePlanTimeline, moveDatePlanBlock, normalizeTimeBlocks, validateDatePlanSchedule } from '../src/lib/datePlanTime.ts';
+import { calculateDatePlanTimeline, datePlanScheduleReadyForApproval, moveDatePlanBlock, normalizeTimeBlocks, validateDatePlanSchedule } from '../src/lib/datePlanTime.ts';
 
 const block = (id: string, position: number, activityMinutes = 60, travelMinutes = 0): DatePlanTimeBlock => ({
   id, position, kind: 'activity', title: id, primaryCandidateId: id, backupCandidateIds: [],
@@ -61,4 +61,14 @@ test('reject invalid fixed starts, unsupported backup IDs, duplicate IDs and exc
   assert.throws(() => validateDatePlanSchedule('', [block('a',0), block('a',1)], ['a']), RangeError);
   assert.throws(() => validateDatePlanSchedule('', Array.from({ length:21 }, (_,i)=>block('b'+i,i)), []), RangeError);
   assert.throws(() => moveDatePlanBlock([block('a',0)], 0, 2), RangeError);
+});
+
+
+test('final approval readiness requires a saved non-empty schedule with a real start time', () => {
+  const complete = { startTime:'10:00', blocks:[block('a',0,90,20)], globalBackupCandidateIds:[], revision:1, updatedBy:'alice' };
+  assert.equal(datePlanScheduleReadyForApproval(complete), true);
+  assert.equal(datePlanScheduleReadyForApproval({ ...complete, revision:0 }), false);
+  assert.equal(datePlanScheduleReadyForApproval({ ...complete, startTime:'' }), false);
+  assert.equal(datePlanScheduleReadyForApproval({ ...complete, blocks:[] }), false);
+  assert.equal(datePlanScheduleReadyForApproval({ ...complete, startTime:'23:40', blocks:[block('a',0,40,0)] }), false);
 });
