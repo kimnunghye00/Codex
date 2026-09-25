@@ -87,6 +87,10 @@
 }
 
 .date-map-add-hint { margin:-2px 0 5px; padding:8px 10px; border-radius:9px; background:var(--primary-soft); color:var(--text-secondary); font-size:11px; line-height:1.55; }
+.date-map-dismissible-hint { display:flex; align-items:flex-start; gap:8px; }
+.date-map-dismissible-hint > span { flex:1; min-width:0; }
+.date-map-dismissible-hint > button { display:grid; place-items:center; flex:0 0 24px; width:24px; height:24px; margin:-3px -4px -3px 0; padding:0; border:0; border-radius:8px; background:transparent; color:var(--text-secondary); cursor:pointer; }
+.date-map-dismissible-hint > button:hover,.date-map-dismissible-hint > button:focus-visible { background:var(--surface); color:var(--primary); outline:none; }
 
 .date-map-search-results { border:1px solid var(--border); border-radius:14px; margin-bottom:12px; padding:10px; background:var(--surface); }
 .date-map-branch { display:flex; align-items:flex-start; gap:9px; width:100%; padding:10px 9px; margin:5px 0; text-align:left; border:1px solid var(--border); border-radius:11px; background:var(--surface); color:var(--text-primary); }

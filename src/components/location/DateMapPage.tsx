@@ -37,6 +37,19 @@ const MAP_HOST = `${MAP_ORIGIN}/naver-map-host.html?v=17`;
 const ALL = '전체';
 // This URL is enabled only after the server has its own NAVER Search ID and secret.
 const NAVER_LOCAL_SEARCH_URL = String(import.meta.env.VITE_NAVER_LOCAL_SEARCH_URL || '').trim();
+const PLACE_HINTS_STORAGE_KEY = 'danduli-date-map-place-hints-v1';
+type PlaceHintKey = 'wishlist' | 'list';
+type DismissedPlaceHints = Partial<Record<PlaceHintKey, boolean>>;
+
+function loadDismissedPlaceHints(): DismissedPlaceHints {
+  if (typeof window === 'undefined') return {};
+  try {
+    const value = JSON.parse(window.localStorage.getItem(PLACE_HINTS_STORAGE_KEY) || '{}') as Record<string, unknown>;
+    return { wishlist: value.wishlist === true, list: value.list === true };
+  } catch {
+    return {};
+  }
+}
 
 function errorText(error: unknown) {
   const code = String((error as { code?: string })?.code ?? '');
@@ -87,12 +100,14 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus, init
   const viewportRequestNumber = useRef(0);
   const pendingViewport = useRef<{ id: string; resolve: (value: MapBounds | null) => void } | null>(null);
   const [searchedBounds, setSearchedBounds] = useState<MapBounds | null>(null);
+  const [searchOrigin, setSearchOrigin] = useState<{ latitude: number; longitude: number } | null>(null);
   const [searchedScope, setSearchedScope] = useState<'map' | 'nationwide'>('map');
   const [excludedIds, setExcludedIds] = useState<string[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [pickedIds, setPickedIds] = useState<string[]>([]);
   const [category, setCategory] = useState<string>(ALL);
   const [placeStatus, setPlaceStatus] = useState<'all' | 'unassigned' | 'in-course'>('all');
+  const [dismissedPlaceHints, setDismissedPlaceHints] = useState<DismissedPlaceHints>(loadDismissedPlaceHints);
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [candidate, setCandidate] = useState<LocationSearchResult | null>(null);
@@ -148,14 +163,26 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus, init
     pendingViewport.current = null;
   }, []);
   // A point returned for a prior viewport must never appear as a current-map
-  // result. Use the latest iframe rectangle even before React processes state.
-  const shownResults = useMemo(() => searchedScope === 'map' && bounds
-    ? results.filter((item) => insideMapBounds(item, bounds))
-    : results, [results, searchedScope, bounds]);
+  // result. Rank every result from the map centre that was visible when the
+  // search started, so nationwide searches still put nearby branches first.
+  const shownResults = useMemo(() => {
+    const visibleResults = searchedScope === 'map' && bounds
+      ? results.filter((item) => insideMapBounds(item, bounds))
+      : results;
+    if (!searchOrigin) return visibleResults;
+    return [...visibleResults].sort((a, b) => kmApprox(a, searchOrigin) - kmApprox(b, searchOrigin));
+  }, [results, searchedScope, bounds, searchOrigin]);
   const mapMovedSinceSearch = searchedScope === 'map' && searchedBounds && bounds
     ? !sameMapBounds(searchedBounds, bounds) : false;
   resultsRef.current = shownResults;
   queryRef.current = query;
+  const dismissPlaceHint = (key: PlaceHintKey) => {
+    setDismissedPlaceHints((previous) => {
+      const next = { ...previous, [key]: true };
+      try { window.localStorage.setItem(PLACE_HINTS_STORAGE_KEY, JSON.stringify(next)); } catch { /* Storage can be disabled. */ }
+      return next;
+    });
+  };
   const selected = places.find((item) => item.id === selectedId);
   const course = courses.find((item) => item.id === courseId);
   const activePlan = datePlans.find((item) => item.id === activePlanId);
@@ -300,11 +327,15 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus, init
     const sequence = ++searchSequence.current;
     ++lookupSequence.current;
     clearMapFocus(); setTab('search'); setSearching(true); setPicking(false); setMessage('');
-    // Never rely on the last pushed React bounds: the iframe may have restored
-    // a different map position, or React has not committed its idle event yet.
-    const liveBounds = activeScope === 'map' ? await readLiveViewport() : null;
+    // Never rely on the last pushed React bounds for strict current-map
+    // searches. Nationwide searches still remember the visible map centre so
+    // nearby branches can be requested and ranked before distant branches.
+    const liveBounds = activeScope === 'map'
+      ? await readLiveViewport()
+      : (latestViewport.current ?? bounds);
     if (sequence !== searchSequence.current) return;
-    const activeBounds = more ? searchedBounds : liveBounds;
+    const proximityBounds = liveBounds && validMapBounds(liveBounds) ? liveBounds : null;
+    const activeBounds = activeScope === 'map' ? (more ? searchedBounds : liveBounds) : null;
     if (activeScope === 'map' && (!liveBounds || !activeBounds || !validMapBounds(activeBounds))) {
       setMessage('현재 지도 범위를 확인하지 못했어요. 지도가 준비되면 다시 검색해 주세요.');
       setSearching(false);
@@ -318,6 +349,10 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus, init
     if (!more) {
       setCandidate(null); setManualMapCandidate(false); setResults([]); setSearchCoverage(null); setHasMore(false); setExcludedIds([]);
       if (intent.hasExplicitRegion) setScope('nationwide');
+      setSearchOrigin(proximityBounds ? {
+        latitude: (proximityBounds.south + proximityBounds.north) / 2,
+        longitude: (proximityBounds.west + proximityBounds.east) / 2,
+      } : null);
       setCandidateSearch(trimmed); setSearchedBounds(activeScope === 'map' ? activeBounds : null); setSearchedScope(activeScope);
     }
     const currentBounds = activeScope === 'map' ? activeBounds! : undefined;
@@ -371,9 +406,9 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus, init
           const token = await auth.currentUser?.getIdToken();
           if (!token || controller.signal.aborted) return [] as LocationSearchResult[];
           let region = '';
-          if (currentBounds && !intent.hasExplicitRegion) {
-            const latitude = (currentBounds.south + currentBounds.north) / 2;
-            const longitude = (currentBounds.west + currentBounds.east) / 2;
+          if (proximityBounds && !intent.hasExplicitRegion) {
+            const latitude = (proximityBounds.south + proximityBounds.north) / 2;
+            const longitude = (proximityBounds.west + proximityBounds.east) / 2;
             const regionKey = latitude.toFixed(4) + ':' + longitude.toFixed(4);
             const memo = regionLookup.current;
             if (memo && memo.key === regionKey && memo.expires > Date.now()) {
@@ -958,7 +993,10 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus, init
         </article>}
         {tab === 'places' && <>
           <div className="date-map-panel-header"><strong>우리의 가고 싶은 곳</strong><span>총 {places.length}곳</span></div>
-          <p className="date-map-add-hint">둘이 가고 싶은 장소를 함께 모으는 보관함이에요. 코스에 담아도 여기에서 사라지지 않아요.</p>
+          {!dismissedPlaceHints.wishlist && <div className="date-map-add-hint date-map-dismissible-hint">
+            <span>둘이 가고 싶은 장소를 함께 모으는 보관함이에요. 코스에 담아도 여기에서 사라지지 않아요.</span>
+            <button type="button" aria-label="가고 싶은 곳 안내 숨기기" onClick={() => dismissPlaceHint('wishlist')}><X size={14}/></button>
+          </div>}
           <div className="date-map-status-filters" aria-label="코스 포함 여부">
             <button type="button" aria-pressed={placeStatus === 'all'} onClick={() => { clearMapFocus(); setSelectedId(''); setPlaceStatus('all'); }}>전체 {statusCounts.all}</button>
             <button type="button" aria-pressed={placeStatus === 'unassigned'} onClick={() => { clearMapFocus(); setSelectedId(''); setPlaceStatus('unassigned'); }}>코스 미배정 {statusCounts.unassigned}</button>
@@ -966,7 +1004,10 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus, init
           </div>
           <div className="date-map-filters" aria-label="장소 종류">{[ALL,...CATEGORIES].map((item) => <button key={item} type="button" className={category === item ? 'active' : ''} onClick={() => { clearMapFocus(); setSelectedId(''); setCategory(item); }}>{item}</button>)}</div>
           <div className="date-map-panel-header"><strong>장소 목록</strong><span>{visible.length}곳</span></div>
-          <p className="date-map-add-hint">장소를 누르면 지도에서 확인하고 코스에 담을 수 있어요. 왼쪽 체크박스로 여러 장소를 골라 새 코스를 만들 수도 있어요.</p>
+          {!dismissedPlaceHints.list && <div className="date-map-add-hint date-map-dismissible-hint">
+            <span>장소를 누르면 지도에서 확인하고 코스에 담을 수 있어요. 왼쪽 체크박스로 여러 장소를 골라 새 코스를 만들 수도 있어요.</span>
+            <button type="button" aria-label="장소 목록 안내 숨기기" onClick={() => dismissPlaceHint('list')}><X size={14}/></button>
+          </div>}
           {picked.length > 0 && <div className="date-map-bulk-actions"><span>{picked.length}곳 선택</span><button type="button" onClick={() => {
             if ((courseId || coursePlaceIds.length || courseTitle) && !window.confirm('현재 코스 편집을 닫고 선택한 장소로 새 코스를 만들까요? 저장하지 않은 변경은 사라져요.')) return;
             const first = places.find((item) => item.id === picked[0]);
