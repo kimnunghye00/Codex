@@ -246,6 +246,16 @@ function App({ user, profile, onProfileChange }: AppProps) {
   }, []);
 
   useEffect(() => {
+    const handleLocalNotification = (event: Event) => {
+      const detail = (event as CustomEvent<Omit<AppNotification, 'id' | 'createdAt' | 'read'>>).detail;
+      if (!detail || !detail.kind || !detail.title) return;
+      addActivity(detail);
+    };
+    window.addEventListener('route-local-notification', handleLocalNotification);
+    return () => window.removeEventListener('route-local-notification', handleLocalNotification);
+  }, [addActivity]);
+
+  useEffect(() => {
     const coupleId = connection?.coupleId;
     knownActivityIds.current = null;
     if (!coupleId) return;
