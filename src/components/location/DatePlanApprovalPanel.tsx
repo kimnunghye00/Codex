@@ -205,6 +205,7 @@ export function DatePlanApprovalPanel({ coupleId, planId, uid, candidates, appro
         <Send size={15}/> 최종 확정 요청
       </button>
       {!detailsReady && <small>데이트 이름의 저장을 완료하면 요청할 수 있어요.</small>}
+      {detailsReady && !draftReady && <small>날짜·시작 시각·시간표가 아직 미정이어도 먼저 최종 확정 요청을 보낼 수 있어요.</small>}
     </>}
     {!loading && approval && <>
       <Preview snapshot={approval.confirmedSnapshot} candidates={candidates}/>
