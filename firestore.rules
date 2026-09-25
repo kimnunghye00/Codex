@@ -450,8 +450,7 @@ service cloud.firestore {
           }
         }
 
-        // The unfinished shared timetable is a single versioned document.
-        // A compare-and-swap revision prevents silent lost edits between accounts.
+        // A versioned, couple-private unfinished timetable.
         match /schedule/{scheduleId} {
           function editableSchedule() {
             return exists(/databases/$(database)/documents/couples/$(coupleId)/datePlans/$(planId))
@@ -463,17 +462,7 @@ service cloud.firestore {
               && request.resource.data.keys().hasAll(['startTime', 'blocks', 'revision', 'updatedBy', 'updatedAt'])
               && request.resource.data.startTime is string
               && (request.resource.data.startTime == ''
-                || request.resource.data.startTime.matches('^([01][0-9]|2[0-3]):[0-5][0-9]
-        allow read: if memberOf(coupleId);
-        allow create: if memberOf(coupleId)
-          && request.resource.data.ownerId == request.auth.uid;
-        allow update, delete: if memberOf(coupleId)
-          && resource.data.ownerId == request.auth.uid;
-      }
-    }
-  }
-}
-))
+                  || request.resource.data.startTime.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$'))
               && request.resource.data.blocks is list
               && request.resource.data.blocks.size() <= 20
               && request.resource.data.revision is int
