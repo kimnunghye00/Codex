@@ -17,7 +17,7 @@ test('activity and travel are edited in hours/minutes and advance next activity 
     ['09:00', '10:30', '10:55'], ['10:55', '13:05', '13:05'],
   ]);
   assert.deepEqual(durationAsHoursMinutes(blocks[0].activityMinutes), { hours: 1, minutes: 30 });
-  validateDatePlanSchedule('09:00', blocks, ['a', 'b']);
+  validateDatePlanSchedule('09:00', blocks, ['a', 'b'], ['b']);
 });
 
 test('fixed time overrides automatic time but warns on overlapping plans', () => {
