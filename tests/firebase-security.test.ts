@@ -19,6 +19,7 @@ import { uploadChatAttachment, uploadChatMedia } from '../src/lib/chatMedia';
 import { addDatePlace, saveDateCourse, setPlaceLike, addPlaceOpinion } from '../src/lib/dateMap';
 import { addDatePlanCandidate, createDatePlanDraft, readDatePlanCandidates, subscribeDatePlanCandidates, updateDatePlanCandidateMemo, updateDatePlanDraft } from '../src/lib/datePlanDrafts';
 import { readDatePlanSchedule, saveDatePlanSchedule, subscribeDatePlanSchedule } from '../src/lib/datePlanSchedule';
+import { approveDatePlan, proposeDatePlanChange, requestDatePlanApproval, subscribeDatePlanApproval, withdrawDatePlanReview } from '../src/lib/datePlanApproval';
 import { addDatePlanCandidateComment, deleteDatePlanCandidateComment, removeDatePlanCandidateWithFeedback,
   setDatePlanCandidatePreference, subscribeDatePlanCandidateComments } from '../src/lib/datePlanOpinions';
 
@@ -542,4 +543,114 @@ test('date plan V2: both members share unfinished timetable without lost edits o
   const outsider = as('eve');
   await assertFails(getDocFromServer(doc(outsider.db,path)));
   await assertFails(setDoc(doc(outsider.db,path), {startTime:'',blocks:[],revision:3,updatedBy:'eve',updatedAt:serverTimestamp()}));
+});
+
+
+test('date plan V2: two real members must approve, reviewed drafts freeze, and revisions preserve accepted content', async () => {
+  const { coupleId } = await pair();
+  as('alice');
+  const legacyId = await addDatePlace(coupleId, 'alice', {
+    name:'기존 여행 후보',address:'서울 광진구',latitude:37.51,longitude:127.08,category:'기타',memo:'',
+  });
+  const planId = await createDatePlanDraft(coupleId, 'alice', { title:'강변 데이트', date:'2026-10-20' });
+  const candidateId = await addDatePlanCandidate(coupleId, planId, 'alice', {
+    name:'CGV 강변',address:'서울 광진구',latitude:37.535,longitude:127.095,category:'놀거리',memo:'',
+  });
+  const candidate = (await readDatePlanCandidates(coupleId,planId))[0];
+  const block = {
+    id:'film', position:0, kind:'activity' as const, title:'영화',
+    primaryCandidateId:candidateId, backupCandidateIds:[],
+    activityMinutes:120, travelMinutes:20, fixedStart:null,
+  };
+  await saveDatePlanSchedule(coupleId,planId,'alice',0,'10:00',[block],[candidateId]);
+  const statePath = 'couples/' + coupleId + '/datePlans/' + planId + '/approval/state';
+  const infoPath = 'couples/' + coupleId + '/datePlans/' + planId;
+  const schedulePath = infoPath + '/schedule/draft';
+  const candidatePath = infoPath + '/candidates/' + candidateId;
+
+  await requestDatePlanApproval(coupleId,planId,'alice',[candidate]);
+  let state = (await getDocFromServer(doc(client.db,statePath))).data()!;
+  expect(state.status).toBe('review');
+  expect(state.approvedBy).toEqual({alice:true});
+  expect(state.confirmedSnapshot.blocks[0].title).toBe('영화');
+  await assertFails(updateDoc(doc(client.db,infoPath), {title:'독단적 변경',updatedAt:serverTimestamp()}));
+  await assertFails(updateDoc(doc(client.db,schedulePath), {startTime:'09:00',revision:2,updatedBy:'alice',updatedAt:serverTimestamp()}));
+  await assertFails(updateDoc(doc(client.db,candidatePath), {memo:'무단 수정',updatedAt:serverTimestamp()}));
+  await assertFails(deleteDoc(doc(client.db,candidatePath)));
+  await expect(approveDatePlan(coupleId,planId,'alice')).rejects.toThrow('date-plan-approval-changed');
+
+  as('bob');
+  await assertFails(updateDoc(doc(client.db,statePath), {status:'confirmed',revision:2,updatedAt:serverTimestamp()}));
+  await approveDatePlan(coupleId,planId,'bob');
+  state = (await getDocFromServer(doc(client.db,statePath))).data()!;
+  expect(state.status).toBe('confirmed');
+  expect(state.approvedBy).toEqual({alice:true,bob:true});
+  const approvedSnapshot = state.confirmedSnapshot;
+  const observed = await new Promise<string>((resolve,reject) => {
+    let stop: () => void = () => {};
+    stop = subscribeDatePlanApproval(coupleId,planId,(value) => {
+      if (value?.status !== 'confirmed') return;
+      resolve(value.confirmedSnapshot.title);
+      queueMicrotask(() => stop());
+    },reject);
+  });
+  expect(observed).toBe('강변 데이트');
+  await assertFails(deleteDoc(doc(client.db,statePath)));
+
+  const proposal = {
+    ...approvedSnapshot, title:'변경한 강변 데이트',
+    blocks:[{...block,activityMinutes:90,travelMinutes:40}],
+  };
+  await proposeDatePlanChange(coupleId,planId,'bob',proposal,[candidate]);
+  state = (await getDocFromServer(doc(client.db,statePath))).data()!;
+  expect(state.status).toBe('change-review');
+  expect(state.approvedBy).toEqual({bob:true});
+  expect(state.confirmedSnapshot).toEqual(approvedSnapshot);
+  await expect(approveDatePlan(coupleId,planId,'bob')).rejects.toThrow('date-plan-approval-changed');
+  as('alice');
+  await assertFails(updateDoc(doc(client.db,statePath), {
+    'confirmedSnapshot.title':'몰래 변경', revision:state.revision+1,updatedAt:serverTimestamp(),
+  }));
+  await approveDatePlan(coupleId,planId,'alice');
+  state = (await getDocFromServer(doc(client.db,statePath))).data()!;
+  expect(state.status).toBe('confirmed');
+  expect(state.confirmedSnapshot.title).toBe('변경한 강변 데이트');
+  expect(state.confirmedSnapshot.blocks[0].travelMinutes).toBe(40);
+  expect((await getDocFromServer(doc(client.db,schedulePath))).data()?.blocks[0].travelMinutes).toBe(20);
+  expect((await getDocFromServer(doc(client.db,'couples',coupleId,'datePlaces',legacyId))).exists()).toBe(true);
+
+  await proposeDatePlanChange(coupleId,planId,'alice',{...proposal,title:'취소할 변경안'},[candidate]);
+  await withdrawDatePlanReview(coupleId,planId);
+  state = (await getDocFromServer(doc(client.db,statePath))).data()!;
+  expect(state.status).toBe('confirmed');
+  expect(state.confirmedSnapshot.title).toBe('변경한 강변 데이트');
+
+  await signup('eve');
+  const outsider = as('eve');
+  await assertFails(getDocFromServer(doc(outsider.db,statePath)));
+  await assertFails(setDoc(doc(outsider.db,statePath), {
+    status:'confirmed',requestedBy:'eve',proposedBy:'eve',approvedBy:{eve:true},
+    confirmedSnapshot:proposal,proposedSnapshot:proposal,revision:1,createdAt:serverTimestamp(),updatedAt:serverTimestamp(),
+  }));
+});
+
+test('date plan V2: withdrawing initial review restores editable shared draft, not a false confirmation', async () => {
+  const { coupleId } = await pair();
+  as('alice');
+  const planId = await createDatePlanDraft(coupleId,'alice',{title:'주말',date:'2026-10-21'});
+  const candidateId = await addDatePlanCandidate(coupleId,planId,'alice', {
+    name:'식당',address:'강릉',latitude:37.7,longitude:128.9,category:'맛집',memo:'',
+  });
+  const candidates = await readDatePlanCandidates(coupleId,planId);
+  await saveDatePlanSchedule(coupleId,planId,'alice',0,'12:00',[{
+    id:'meal',position:0,kind:'meal',title:'점심',primaryCandidateId:candidateId,
+    backupCandidateIds:[],activityMinutes:90,travelMinutes:0,fixedStart:null,
+  }],[candidateId]);
+  await requestDatePlanApproval(coupleId,planId,'alice',candidates);
+  as('bob');
+  await withdrawDatePlanReview(coupleId,planId);
+  const path = 'couples/' + coupleId + '/datePlans/' + planId;
+  expect((await getDocFromServer(doc(client.db,path,'approval','state'))).exists()).toBe(false);
+  await updateDatePlanDraft(coupleId,planId,{title:'수정 가능한 초안'});
+  expect((await getDocFromServer(doc(client.db,path))).data()?.title).toBe('수정 가능한 초안');
 });
