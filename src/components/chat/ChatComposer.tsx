@@ -2,7 +2,8 @@ import { CalendarClock, ContactRound, FileUp, Gift, ImagePlus, Mic, Plus, Send, 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Message } from '../../types';
-import { DANDULI_STICKERS, DanduliSticker, stickerToken } from './DanduliSticker';
+import { DanduliSticker, stickerIdFromToken, stickerLabel } from './DanduliSticker';
+import { STICKER_PACKS } from './ChatToolsPanel';
 import { GifCameraCapture } from './GifCameraCapture';
 
 const QUICK = ['기분 좋아 😊', '배고파 🍚', '심심해 🫠', '우울해 🥺', '놀아줘 ❤️'];
@@ -18,6 +19,7 @@ export function ChatComposer({
   draft,
   reply,
   partnerName,
+  ownedStickerPacks,
   onDraft,
   onSend,
   onImages,
@@ -36,6 +38,7 @@ export function ChatComposer({
   draft: string;
   reply?: Message;
   partnerName: string;
+  ownedStickerPacks: string[];
   onDraft: (value: string) => void;
   onSend: () => void;
   onImages: (files: File[]) => Promise<void> | void;
@@ -62,10 +65,13 @@ export function ChatComposer({
   const [extras, setExtras] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [stickerOpen, setStickerOpen] = useState(false);
+  const [selectedStickerPack, setSelectedStickerPack] = useState('danduli-couple');
   const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
   const [photoSending, setPhotoSending] = useState(false);
   const [voiceRecording, setVoiceRecording] = useState(false);
   const [gifCameraOpen, setGifCameraOpen] = useState(false);
+  const availablePacks = STICKER_PACKS.filter((pack) => ownedStickerPacks.includes(pack.id));
+  const activePack = availablePacks.find((pack) => pack.id === selectedStickerPack) ?? availablePacks[0];
 
   useEffect(() => {
     pendingRef.current = pendingPhotos;
@@ -207,7 +213,10 @@ export function ChatComposer({
   return <>
     <div className="composer-area">
       {reply && <div className="composer-reply"><div><b>{reply.sender === 'partner' ? `${partnerName}에게 답장` : '내 메시지에 답장'}</b><span>{reply.type === 'sticker' ? '이모티콘' : reply.type === 'file' ? '파일' : reply.type === 'contact' ? '연락처' : reply.type === 'audio' ? '음성 메시지' : reply.type === 'call' ? (reply.callKind === 'video' ? '영상통화 기록' : '음성 통화 기록') : reply.type === 'image' || reply.type === 'gallery' || reply.type === 'gif' ? '미디어' : reply.text}</span></div><button onClick={onCancelReply} aria-label="답장 취소"><X size={17} /></button></div>}
-      {stickerOpen && <div className="composer-sticker-tray" aria-label="단둘이 이모티콘 16종">{DANDULI_STICKERS.map((item) => <button key={item.id} type="button" aria-label={`${item.label} 이모티콘 보내기`} onClick={() => { onSticker(stickerToken(item.id)); setStickerOpen(false); }}><DanduliSticker id={item.id} /></button>)}</div>}
+      {stickerOpen && activePack && <div className="composer-sticker-picker" aria-label="이모티콘 선택">
+        <div className="composer-sticker-tabs" role="tablist" aria-label="이모티콘 팩">{availablePacks.map((pack) => <button key={pack.id} type="button" role="tab" aria-selected={pack.id === activePack.id} className={pack.id === activePack.id ? 'active' : ''} onClick={() => setSelectedStickerPack(pack.id)}>{pack.name}</button>)}</div>
+        <div className="composer-sticker-tray" role="tabpanel" aria-label={`${activePack.name} 이모티콘`}>{activePack.stickers.map((sticker, index) => { const id = stickerIdFromToken(sticker); return <button key={`${sticker}-${index}`} type="button" aria-label={`${id ? stickerLabel(id) : sticker} 이모티콘 보내기`} onClick={() => { onSticker(sticker); setStickerOpen(false); }}>{id ? <DanduliSticker id={id} /> : <span className="composer-emoji-sticker">{sticker}</span>}</button>; })}</div>
+      </div>}
       {quickOpen && <div className="quick-contact-strip">{QUICK.map((item) => <button key={item} type="button" onClick={() => { onQuick(item); setQuickOpen(false); setStickerOpen(false); }}>{item}</button>)}</div>}
       {extras && <div className="composer-extra-row">
         <button type="button" onClick={() => fileRef.current?.click()}><ImagePlus /><span>사진</span></button>

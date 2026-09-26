@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, Check, Download, Image as ImageIcon, PackageOpen, Palette, RotateCcw, Search, Settings2, ShoppingBag, SlidersHorizontal, Type, Upload, X } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import type { Message } from '../../types';
-import { DANDULI_STICKERS, DanduliSticker, stickerIdFromToken, stickerToken } from './DanduliSticker';
+import { DANDULI_NEW_STICKER_PACKS, DANDULI_STICKERS, DanduliSticker, stickerIdFromToken, stickerToken } from './DanduliSticker';
 
 export type ChatBackground = 'route' | 'cream' | 'rose' | 'sage' | 'midnight';
 export type ChatFontSize = 'small' | 'medium' | 'large' | 'xlarge';
@@ -19,12 +19,14 @@ type StickerPack = { id: string; name: string; description: string; stickers: st
 
 export const STICKER_PACKS: StickerPack[] = [
   { id: 'danduli-couple', name: '단둘이 커플', description: '고양이와 토끼 커플의 16가지 마음 표현', stickers: DANDULI_STICKERS.map((sticker) => stickerToken(sticker.id)), priceLabel: '기본' },
+  ...DANDULI_NEW_STICKER_PACKS.map((pack) => ({ id: pack.id, name: pack.name, description: pack.description, stickers: pack.stickers.map((sticker) => stickerToken(sticker.id)), priceLabel: '기본' })),
   { id: 'route-hearts', name: '단둘이 하트', description: '커플 대화에 잘 어울리는 기본 팩', stickers: ['🫶', '❤️', '💕', '💗', '💖', '💘'], priceLabel: '기본' },
   { id: 'daily-mood', name: '오늘의 기분', description: '매일 쓰기 좋은 표정 모음', stickers: ['🥰', '😊', '🥹', '😴', '😤', '🤭'], priceLabel: '무료' },
   { id: 'tiny-love', name: '쪼꼬미 러브', description: '짧게 마음을 전하는 팩', stickers: ['🐰💗', '🐻🫶', '🐶💕', '🐱💖', '🐹❤️', '🐥💘'], priceLabel: '무료' },
 ];
 
 const PREF_KEY_PREFIX = 'route-chat-preferences:';
+const fallbackPackIds = ['danduli-couple', ...DANDULI_NEW_STICKER_PACKS.map((pack) => pack.id), 'route-hearts'];
 
 export function defaultChatPreferences(): ChatPreferences {
   return {
@@ -32,7 +34,7 @@ export function defaultChatPreferences(): ChatPreferences {
     fontSize: 'medium',
     mediaQuality: 'high',
     stickerPackOrder: STICKER_PACKS.map((pack) => pack.id),
-    ownedStickerPacks: ['danduli-couple', 'route-hearts'],
+    ownedStickerPacks: fallbackPackIds,
   };
 }
 
@@ -45,7 +47,7 @@ export function loadChatPreferences(uid: string): ChatPreferences {
     return {
       ...fallback,
       ...parsed,
-      stickerPackOrder: Array.isArray(parsed.stickerPackOrder) ? parsed.stickerPackOrder : fallback.stickerPackOrder,
+      stickerPackOrder: Array.isArray(parsed.stickerPackOrder) ? Array.from(new Set([...parsed.stickerPackOrder, ...fallback.stickerPackOrder])) : fallback.stickerPackOrder,
       ownedStickerPacks: Array.isArray(parsed.ownedStickerPacks) ? Array.from(new Set([...fallback.ownedStickerPacks, ...parsed.ownedStickerPacks])) : fallback.ownedStickerPacks,
     };
   } catch {
@@ -124,7 +126,7 @@ export function ChatToolsPanel({
     update({ stickerPackOrder: order });
   };
   const restorePacks = () => {
-    const restored = Array.from(new Set([...preferences.ownedStickerPacks, 'danduli-couple', 'route-hearts']));
+    const restored = Array.from(new Set([...preferences.ownedStickerPacks, ...fallbackPackIds]));
     update({ ownedStickerPacks: restored });
     setFeedback('이 기기에 저장된 이모티콘 이용 정보를 복원했어요.');
   };

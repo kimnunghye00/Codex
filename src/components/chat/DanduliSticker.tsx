@@ -1,16 +1,13 @@
 import '../../danduli-stickers.css';
 
-export type DanduliStickerId =
-  | 'love' | 'miss' | 'kiss' | 'hug'
-  | 'sleep' | 'pat' | 'heart' | 'sulk'
-  | 'thanks' | 'my-side' | 'date' | 'yay'
-  | 'squeeze' | 'why' | 'best' | 'cuddle';
+export type DanduliStickerId = string;
 
 export type DanduliStickerItem = {
   id: DanduliStickerId;
   label: string;
   row: number;
   col: number;
+  sheet?: string;
 };
 
 export const DANDULI_STICKERS: DanduliStickerItem[] = [
@@ -32,7 +29,39 @@ export const DANDULI_STICKERS: DanduliStickerItem[] = [
   { id: 'cuddle', label: '꼬옥', row: 3, col: 3 },
 ];
 
-const STICKER_BY_ID = new Map(DANDULI_STICKERS.map((item) => [item.id, item]));
+const makePack = (id: string, name: string, description: string, sheet: string, labels: string[]) => ({
+  id,
+  name,
+  description,
+  stickers: labels.map((label, index): DanduliStickerItem => ({
+    id: `${id}-${String(index + 1).padStart(2, '0')}`,
+    label,
+    row: Math.floor(index / 4),
+    col: index % 4,
+    sheet,
+  })),
+});
+
+export const DANDULI_NEW_STICKER_PACKS = [
+  makePack('military-cat', '군인 고양이', '군 생활과 기다림을 전하는 16가지 마음', '/danduli-military-cat.webp', [
+    '충성!', '훈련중', '경계중', '휴가 간다', '복귀중', '전화할게', '편지 고마워', 'PX 왔어',
+    '군복 어때', '너 생각중', '보고할게', '작전 성공', '전역하면 보자', '기다려줘', '무사복귀', '곰신 최고',
+  ]),
+  makePack('military-bunny', '기다리는 토끼', '곰신 토끼의 응원과 약속 16가지', '/danduli-military-bunny.webp', [
+    '곰신 모드', '편지 쓰는중', '휴가만 기다려', '면회 갈게', '간식 챙겼어', '군복 멋있어', '얼른 와줘', '무사히 다녀와',
+    '사진 보는중', '오늘도 응원해', '전역하면 놀자', '자랑스러워', '꽃신 신자', '손꼽는중', '내 군인', '끝까지 응원',
+  ]),
+  makePack('daily-bunny', '토끼의 하루', '일상에서 쓰기 좋은 토끼의 16가지 표현', '/danduli-daily-bunny.webp', [
+    '뭐해?', '배고파', '조심히가', '데리러와', '심심해', '서운해', '행복해', '히히',
+    '같이 먹자', '다녀와', '화이팅', '충전중', '반칙이야', '걱정마', '집가자', '기다릴게',
+  ]),
+  makePack('daily-cat', '고양이의 하루', '일상에서 쓰기 좋은 고양이의 16가지 표현', '/danduli-daily-cat.webp', [
+    '브이', '내가 갈게', '나만 봐', '내가 살게', '집중중', '게임중', '머쓱', '미안해',
+    '괜찮아?', '기다려봐', '집에가자', '나이스', '드라이브 가자', '내가 할게', '지켜줄게', '출동!',
+  ]),
+];
+
+const STICKER_BY_ID = new Map([...DANDULI_STICKERS, ...DANDULI_NEW_STICKER_PACKS.flatMap((pack) => pack.stickers)].map((item) => [item.id, item]));
 
 export function stickerToken(id: DanduliStickerId) {
   return `danduli:${id}`;
@@ -44,6 +73,10 @@ export function stickerIdFromToken(value: string): DanduliStickerId | undefined 
   return STICKER_BY_ID.has(id) ? id : undefined;
 }
 
+export function stickerLabel(id: string) {
+  return STICKER_BY_ID.get(id)?.label;
+}
+
 export function DanduliSticker({ id, className = '' }: { id?: string; className?: string }) {
   const item = id ? STICKER_BY_ID.get(id as DanduliStickerId) : undefined;
   if (!item) return null;
@@ -51,11 +84,11 @@ export function DanduliSticker({ id, className = '' }: { id?: string; className?
   const y = item.row * (100 / 3);
   return (
     <span
-      className={`danduli-sticker ${className}`}
+      className={`danduli-sticker ${item.sheet ? 'danduli-sticker-portrait' : ''} ${className}`}
       role="img"
       aria-label={item.label}
       title={item.label}
-      style={{ backgroundPosition: `${x}% ${y}%` }}
+      style={{ backgroundPosition: `${x}% ${y}%`, ...(item.sheet ? { backgroundImage: `url('${item.sheet}')` } : {}) }}
     />
   );
 }

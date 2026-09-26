@@ -112,3 +112,27 @@
   border-radius:0 !important;
   box-shadow:none !important;
 }
+
+.composer-sticker-picker { background: var(--surface); border-top: 1px solid var(--border); }
+.composer-sticker-tabs {
+  display: flex; gap: 5px; overflow-x: auto; padding: 8px;
+  scrollbar-width: none; white-space: nowrap;
+}
+.composer-sticker-tabs::-webkit-scrollbar { display: none; }
+.composer-sticker-tabs button {
+  flex: 0 0 auto; padding: 7px 11px; border: 0; border-radius: 999px;
+  color: var(--text-secondary); background: var(--primary-soft); font-size: 12px; font-weight: 700;
+}
+.composer-sticker-tabs button.active { color: white; background: var(--primary); }
+.composer-sticker-picker .composer-sticker-tray { border-top: 0; max-height: min(37dvh, 340px); }
+.composer-emoji-sticker { font-size: 32px; }
+.danduli-sticker.danduli-sticker-portrait { aspect-ratio: 1122 / 1402; height: auto; }
+.composer-sticker-tray .danduli-sticker-portrait { height: 90px; }
+.chat-sticker-art.danduli-sticker-portrait { height: 190px; }
+.sticker-pack-preview .danduli-sticker-portrait { height: 55px; }
+.owned-sticker-preview .danduli-sticker-portrait { height: 77px; }
+.owned-sticker-preview > button:has(.danduli-sticker-portrait) { height: 82px; }
+@media (max-width: 390px) {
+  .composer-sticker-tray .danduli-sticker-portrait { height: 80px; }
+  .chat-sticker-art.danduli-sticker-portrait { height: 170px; }
+}
