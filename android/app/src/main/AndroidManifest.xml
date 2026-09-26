@@ -25,12 +25,83 @@
             android:launchMode="singleTask"
             android:exported="true" />
 
-        <!-- Current launcher aliases. V2 names intentionally differ from older builds so
-             Samsung/One UI treats an icon change as a new launcher component instead
-             of reusing a stale cached icon for the package. -->
+        <!-- Real launcher Activities are used instead of activity-alias for the four
+             selectable icons. Samsung/One UI can cache an alias icon by package;
+             distinct Activity component names force the launcher to resolve the
+             selected component's own icon resource. Exactly one stays enabled. -->
+        <activity
+            android:name=".RouteLauncherActivity"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/danduli_route_launcher"
+            android:roundIcon="@mipmap/danduli_route_launcher"
+            android:label="@string/app_name"
+            android:launchMode="singleTask"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".HeartChatLauncherActivity"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/danduli_heart_chat_launcher"
+            android:roundIcon="@mipmap/danduli_heart_chat_launcher"
+            android:label="@string/app_name"
+            android:launchMode="singleTask"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".CoupleLoveLauncherActivity"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/danduli_couple_love_launcher"
+            android:roundIcon="@mipmap/danduli_couple_love_launcher"
+            android:label="@string/app_name"
+            android:launchMode="singleTask"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".CoupleDateLauncherActivity"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/danduli_couple_date_launcher"
+            android:roundIcon="@mipmap/danduli_couple_date_launcher"
+            android:label="@string/app_name"
+            android:launchMode="singleTask"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Legacy alias launchers are retained only for upgrade migration. They are
+             always disabled by LauncherRepairReceiver in this build. -->
         <activity-alias
             android:name=".DanduliRouteIconV2"
-            android:enabled="true"
+            android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/danduli_route_launcher"
             android:roundIcon="@mipmap/danduli_route_launcher"
