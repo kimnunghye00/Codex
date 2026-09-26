@@ -1,0 +1,138 @@
+name: Build DANDULI OneStore Secure Upload APK
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: danduli-onestore-secure-upload-once
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Create private OneStore upload key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p secure-upload-key
+          PASS="$(openssl rand -hex 24)"
+          printf '%s' "$PASS" > secure-upload-key/password.txt
+          keytool -genkeypair             -keystore secure-upload-key/danduli-onestore-upload.jks             -storetype JKS             -storepass "$PASS"             -keypass "$PASS"             -alias danduli-upload             -keyalg RSA             -keysize 4096             -validity 10000             -dname "CN=DANDULI Upload,O=E2,C=KR"
+          keytool -exportcert -rfc             -keystore secure-upload-key/danduli-onestore-upload.jks             -storepass "$PASS"             -alias danduli-upload             -file secure-upload-key/danduli-upload-cert.pem
+          FP="$(keytool -list -v -keystore secure-upload-key/danduli-onestore-upload.jks -storepass "$PASS" -alias danduli-upload | awk '/SHA256:/{print $2; exit}')"
+          printf 'Alias: danduli-upload\nSHA-256: %s\n' "$FP" > secure-upload-key/fingerprint.txt
+          {
+            printf 'DANDULI OneStore upload key backup\n'
+            printf 'Keystore: danduli-onestore-upload.jks\n'
+            printf 'Alias: danduli-upload\n'
+            printf 'Store password / key password: %s\n' "$PASS"
+            printf 'IMPORTANT: Keep this file and the JKS private. Do not commit them to GitHub.\n'
+          } > secure-upload-key/credentials.txt
+
+      - name: Restore Firebase Android config
+        shell: bash
+        env:
+          ROUTE_GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.ROUTE_GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ROUTE_GOOGLE_SERVICES_JSON_BASE64:-}" ]; then
+            echo "::warning::ROUTE_GOOGLE_SERVICES_JSON_BASE64 is not configured; native Firebase services will be unavailable in this build."
+            exit 0
+          fi
+          printf '%s' "${ROUTE_GOOGLE_SERVICES_JSON_BASE64}" | base64 --decode > android/app/google-services.json
+          test -s android/app/google-services.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const p='android/app/google-services.json';
+          const j=JSON.parse(fs.readFileSync(p,'utf8'));
+          const ok=(j.client||[]).some(c=>c?.client_info?.android_client_info?.package_name==='com.e2.danduli');
+          if (j?.project_info?.project_id !== 'meluni-f4e00') throw new Error('Unexpected Firebase project');
+          if (!ok) {
+            console.log('::warning::google-services.json has no com.e2.danduli client; building without native Firebase services.');
+            fs.unlinkSync(p);
+          }
+          NODE
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run stability suite
+        run: npm run stability
+
+      - name: Configure and sync native project
+        run: |
+          npm run native:configure
+          npx cap sync android
+
+      - name: Prepare launcher icons
+        run: |
+          python3 -m pip install --disable-pip-version-check --quiet Pillow==11.3.0
+          python3 scripts/prepare_character_launcher_icons.py
+
+      - name: Build unsigned release APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --stacktrace
+
+      - name: Sign secure OneStore upload APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          PASS="$(cat secure-upload-key/password.txt)"
+          UNSIGNED="android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          OUTPUT="DANDULI-onestore-upload-release.apk"
+          BUILD_TOOLS="$(find "${ANDROID_HOME}/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          "${BUILD_TOOLS}/zipalign" -f -p 4 "$UNSIGNED" "${OUTPUT}.aligned"
+          "${BUILD_TOOLS}/apksigner" sign             --ks secure-upload-key/danduli-onestore-upload.jks             --ks-key-alias danduli-upload             --ks-pass "pass:$PASS"             --key-pass "pass:$PASS"             --out "$OUTPUT"             "${OUTPUT}.aligned"
+          rm -f "${OUTPUT}.aligned"
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="DANDULI-onestore-upload-release.apk"
+          APKSIGNER="$(find "${ANDROID_HOME}/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          AAPT="$(find "${ANDROID_HOME}/build-tools" -type f -name aapt | sort -V | tail -n 1)"
+          "${APKSIGNER}" verify --verbose --print-certs "$APK"
+          BADGING="$("${AAPT}" dump badging "$APK" | head -n 1)"
+          echo "$BADGING"
+          printf '%s' "$BADGING" | grep -q "name='com.e2.danduli'"
+          printf '%s\n' "$BADGING" > secure-upload-key/apk-badging.txt
+          sha256sum "$APK" > secure-upload-key/apk-sha256.txt
+
+      - name: Upload secure release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DANDULI-onestore-secure-release
+          path: DANDULI-onestore-upload-release.apk
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Upload upload-key backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: DANDULI-onestore-upload-key-backup
+          path: secure-upload-key/
+          if-no-files-found: error
+          retention-days: 3
