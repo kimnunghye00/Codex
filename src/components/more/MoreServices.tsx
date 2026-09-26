@@ -154,14 +154,14 @@ export function MoreServices({
     if (appIconChanging) return;
     const option = APP_ICONS.find((item) => item.id === next) ?? APP_ICONS[0];
     setAppIconChanging(true);
-    setNotice(nativeAppIconSupported ? '휴대폰 홈 화면 앱 아이콘을 변경하고 있어요…' : '웹에서는 미리보기 아이콘만 변경돼요.');
+    setNotice(nativeAppIconSupported ? '휴대폰 앱 아이콘을 적용하고 확인하고 있어요…' : '웹에서는 미리보기 아이콘만 변경돼요.');
     try {
       if (nativeAppIconSupported) {
         const applied = await setNativeRouteAppIcon(next);
         setAppIcon(applied);
         localStorage.setItem('route-app-icon', applied);
         updateRouteFavicon(applied);
-        setNotice(`“${option.label}”로 변경 중이에요. 홈 화면으로 이동한 뒤 단둘이 앱이 한 번 종료되며 새 아이콘이 등록돼요.`);
+        setNotice(`“${option.label}” 아이콘을 적용했어요. 앱 서랍에서 확인해 주세요. 예전에 홈 화면에 고정한 아이콘이 그대로라면 그 바로가기를 지우고 앱 서랍에서 다시 꺼내세요.`);
       } else {
         setAppIcon(next);
         localStorage.setItem('route-app-icon', next);
@@ -233,7 +233,7 @@ export function MoreServices({
           {(['default','lavender','dark'] as ThemeId[]).map((item) => <button type="button" key={item} className={theme === item ? 'active' : ''} onClick={() => chooseTheme(item)}><i className={item} /><span><b>{item === 'default' ? '기본' : item === 'lavender' ? '라벤더' : '다크'}</b><small>{item === 'default' ? '네이비 + 코랄' : item === 'lavender' ? '부드러운 보라' : '어두운 화면'}</small></span></button>)}
         </div></>}
 
-        {sheet === 'app-icon' && <><HeaderBar title="앱 아이콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">4가지 단둘이 아이콘 중 원하는 스타일을 선택해요. Android에서는 아이콘을 바꿀 때 홈 화면으로 이동한 뒤 런처 항목을 새로 등록해요.</p>
+        {sheet === 'app-icon' && <><HeaderBar title="앱 아이콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">4가지 단둘이 아이콘 중 원하는 스타일을 선택해요. Android에서는 적용 결과를 확인한 뒤 알려드려요.</p>
           <div className="app-icon-current-status" role="status" aria-live="polite">
             <span className={`more-app-icon-preview ${appIcon} ${activeIcon.className} !grid place-items-center`}><AppIconGlyph id={appIcon} /></span>
             <span><small>{nativeAppIconSupported ? '현재 선택된 홈 화면 아이콘' : '현재 웹 미리보기'}</small><b>{appIconStateLoading ? '아이콘 확인 중…' : activeIcon.label}</b><em>{nativeAppIconSupported ? 'Android 런처 구성요소 기준 · 홈 화면 표시는 기기 런처가 갱신해요' : '홈 화면 변경은 Android 앱에서 가능'}</em></span>

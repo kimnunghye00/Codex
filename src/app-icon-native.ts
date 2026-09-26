@@ -3,7 +3,7 @@ import type { RouteAppIconId } from './utils/appIcon';
 
 type IconId = RouteAppIconId;
 type RouteAppIconPlugin = {
-  setIcon(options: { icon: IconId }): Promise<{ icon: IconId; pending?: boolean }>;
+  setIcon(options: { icon: IconId }): Promise<{ icon: IconId; component: string }>;
   getIcon(): Promise<{ icon: IconId; component?: string | null }>;
 };
 
@@ -28,9 +28,7 @@ export async function getNativeRouteAppIcon(): Promise<IconId | null> {
 export async function setNativeRouteAppIcon(icon: IconId): Promise<IconId> {
   if (!supportsNativeRouteAppIcon()) return icon;
   const result = await RouteAppIcon.setIcon({ icon });
-  // Android completes the launcher-component replacement after moving the task to the Home screen.
-  // Do not immediately call getIcon(): during that short overlap both launcher
-  // components intentionally exist so Samsung can observe the replacement.
+  // The native call resolves only after PackageManager verifies the selected alias.
   notifyIcon(result.icon);
   return result.icon;
 }
