@@ -183,7 +183,7 @@ for (const permission of forbiddenPermissions) {
 
 check('Android WebView uses adjustResize', manifest.includes('android:windowSoftInputMode="adjustResize"'));
 check('Android backup is disabled', manifest.includes('android:allowBackup="false"'));
-check('launcher icon aliases remain configured', ['RouteDefaultIcon', 'RouteHeartIcon', 'RouteNightIcon', 'RouteCreamIcon'].every((name) => manifest.includes(name)));
+check('four launcher icon aliases remain configured', ['DanduliDefaultLauncher', 'DanduliChatLauncher', 'DanduliLoveLauncher', 'DanduliDateLauncher'].every((name) => manifest.includes(name)));
 
 check('package exposes runtime gate', pkg.scripts?.['stability:runtime'] === 'node --experimental-strip-types --test tests/*runtime.test.ts');
 check('package exposes flow gate', pkg.scripts?.['stability:flow'] === 'node scripts/route-flow-smoke.mjs');
