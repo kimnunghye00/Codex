@@ -1,4 +1,4 @@
-name: Build Android Release QA APK
+name: Build Android OneStore Release APK
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: android-release-qa-apk-main
+  group: android-onestore-release-apk-main
   cancel-in-progress: true
 
 jobs:
@@ -31,7 +31,7 @@ jobs:
           java-version: '21'
           cache: gradle
 
-      - name: Prepare fixed DANDULI test signing key
+      - name: Prepare stable DANDULI upload signing key
         shell: bash
         run: |
           set -euo pipefail
@@ -39,7 +39,7 @@ jobs:
           base64 --decode android/route-test-debug.keystore.b64 > android/signing/route-test-debug.keystore
           EXPECTED="40F608CE3D3DD13773271E6D61B2EB1C513904636AECD662D78B882C7A006A5A"
           ACTUAL="$(keytool -list -v -keystore android/signing/route-test-debug.keystore -storepass android -alias androiddebugkey | awk '/SHA256:/{print $2; exit}' | tr -d ':')"
-          echo "DANDULI test signing certificate SHA-256: ${ACTUAL}"
+          echo "DANDULI upload signing certificate SHA-256: ${ACTUAL}"
           test "${ACTUAL}" = "${EXPECTED}"
 
       - name: Restore Firebase Android config
@@ -49,7 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${ROUTE_GOOGLE_SERVICES_JSON_BASE64:-}" ]; then
-            echo "::warning::ROUTE_GOOGLE_SERVICES_JSON_BASE64 is not configured. Native Firebase features such as FCM push notifications will be unavailable in this QA APK."
+            echo "::warning::ROUTE_GOOGLE_SERVICES_JSON_BASE64 is not configured. Native Firebase features such as FCM push notifications will be unavailable in this release APK."
             exit 0
           fi
 
@@ -92,45 +92,68 @@ jobs:
       - name: Make Gradle executable
         run: chmod +x android/gradlew
 
-      - name: Build debug QA APK
+      - name: Build unsigned release APK
         working-directory: android
-        run: ./gradlew assembleDebug --stacktrace
+        run: ./gradlew assembleRelease --stacktrace
 
-      - name: Verify APK signing identity, package and update version
+      - name: Align and sign OneStore release APK
         shell: bash
         run: |
           set -euo pipefail
-          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          UNSIGNED="android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          OUTPUT="android/app/build/outputs/apk/release/DANDULI-onestore-release.apk"
+          BUILD_TOOLS="$(find "${ANDROID_HOME}/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          ZIPALIGN="${BUILD_TOOLS}/zipalign"
+          APKSIGNER="${BUILD_TOOLS}/apksigner"
+
+          test -f "${UNSIGNED}"
+          "${ZIPALIGN}" -f -p 4 "${UNSIGNED}" "${OUTPUT}.aligned"
+
+          "${APKSIGNER}" sign             --ks android/signing/route-test-debug.keystore             --ks-key-alias androiddebugkey             --ks-pass pass:android             --key-pass pass:android             --out "${OUTPUT}"             "${OUTPUT}.aligned"
+
+          rm -f "${OUTPUT}.aligned"
+          test -s "${OUTPUT}"
+
+      - name: Verify release APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="android/app/build/outputs/apk/release/DANDULI-onestore-release.apk"
           APKSIGNER="$(find "${ANDROID_HOME}/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          AAPT="$(find "${ANDROID_HOME}/build-tools" -type f -name aapt | sort -V | tail -n 1)"
           EXPECTED="40f608ce3d3dd13773271e6d61b2eb1c513904636aecd662d78b882c7a006a5a"
-          CERT_OUTPUT="$(${APKSIGNER} verify --print-certs "${APK}")"
-          ACTUAL="$(printf '%s\n' "${CERT_OUTPUT}" | sed -n 's/^.*certificate SHA-256 digest:[[:space:]]*//p' | head -n 1 | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+
+          VERIFY_OUTPUT="$("${APKSIGNER}" verify --verbose --print-certs "${APK}")"
+          printf '%s\n' "${VERIFY_OUTPUT}"
+          printf '%s\n' "${VERIFY_OUTPUT}" | grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true'
+
+          ACTUAL="$(printf '%s\n' "${VERIFY_OUTPUT}" | sed -n 's/^.*certificate SHA-256 digest:[[:space:]]*//p' | head -n 1 | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
           test -n "${ACTUAL}"
           test "${ACTUAL}" = "${EXPECTED}"
-          AAPT="$(find "${ANDROID_HOME}/build-tools" -type f -name aapt | sort -V | tail -n 1)"
-          BADGING="$(${AAPT} dump badging "${APK}" | head -n 1)"
+
+          BADGING="$("${AAPT}" dump badging "${APK}" | head -n 1)"
           echo "${BADGING}"
           printf '%s' "${BADGING}" | grep -q "name='com.e2.danduli'"
           VERSION_CODE="$(printf '%s\n' "${BADGING}" | sed -n "s/.*versionCode='\([0-9][0-9]*\)'.*/\1/p")"
           test -n "${VERSION_CODE}"
           test "${VERSION_CODE}" -gt 1000000
-          echo "DANDULI QA APK versionCode: ${VERSION_CODE}"
+          echo "DANDULI OneStore release APK versionCode: ${VERSION_CODE}"
 
-      - name: Write QA build summary
+      - name: Write build summary
         shell: bash
         run: |
-          echo '### 단둘이 Android Release QA APK' >> "$GITHUB_STEP_SUMMARY"
+          echo '### 단둘이 Android OneStore Release APK' >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
-          echo "- Source: main @ `${GITHUB_SHA}`" >> "$GITHUB_STEP_SUMMARY"
-          echo '- Stability suite: passed before native build' >> "$GITHUB_STEP_SUMMARY"
+          echo "- Source: main @ \`${GITHUB_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo '- Build type: release (non-debug)' >> "$GITHUB_STEP_SUMMARY"
           echo '- Package: com.e2.danduli' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Uses monotonic Android versionCode for update installs' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Artifact: DANDULI-release-qa-apk' >> "$GITHUB_STEP_SUMMARY"
+          echo '- APK Signature Scheme v2: verified' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Artifact: DANDULI-onestore-release-apk' >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload QA APK
+      - name: Upload OneStore release APK
         uses: actions/upload-artifact@v4
         with:
-          name: DANDULI-release-qa-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: DANDULI-onestore-release-apk
+          path: android/app/build/outputs/apk/release/DANDULI-onestore-release.apk
           if-no-files-found: error
           retention-days: 14
