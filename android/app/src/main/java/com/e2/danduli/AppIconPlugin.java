@@ -1,4 +1,4 @@
-package com.route.couple;
+package com.e2.danduli;
 
 import android.content.ComponentName;
 import android.content.SharedPreferences;

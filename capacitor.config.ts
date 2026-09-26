@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.route.couple',
+  appId: 'com.e2.danduli',
   appName: '단둘이',
   webDir: 'dist',
   backgroundColor: '#fffaf8',

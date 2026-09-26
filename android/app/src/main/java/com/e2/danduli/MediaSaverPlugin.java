@@ -1,4 +1,4 @@
-package com.route.couple;
+package com.e2.danduli;
 
 import android.content.ContentResolver;
 import android.content.ContentValues;

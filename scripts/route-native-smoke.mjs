@@ -17,8 +17,8 @@ const required = [
   'src/input-ime-stability.ts',
   'src/route-stability-v15.css',
   'android/app/src/main/AndroidManifest.xml',
-  'android/app/src/main/java/com/route/couple/LauncherRepairReceiver.java',
-  'android/app/src/main/java/com/route/couple/AppIconPlugin.java',
+  'android/app/src/main/java/com/e2/danduli/LauncherRepairReceiver.java',
+  'android/app/src/main/java/com/e2/danduli/AppIconPlugin.java',
   'src/components/more/MoreServices.tsx',
   'scripts/prepare_character_launcher_icons.py',
   'capacitor.config.ts',
@@ -39,12 +39,15 @@ const icon = read('src/app-icon-native.ts');
 const ime = read('src/input-ime-stability.ts');
 const stabilityCss = read('src/route-stability-v15.css');
 const manifest = read('android/app/src/main/AndroidManifest.xml');
-const launcherRepair = read('android/app/src/main/java/com/route/couple/LauncherRepairReceiver.java');
-const iconPlugin = read('android/app/src/main/java/com/route/couple/AppIconPlugin.java');
+const launcherRepair = read('android/app/src/main/java/com/e2/danduli/LauncherRepairReceiver.java');
+const iconPlugin = read('android/app/src/main/java/com/e2/danduli/AppIconPlugin.java');
 const moreServices = read('src/components/more/MoreServices.tsx');
 const iconPrep = read('scripts/prepare_character_launcher_icons.py');
 const capacitorConfig = read('capacitor.config.ts');
+const androidGradle = read('android/app/build.gradle');
+const androidStrings = read('android/app/src/main/res/values/strings.xml');
 
+check('DANDULI package id is consistent', androidGradle.includes('namespace = "com.e2.danduli"') && androidGradle.includes('applicationId "com.e2.danduli"') && capacitorConfig.includes("appId: 'com.e2.danduli'") && androidStrings.includes('<string name="package_name">com.e2.danduli</string>') && androidStrings.includes('<string name="custom_url_scheme">com.e2.danduli</string>'));
 check('native bootstrap is wired', main.includes('initializeNativeApp') && (main.includes('await initializeNativeApp()') || main.includes('void initializeNativeApp()')));
 check('native splash has an OS-level auto-hide guard', capacitorConfig.includes('launchAutoHide: true') && /launchShowDuration:\s*[1-9][0-9]*/.test(capacitorConfig));
 check('native splash can still hide immediately when ROUTE is ready', main.includes('hideNativeSplash') && native.includes('export async function hideNativeSplash'));

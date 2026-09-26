@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">단둘이</string>
     <string name="title_activity_main">단둘이</string>
-    <string name="package_name">com.route.couple</string>
-    <string name="custom_url_scheme">com.route.couple</string>
+    <string name="package_name">com.e2.danduli</string>
+    <string name="custom_url_scheme">com.e2.danduli</string>
 </resources>

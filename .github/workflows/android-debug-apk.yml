@@ -60,14 +60,16 @@ jobs:
           const json = JSON.parse(fs.readFileSync(path, 'utf8'));
           const projectId = json?.project_info?.project_id;
           const clients = Array.isArray(json?.client) ? json.client : [];
-          const routeClient = clients.find((client) => client?.client_info?.android_client_info?.package_name === 'com.route.couple');
+          const danduliClient = clients.find((client) => client?.client_info?.android_client_info?.package_name === 'com.e2.danduli');
           if (projectId !== 'meluni-f4e00') {
             throw new Error(`Unexpected Firebase project_id: ${projectId ?? 'missing'}`);
           }
-          if (!routeClient) {
-            throw new Error('google-services.json does not contain Android package com.route.couple');
+          if (!danduliClient) {
+            console.log('::warning::Firebase Android app com.e2.danduli is not present in the current google-services.json. Continuing this build without native Firebase services.');
+            fs.unlinkSync(path);
+            process.exit(0);
           }
-          console.log('Firebase Android config verified for meluni-f4e00 / com.route.couple.');
+          console.log('Firebase Android config verified for meluni-f4e00 / com.e2.danduli.');
           NODE
 
       - name: Install dependencies

@@ -1,4 +1,4 @@
-package com.route.couple;
+package com.e2.danduli;
 
 import android.os.Bundle;
 import com.getcapacitor.BridgeActivity;
@@ -8,7 +8,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         // Heal launcher component state before Capacitor starts. This is harmless
         // on normal launches and protects update installs where an old alias state
-        // could otherwise leave ROUTE without a usable launcher entry.
+        // could otherwise leave 단둘이 without a usable launcher entry.
         LauncherRepairReceiver.ensureLauncherAvailable(this);
         registerPlugin(AppIconPlugin.class);
         registerPlugin(MediaSaverPlugin.class);

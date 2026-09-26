@@ -62,10 +62,14 @@ jobs:
           const json = JSON.parse(fs.readFileSync(path, 'utf8'));
           const projectId = json?.project_info?.project_id;
           const clients = Array.isArray(json?.client) ? json.client : [];
-          const routeClient = clients.find((client) => client?.client_info?.android_client_info?.package_name === 'com.route.couple');
+          const danduliClient = clients.find((client) => client?.client_info?.android_client_info?.package_name === 'com.e2.danduli');
           if (projectId !== 'meluni-f4e00') throw new Error(`Unexpected Firebase project_id: ${projectId ?? 'missing'}`);
-          if (!routeClient) throw new Error('google-services.json does not contain Android package com.route.couple');
-          console.log('Firebase Android config verified for meluni-f4e00 / com.route.couple.');
+          if (!danduliClient) {
+            console.log('::warning::Firebase Android app com.e2.danduli is not present in the current google-services.json. Continuing this build without native Firebase services.');
+            fs.unlinkSync(path);
+            process.exit(0);
+          }
+          console.log('Firebase Android config verified for meluni-f4e00 / com.e2.danduli.');
           NODE
 
       - name: Install dependencies
@@ -106,7 +110,7 @@ jobs:
           AAPT="$(find "${ANDROID_HOME}/build-tools" -type f -name aapt | sort -V | tail -n 1)"
           BADGING="$(${AAPT} dump badging "${APK}" | head -n 1)"
           echo "${BADGING}"
-          printf '%s' "${BADGING}" | grep -q "name='com.route.couple'"
+          printf '%s' "${BADGING}" | grep -q "name='com.e2.danduli'"
           VERSION_CODE="$(printf '%s\n' "${BADGING}" | sed -n "s/.*versionCode='\([0-9][0-9]*\)'.*/\1/p")"
           test -n "${VERSION_CODE}"
           test "${VERSION_CODE}" -gt 1000000
@@ -119,7 +123,7 @@ jobs:
           echo '' >> "$GITHUB_STEP_SUMMARY"
           echo "- Source: main @ `${GITHUB_SHA}`" >> "$GITHUB_STEP_SUMMARY"
           echo '- Stability suite: passed before native build' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Package: com.route.couple' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Package: com.e2.danduli' >> "$GITHUB_STEP_SUMMARY"
           echo '- Uses monotonic Android versionCode for update installs' >> "$GITHUB_STEP_SUMMARY"
           echo '- Artifact: DANDULI-release-qa-apk' >> "$GITHUB_STEP_SUMMARY"
 

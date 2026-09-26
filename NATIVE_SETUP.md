@@ -69,7 +69,7 @@ NAVER Cloud treats HTTP and HTTPS as the same host for this setting. Do not regi
 Because 단둘이 is using the Web Dynamic Map SDK through the fixed host, adding each new GitHub Codespaces domain is not required. The Android package name remains:
 
 ```text
-com.route.couple
+com.e2.danduli
 ```
 
 That package name is relevant if Mobile Dynamic Map/native NAVER SDK is added later, but the current 단둘이 map renderer authenticates through the fixed web host above.
