@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, Check, Clock3, Send, ShieldCheck, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, Send, ShieldCheck, X } from 'lucide-react';
 import type { DatePlanCandidate, DatePlanTimeBlock } from '../../lib/datePlanFoundation';
 import { durationAsHoursMinutes, durationFromHoursMinutes } from '../../lib/datePlanFoundation';
 import {

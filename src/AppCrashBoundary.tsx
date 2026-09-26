@@ -71,7 +71,7 @@ export class AppCrashBoundary extends Component<Props, State> {
   };
 
   private reloadApp = () => {
-    try { sessionStorage.setItem('route-recovered-from-crash', new Date().toISOString()); } catch {}
+    try { sessionStorage.setItem('route-recovered-from-crash', new Date().toISOString()); } catch { /* Recovery must work when storage is disabled. */ }
     window.location.reload();
   };
 

@@ -1,4 +1,4 @@
-import { collection, doc, getDocFromServer, onSnapshot, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { doc, getDocFromServer, onSnapshot, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 import { calculateDatePlanTimeline, validateDatePlanSchedule } from './datePlanTime';
 import type { DatePlanTimeBlock, DatePlanCandidate } from './datePlanFoundation';

@@ -105,10 +105,6 @@ export function MoreServices({
   const activeIcon = useMemo(() => APP_ICONS.find((item) => item.id === appIcon) ?? APP_ICONS[0], [appIcon]);
 
   useEffect(() => {
-    setChatPreferences(loadChatPreferences(auth.currentUser?.uid ?? 'guest'));
-  }, []);
-
-  useEffect(() => {
     const handleIconChange = (event: Event) => {
       const next = normalizeRouteAppIcon(String((event as CustomEvent<string>).detail ?? ''));
       setAppIcon(next);
@@ -117,7 +113,6 @@ export function MoreServices({
     };
     window.addEventListener('route-app-icon-changed', handleIconChange);
     if (nativeAppIconSupported) {
-      setAppIconStateLoading(true);
       void getNativeRouteAppIcon()
         .then((icon) => { if (icon) setAppIcon(icon); })
         .catch((cause) => {
@@ -131,7 +126,6 @@ export function MoreServices({
 
   useEffect(() => {
     if (sheet !== 'app-icon' || !nativeAppIconSupported) return;
-    setAppIconStateLoading(true);
     void getNativeRouteAppIcon()
       .then((icon) => { if (icon) setAppIcon(icon); })
       .catch((cause) => console.warn('[DANDULI current launcher icon refresh]', cause))
@@ -140,13 +134,14 @@ export function MoreServices({
 
   const openSheet = (next: MoreSheet) => {
     setNotice('');
+    if (next === 'app-icon' && nativeAppIconSupported) setAppIconStateLoading(true);
     setSheet(next);
   };
 
   const chooseTheme = (next: ThemeId) => {
     setTheme(next);
     localStorage.setItem('meluni-theme', next);
-    document.documentElement.dataset.meluniTheme = next;
+    document.documentElement.setAttribute('data-meluni-theme', next);
     setNotice('테마를 바로 적용했어요.');
   };
 

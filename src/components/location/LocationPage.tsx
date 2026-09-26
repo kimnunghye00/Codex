@@ -1,5 +1,5 @@
 import { CalendarDays, Clock3, ImagePlus, LocateFixed, MapPin, Navigation, PauseCircle, RefreshCw, ShieldCheck, X } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import type { MemoryDraft } from '../../types';
 import { auth } from '../../lib/firebase';
@@ -23,6 +23,7 @@ const ROUTE_MAP_ORIGIN = typeof window !== 'undefined' && window.location.hostna
 const ROUTE_MAP_HOST = `${ROUTE_MAP_ORIGIN}/naver-map-host.html`;
 const LOCATION_FOCUS_KEY = 'route-pending-location-focus';
 const MAP_READY_TIMEOUT_MS = 12_000;
+const EMPTY_VISITS: LocationVisit[] = [];
 
 export type LocationTabId = 'map' | 'footprints';
 type MapHostMessage = { source?: string; type?: string; origin?: string; code?: string };
@@ -103,10 +104,9 @@ export function LocationPage({ requestedTab, Header, connection, focusPlace, onC
   const [activeTab, setActiveTab] = useState<LocationTabId>(requestedTab ?? 'map');
   const [sharing, setSharing] = useState(() => uid ? loadLocationSharing(uid).enabled : false);
   const [visits, setVisits] = useState<LocationVisit[]>(() => uid ? loadLocationVisits(uid) : []);
-  const [partnerVisits, setPartnerVisits] = useState<LocationVisit[]>([]);
+  const [partnerSnapshot, setPartnerSnapshot] = useState<{ key: string; visits: LocationVisit[]; status: string }>();
   const [selectedDay, setSelectedDay] = useState(todayKey());
   const [status, setStatus] = useState('위치 공유를 켜면 이동 기록을 만들어요.');
-  const [partnerStatus, setPartnerStatus] = useState('상대방의 오늘 발자취를 불러오는 중이에요.');
   const [tracking, setTracking] = useState(false);
   const [mapStatus, setMapStatus] = useState('네이버 지도를 불러오는 중이에요…');
   const [mapFailed, setMapFailed] = useState(false);
@@ -126,6 +126,19 @@ export function LocationPage({ requestedTab, Header, connection, focusPlace, onC
   const mapTimeoutRef = useRef<number | undefined>(undefined);
   const handledFocus = useRef('');
   const partnerName = connection?.partnerProfile?.name?.trim() || connection?.partnerProfile?.nickname?.trim() || '상대방';
+  const partnerKey = `${connection?.coupleId ?? ''}:${connection?.partnerUid ?? ''}:${selectedDay}:${activeTab}`;
+  const partnerVisits = partnerSnapshot?.key === partnerKey ? partnerSnapshot.visits : EMPTY_VISITS;
+  const partnerStatus = partnerSnapshot?.key === partnerKey ? partnerSnapshot.status
+    : !connection?.coupleId ? '상대방을 연결하면 발자취를 볼 수 있어요.' : `${partnerName}의 발자취를 불러오는 중이에요.`;
+  const clearExternalFocus = useEffectEvent(() => onClearFocus?.());
+  const [seenRequestedTab, setSeenRequestedTab] = useState(requestedTab);
+  if (seenRequestedTab !== requestedTab) {
+    setSeenRequestedTab(requestedTab);
+    if (requestedTab) {
+      setActiveTab(requestedTab);
+      if (requestedTab === 'footprints') { setFocusState('idle'); setFocusStatus(''); setFocusedVisit(undefined); }
+    }
+  }
   const mapVisits = useMemo(() => activeTab === 'footprints' ? partnerVisits : [...visits].reverse(), [activeTab, partnerVisits, visits]);
 
   const postMapMessage = (payload: Record<string, unknown>) => {
@@ -169,21 +182,11 @@ export function LocationPage({ requestedTab, Header, connection, focusPlace, onC
   }, [uid]);
 
   useEffect(() => {
-    if (activeTab !== 'footprints') {
-      setPartnerVisits([]);
-      return;
-    }
-    if (!connection?.coupleId || !connection.partnerUid) {
-      setPartnerVisits([]);
-      setPartnerStatus('상대방을 연결하면 발자취를 볼 수 있어요.');
-      return;
-    }
-    setPartnerStatus(`${partnerName}의 발자취를 불러오는 중이에요.`);
+    if (activeTab !== 'footprints' || !connection?.coupleId || !connection.partnerUid) return;
     return subscribePartnerLocationVisits(connection.coupleId, connection.partnerUid, selectedDay, (items) => {
-      setPartnerVisits(items);
-      setPartnerStatus(items.length ? '' : selectedDay === todayKey() ? '아직 오늘 공유된 발자취가 없어요.' : '이 날짜에는 공유된 발자취가 없어요.');
-    }, () => setPartnerStatus('발자취를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.'));
-  }, [activeTab, connection?.coupleId, connection?.partnerUid, partnerName, selectedDay]);
+      setPartnerSnapshot({ key: partnerKey, visits: items, status: items.length ? '' : selectedDay === todayKey() ? '아직 오늘 공유된 발자취가 없어요.' : '이 날짜에는 공유된 발자취가 없어요.' });
+    }, () => setPartnerSnapshot({ key: partnerKey, visits: [], status: '발자취를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.' }));
+  }, [activeTab, connection?.coupleId, connection?.partnerUid, partnerKey, selectedDay]);
 
   useEffect(() => {
     const requestedFocus = focusPlace?.trim() || queuedFocus;
@@ -197,8 +200,8 @@ export function LocationPage({ requestedTab, Header, connection, focusPlace, onC
     setFocusStatus(`‘${query}’ 위치를 찾는 중이에요…`);
 
     const clearRequest = () => {
-      try { sessionStorage.removeItem(LOCATION_FOCUS_KEY); } catch {}
-      onClearFocus?.();
+      try { sessionStorage.removeItem(LOCATION_FOCUS_KEY); } catch { /* Private browsing may disable storage. */ }
+      clearExternalFocus();
     };
 
     const resolvePlace = async () => {
@@ -416,10 +419,9 @@ export function LocationPage({ requestedTab, Header, connection, focusPlace, onC
   };
 
   useEffect(() => {
-    if (!requestedTab) return;
-    if (requestedTab === 'footprints') clearFocusedPlace();
-    setActiveTab(requestedTab);
-  }, [requestedTab]);
+    if (requestedTab !== 'footprints' || !mapReady) return;
+    mapFrame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'clear-focus' }, ROUTE_MAP_ORIGIN);
+  }, [requestedTab, mapReady]);
 
   const createMemoryFromVisit = (visit: LocationVisit) => {
     if (!onCreateMemory) return;

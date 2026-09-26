@@ -19,7 +19,7 @@ import { uploadChatAttachment, uploadChatMedia } from '../src/lib/chatMedia';
 import { addDatePlace, saveDateCourse, setPlaceLike, addPlaceOpinion } from '../src/lib/dateMap';
 import { addDatePlanCandidate, createDatePlanDraft, readDatePlanCandidates, subscribeDatePlanCandidates, updateDatePlanCandidateMemo, updateDatePlanDraft } from '../src/lib/datePlanDrafts';
 import { readDatePlanSchedule, saveDatePlanSchedule, subscribeDatePlanSchedule } from '../src/lib/datePlanSchedule';
-import { publishCoupleActivity, subscribeCoupleActivities } from '../src/lib/coupleActivity';
+import { subscribeCoupleActivities } from '../src/lib/coupleActivity';
 import { approveDatePlan, proposeDatePlanChange, readDatePlanApproval, requestDatePlanApproval, subscribeDatePlanApproval, withdrawDatePlanReview } from '../src/lib/datePlanApproval';
 import { addDatePlanCandidateComment, deleteDatePlanCandidateComment, removeDatePlanCandidateWithFeedback,
   setDatePlanCandidatePreference, subscribeDatePlanCandidateComments } from '../src/lib/datePlanOpinions';

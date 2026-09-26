@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { createPortal } from 'react-dom';
 import { CalendarDays, ChevronDown, ChevronUp, GripVertical, Heart, MapPin, MessageCircle, Plus, Search, Trash2, X } from 'lucide-react';
@@ -67,33 +67,39 @@ function kmApprox(a: { latitude: number; longitude: number }, b: { latitude: num
   return Math.hypot(lat, lon);
 }
 
-export function DateMapPage({ Header, connection, focusPlace, onClearFocus, initialPlanId, notificationRequest }: {
+type DateMapPageProps = {
   Header: ({ title }: { title?: string }) => React.ReactNode;
   connection: RealCoupleConnection | null;
   focusPlace?: string;
   onClearFocus: () => void;
   initialPlanId?: string;
   notificationRequest?: number;
-}) {
+};
+
+export function DateMapPage(props: DateMapPageProps) {
+  return <CoupleDateMapPage key={props.connection?.coupleId ?? ''} {...props} />;
+}
+
+function CoupleDateMapPage({ Header, connection, focusPlace, onClearFocus, initialPlanId, notificationRequest }: DateMapPageProps) {
   const uid = auth.currentUser?.uid ?? '';
   const coupleId = connection?.coupleId ?? '';
   const [places, setPlaces] = useState<DatePlace[]>([]);
   const [courses, setCourses] = useState<DateCourse[]>([]);
   const [datePlans, setDatePlans] = useState<DatePlanDraft[]>([]);
-  const [activePlanId, setActivePlanId] = useState('');
+  const [activePlanId, setActivePlanId] = useState(() => coupleId ? initialPlanId ?? '' : '');
   const [planCandidates, setPlanCandidates] = useState<DatePlanCandidate[]>([]);
   const [planApproval, setPlanApproval] = useState<DatePlanApproval | null>(null);
-  const [approvalLoading, setApprovalLoading] = useState(true);
+  const [approvalLoading, setApprovalLoading] = useState(Boolean(coupleId && initialPlanId));
   const [scheduleReady, setScheduleReady] = useState(false);
   const approvalLocked = approvalLoading || planApproval !== null;
-  const [planCandidatesLoading, setPlanCandidatesLoading] = useState(false);
+  const [planCandidatesLoading, setPlanCandidatesLoading] = useState(Boolean(coupleId && initialPlanId));
   const [planCandidatesError, setPlanCandidatesError] = useState(false);
   const [planTitle, setPlanTitle] = useState('');
   const [planDate, setPlanDate] = useState('');
   const [selectedPlanCandidateId, setSelectedPlanCandidateId] = useState('');
   const [addingToPlan, setAddingToPlan] = useState(false);
   const [mobilePlanView, setMobilePlanView] = useState<'list' | 'map'>('list');
-  const [tab, setTab] = useState<'search' | 'places' | 'courses' | 'plans'>('places');
+  const [tab, setTab] = useState<'search' | 'places' | 'courses' | 'plans'>(() => coupleId && initialPlanId ? 'plans' : 'places');
   const [scope, setScope] = useState<'map' | 'nationwide'>('map');
   const [bounds, setBounds] = useState<MapBounds | null>(null);
   const latestViewport = useRef<MapBounds | null>(null);
@@ -155,7 +161,20 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus, init
   const regionLookup = useRef<{ key: string; expires: number; region: string } | null>(null);
   const queryRef = useRef(query);
   const activePlanIdRef = useRef(activePlanId);
-  activePlanIdRef.current = activePlanId;
+  useEffect(() => { activePlanIdRef.current = activePlanId; }, [activePlanId]);
+  const mapFocus = useCallback((place: { latitude: number; longitude: number; placeName: string; photoUrl?: string; address?: string }) => {
+    if (!mapReady || !frame.current?.contentWindow) {
+      queuedFocus.current = place;
+      return;
+    }
+    queuedFocus.current = null;
+    frame.current.contentWindow.postMessage({ source: 'route-map-parent', type: 'focus', showPopup: true,
+      visit: { latitude: place.latitude, longitude: place.longitude, placeName: place.placeName, photoUrl: place.photoUrl, address: place.address } }, MAP_ORIGIN);
+  }, [mapReady]);
+  const clearMapFocus = useCallback(() => {
+    queuedFocus.current = null;
+    if (mapReady) frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'clear-focus' }, MAP_ORIGIN);
+  }, [mapReady]);
   useEffect(() => () => {
     ++searchSequence.current;
     searchAbort.current?.abort();
@@ -174,8 +193,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus, init
   }, [results, searchedScope, bounds, searchOrigin]);
   const mapMovedSinceSearch = searchedScope === 'map' && searchedBounds && bounds
     ? !sameMapBounds(searchedBounds, bounds) : false;
-  resultsRef.current = shownResults;
-  queryRef.current = query;
+  useEffect(() => { resultsRef.current = shownResults; queryRef.current = query; }, [shownResults, query]);
   const dismissPlaceHint = (key: PlaceHintKey) => {
     setDismissedPlaceHints((previous) => {
       const next = { ...previous, [key]: true };
@@ -186,6 +204,42 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus, init
   const selected = places.find((item) => item.id === selectedId);
   const course = courses.find((item) => item.id === courseId);
   const activePlan = datePlans.find((item) => item.id === activePlanId);
+  // Adjust local drafts during render when their source changes. React retries
+  // this render before showing children, so a prior plan's edits never flash.
+  const notificationKey = JSON.stringify([notificationRequest ?? 0, initialPlanId ?? '']);
+  const [seenNotificationKey, setSeenNotificationKey] = useState(notificationKey);
+  if (seenNotificationKey !== notificationKey) {
+    setSeenNotificationKey(notificationKey);
+    if (initialPlanId && coupleId) { setTab('plans'); setActivePlanId(initialPlanId); setMobilePlanView('list'); }
+  }
+  const [previousPlanId, setPreviousPlanId] = useState(activePlanId);
+  if (previousPlanId !== activePlanId) {
+    setPreviousPlanId(activePlanId);
+    setPlanApproval(null); setApprovalLoading(Boolean(coupleId && activePlanId)); setScheduleReady(false);
+    setPlanCandidates([]); setSelectedPlanCandidateId(''); setPlanCandidatesLoading(Boolean(coupleId && activePlanId)); setPlanCandidatesError(false);
+  }
+  const planSnapshotKey = JSON.stringify([activePlan?.id, activePlan?.title, activePlan?.date, planApproval?.confirmedSnapshot.title, planApproval?.confirmedSnapshot.date]);
+  const [previousPlanSnapshotKey, setPreviousPlanSnapshotKey] = useState(planSnapshotKey);
+  if (previousPlanSnapshotKey !== planSnapshotKey) {
+    setPreviousPlanSnapshotKey(planSnapshotKey);
+    if (activePlan) { setPlanTitle(planApproval?.confirmedSnapshot.title ?? activePlan.title); setPlanDate(planApproval?.confirmedSnapshot.date ?? activePlan.date); }
+  }
+  const selectedKey = JSON.stringify([selected?.id, selected?.memo, selected?.category]);
+  const [previousSelectedKey, setPreviousSelectedKey] = useState(selectedKey);
+  if (previousSelectedKey !== selectedKey) {
+    setPreviousSelectedKey(selectedKey);
+    setLikes([]); setOpinions([]); setOpinion('');
+    setEditMemo(selected?.memo ?? ''); setEditCategory(selected?.category ?? '기타');
+  }
+  const courseKey = JSON.stringify([course?.id, course?.updatedAt]);
+  const [previousCourseKey, setPreviousCourseKey] = useState(courseKey);
+  if (previousCourseKey !== courseKey) {
+    setPreviousCourseKey(courseKey);
+    if (course) {
+      setCourseTitle(course.title); setCourseDate(course.date); setCoursePlaceIds(course.placeIds);
+      setCourseTimes(courseTimesFromSaved(course.placeIds, course.timeSlots));
+    }
+  }
   // A bookmarked place remains in the shared wishlist after it is added
   // to a course. A course only references its stable place ID.
   const courseUsage = useMemo(() => {
@@ -211,7 +265,6 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus, init
   const mappedPlaces = useMemo(() => tab === 'search' || tab === 'plans' ? [] : placesForDateMap(tab === 'courses' ? places : visible, tab, coursePlaceIds), [places, visible, tab, coursePlaceIds]);
 
   useEffect(() => {
-    setPlaces([]); setCourses([]); setDatePlans([]); setActivePlanId(''); setPlanCandidates([]); setPlanApproval(null); setApprovalLoading(true); setScheduleReady(false); setAddingToPlan(false); setPickedIds([]); setCoursePlaceIds([]); setSelectedId(''); setCourseId(''); setCourseTimes({}); setCoursePicking(false); setCourseEditorOpen(false); setAddingToCourse(false); setShowSchedule(false); setLikes([]); setOpinions([]);
     if (!coupleId) return;
     const stopPlaces = subscribeDatePlaces(coupleId, setPlaces, (error) => setMessage(errorText(error)));
     const stopCourses = subscribeDateCourses(coupleId, setCourses, (error) => setMessage(errorText(error)));
@@ -223,13 +276,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus, init
     return subscribeDatePlanDrafts(coupleId, setDatePlans, (error) => setMessage(errorText(error)));
   }, [coupleId]);
   useEffect(() => {
-    if (!initialPlanId || !coupleId) return;
-    setTab('plans'); setActivePlanId(initialPlanId); setMobilePlanView('list');
-  }, [initialPlanId, notificationRequest, coupleId]);
-
-  useEffect(() => {
-    setPlanApproval(null); setApprovalLoading(true); setScheduleReady(false);
-    if (!coupleId || !activePlanId) { setApprovalLoading(false); return; }
+    if (!coupleId || !activePlanId) return;
     let disposed = false;
     let listenerDelivered = false;
     const apply = (approval: DatePlanApproval | null) => {
@@ -258,8 +305,6 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus, init
   };
 
   useEffect(() => {
-    setPlanCandidates([]); setSelectedPlanCandidateId('');
-    setPlanCandidatesLoading(Boolean(coupleId && activePlanId)); setPlanCandidatesError(false);
     if (!coupleId || !activePlanId) return;
     return subscribeDatePlanCandidates(coupleId, activePlanId, (items) => {
       setPlanCandidates(items);
@@ -270,32 +315,11 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus, init
   }, [coupleId, activePlanId]);
 
   useEffect(() => {
-    if (!activePlan) return;
-    // Approved revisions are canonical snapshots; the original draft stays
-    // immutable so it may retain its initial name and date.
-    setPlanTitle(planApproval?.confirmedSnapshot.title ?? activePlan.title);
-    setPlanDate(planApproval?.confirmedSnapshot.date ?? activePlan.date);
-  }, [activePlan?.id, activePlan?.title, activePlan?.date,
-      planApproval?.confirmedSnapshot.title, planApproval?.confirmedSnapshot.date]);
-
-  useEffect(() => {
-    setLikes([]); setOpinions([]); setOpinion('');
     if (!coupleId || !selectedId) return;
     const stopLikes = subscribePlaceLikes(coupleId, selectedId, setLikes, (error) => setMessage(errorText(error)));
     const stopOpinions = subscribePlaceOpinions(coupleId, selectedId, setOpinions, (error) => setMessage(errorText(error)));
     return () => { stopLikes(); stopOpinions(); };
   }, [coupleId, selectedId]);
-
-  useEffect(() => {
-    setEditMemo(selected?.memo ?? '');
-    setEditCategory(selected?.category ?? '기타');
-  }, [selected?.id, selected?.memo, selected?.category]);
-
-  useEffect(() => {
-    if (!course) return;
-    setCourseTitle(course.title); setCourseDate(course.date); setCoursePlaceIds(course.placeIds);
-    setCourseTimes(courseTimesFromSaved(course.placeIds, course.timeSlots));
-  }, [course?.id, course?.updatedAt]);
 
   const readLiveViewport = (): Promise<MapBounds | null> => {
     const target = frame.current?.contentWindow;
@@ -303,14 +327,13 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus, init
     pendingViewport.current?.resolve(null);
     return new Promise((resolve) => {
       const id = 'viewport-' + (++viewportRequestNumber.current);
-      let timer: number | undefined;
       const finish = (value: MapBounds | null) => {
-        if (timer !== undefined) window.clearTimeout(timer);
+        window.clearTimeout(timer);
         if (pendingViewport.current?.id === id) pendingViewport.current = null;
         resolve(value);
       };
       pendingViewport.current = { id, resolve: finish };
-      timer = window.setTimeout(() => finish(null), 2000);
+      const timer = window.setTimeout(() => finish(null), 2000);
       target.postMessage({ source: 'route-map-parent', type: 'request-viewport', requestId: id }, MAP_ORIGIN);
     });
   };
@@ -500,11 +523,15 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus, init
     finally { setSearching(false); }
   };
 
+  const searchFocusedPlace = useEffectEvent((place: string) => {
+    setQuery(place);
+    setScope('nationwide');
+    void search(place, false, 'nationwide').finally(onClearFocus);
+  });
   useEffect(() => {
     if (!focusPlace) return;
-    setQuery(focusPlace);
-    setScope('nationwide');
-    void search(focusPlace, false, 'nationwide').finally(onClearFocus);
+    const timer = window.setTimeout(() => searchFocusedPlace(focusPlace), 0);
+    return () => window.clearTimeout(timer);
   // One-shot external navigation, not on each render.
   }, [focusPlace]);
 
@@ -603,7 +630,7 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus, init
     };
     window.addEventListener('message', receive);
     return () => { window.clearTimeout(timer); window.removeEventListener('message', receive); };
-  }, [mapReady, tab, planCandidates]);
+  }, [mapReady, tab, planCandidates, mapFocus]);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -645,21 +672,6 @@ export function DateMapPage({ Header, connection, focusPlace, onClearFocus, init
     setCandidate(item); setManualMapCandidate(false); setCandidateName(item.placeName); setCandidateAddress(item.address ?? '');
     setCandidateSearch(query.trim()); setPicking(false); setMessage('');
     mapFocus(item);
-  };
-
-  const mapFocus = (place: { latitude: number; longitude: number; placeName: string; photoUrl?: string; address?: string }) => {
-    if (!mapReady || !frame.current?.contentWindow) {
-      queuedFocus.current = place;
-      return;
-    }
-    queuedFocus.current = null;
-    frame.current.contentWindow.postMessage({ source: 'route-map-parent', type: 'focus', showPopup: true,
-      visit: { latitude: place.latitude, longitude: place.longitude, placeName: place.placeName, photoUrl: place.photoUrl, address: place.address } }, MAP_ORIGIN);
-  };
-
-  const clearMapFocus = () => {
-    queuedFocus.current = null;
-    if (mapReady) frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'clear-focus' }, MAP_ORIGIN);
   };
 
   const submit = async (work: () => Promise<unknown>, success: string) => {

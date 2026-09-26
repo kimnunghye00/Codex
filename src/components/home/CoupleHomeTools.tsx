@@ -303,20 +303,6 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
   const [form, setForm] = useState({ title: '', date: todayKey(), startTime: '19:00', endTime: '', memo: '', location: '' });
 
   useEffect(() => {
-    setLocalSchedules(loadLocal(uid));
-    setLegacyPromises(loadLegacyPromises(uid));
-  }, [uid]);
-
-  useEffect(() => {
-    if (myProfileOpen) return;
-    setProfileDraft({
-      photoDataUrl: profile.photoDataUrl ?? '',
-      backgroundPhotoDataUrl: profile.backgroundPhotoDataUrl ?? '',
-      statusMessage: profile.statusMessage ?? '',
-    });
-  }, [myProfileOpen, profile.backgroundPhotoDataUrl, profile.photoDataUrl, profile.statusMessage]);
-
-  useEffect(() => {
     const refresh = () => setLegacyPromises(loadLegacyPromises(uid));
     window.addEventListener('route-schedules-local-change', refresh);
     window.addEventListener('route-memories-local-change', refresh);
@@ -327,7 +313,7 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
   }, [uid]);
 
   useEffect(() => {
-    if (!connection?.coupleId) { setRemoteSchedules([]); return; }
+    if (!connection?.coupleId) return;
     const schedulesRef = collection(db, 'couples', connection.coupleId, 'schedules');
     const q = query(schedulesRef, orderBy('date', 'asc'));
     let unsubscribe: (() => void) | undefined;

@@ -21,6 +21,7 @@ type DatePlan = { id: number; title: string; date: string; time: string; locatio
 type AnniversaryItem = { title: string; date: string; icon: string; special?: boolean };
 
 const DEFAULT_TABS: HubTabId[] = ['album', 'anniversary', 'record', 'tier', 'schedule', 'date'];
+const EMPTY_SCHEDULES: Schedule[] = [];
 const TAB_LABEL: Record<HubTabId, string> = { album: '앨범', anniversary: '기념일', record: '기록', tier: '티어', schedule: '일정', date: '약속' };
 
 function normalizeTabOrder(value: unknown): HubTabId[] {
@@ -109,9 +110,9 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
   const profile = sharedProfile ?? (uid ? loadProfile(uid) : null);
   const [fallbackConnection, setFallbackConnection] = useState<RealCoupleConnection | null>(null);
   const connection = sharedConnection !== undefined ? sharedConnection : fallbackConnection;
-  const [fallbackRelationshipStartDate, setFallbackRelationshipStartDate] = useState<string>();
-  const relationshipStartDate = sharedRelationshipStartDate ?? fallbackRelationshipStartDate;
-  const [activeTab, setActiveTab] = useState<HubTabId>(requestedTab ?? 'album');
+  const [fallbackRelationship, setFallbackRelationship] = useState<{ coupleId: string; date?: string }>();
+  const relationshipStartDate = sharedRelationshipStartDate ?? (fallbackRelationship?.coupleId === connection?.coupleId ? fallbackRelationship?.date : undefined);
+  const [activeTab, setActiveTab] = useState<HubTabId>(() => initialDraft || initialMemoryId !== undefined ? 'album' : requestedTab ?? 'album');
   const [tabOrder, setTabOrder] = useState<HubTabId[]>(() => {
     try {
       const parsed = JSON.parse(localStorage.getItem(`route-hub-tabs:${uid}`) || '[]') as unknown;
@@ -131,9 +132,10 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
   const draggingTabRef = useRef<HubTabId | null>(null);
   const [draggingTab, setDraggingTab] = useState<HubTabId | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
-  const [selected, setSelected] = useState<number | undefined>(initialMemoryId);
-  const [editing, setEditing] = useState<Memory | null>();
-  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [selected, setSelected] = useState<number | undefined>(initialDraft ? undefined : initialMemoryId);
+  const [editing, setEditing] = useState<Memory | null | undefined>(initialDraft ? null : undefined);
+  const [remoteSchedules, setRemoteSchedules] = useState<{ coupleId: string; items: Schedule[] }>();
+  const schedules = remoteSchedules?.coupleId === connection?.coupleId ? remoteSchedules?.items ?? EMPTY_SCHEDULES : EMPTY_SCHEDULES;
   const [localSchedules, setLocalSchedules] = useState<Schedule[]>(() => { try { return JSON.parse(localStorage.getItem(`route-local-schedules:${uid}`) || '[]') as Schedule[]; } catch { return []; } });
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [editingScheduleId, setEditingScheduleId] = useState<string>();
@@ -147,6 +149,21 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
   const [dateSourceKey, setDateSourceKey] = useState<string>();
   const [dateForm, setDateForm] = useState({ title: '', date: todayKey(), time: '18:00', location: '', memo: '' });
   const [placeTimelineFocus, setPlaceTimelineFocus] = useState<string>();
+  const [seenDraft, setSeenDraft] = useState(initialDraft);
+  if (seenDraft !== initialDraft) {
+    setSeenDraft(initialDraft);
+    if (initialDraft) { setSelected(undefined); setActiveTab('album'); setEditing(null); }
+  }
+  const [seenRequestedTab, setSeenRequestedTab] = useState(requestedTab);
+  if (seenRequestedTab !== requestedTab) {
+    setSeenRequestedTab(requestedTab);
+    if (requestedTab) setActiveTab(requestedTab);
+  }
+  const [seenInitialMemoryId, setSeenInitialMemoryId] = useState(initialMemoryId);
+  if (seenInitialMemoryId !== initialMemoryId) {
+    setSeenInitialMemoryId(initialMemoryId);
+    if (initialMemoryId !== undefined) { setActiveTab('album'); setSelected(initialMemoryId); }
+  }
 
   useEffect(() => {
     if (sharedConnection !== undefined || !uid) return;
@@ -154,36 +171,19 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
   }, [sharedConnection, uid]);
   useEffect(() => {
     if (sharedRelationshipStartDate !== undefined) return;
-    if (!connection?.coupleId) {
-      setFallbackRelationshipStartDate(undefined);
-      return;
-    }
-    return subscribeCoupleShared(connection.coupleId, (shared) => setFallbackRelationshipStartDate(shared.relationshipStartDate));
+    if (!connection?.coupleId) return;
+    const coupleId = connection.coupleId;
+    return subscribeCoupleShared(coupleId, (shared) => setFallbackRelationship({ coupleId, date: shared.relationshipStartDate }));
   }, [connection?.coupleId, sharedRelationshipStartDate]);
-  useEffect(() => { if (!connection?.coupleId) { setSchedules([]); return; } const q = query(collection(db, 'couples', connection.coupleId, 'schedules'), orderBy('date', 'asc')); return onSnapshot(q, (snap) => setSchedules(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Schedule, 'id'>) }))), () => setScheduleFeedback('공유 일정을 불러오지 못해 이 기기에 저장된 일정만 표시해요.')); }, [connection?.coupleId]);
-  useEffect(() => { try { localStorage.setItem(`route-hub-tabs:${uid}`, JSON.stringify(tabOrder)); } catch {} }, [tabOrder, uid]);
+  useEffect(() => { if (!connection?.coupleId) return; const coupleId = connection.coupleId; const q = query(collection(db, 'couples', coupleId, 'schedules'), orderBy('date', 'asc')); return onSnapshot(q, (snap) => setRemoteSchedules({ coupleId, items: snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Schedule, 'id'>) })) }), () => setScheduleFeedback('공유 일정을 불러오지 못해 이 기기에 저장된 일정만 표시해요.')); }, [connection?.coupleId]);
+  useEffect(() => { try { localStorage.setItem(`route-hub-tabs:${uid}`, JSON.stringify(tabOrder)); } catch { /* Tab order is optional when storage is unavailable. */ } }, [tabOrder, uid]);
   useEffect(() => {
     try {
       localStorage.setItem(`route-show-default-anniversaries:${uid}`, String(showDefaultAnniversaries));
-    } catch {}
+    } catch { /* Anniversary preference remains in memory for this session. */ }
   }, [showDefaultAnniversaries, uid]);
-  useEffect(() => { try { localStorage.setItem(`route-date-plans:${uid}`, JSON.stringify(datePlans)); window.dispatchEvent(new Event('route-schedules-local-change')); } catch { setDateFeedback('기기 저장 공간을 확인해 주세요.'); } }, [datePlans, uid]);
-  useEffect(() => { try { localStorage.setItem(`route-local-schedules:${uid}`, JSON.stringify(localSchedules)); window.dispatchEvent(new Event('route-schedules-local-change')); } catch { setScheduleFeedback('기기 저장 공간을 확인해 주세요.'); } }, [localSchedules, uid]);
-  useEffect(() => {
-    if (!initialDraft) return;
-    setSelected(undefined);
-    setActiveTab('album');
-    setEditing(null);
-  }, [initialDraft]);
-  useEffect(() => {
-    if (!requestedTab) return;
-    setActiveTab(requestedTab);
-  }, [requestedTab]);
-  useEffect(() => {
-    if (initialMemoryId === undefined) return;
-    setActiveTab('album');
-    setSelected(initialMemoryId);
-  }, [initialMemoryId]);
+  useEffect(() => { try { localStorage.setItem(`route-date-plans:${uid}`, JSON.stringify(datePlans)); window.dispatchEvent(new Event('route-schedules-local-change')); } catch { window.setTimeout(() => setDateFeedback('기기 저장 공간을 확인해 주세요.'), 0); } }, [datePlans, uid]);
+  useEffect(() => { try { localStorage.setItem(`route-local-schedules:${uid}`, JSON.stringify(localSchedules)); window.dispatchEvent(new Event('route-schedules-local-change')); } catch { window.setTimeout(() => setScheduleFeedback('기기 저장 공간을 확인해 주세요.'), 0); } }, [localSchedules, uid]);
 
   useEffect(() => {
     const handleBack = (event: Event) => {

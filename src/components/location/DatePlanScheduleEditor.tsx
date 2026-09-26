@@ -17,6 +17,13 @@ export function DatePlanScheduleEditor({ coupleId, planId, uid, candidates, onRe
   coupleId: string; planId: string; uid: string; candidates: DatePlanCandidate[];
   onReadyChange?: (ready: boolean) => void;
 }) {
+  return <ScheduleEditor key={`${coupleId}:${planId}`} coupleId={coupleId} planId={planId} uid={uid} candidates={candidates} onReadyChange={onReadyChange} />;
+}
+
+function ScheduleEditor({ coupleId, planId, uid, candidates, onReadyChange }: {
+  coupleId: string; planId: string; uid: string; candidates: DatePlanCandidate[];
+  onReadyChange?: (ready: boolean) => void;
+}) {
   const [draft, setDraft] = useState<DatePlanSchedule>(() => copy(EMPTY_DATE_PLAN_SCHEDULE));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -30,15 +37,13 @@ export function DatePlanScheduleEditor({ coupleId, planId, uid, candidates, onRe
   const dirtyRef = useRef(false);
   const savingRef = useRef(false);
   const conflictRef = useRef(false);
+  const localRevision = useRef(0);
   const changedCandidateIds = candidates.map((item) => item.id);
   const candidateIdsKey = changedCandidateIds.join('\u0001');
   const timeline = useMemo(() => calculateDatePlanTimeline(draft.startTime, draft.blocks), [draft]);
   const candidateById = useMemo(() => new Map(candidates.map((item) => [item.id, item])), [candidates]);
 
   useEffect(() => {
-    dirtyRef.current = false; savingRef.current = false; conflictRef.current = false;
-    setDraft(copy(EMPTY_DATE_PLAN_SCHEDULE)); setLoading(true); setSaving(false);
-    setDirty(false); setConflict(false); setSaveFailed(false); setError(''); setStatus('');
     return subscribeDatePlanSchedule(coupleId, planId, (remote) => {
       if (savingRef.current) return;
       if (dirtyRef.current) {
@@ -54,7 +59,6 @@ export function DatePlanScheduleEditor({ coupleId, planId, uid, candidates, onRe
     }, () => { setLoading(false); setError('공동 시간표를 불러오지 못했어요. 잠시 후 다시 열어 주세요.'); });
   }, [coupleId, planId]);
 
-  const localRevision = useRef(0);
   const scheduleReady = !loading && !saving && !dirty && !conflict && !saveFailed && !error
     && datePlanScheduleReadyForApproval(draft);
   useEffect(() => {

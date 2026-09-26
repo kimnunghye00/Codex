@@ -1,5 +1,5 @@
-import { Bot, CalendarClock, ContactRound, Gift, Heart, MonitorUp, MoreHorizontal, Phone, Trash2, Video, X } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Bot, CalendarClock, ContactRound, Gift, Heart, MoreHorizontal, Phone, Trash2, Video, X } from 'lucide-react';
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { collection, doc, limit, onSnapshot, orderBy, query, setDoc, where } from 'firebase/firestore';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -318,11 +318,12 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
       window.removeEventListener('route-memories-remote-change', refreshSavedMedia);
     };
   }, []);
+  const connectedCoupleId = connection?.coupleId;
   useEffect(() => {
-    if (!connection || !currentUid) return;
+    if (!connectedCoupleId || !currentUid) return;
     setSyncError('');
-    return subscribeCoupleMessages(connection.coupleId, currentUid, setMessages, (cause) => { console.error('[DANDULI realtime chat]', cause); setSyncError('실시간 대화를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.'); });
-  }, [connection?.coupleId, currentUid, setMessages]);
+    return subscribeCoupleMessages(connectedCoupleId, currentUid, setMessages, (cause) => { console.error('[DANDULI realtime chat]', cause); setSyncError('실시간 대화를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.'); });
+  }, [connectedCoupleId, currentUid, setMessages]);
   useEffect(() => {
     if (!connection?.coupleId || !currentUid) return;
     migrateLoadedLegacyChatMedia(connection.coupleId, currentUid, messages);
@@ -485,6 +486,7 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
     const message: Message = { id: createMessageId(), sender: 'me', type: 'text', text: text.trim(), timestamp: new Date().toISOString(), read: usingAiPartner, replyTo, scheduledFor };
     deliver(message); setReplyTo(undefined);
   };
+  const sendScheduledText = useEffectEvent((text: string, sendAt: string) => sendText(text, sendAt));
 
   const sendStickerChoice = (value: string) => {
     const stickerId = stickerIdFromToken(value);
@@ -513,7 +515,7 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
         timer = undefined;
         const due = scheduledDrafts.filter((item) => new Date(item.sendAt).getTime() <= Date.now());
         if (due.length) {
-          due.forEach((item) => sendText(item.text, item.sendAt));
+          due.forEach((item) => sendScheduledText(item.text, item.sendAt));
           setScheduledDrafts((items) => items.filter((item) => !due.some((dueItem) => dueItem.id === item.id)));
           return;
         }
@@ -756,15 +758,6 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
     setScheduleForm({ text: '', date: '', time: '' });
     setScheduleError('');
     setScheduleOpen(false);
-  };
-  const startMedia = async (mode: CallMode) => {
-    try {
-      mediaStream?.getTracks().forEach((track) => track.stop());
-      const stream = mode === 'screen'
-        ? await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })
-        : await navigator.mediaDevices.getUserMedia({ video: mode === 'video', audio: true });
-      setMediaStream(stream); setCallMode(mode);
-    } catch { setSyncError('마이크/카메라 또는 화면 공유 권한을 확인해 주세요.'); }
   };
   const stopMedia = () => { mediaStream?.getTracks().forEach((track) => track.stop()); setMediaStream(undefined); setCallMode(undefined); };
 

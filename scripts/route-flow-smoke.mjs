@@ -93,7 +93,7 @@ check('shared header owns settings', header.includes('onSettings') && header.inc
 check('responsive frame owns desktop viewport', responsiveFrame.includes('lg:[&_.home-page]:!h-dvh') && responsiveFrame.includes('lg:[&_.home-page]:!min-h-0'));
 
 check('App routes home', app.includes("tab === 'home'"));
-check('App routes memories directly', app.includes("from './components/memories/MemoriesPage'") && app.includes('<MemoriesPage requestedTab={requestedHubTab}'));
+check('App routes memories directly', app.includes("from './components/memories/MemoriesPage'") && /<MemoriesPage\b[^>]*\brequestedTab=\{requestedHubTab\}/.test(app));
 check('App routes chat directly into page', app.includes("tab === 'chat'") && app.includes('<ChatPage Header={AppHeader}') && !app.includes('chat-room-layer'));
 check('App routes date planning directly', app.includes("import('./components/location/DateMapPage')") && app.includes('<DateMapPage Header={AppHeader}') && !app.includes('<LocationPage requestedTab='));
 check('App routes more', app.includes("tab === 'more'"));

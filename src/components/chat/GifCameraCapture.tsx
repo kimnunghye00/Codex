@@ -63,7 +63,7 @@ export function GifCameraCapture({ onClose, onCaptured, onError }: {
   const [progress, setProgress] = useState(0);
   const [previewUrl, setPreviewUrl] = useState('');
   const [capturedFile, setCapturedFile] = useState<File>();
-  const [error, setError] = useState('');
+  const [error, setError] = useState(() => typeof navigator !== 'undefined' && typeof navigator.mediaDevices?.getUserMedia === 'function' ? '' : '이 기기에서는 카메라 촬영을 지원하지 않아요.');
 
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -97,10 +97,7 @@ export function GifCameraCapture({ onClose, onCaptured, onError }: {
 
   useEffect(() => {
     let disposed = false;
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setError('이 기기에서는 카메라 촬영을 지원하지 않아요.');
-      return;
-    }
+    if (!navigator.mediaDevices?.getUserMedia) return;
     void navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 1280 } },
       audio: false,

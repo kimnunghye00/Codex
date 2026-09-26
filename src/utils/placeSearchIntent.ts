@@ -15,7 +15,7 @@ const CITIES = Object.entries(MUNICIPALITIES).flatMap(([province, cities]) =>
 const PROVINCE_NAMES = Object.entries(PROVINCES).sort(([a], [b]) => b.length - a.length);
 
 export function normalizePlaceSearchText(text: string): string {
-  return text.normalize('NFKC').toLocaleLowerCase('ko-KR').replace(/[\s·,()\-]/g, '');
+  return text.normalize('NFKC').toLocaleLowerCase('ko-KR').replace(/[\s·,()-]/g, '');
 }
 
 /** Only whole locality tokens and explicit "OO점" suffixes count as a location.

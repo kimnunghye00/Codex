@@ -96,13 +96,11 @@ async function downloadAttachment(url: string, name: string, mime?: string) {
 }
 
 function VoiceAttachment({ url, mime }: { url: string; mime?: string }) {
-  const [playbackUrl, setPlaybackUrl] = useState(url);
+  const [resolved, setResolved] = useState<{ source: string; playbackUrl: string }>();
+  const playbackUrl = resolved?.source === url ? resolved.playbackUrl : url;
 
   useEffect(() => {
-    if (!url || url.startsWith('blob:') || url.startsWith('data:')) {
-      setPlaybackUrl(url);
-      return;
-    }
+    if (!url || url.startsWith('blob:') || url.startsWith('data:')) return;
     let cancelled = false;
     let objectUrl = '';
     void fetch(url)
@@ -113,11 +111,9 @@ function VoiceAttachment({ url, mime }: { url: string; mime?: string }) {
       .then((bytes) => {
         if (cancelled) return;
         objectUrl = URL.createObjectURL(new Blob([bytes], { type: mime || 'audio/webm' }));
-        setPlaybackUrl(objectUrl);
+        setResolved({ source: url, playbackUrl: objectUrl });
       })
-      .catch(() => {
-        if (!cancelled) setPlaybackUrl(url);
-      });
+      .catch(() => { /* The original URL remains available for the audio element. */ });
     return () => {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
@@ -132,44 +128,33 @@ function retryableUrl(url: string, retry: number) {
   return `${url}${url.includes('?') ? '&' : '?'}route-preview-retry=${retry}`;
 }
 
-function DeferredMediaImage({ src, alt, className, onClick, eager = false }: {
+type DeferredMediaImageProps = {
   src: string;
   alt: string;
   className?: string;
   onClick?: (event: React.MouseEvent<HTMLElement>) => void;
   eager?: boolean;
-}) {
+};
+
+function DeferredMediaImage(props: DeferredMediaImageProps) {
+  return <DeferredMediaImageSource key={`${props.src}:${props.eager ?? false}`} {...props} />;
+}
+
+function DeferredMediaImageSource({ src, alt, className, onClick, eager = false }: DeferredMediaImageProps) {
   const optimizedPreview = hasOptimizedChatPreview(src);
   const alreadySeen = seenMediaSrcs.has(src);
   const [legacyState, setLegacyState] = useState<LegacyPreviewState>('optimizing');
   const [failureCode, setFailureCode] = useState('');
   const [previewFailed, setPreviewFailed] = useState(false);
   const [previewRetry, setPreviewRetry] = useState(0);
-  const [mediaReady, setMediaReady] = useState(eager || alreadySeen);
-  const [legacyRequested, setLegacyRequested] = useState(eager || alreadySeen);
+  const [mediaReady, setMediaReady] = useState(eager || alreadySeen || typeof IntersectionObserver === 'undefined');
+  const legacyRequested = mediaReady;
   const mediaAnchorRef = useRef<HTMLSpanElement>(null);
-
-  useEffect(() => {
-    const ready = eager || seenMediaSrcs.has(src);
-    setLegacyState('optimizing');
-    setFailureCode('');
-    setPreviewFailed(false);
-    setPreviewRetry(0);
-    // Same-value setState calls below bail out without a re-render, so this
-    // is a no-op for a row that mounted already-ready — it only matters when
-    // `src` actually changes on a live instance (e.g. swiping the gallery
-    // viewer to the next photo).
-    setMediaReady(ready);
-    setLegacyRequested(ready);
-  }, [src, eager]);
 
   useEffect(() => {
     if (mediaReady || eager) return;
     const target = mediaAnchorRef.current;
-    if (!target || typeof IntersectionObserver === 'undefined') {
-      setMediaReady(true);
-      return;
-    }
+    if (!target) return;
 
     const observer = new IntersectionObserver(([entry]) => {
       if (!entry.isIntersecting) return;
@@ -179,11 +164,6 @@ function DeferredMediaImage({ src, alt, className, onClick, eager = false }: {
     observer.observe(target);
     return () => observer.disconnect();
   }, [eager, mediaReady, src]);
-
-  useEffect(() => {
-    if (optimizedPreview || !mediaReady || legacyRequested) return;
-    setLegacyRequested(true);
-  }, [legacyRequested, mediaReady, optimizedPreview]);
 
   useEffect(() => {
     if (optimizedPreview || !legacyRequested) return;
@@ -211,7 +191,6 @@ function DeferredMediaImage({ src, alt, className, onClick, eager = false }: {
     event.stopPropagation();
     setLegacyState('retrying');
     setFailureCode('');
-    setLegacyRequested(true);
     window.dispatchEvent(new CustomEvent(PREVIEW_RETRY_EVENT, { detail: { reference: src } }));
   };
 
@@ -418,7 +397,7 @@ function ChatBubbleView({ message, reply, partnerName, partnerInitial, active, h
           {message.type === 'sticker' && <DanduliSticker id={message.stickerId} className="chat-sticker-art" />}
           {message.type === 'file' && <span className="chat-attachment-card"><FileText /><span className="chat-attachment-copy"><b>{message.attachmentName || '파일'}</b><small>{formatAttachmentSize(message.attachmentSize)}{message.attachmentMime ? ` · ${message.attachmentMime}` : ''}</small></span>{message.attachmentUrl && <button type="button" className="chat-attachment-download" aria-label="파일 저장" onClick={(event) => { event.stopPropagation(); void downloadAttachment(message.attachmentUrl!, message.attachmentName || 'attachment', message.attachmentMime); }}><Download /></button>}</span>}
           {message.type === 'contact' && <span className="chat-contact-card"><ContactRound /><span><b>{message.contactName || '연락처'}</b><small>{message.contactPhone || '전화번호 없음'}</small></span>{message.contactPhone && <a href={`tel:${message.contactPhone}`} aria-label={`${message.contactName || '연락처'}에게 전화하기`} onClick={(event) => event.stopPropagation()}><Phone /></a>}</span>}
-          {message.type === 'audio' && <span className="chat-audio-card"><Mic /><span><b>음성 메시지</b><small>{formatAudioDuration(message.audioDuration)}</small></span>{message.attachmentUrl && <VoiceAttachment url={message.attachmentUrl} mime={message.attachmentMime} />}</span>}
+          {message.type === 'audio' && <span className="chat-audio-card"><Mic /><span><b>음성 메시지</b><small>{formatAudioDuration(message.audioDuration)}</small></span>{message.attachmentUrl && <VoiceAttachment key={message.attachmentUrl} url={message.attachmentUrl} mime={message.attachmentMime} />}</span>}
           {message.type === 'call' && (() => { const copy = callRecordCopy(message); return <span className="chat-call-record-card"><span className="chat-call-record-icon">{message.callKind === 'video' ? <Video /> : <PhoneCall />}</span><span className="chat-call-record-copy"><b>{copy.title}</b><small>{copy.detail}</small></span></span>; })()}
           {message.type === 'text' && <span className="message-text">{message.text}</span>}
         </div>
