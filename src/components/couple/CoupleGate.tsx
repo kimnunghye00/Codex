@@ -25,7 +25,7 @@ export function CoupleGate({ user, children }: { user: User; children: ReactNode
   }, [profile?.completedAt, user.uid]);
 
   if (!profile) return <>{children}</>;
-  if (checking) return <div className="app-shell couple-gate-loading"><strong>ROUTE.</strong><span>커플 연결 정보를 확인하고 있어요…</span></div>;
+  if (checking) return <div className="app-shell couple-gate-loading"><strong>단둘이</strong><span>커플 연결 정보를 확인하고 있어요…</span></div>;
   if (!connection) {
     return <CoupleConnect
       user={user}

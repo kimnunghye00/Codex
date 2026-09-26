@@ -1,4 +1,4 @@
-name: Build Android OneStore Release APK
+name: Build Android QA APK (test signing key)
 
 on:
   push:
@@ -96,12 +96,12 @@ jobs:
         working-directory: android
         run: ./gradlew assembleRelease --stacktrace
 
-      - name: Align and sign OneStore release APK
+      - name: Align and sign QA APK with the test key
         shell: bash
         run: |
           set -euo pipefail
           UNSIGNED="android/app/build/outputs/apk/release/app-release-unsigned.apk"
-          OUTPUT="android/app/build/outputs/apk/release/DANDULI-onestore-release.apk"
+          OUTPUT="android/app/build/outputs/apk/release/DANDULI-qa-test-key.apk"
           BUILD_TOOLS="$(find "${ANDROID_HOME}/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
           ZIPALIGN="${BUILD_TOOLS}/zipalign"
           APKSIGNER="${BUILD_TOOLS}/apksigner"
@@ -114,11 +114,11 @@ jobs:
           rm -f "${OUTPUT}.aligned"
           test -s "${OUTPUT}"
 
-      - name: Verify release APK
+      - name: Verify QA APK
         shell: bash
         run: |
           set -euo pipefail
-          APK="android/app/build/outputs/apk/release/DANDULI-onestore-release.apk"
+          APK="android/app/build/outputs/apk/release/DANDULI-qa-test-key.apk"
           APKSIGNER="$(find "${ANDROID_HOME}/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           AAPT="$(find "${ANDROID_HOME}/build-tools" -type f -name aapt | sort -V | tail -n 1)"
           EXPECTED="40f608ce3d3dd13773271e6d61b2eb1c513904636aecd662d78b882c7a006a5a"
@@ -137,23 +137,24 @@ jobs:
           VERSION_CODE="$(printf '%s\n' "${BADGING}" | sed -n "s/.*versionCode='\([0-9][0-9]*\)'.*/\1/p")"
           test -n "${VERSION_CODE}"
           test "${VERSION_CODE}" -gt 1000000
-          echo "DANDULI OneStore release APK versionCode: ${VERSION_CODE}"
+          echo "DANDULI QA APK versionCode: ${VERSION_CODE}"
 
       - name: Write build summary
         shell: bash
         run: |
-          echo '### 단둘이 Android OneStore Release APK' >> "$GITHUB_STEP_SUMMARY"
+          echo '### 단둘이 Android QA APK (test signing key)' >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo 'This test key differs from the OneStore production signing key. Do not submit this APK as a store update.' >> "$GITHUB_STEP_SUMMARY"
           echo "- Source: main @ \`${GITHUB_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
           echo '- Build type: release (non-debug)' >> "$GITHUB_STEP_SUMMARY"
           echo '- Package: com.e2.danduli' >> "$GITHUB_STEP_SUMMARY"
           echo '- APK Signature Scheme v2: verified' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Artifact: DANDULI-onestore-release-apk' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Artifact: DANDULI-qa-test-key-apk' >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload OneStore release APK
+      - name: Upload QA APK
         uses: actions/upload-artifact@v4
         with:
-          name: DANDULI-onestore-release-apk
-          path: android/app/build/outputs/apk/release/DANDULI-onestore-release.apk
+          name: DANDULI-qa-test-key-apk
+          path: android/app/build/outputs/apk/release/DANDULI-qa-test-key.apk
           if-no-files-found: error
           retention-days: 14

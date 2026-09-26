@@ -6,6 +6,7 @@ import { db } from '../../lib/firebase';
 import { syncUserProfile } from '../../lib/coupleData';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
 import { displayName, saveProfile, type UserProfile } from '../../utils/profile';
+import { constrainCroppedProfileImage, constrainProfileMedia } from '../../utils/profileImage';
 
 type ScheduleType = 'personal' | 'couple';
 type ScheduleFilter = 'all' | 'couple' | 'mine' | 'partner';
@@ -462,7 +463,7 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
     setCropApplying(true);
     setProfileFeedback('');
     try {
-      const cropped = await renderProfileCrop(profileCrop);
+      const cropped = await constrainCroppedProfileImage(await renderProfileCrop(profileCrop), profileCrop.kind);
       setProfileDraft((current) => profileCrop.kind === 'avatar'
         ? { ...current, photoDataUrl: cropped }
         : { ...current, backgroundPhotoDataUrl: cropped });
@@ -486,15 +487,19 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
       statusMessage: profileDraft.statusMessage.trim().slice(0, 60) || undefined,
     };
 
-    saveProfile(uid, next);
-    onProfileChange(next);
     try {
-      await syncUserProfile(uid, next);
+      const prepared = await constrainProfileMedia(next);
+      await syncUserProfile(uid, prepared);
+      try { saveProfile(uid, prepared); }
+      catch (cause) { console.warn('[DANDULI profile cache]', cause); }
+      onProfileChange(prepared);
       setProfileFeedback('프로필을 저장했어요.');
       window.setTimeout(() => setMyProfileOpen(false), 280);
     } catch (cause) {
       console.warn('[ROUTE home profile sync]', cause);
-      setProfileFeedback('이 기기에는 저장했어요. 연결이 안정되면 다시 동기화해 주세요.');
+      setProfileFeedback(cause instanceof Error && cause.message === 'image-too-large-to-sync'
+        ? '사진 크기를 줄이지 못했어요. 다른 사진을 선택해 주세요.'
+        : '서버에 저장하지 못했어요. 연결을 확인한 뒤 다시 시도해 주세요.');
     } finally {
       setProfileSaving(false);
     }
