@@ -59,8 +59,8 @@ async function fetchLegacyOriginal(originalUrl: string) {
     if (!response.ok) throw new Error(`legacy-media-${response.status}`);
     return await response.blob();
   } catch (cause) {
-    if (cause instanceof DOMException && cause.name === 'AbortError') throw new Error('legacy-media-timeout');
-    if (cause instanceof TypeError) throw new Error(`legacy-media-network:${cause.message || 'fetch-failed'}`);
+    if (cause instanceof DOMException && cause.name === 'AbortError') throw new Error('legacy-media-timeout', { cause });
+    if (cause instanceof TypeError) throw new Error(`legacy-media-network:${cause.message || 'fetch-failed'}`, { cause });
     throw cause;
   } finally {
     window.clearTimeout(timer);
@@ -82,7 +82,7 @@ async function decodeImage(blob: Blob): Promise<{
         height: bitmap.height,
         release: () => bitmap.close(),
       };
-    } catch {}
+    } catch { /* Fall back to HTMLImageElement when bitmap decoding is unavailable. */ }
   }
 
   const objectUrl = URL.createObjectURL(blob);

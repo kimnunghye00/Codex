@@ -1,11 +1,25 @@
 import { Camera, Check, ChevronLeft, ChevronRight, UserRound } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { User } from 'firebase/auth';
 import { calculateAge, saveProfile, type Gender, type UserProfile } from '../../utils/profile';
 import { syncUserProfile } from '../../lib/coupleData';
+import { prepareProfilePhoto } from '../../utils/profileImage';
 import { AuthFlow } from './AuthFlow';
 
 const steps = ['이름', '생년월일', '성별', '프로필 사진'];
+const draftKey = (uid: string) => `danduli-profile-draft:${uid}`;
+
+function loadDraft(uid: string) {
+  try {
+    const draft = JSON.parse(localStorage.getItem(draftKey(uid)) || '{}') as Record<string, unknown>;
+    return {
+      name: typeof draft.name === 'string' ? draft.name : '',
+      birthDate: typeof draft.birthDate === 'string' ? draft.birthDate : '',
+      gender: draft.gender === 'male' || draft.gender === 'female' || draft.gender === 'other' ? draft.gender : '' as Gender | '',
+      photoDataUrl: typeof draft.photoDataUrl === 'string' && draft.photoDataUrl.startsWith('data:image/') ? draft.photoDataUrl : '',
+    };
+  } catch { return { name: '', birthDate: '', gender: '' as Gender | '', photoDataUrl: '' }; }
+}
 
 const normalizeBirthDate = (value: string) => {
   const digits = value.replace(/\D/g, '').slice(0, 8);
@@ -27,15 +41,23 @@ const isValidBirthDate = (value: string) => {
 
 export function ProfileSetup({ user, onComplete }: { user: User; onComplete: (profile: UserProfile) => void }) {
   const hasPassword = user.providerData.some((provider) => provider.providerId === 'password');
+  const [draft] = useState(() => loadDraft(user.uid));
   const [step, setStep] = useState(0);
-  const [name, setName] = useState('');
-  const [birthDate, setBirthDate] = useState('');
-  const [gender, setGender] = useState<Gender | ''>('');
-  const [photoDataUrl, setPhotoDataUrl] = useState('');
+  const [name, setName] = useState(draft.name);
+  const [birthDate, setBirthDate] = useState(draft.birthDate);
+  const [gender, setGender] = useState<Gender | ''>(draft.gender);
+  const [photoDataUrl, setPhotoDataUrl] = useState(draft.photoDataUrl);
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const birthDateValid = isValidBirthDate(birthDate);
   const age = useMemo(() => birthDateValid ? calculateAge(birthDate) : 0, [birthDate, birthDateValid]);
+
+  useEffect(() => {
+    try { localStorage.setItem(draftKey(user.uid), JSON.stringify({ name, birthDate, gender, photoDataUrl })); }
+    catch { /* Keep the form available even when this device blocks storage. */ }
+  }, [user.uid, name, birthDate, gender, photoDataUrl]);
 
   if (user.phoneNumber && !hasPassword) return <AuthFlow />;
 
@@ -44,8 +66,9 @@ export function ProfileSetup({ user, onComplete }: { user: User; onComplete: (pr
       : step === 2 ? Boolean(gender)
         : true;
 
-  const next = () => {
+  const next = async () => {
     setError('');
+    if (busy || photoBusy) return;
     if (!canContinue) return setError(step === 1 ? '생년월일 8자리를 정확히 입력해 주세요.' : '필수 정보를 입력해 주세요.');
     if (step < 3) return setStep((current) => current + 1);
     const profile: UserProfile = {
@@ -55,21 +78,31 @@ export function ProfileSetup({ user, onComplete }: { user: User; onComplete: (pr
       photoDataUrl: photoDataUrl || undefined,
       completedAt: new Date().toISOString(),
     };
-    saveProfile(user.uid, profile);
-    void syncUserProfile(user.uid, profile).catch((cause) => console.warn('[DANDULI profile cloud sync]', cause));
-    onComplete(profile);
+    setBusy(true);
+    try {
+      await syncUserProfile(user.uid, profile);
+      try { saveProfile(user.uid, profile); }
+      catch (cause) { console.warn('[DANDULI profile cache]', cause); }
+      try { localStorage.removeItem(draftKey(user.uid)); }
+      catch { /* Cloud profile is already saved. */ }
+      onComplete(profile);
+    } catch (cause) {
+      console.warn('[DANDULI profile cloud sync]', cause);
+      setError('프로필을 서버에 저장하지 못했어요. 연결을 확인한 뒤 다시 시도해 주세요.');
+    } finally { setBusy(false); }
   };
 
-  const readPhoto = (file?: File) => {
+  const readPhoto = async (file?: File) => {
     if (!file) return;
-    if (!file.type.startsWith('image/')) return setError('이미지 파일을 선택해 주세요.');
-    if (file.size > 3 * 1024 * 1024) return setError('프로필 사진은 3MB 이하로 선택해 주세요.');
-    const reader = new FileReader();
-    reader.onload = () => {
-      setPhotoDataUrl(String(reader.result ?? ''));
+    setPhotoBusy(true);
+    try {
+      setPhotoDataUrl(await prepareProfilePhoto(file));
       setError('');
-    };
-    reader.readAsDataURL(file);
+    } catch (cause) {
+      setError(cause instanceof Error && cause.message === 'image-only' ? '이미지 파일을 선택해 주세요.'
+        : cause instanceof Error && cause.message === 'image-too-large' ? '프로필 사진은 12MB 이하로 선택해 주세요.'
+          : '사진을 처리하지 못했어요. 다른 사진으로 다시 시도해 주세요.');
+    } finally { setPhotoBusy(false); }
   };
 
   return <div className="app-shell onboarding-shell">
@@ -114,7 +147,7 @@ export function ProfileSetup({ user, onComplete }: { user: User; onComplete: (pr
         <button type="button" className="photo-picker" onClick={() => fileRef.current?.click()}>
           {photoDataUrl ? <img src={photoDataUrl} alt="선택한 프로필" /> : <span><UserRound size={38} /><Camera size={17} /></span>}
         </button>
-        <input ref={fileRef} hidden type="file" accept="image/*" onChange={(e) => readPhoto(e.target.files?.[0])} />
+        <input ref={fileRef} hidden type="file" accept="image/*" onChange={(e) => void readPhoto(e.target.files?.[0])} />
         <button type="button" className="photo-action" onClick={() => fileRef.current?.click()}>{photoDataUrl ? '다른 사진 선택' : '사진 선택하기'}</button>
         {!photoDataUrl && <small className="skip-note">사진 없이 시작해도 괜찮아요.</small>}
       </section>}
@@ -122,7 +155,7 @@ export function ProfileSetup({ user, onComplete }: { user: User; onComplete: (pr
       {error && <p className="auth-feedback error" role="alert">{error}</p>}
       <div className="onboarding-actions">
         {step > 0 ? <button type="button" className="secondary" onClick={() => { setError(''); setStep((current) => current - 1); }}><ChevronLeft size={18} />이전</button> : <span />}
-        <button type="button" className="primary" disabled={!canContinue} onClick={next}>{step === 3 ? '프로필 설정 완료' : '다음'}{step < 3 && <ChevronRight size={18} />}</button>
+        <button type="button" className="primary" disabled={!canContinue || busy || photoBusy} onClick={() => void next()}>{busy ? '서버에 저장 중...' : photoBusy ? '사진 처리 중...' : step === 3 ? '프로필 설정 완료' : '다음'}{step < 3 && <ChevronRight size={18} />}</button>
       </div>
     </main>
   </div>;

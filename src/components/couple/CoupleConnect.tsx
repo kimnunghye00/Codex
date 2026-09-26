@@ -63,13 +63,13 @@ export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps
   const [error, setError] = useState('');
 
   const clearPersistedSession = useCallback(() => {
-    try { localStorage.removeItem(coupleConnectSessionKey(user.uid)); } catch {}
+    try { localStorage.removeItem(coupleConnectSessionKey(user.uid)); } catch { /* Storage may be disabled. */ }
   }, [user.uid]);
 
   const persistSession = useCallback((session: Omit<CoupleConnectSession, 'savedAt'>) => {
     try {
       localStorage.setItem(coupleConnectSessionKey(user.uid), serializeCoupleConnectSession({ ...session, savedAt: Date.now() }));
-    } catch {}
+    } catch { /* The invite still works without a local session cache. */ }
   }, [user.uid]);
 
   const finishConnection = useCallback((connection: RealCoupleConnection) => {
@@ -161,22 +161,30 @@ export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps
     }
   };
 
-  const copyCode = async () => {
-    if (!inviteCode) return;
-    await navigator.clipboard?.writeText(inviteCode);
+  const copyText = async (text: string) => {
+    if (!navigator.clipboard?.writeText) throw new Error('clipboard-unavailable');
+    await navigator.clipboard.writeText(text);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1500);
   };
 
+  const copyCode = async () => {
+    if (!inviteCode) return;
+    setError('');
+    try { await copyText(inviteCode); }
+    catch { setError('코드를 복사하지 못했어요. 표시된 코드를 직접 입력하거나 다시 시도해 주세요.'); }
+  };
+
   const shareCode = async () => {
     if (!inviteCode) return;
-    const text = `ROUTE에서 나와 연결해요. 초대 코드: ${inviteCode}`;
+    setError('');
+    const text = `단둘이에서 나와 연결해요. 초대 코드: ${inviteCode}`;
     if (navigator.share) {
-      try { await navigator.share({ title: 'ROUTE 커플 초대', text }); return; } catch { /* cancelled */ }
+      try { await navigator.share({ title: '단둘이 커플 초대', text }); return; }
+      catch (cause) { if (cause instanceof DOMException && cause.name === 'AbortError') return; }
     }
-    await navigator.clipboard?.writeText(text);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1500);
+    try { await copyText(text); }
+    catch { setError('공유하지 못했어요. 표시된 초대 코드를 직접 전달해 주세요.'); }
   };
 
   const join = async () => {
@@ -196,17 +204,17 @@ export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps
   };
 
   return <div className="app-shell couple-connect-shell">
-    <header className="couple-connect-brand"><strong>ROUTE.</strong><small>COUPLE CONNECT</small></header>
+    <header className="couple-connect-brand"><strong>단둘이</strong><small>COUPLE CONNECT</small></header>
 
     <main className="couple-connect-card">
       <div className="couple-connect-symbol"><HeartHandshake size={30} /></div>
-      <p className="overline">TOGETHER ON ROUTE</p>
+      <p className="overline">우리 둘만의 공간</p>
       <h1>{mode === 'choose' ? '상대방과 연결할까요?' : mode === 'invite' ? '상대방을 초대해요' : mode === 'join' ? '초대 코드를 입력해요' : '연결을 마무리하고 있어요'}</h1>
       <p className="couple-connect-copy">
         {mode === 'choose' && '두 계정을 연결하면 채팅, 추억, 기념일과 위치 기록을 둘만의 공간에서 함께 사용할 수 있어요.'}
-        {mode === 'invite' && '상대방이 ROUTE에 가입한 뒤 아래 코드를 입력하면 두 계정이 연결돼요.'}
-        {mode === 'join' && '상대방에게 받은 ROUTE 초대 코드를 입력해 주세요.'}
-        {mode === 'waiting' && '상대방의 ROUTE 화면에서 연결 요청을 확인하고 있어요. 앱을 닫아도 이 상태를 기억해요.'}
+        {mode === 'invite' && '상대방이 단둘이에 가입한 뒤 아래 코드를 입력하면 두 계정이 연결돼요.'}
+        {mode === 'join' && '상대방에게 받은 단둘이 초대 코드를 입력해 주세요.'}
+        {mode === 'waiting' && '상대방의 단둘이 화면에서 연결 요청을 확인하고 있어요. 앱을 닫아도 이 상태를 기억해요.'}
       </p>
 
       {mode === 'choose' && <div className="couple-connect-options">

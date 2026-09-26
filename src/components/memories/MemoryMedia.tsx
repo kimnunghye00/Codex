@@ -1,6 +1,6 @@
 import { getDownloadURL, ref } from 'firebase/storage';
 import { Image as ImageIcon, RefreshCw, Video } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type React from 'react';
 import { storage } from '../../lib/firebaseStorage';
 import { auth } from '../../lib/firebaseAuth';
@@ -28,7 +28,7 @@ export function isMemoryVideo(src?: string) {
   if (!src) return false;
   if (src.startsWith('data:video/')) return true;
   let normalized = src.split('#')[0];
-  try { normalized = decodeURIComponent(normalized); } catch {}
+  try { normalized = decodeURIComponent(normalized); } catch { /* Use the original URL when percent encoding is invalid. */ }
   return /\.(mp4|webm|mov)(\?|$)/i.test(normalized);
 }
 
@@ -115,20 +115,26 @@ function persistRecoveredUrl(source: string | undefined, recoveredUrl: string, s
   }
 }
 
-export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 'async', onClick }: {
+type MemoryImageProps = {
   src?: string;
   alt: string;
   className?: string;
   loading?: 'eager' | 'lazy';
   decoding?: 'async' | 'auto' | 'sync';
   onClick?: React.MouseEventHandler<HTMLImageElement>;
-}) {
+};
+
+export function MemoryImage(props: MemoryImageProps) {
+  return <MemoryImageSource key={`${props.src ?? ''}:${props.loading ?? 'lazy'}`} {...props} />;
+}
+
+function MemoryImageSource({ src, alt, className, loading = 'lazy', decoding = 'async', onClick }: MemoryImageProps) {
   const [candidates, setCandidates] = useState<string[]>(() => immediateCandidates(src));
   const [candidateIndex, setCandidateIndex] = useState(0);
   const [attempt, setAttempt] = useState(0);
   const [retrying, setRetrying] = useState(false);
   const [failed, setFailed] = useState(false);
-  const [mediaReady, setMediaReady] = useState(loading === 'eager');
+  const [mediaReady, setMediaReady] = useState(loading === 'eager' || typeof IntersectionObserver === 'undefined');
   const [legacyRecovery, setLegacyRecovery] = useState<LegacyRecovery>({ url: '', slot: null });
   const retryTimer = useRef<number | undefined>(undefined);
   const deferredAnchor = useRef<HTMLSpanElement>(null);
@@ -138,7 +144,7 @@ export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 
   const legacyRecoveryAttempted = useRef(false);
   const displayUrl = candidates[candidateIndex] ?? '';
 
-  const resolveDurableCandidates = () => {
+  const resolveDurableCandidates = useCallback(() => {
     const source = src;
     const generation = requestGeneration.current;
     if (!source || storageResolutionStarted.current || storageCandidates(source).length === 0) return false;
@@ -156,7 +162,7 @@ export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 
       setRetrying(false);
     });
     return true;
-  };
+  }, [src]);
 
   const startLegacyRecovery = () => {
     const source = src;
@@ -182,51 +188,36 @@ export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 
   };
 
   useEffect(() => {
-    requestGeneration.current += 1;
-    sourceRef.current = src;
-    let observer: IntersectionObserver | undefined;
+    const generation = ++requestGeneration.current;
     const cleanup = () => {
       requestGeneration.current += 1;
-      observer?.disconnect();
       if (retryTimer.current) window.clearTimeout(retryTimer.current);
     };
-    if (retryTimer.current) window.clearTimeout(retryTimer.current);
-    const initial = immediateCandidates(src);
-    setCandidates(initial);
-    setCandidateIndex(0);
-    setAttempt(0);
-    setRetrying(false);
-    setFailed(false);
-    setMediaReady(loading === 'eager');
-    setLegacyRecovery({ url: '', slot: null });
-    storageResolutionStarted.current = false;
-    legacyRecoveryAttempted.current = false;
-
     if (!src) return cleanup;
     const activateMedia = () => {
       setMediaReady(true);
       if (storageCandidates(src).length > 0) resolveDurableCandidates();
     };
-    if (loading === 'eager') {
-      activateMedia();
+    if (loading === 'eager' || typeof IntersectionObserver === 'undefined') {
+      // Storage URLs still need an asynchronous resolution even for eager media.
+      if (storageCandidates(src).length > 0) void Promise.resolve().then(() => {
+        if (sourceRef.current === src && requestGeneration.current === generation) resolveDurableCandidates();
+      });
       return cleanup;
     }
 
     const target = deferredAnchor.current;
-    if (!target || typeof IntersectionObserver === 'undefined') {
-      activateMedia();
-      return cleanup;
-    }
+    if (!target) return cleanup;
 
-    observer = new IntersectionObserver(([entry]) => {
+    const observer = new IntersectionObserver(([entry]) => {
       if (!entry.isIntersecting) return;
-      observer?.disconnect();
+      observer.disconnect();
       activateMedia();
     }, { rootMargin: MEMORY_MEDIA_PREFETCH_MARGIN, threshold: 0.01 });
     observer.observe(target);
 
-    return cleanup;
-  }, [src, loading]);
+    return () => { observer.disconnect(); cleanup(); };
+  }, [src, loading, resolveDurableCandidates]);
 
   const retryNow = (event: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>) => {
     event.preventDefault();
@@ -282,7 +273,7 @@ export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 
     setFailed(true);
   };
 
-  if (!mediaReady || sourceRef.current !== src) {
+  if (!mediaReady) {
     return <span ref={deferredAnchor} className={`memory-media-fallback ${className ?? ''} !grid place-items-center content-center gap-1`} role="img" aria-label={alt || '사진 미리보기'}><ImageIcon size={20} /><small>사진 미리보기</small></span>;
   }
 
@@ -322,7 +313,7 @@ export function MemoryImage({ src, alt, className, loading = 'lazy', decoding = 
   />;
 }
 
-export function MemoryVideo({ src, className, controls = false, autoPlay = false, muted = false, loop = false, preload = 'metadata' }: {
+type MemoryVideoProps = {
   src?: string;
   className?: string;
   controls?: boolean;
@@ -330,10 +321,14 @@ export function MemoryVideo({ src, className, controls = false, autoPlay = false
   muted?: boolean;
   loop?: boolean;
   preload?: 'none' | 'metadata' | 'auto';
-}) {
-  const [failed, setFailed] = useState(false);
+};
 
-  useEffect(() => setFailed(false), [src]);
+export function MemoryVideo(props: MemoryVideoProps) {
+  return <MemoryVideoSource key={props.src ?? ''} {...props} />;
+}
+
+function MemoryVideoSource({ src, className, controls = false, autoPlay = false, muted = false, loop = false, preload = 'metadata' }: MemoryVideoProps) {
+  const [failed, setFailed] = useState(false);
 
   if (!src || failed) {
     return <span className={`memory-media-fallback ${className ?? ''}`} role="img" aria-label="영상 미리보기"><Video size={20} /><small>영상 미리보기</small></span>;

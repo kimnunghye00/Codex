@@ -5,6 +5,7 @@ import { auth } from '../../lib/firebase';
 import { connectAiTestPartner, loadLocalAiPartner, syncUserProfile } from '../../lib/coupleData';
 import { subscribeRealCoupleConnection, type RealCoupleConnection } from '../../lib/coupleConnection';
 import { savePartnerNickname } from '../../lib/coupleShared';
+import { constrainProfileMedia, prepareProfilePhoto } from '../../utils/profileImage';
 import { CoupleConnect } from '../couple/CoupleConnect';
 import { CoupleDisconnectControl } from './CoupleDisconnectControl';
 import { PartnerProfileCard } from './PartnerProfileCard';
@@ -43,6 +44,8 @@ export function AccountSettings({ user, profile, onProfileChange, onClose }: {
   const [gender, setGender] = useState<Gender>(profile.gender);
   const [photoDataUrl, setPhotoDataUrl] = useState(profile.photoDataUrl ?? '');
   const [profileFeedback, setProfileFeedback] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiFeedback, setAiFeedback] = useState('');
   const [aiPartner, setAiPartner] = useState(() => loadLocalAiPartner(user.uid));
@@ -60,39 +63,57 @@ export function AccountSettings({ user, profile, onProfileChange, onClose }: {
     if (next?.partnerProfile?.nickname) setPartnerNicknameValue(next.partnerProfile.nickname);
   }, () => setRealConnection(null)), [user.uid]);
 
-  const syncProfile = (next: UserProfile) => {
-    saveProfile(user.uid, next);
-    onProfileChange(next);
-    void syncUserProfile(user.uid, next).catch((cause) => console.warn('[DANDULI profile cloud sync]', cause));
+  const syncProfile = async (next: UserProfile, onError: (message: string) => void) => {
+    if (profileSaving) return false;
+    setProfileSaving(true);
+    try {
+      const prepared = await constrainProfileMedia(next);
+      await syncUserProfile(user.uid, prepared);
+      try { saveProfile(user.uid, prepared); }
+      catch (cause) { console.warn('[DANDULI profile cache]', cause); }
+      onProfileChange(prepared);
+      return true;
+    } catch (cause) {
+      console.warn('[DANDULI profile cloud sync]', cause);
+      onError(cause instanceof Error && cause.message === 'image-too-large-to-sync'
+        ? '사진 크기를 줄이지 못했어요. 다른 사진을 선택해 주세요.'
+        : '서버에 저장하지 못했어요. 연결을 확인한 뒤 다시 시도해 주세요.');
+      return false;
+    } finally { setProfileSaving(false); }
   };
 
-  const readPhoto = (file?: File) => {
+  const readPhoto = async (file?: File) => {
     if (!file) return;
-    if (!file.type.startsWith('image/')) return setProfileFeedback('이미지 파일을 선택해 주세요.');
-    if (file.size > 3 * 1024 * 1024) return setProfileFeedback('프로필 사진은 3MB 이하로 선택해 주세요.');
-    const reader = new FileReader();
-    reader.onload = () => { setPhotoDataUrl(String(reader.result ?? '')); setProfileFeedback(''); };
-    reader.readAsDataURL(file);
+    setPhotoBusy(true);
+    try {
+      setPhotoDataUrl(await prepareProfilePhoto(file));
+      setProfileFeedback('');
+    } catch (cause) {
+      setProfileFeedback(cause instanceof Error && cause.message === 'image-only' ? '이미지 파일을 선택해 주세요.'
+        : cause instanceof Error && cause.message === 'image-too-large' ? '프로필 사진은 12MB 이하로 선택해 주세요.'
+          : '사진을 처리하지 못했어요. 다른 사진으로 다시 시도해 주세요.');
+    } finally { setPhotoBusy(false); }
   };
 
-  const saveEditedProfile = () => {
+  const saveEditedProfile = async () => {
+    if (photoBusy) return setProfileFeedback('사진 처리가 끝난 뒤 저장해 주세요.');
     setProfileFeedback('');
     if (name.trim().length < 2) return setProfileFeedback('이름을 2자 이상 입력해 주세요.');
     if (!birthDate || age <= 0) return setProfileFeedback('생년월일을 확인해 주세요.');
     const next: UserProfile = { ...profile, name: name.trim(), birthDate, gender, photoDataUrl: photoDataUrl || undefined };
-    syncProfile(next);
+    if (!await syncProfile(next, setProfileFeedback)) return;
     setProfileFeedback('프로필을 저장했어요.');
     setProfileOpen(false);
   };
 
-  const saveNickname = () => {
+  const saveNickname = async () => {
     setNicknameFeedback('');
     const trimmed = nickname.trim();
     if (trimmed.length < 1 || trimmed.length > 12) return setNicknameFeedback('별명은 1~12자로 입력해 주세요.');
     if (!nicknameState.canChange) return setNicknameFeedback(`내가 직접 바꾸는 별명은 ${nicknameState.daysLeft}일 뒤에 다시 변경할 수 있어요.`);
     try {
       const next = setSelfNickname(profile, trimmed);
-      syncProfile(next);
+      if (!await syncProfile(next, setNicknameFeedback)) return;
       setNicknameFeedback('별명을 바꿨어요. 다음 직접 변경은 30일 뒤에 가능해요.');
       setNicknameOpen(false);
     } catch {
@@ -127,11 +148,11 @@ export function AccountSettings({ user, profile, onProfileChange, onClose }: {
     } finally { setAiBusy(false); }
   };
 
-  const letAiChooseNickname = () => {
+  const letAiChooseNickname = async () => {
     if (!aiPartner?.connected) return setAiFeedback('먼저 AI 테스트 파트너를 연결해 주세요.');
     const chosen = aiNicknameFor(profile.name);
     const next = setPartnerNickname(profile, chosen);
-    syncProfile(next);
+    if (!await syncProfile(next, setAiFeedback)) return;
     setNickname(chosen);
     setAiFeedback(`단둘이가 "${chosen}"라고 별명을 지어줬어요.`);
   };
@@ -146,12 +167,12 @@ export function AccountSettings({ user, profile, onProfileChange, onClose }: {
         <section className="nickname-card">
           <div className="nickname-heading"><span><Heart size={17} /></span><div><small>내가 표시되는 이름</small><strong>{displayName(profile)}</strong><em>{nicknameSource}</em></div></div>
           <p>기본 이름은 가입할 때 입력한 이름이에요. 필요하면 내가 직접 별명을 바꿀 수 있어요.</p>
-          {!nicknameOpen ? <button type="button" className="nickname-edit-button" disabled={!nicknameState.canChange} onClick={() => { setNickname(profile.nickname ?? profile.name); setNicknameFeedback(''); setNicknameOpen(true); }}>{nicknameState.canChange ? '내 별명 바꾸기' : `${nicknameState.daysLeft}일 뒤 변경 가능`}</button> : <div className="nickname-editor"><label>새 별명<input autoFocus type="text" maxLength={12} value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="1~12자" /></label>{nicknameFeedback && <p className="account-feedback">{nicknameFeedback}</p>}<div><button type="button" onClick={() => setNicknameOpen(false)}>취소</button><button type="button" className="primary" onClick={saveNickname}>별명 저장</button></div></div>}
+          {!nicknameOpen ? <button type="button" className="nickname-edit-button" disabled={!nicknameState.canChange} onClick={() => { setNickname(profile.nickname ?? profile.name); setNicknameFeedback(''); setNicknameOpen(true); }}>{nicknameState.canChange ? '내 별명 바꾸기' : `${nicknameState.daysLeft}일 뒤 변경 가능`}</button> : <div className="nickname-editor"><label>새 별명<input autoFocus type="text" maxLength={12} value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="1~12자" /></label>{nicknameFeedback && <p className="account-feedback">{nicknameFeedback}</p>}<div><button type="button" onClick={() => setNicknameOpen(false)}>취소</button><button type="button" className="primary" disabled={profileSaving} onClick={() => void saveNickname()}>{profileSaving ? '저장 중...' : '별명 저장'}</button></div></div>}
         </section>
 
         <section className="settings-profile-card">
           <button className="settings-profile-summary" type="button" onClick={() => setProfileOpen((open) => !open)}><span className="settings-profile-avatar">{photoDataUrl ? <img src={photoDataUrl} alt="프로필" /> : <UserRound size={24} />}</span><span className="settings-profile-copy"><small>내 기본 프로필</small><strong>{profile.name}</strong><em>{profile.birthDate} · 만 {calculateAge(profile.birthDate)}세</em></span><span className="settings-edit-label">{profileOpen ? '닫기' : '수정'}</span></button>
-          {profileOpen && <div className="settings-profile-editor"><div className="settings-photo-row"><button type="button" className="settings-photo-picker" onClick={() => fileRef.current?.click()}>{photoDataUrl ? <img src={photoDataUrl} alt="선택한 프로필" /> : <UserRound size={28} />}<span><Camera size={13} /></span></button><div><strong>프로필 사진</strong><button type="button" onClick={() => fileRef.current?.click()}>사진 변경</button>{photoDataUrl && <button type="button" onClick={() => setPhotoDataUrl('')}>사진 삭제</button>}</div><input ref={fileRef} hidden type="file" accept="image/*" onChange={(event) => readPhoto(event.target.files?.[0])} /></div><label>이름<input type="text" maxLength={20} value={name} onChange={(event) => setName(event.target.value)} /></label><label>생년월일<input type="date" max={new Date().toISOString().slice(0, 10)} value={birthDate} onChange={(event) => setBirthDate(event.target.value)} /></label>{birthDate && <div className="settings-age"><span>현재 나이</span><strong>만 {age}세</strong></div>}<div className="settings-gender"><span>성별</span><div>{([['male', '남성'], ['female', '여성'], ['other', '기타']] as const).map(([value, label]) => <button type="button" key={value} className={gender === value ? 'selected' : ''} onClick={() => setGender(value)}>{label}</button>)}</div></div>{profileFeedback && <p className="account-feedback">{profileFeedback}</p>}<button className="primary settings-save-profile" type="button" onClick={saveEditedProfile}>프로필 저장</button></div>}
+          {profileOpen && <div className="settings-profile-editor"><div className="settings-photo-row"><button type="button" className="settings-photo-picker" onClick={() => fileRef.current?.click()}>{photoDataUrl ? <img src={photoDataUrl} alt="선택한 프로필" /> : <UserRound size={28} />}<span><Camera size={13} /></span></button><div><strong>프로필 사진</strong><button type="button" onClick={() => fileRef.current?.click()}>사진 변경</button>{photoDataUrl && <button type="button" onClick={() => setPhotoDataUrl('')}>사진 삭제</button>}</div><input ref={fileRef} hidden type="file" accept="image/*" onChange={(event) => void readPhoto(event.target.files?.[0])} /></div><label>이름<input type="text" maxLength={20} value={name} onChange={(event) => setName(event.target.value)} /></label><label>생년월일<input type="date" max={new Date().toISOString().slice(0, 10)} value={birthDate} onChange={(event) => setBirthDate(event.target.value)} /></label>{birthDate && <div className="settings-age"><span>현재 나이</span><strong>만 {age}세</strong></div>}<div className="settings-gender"><span>성별</span><div>{([['male', '남성'], ['female', '여성'], ['other', '기타']] as const).map(([value, label]) => <button type="button" key={value} className={gender === value ? 'selected' : ''} onClick={() => setGender(value)}>{label}</button>)}</div></div>{profileFeedback && <p className="account-feedback">{profileFeedback}</p>}<button className="primary settings-save-profile" type="button" disabled={profileSaving} onClick={() => void saveEditedProfile()}>{profileSaving ? '저장 중...' : '프로필 저장'}</button></div>}
         </section>
 
         <PartnerProfileCard />
@@ -175,7 +196,7 @@ export function AccountSettings({ user, profile, onProfileChange, onClose }: {
           <div className="nickname-editor"><label>상대방 별명<input type="text" maxLength={12} value={partnerNickname} onChange={(e) => setPartnerNicknameValue(e.target.value)} placeholder={realConnection.partnerProfile?.name || '1~12자'} /></label>{partnerNicknameFeedback && <p className="account-feedback">{partnerNicknameFeedback}</p>}<div><button type="button" className="primary" disabled={partnerNicknameBusy} onClick={() => void saveRealPartnerNickname()}>{partnerNicknameBusy ? '저장 중...' : '상대방 별명 저장'}</button></div></div>
         </section>}
 
-        <section className="ai-test-card"><div><Bot size={20} /><span><strong>AI 테스트 파트너</strong><small>실제 상대방 기능과 별개로 테스트할 때만 사용해요.</small></span></div><button type="button" className="nickname-edit-button" disabled={aiBusy || Boolean(aiPartner?.connected) || Boolean(realConnection)} onClick={() => void connectAi()}>{aiBusy ? '연결 중...' : aiPartner?.connected ? 'AI 파트너 연결됨' : 'AI 테스트 파트너 연결'}</button>{aiPartner?.connected && !realConnection && <button type="button" className="nickname-edit-button ai-nickname-button" onClick={letAiChooseNickname}><Sparkles size={15} />AI가 내 별명 지어주기</button>}{aiFeedback && <p className="account-feedback">{aiFeedback}</p>}</section>
+        <section className="ai-test-card"><div><Bot size={20} /><span><strong>AI 테스트 파트너</strong><small>실제 상대방 기능과 별개로 테스트할 때만 사용해요.</small></span></div><button type="button" className="nickname-edit-button" disabled={aiBusy || Boolean(aiPartner?.connected) || Boolean(realConnection)} onClick={() => void connectAi()}>{aiBusy ? '연결 중...' : aiPartner?.connected ? 'AI 파트너 연결됨' : 'AI 테스트 파트너 연결'}</button>{aiPartner?.connected && !realConnection && <button type="button" className="nickname-edit-button ai-nickname-button" disabled={profileSaving} onClick={() => void letAiChooseNickname()}><Sparkles size={15} />AI가 내 별명 지어주기</button>}{aiFeedback && <p className="account-feedback">{aiFeedback}</p>}</section>
 
         {feedback && <p className="account-feedback">{feedback}</p>}
         <button className="logout-button" onClick={() => void signOut(auth)}><LogOut size={17} />로그아웃</button>

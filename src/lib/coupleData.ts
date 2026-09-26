@@ -1,4 +1,4 @@
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { doc, getDoc, getDocFromServer, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import type { UserProfile } from '../utils/profile';
 
@@ -29,10 +29,13 @@ export const AI_TEST_PARTNER_NAME = '멜루니';
 const localAiKey = (uid: string) => `meluni-ai-partner:${uid}`;
 
 function withTimeout<T>(promise: Promise<T>, ms = 5000): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => window.setTimeout(() => reject(new Error('firestore-timeout')), ms)),
-  ]);
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error('firestore-timeout')), ms);
+    promise.then(
+      (value) => { window.clearTimeout(timer); resolve(value); },
+      (error) => { window.clearTimeout(timer); reject(error); },
+    );
+  });
 }
 
 export function connectLocalAiPartner(uid: string): LocalAiPartner {
@@ -75,7 +78,9 @@ export async function syncUserProfile(uid: string, profile: UserProfile) {
 }
 
 export async function loadCloudProfile(uid: string): Promise<UserProfile | null> {
-  const snapshot = await withTimeout(getDoc(doc(db, 'users', uid)));
+  // A cached "missing" document is not proof that this is a new account.
+  // Without a local profile, wait for the server before showing onboarding.
+  const snapshot = await withTimeout(getDocFromServer(doc(db, 'users', uid)));
   if (!snapshot.exists()) return null;
   const profile = snapshot.data()?.profile as UserProfile | undefined;
   return profile?.name && profile?.birthDate && profile?.gender ? profile : null;

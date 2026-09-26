@@ -4,6 +4,7 @@ import type { Message, Reaction } from '../types';
 import { publishCoupleActivity } from './coupleActivity';
 import { mergePagedSnapshot, messageTimeValue } from './messageSnapshot';
 import { createUiTaskScope } from '../utils/uiTaskScope';
+import type { ScheduledChatDraft } from './scheduledChat';
 
 type CloudReaction = { emoji: string; uid: string };
 type MessageStateSink = (value: Message[] | ((current: Message[]) => Message[])) => void;
@@ -315,6 +316,40 @@ export async function sendCoupleMessage(coupleId: string, currentUid: string, me
       detail: (message.type === 'text' ? message.text || '' : '사진·파일 또는 이모티콘을 보냈어요.').slice(0, 200),
       target: { screen: 'chat', itemId: String(message.id) },
     }).catch((cause) => console.warn('[DANDULI chat activity]', cause));
+  }
+}
+
+/** A stable message ID makes retries safe after a lost acknowledgement or app restart. */
+export async function sendScheduledCoupleMessage(coupleId: string, currentUid: string, draft: ScheduledChatDraft) {
+  if (draft.coupleId !== coupleId) throw new Error('scheduled-chat-couple-changed');
+  const ref = messageRef(coupleId, draft.id);
+  const created = await runTransaction(db, async (transaction) => {
+    const existing = await transaction.get(ref);
+    if (existing.exists()) {
+      const data = existing.data() as CloudMessage;
+      if (data.authorUid !== currentUid || data.scheduledFor !== draft.sendAt || data.text !== draft.text) {
+        throw new Error('scheduled-chat-id-conflict');
+      }
+      return false;
+    }
+    transaction.set(ref, {
+      id: draft.id,
+      authorUid: currentUid,
+      type: 'text',
+      text: draft.text,
+      timestamp: new Date().toISOString(),
+      createdAt: serverTimestamp(),
+      read: false,
+      scheduledFor: draft.sendAt,
+    } satisfies CloudMessage);
+    return true;
+  });
+  if (created) {
+    await publishCoupleActivity(coupleId, currentUid, {
+      id: 'chat-' + draft.id, kind: 'chat', sourceId: String(draft.id), revision: 0,
+      title: '새 메시지가 왔어요', detail: draft.text.slice(0, 200),
+      target: { screen: 'chat', itemId: String(draft.id) },
+    }).catch((cause) => console.warn('[DANDULI scheduled chat activity]', cause));
   }
 }
 

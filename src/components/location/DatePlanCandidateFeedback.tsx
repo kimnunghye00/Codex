@@ -15,6 +15,12 @@ function describeError(error: unknown) {
 export function DatePlanCandidateFeedback({ coupleId, planId, candidateId, uid }: {
   coupleId: string; planId: string; candidateId: string; uid: string;
 }) {
+  return <CandidateFeedback key={`${coupleId}:${planId}:${candidateId}`} coupleId={coupleId} planId={planId} candidateId={candidateId} uid={uid} />;
+}
+
+function CandidateFeedback({ coupleId, planId, candidateId, uid }: {
+  coupleId: string; planId: string; candidateId: string; uid: string;
+}) {
   const [comments, setComments] = useState<DatePlanCandidateComment[]>([]);
   const [text, setText] = useState('');
   const [pending, setPending] = useState(false);
@@ -22,7 +28,6 @@ export function DatePlanCandidateFeedback({ coupleId, planId, candidateId, uid }
   const [error, setError] = useState('');
 
   useEffect(() => {
-    setComments([]); setText(''); setError(''); setLoading(true);
     return subscribeDatePlanCandidateComments(coupleId, planId, candidateId, (items) => {
       setComments(items); setLoading(false); setError('');
     }, (reason) => { setLoading(false); setError(describeError(reason)); });

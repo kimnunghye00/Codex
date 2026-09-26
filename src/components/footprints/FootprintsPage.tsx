@@ -48,12 +48,6 @@ export function FootprintsPage({ uid, memories, initialMemoryId, onOpenMemory, o
   const frame = useRef<HTMLIFrameElement>(null);
   const days = useMemo(() => Array.from(new Set(footprints.map((visit) => dayKey(visit.arrivedAt)))).sort().reverse(), [footprints]);
 
-  useEffect(() => {
-    if (!focusMemory) return;
-    setDay(focusMemory.date);
-    setView('day');
-  }, [focusMemory?.date, focusMemory?.id]);
-
   const visible = useMemo(() => view === 'all'
     ? footprints
     : footprints.filter((visit) => dayKey(visit.arrivedAt) === day), [day, footprints, view]);
@@ -63,8 +57,6 @@ export function FootprintsPage({ uid, memories, initialMemoryId, onOpenMemory, o
   })), [visible]);
 
   useEffect(() => {
-    setMapReady(false);
-    setMapFailed(false);
     const timeout = window.setTimeout(() => setMapFailed(true), 12_000);
     const receive = (event: MessageEvent<{ source?: string; type?: string }>) => {
       if (event.origin !== MAP_ORIGIN || event.source !== frame.current?.contentWindow

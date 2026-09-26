@@ -23,6 +23,9 @@ import {
 } from './utils/notifications';
 import { subscribeCoupleActivities } from './lib/coupleActivity';
 import { activityAlertEnabled, installActivityAlertClicks, openActivityFromUrl, requestActivityAlerts, showPartnerActivityAlert } from './lib/activityAlerts';
+import { sendScheduledCoupleMessage } from './lib/chatRealtime';
+import { dueScheduledChatDrafts, loadScheduledChatDrafts, removeScheduledChatDraft, SCHEDULED_CHAT_CHANGED } from './lib/scheduledChat';
+import { PERSISTENT_STATE_CHANGE_EVENT } from './utils/persistenceSignal';
 import { ChevronRight, Heart, Image, MapPin, MapPinned, Plus } from 'lucide-react';
 import './home-simple.css';
 import './home-dashboard.css';
@@ -177,13 +180,10 @@ function formatDate(date: Date) {
   return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일`;
 }
 
-function formatShortDate(value?: string) {
-  return value ? value.replaceAll('-', '.') : '기념일 설정 필요';
-}
-
 function App({ user, profile, onProfileChange }: AppProps) {
   const [connection, setConnection] = useState<RealCoupleConnection | null>(null);
-  const [relationshipStartDate, setRelationshipStartDate] = useState<string>();
+  const [relationship, setRelationship] = useState<{ coupleId: string; date?: string }>();
+  const relationshipStartDate = relationship?.coupleId && relationship.coupleId === connection?.coupleId ? relationship.date : undefined;
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [alertStatus, setAlertStatus] = useState('기기 알림 받기');
@@ -249,6 +249,68 @@ function App({ user, profile, onProfileChange }: AppProps) {
   }, [user.uid]);
 
   useEffect(() => installActivityAlertClicks(), []);
+  useEffect(() => {
+    const coupleId = connection?.coupleId;
+    if (!coupleId) return;
+    const uid = user.uid;
+    let stopped = false;
+    let sending = false;
+    let retryAfter = 0;
+    let timer: number | undefined;
+
+    const check = () => {
+      if (stopped || sending) return;
+      if (timer !== undefined) window.clearTimeout(timer);
+      const drafts = loadScheduledChatDrafts(uid).filter((draft) => draft.coupleId === coupleId);
+      const now = Date.now();
+      const due = dueScheduledChatDrafts(drafts, coupleId, now);
+      if (due.length && now >= retryAfter) {
+        sending = true;
+        void (async () => {
+          for (const draft of due) {
+            if (stopped) break;
+            if (!loadScheduledChatDrafts(uid).some((item) => item.id === draft.id && item.coupleId === coupleId)) continue;
+            try {
+              await sendScheduledCoupleMessage(coupleId, uid, draft);
+              removeScheduledChatDraft(uid, draft.id, coupleId);
+              retryAfter = 0;
+            } catch (cause) {
+              console.warn('[DANDULI scheduled chat retry]', cause);
+              retryAfter = Date.now() + 30_000;
+              break;
+            }
+          }
+          sending = false;
+          check();
+        })();
+        return;
+      }
+      const next = drafts.reduce((earliest, draft) => Math.min(earliest, Date.parse(draft.sendAt)), Infinity);
+      const wait = due.length ? retryAfter - now : next - now;
+      timer = window.setTimeout(check, Math.max(250, Math.min(60 * 60 * 1000, Number.isFinite(wait) ? wait : 60 * 60 * 1000)));
+    };
+    const onDraftChange = (event: Event) => {
+      if ((event as CustomEvent<string>).detail === uid) check();
+    };
+    const onVisibility = () => { if (!document.hidden) check(); };
+    window.addEventListener(SCHEDULED_CHAT_CHANGED, onDraftChange);
+    window.addEventListener(PERSISTENT_STATE_CHANGE_EVENT, check);
+    window.addEventListener('storage', check);
+    window.addEventListener('online', check);
+    window.addEventListener('focus', check);
+    document.addEventListener('visibilitychange', onVisibility);
+    check();
+    return () => {
+      stopped = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+      window.removeEventListener(SCHEDULED_CHAT_CHANGED, onDraftChange);
+      window.removeEventListener(PERSISTENT_STATE_CHANGE_EVENT, check);
+      window.removeEventListener('storage', check);
+      window.removeEventListener('online', check);
+      window.removeEventListener('focus', check);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [user.uid, connection?.coupleId]);
   useEffect(() => {
     void activityAlertEnabled().then((enabled) => setAlertStatus(enabled ? '기기 알림 켜짐' : '기기 알림 받기'));
   }, []);
@@ -330,16 +392,13 @@ function App({ user, profile, onProfileChange }: AppProps) {
 
   useEffect(() => {
     const coupleId = connection?.coupleId;
-    if (!coupleId) {
-      setRelationshipStartDate(undefined);
-      return;
-    }
+    if (!coupleId) return;
     let disposed = false;
     let unsubscribe: (() => void) | undefined;
     void import('./lib/coupleShared').then(({ subscribeCoupleShared }) => {
       if (disposed) return;
       unsubscribe = subscribeCoupleShared(coupleId, (shared) => {
-        if (!disposed) setRelationshipStartDate(shared.relationshipStartDate);
+        if (!disposed) setRelationship({ coupleId, date: shared.relationshipStartDate });
       });
     }).catch((cause) => {
       if (!disposed) console.warn('[DANDULI couple shared lazy load]', cause);
@@ -561,19 +620,22 @@ function App({ user, profile, onProfileChange }: AppProps) {
     if (!pendingRoute) return;
     if (pendingRoute.screen === 'date-plan' && !connection?.coupleId) return;
     const route = pendingRoute;
-    setPendingRoute(null);
-    setNotificationsOpen(false);
-    if (route.screen === 'chat') {
-      setNotificationMessageId(Number(route.itemId));
-      setNotificationMessageRequest((current) => current + 1);
-      navigateTab('chat');
-    } else if (route.screen === 'album') {
-      openMemory(Number(route.itemId));
-    } else {
-      setNotificationPlanId(route.itemId);
-      setNotificationPlanRequest((current) => current + 1);
-      navigateTab('location');
-    }
+    const timer = window.setTimeout(() => {
+      setPendingRoute(null);
+      setNotificationsOpen(false);
+      if (route.screen === 'chat') {
+        setNotificationMessageId(Number(route.itemId));
+        setNotificationMessageRequest((current) => current + 1);
+        navigateTab('chat');
+      } else if (route.screen === 'album') {
+        openMemory(Number(route.itemId));
+      } else {
+        setNotificationPlanId(route.itemId);
+        setNotificationPlanRequest((current) => current + 1);
+        navigateTab('location');
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [pendingRoute, connection?.coupleId, navigateTab, openMemory]);
 
   useEffect(() => {
@@ -625,7 +687,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
     if (!connection?.coupleId) throw new Error('not-connected');
     const { saveRelationshipStartDate } = await import('./lib/coupleShared');
     await saveRelationshipStartDate(connection.coupleId, value);
-    setRelationshipStartDate(value);
+    if (connection?.coupleId) setRelationship({ coupleId: connection.coupleId, date: value });
   };
 
   const AppHeader = ({ title }: { title?: string }) => <SharedAppHeader title={title} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />;
@@ -633,11 +695,11 @@ function App({ user, profile, onProfileChange }: AppProps) {
   return <>
     <div className="app-shell"><main><Suspense fallback={<div className="page auth-loading" role="status" aria-live="polite"><div className="loading-mark" /><p>화면을 불러오는 중이에요</p></div>}>
       {tab === 'home' && <HomePage uid={user.uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} memories={memories} onNavigate={navigateTab} onOpenMemory={openMemory} onOpenFootprints={() => openFootprints()} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
-      {tab === 'memories' && <MemoriesPage requestedTab={requestedHubTab} Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={(place) => { setLocationFocus(place); navigateTab('location'); }} onOpenFootprints={(memoryId) => openFootprints(memoryId)} sharedProfile={profile} sharedConnection={connection} sharedRelationshipStartDate={relationshipStartDate} />}
-      {tab === 'footprints' && <FootprintsPage uid={user.uid} memories={memories} initialMemoryId={footprintMemoryId} onOpenMemory={openMemory} onBack={closeFootprints} Header={AppHeader} />}
+      {tab === 'memories' && <MemoriesPage key={user.uid} requestedTab={requestedHubTab} Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={(place) => { setLocationFocus(place); navigateTab('location'); }} onOpenFootprints={(memoryId) => openFootprints(memoryId)} sharedProfile={profile} sharedConnection={connection} sharedRelationshipStartDate={relationshipStartDate} />}
+      {tab === 'footprints' && <FootprintsPage key={`${user.uid}:${footprintMemoryId ?? ''}`} uid={user.uid} memories={memories} initialMemoryId={footprintMemoryId} onOpenMemory={openMemory} onBack={closeFootprints} Header={AppHeader} />}
       {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} connection={connection} initialMessageId={notificationMessageId} notificationRequest={notificationMessageRequest}/>}
       {tab === 'location' && <DateMapPage Header={AppHeader} connection={connection} focusPlace={locationFocus} onClearFocus={() => setLocationFocus(undefined)} initialPlanId={notificationPlanId} notificationRequest={notificationPlanRequest}/>}
-      {tab === 'anniversary' && <AnniversaryPage connected={Boolean(connection)} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} onSaveStartDate={saveStartDate} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
+      {tab === 'anniversary' && <AnniversaryPage key={relationshipStartDate ?? ''} connected={Boolean(connection)} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} onSaveStartDate={saveStartDate} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'more' && <MorePage onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} onNavigate={navigateMoreTarget} />}
     </Suspense></main><BottomNav tab={tab === 'footprints' ? 'home' : tab} onNavigate={navigateTab} /></div>
 
@@ -668,7 +730,7 @@ const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connect
 
       <aside className="home-dashboard-side" aria-label="홈 요약">
         <Suspense fallback={<section className="home-profile-card" aria-label="커플 정보 불러오는 중"><div className="loading-mark" /><small>커플 정보를 불러오는 중이에요</small></section>}>
-          <CoupleHomeTools uid={uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} onOpenConnect={onSettings} onOpenAnniversary={() => onNavigate('anniversary')} />
+          <CoupleHomeTools key={`${uid}:${connection?.coupleId ?? ''}`} uid={uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} onOpenConnect={onSettings} onOpenAnniversary={() => onNavigate('anniversary')} />
         </Suspense>
 
         <section className="home-memory-card" aria-label="우리의 추억">
@@ -697,7 +759,6 @@ function AnniversaryPage({ connected, relationshipStartDate, coupleDay, annivers
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState('');
   const monthlySpecials = useMemo(() => currentMonthSpecialDays(), []);
-  useEffect(() => setDate(relationshipStartDate ?? ''), [relationshipStartDate]);
   const save = async () => {
     if (!date) return setFeedback('서로 만나기 시작한 날짜를 입력해 주세요.');
     setSaving(true); setFeedback('');

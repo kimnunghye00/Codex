@@ -305,6 +305,14 @@ main { padding-bottom: 88px; }
 .auth-loading { min-height: 100vh; display: grid; place-items: center; align-content: center; gap: 18px; text-align: center; }
 .auth-loading .wordmark { position: absolute; top: 32px; left: 24px; text-align: left; }
 .auth-loading p { color: var(--text-secondary); font-size: 11px; }
+.profile-recovery { display: flex; align-items: center; justify-content: center; min-height: 100dvh; padding: 80px 24px max(32px, env(safe-area-inset-bottom)); }
+.profile-recovery > .wordmark { position: absolute; top: max(32px, env(safe-area-inset-top)); left: 24px; }
+.profile-recovery-card { width: min(100%, 380px); padding: 32px 24px; border: 1px solid var(--border); border-radius: 24px; background: var(--surface); text-align: center; }
+.profile-recovery-card h1 { margin: 0 0 12px; color: var(--text-primary); font-size: 21px; }
+.profile-recovery-card p { margin: 0 0 24px; color: var(--text-secondary); font-size: 14px; line-height: 1.6; }
+.profile-recovery-card button { display: block; width: 100%; min-height: 48px; margin-top: 10px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text-primary); font-weight: 700; }
+.profile-recovery-card button.primary { border-color: var(--primary); background: var(--primary); color: #fff; }
+.profile-recovery-card p[role="alert"] { margin: 16px 0 0; }
 .loading-mark { width: 42px; height: 42px; border: 3px solid var(--primary-soft); border-top-color: var(--primary); border-radius: 50%; animation: auth-spin .8s linear infinite; }
 @keyframes auth-spin { to { transform: rotate(360deg); } }
 .auth-back { min-height: 36px; display: flex; align-items: center; gap: 5px; margin: -8px 0 12px; padding: 0; border: 0; color: var(--text-secondary); background: transparent; font-size: 11px; }

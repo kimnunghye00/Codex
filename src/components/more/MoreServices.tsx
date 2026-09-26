@@ -7,10 +7,12 @@ import { applyRouteProfileStyle, normalizeRouteProfileStyle, type RouteProfileSt
 import {
   loadChatPreferences,
   saveChatPreferences,
+  STICKER_PACKS,
   type ChatBackground,
   type ChatFontSize,
   type ChatPreferences,
 } from '../chat/ChatToolsPanel';
+import { DanduliSticker, stickerIdFromToken } from '../chat/DanduliSticker';
 import type { HubTabId } from '../memories/MemoriesPage';
 import type { LocationTabId } from '../location/LocationPage';
 
@@ -34,13 +36,6 @@ const APP_ICONS: AppIconOption[] = [
   { id: 'heart-chat', label: '둘이 톡', className: 'danduli-image-icon' },
   { id: 'couple-love', label: '꼬옥 커플', className: 'danduli-image-icon' },
   { id: 'couple-date', label: '데이트 커플', className: 'danduli-image-icon' },
-];
-
-const EMOTICON_PACKS = [
-  { id: 'daily', name: '우리의 하루', preview: ['🥰', '😴', '🍚', '❤️'], price: '무료' },
-  { id: 'mood', name: '오늘의 기분', preview: ['😆', '🥺', '😤', '🤭'], price: '1,500원' },
-  { id: 'love', name: '사랑 가득', preview: ['💕', '💌', '😘', '🫶'], price: '1,500원' },
-  { id: 'date', name: '데이트 가자', preview: ['🍿', '☕', '🚗', '🌙'], price: '2,000원' },
 ];
 
 const CHAT_BACKGROUNDS: Array<{ id: ChatBackground; label: string }> = [
@@ -94,19 +89,12 @@ export function MoreServices({
   const nativeAppIconSupported = supportsNativeRouteAppIcon();
   const [appIconStateLoading, setAppIconStateLoading] = useState(nativeAppIconSupported);
   const [appIconChanging, setAppIconChanging] = useState(false);
-  const [owned, setOwned] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem('route-owned-emoticons') || '["daily"]') as string[]; } catch { return ['daily']; }
-  });
   const [profileStyle, setProfileStyle] = useState<RouteProfileStyle>(() => normalizeRouteProfileStyle(localStorage.getItem('route-profile-style')));
   const chatUid = auth.currentUser?.uid ?? 'guest';
   const [chatPreferences, setChatPreferences] = useState<ChatPreferences>(() => loadChatPreferences(chatUid));
   const [notice, setNotice] = useState('');
 
   const activeIcon = useMemo(() => APP_ICONS.find((item) => item.id === appIcon) ?? APP_ICONS[0], [appIcon]);
-
-  useEffect(() => {
-    setChatPreferences(loadChatPreferences(auth.currentUser?.uid ?? 'guest'));
-  }, []);
 
   useEffect(() => {
     const handleIconChange = (event: Event) => {
@@ -117,7 +105,6 @@ export function MoreServices({
     };
     window.addEventListener('route-app-icon-changed', handleIconChange);
     if (nativeAppIconSupported) {
-      setAppIconStateLoading(true);
       void getNativeRouteAppIcon()
         .then((icon) => { if (icon) setAppIcon(icon); })
         .catch((cause) => {
@@ -131,7 +118,6 @@ export function MoreServices({
 
   useEffect(() => {
     if (sheet !== 'app-icon' || !nativeAppIconSupported) return;
-    setAppIconStateLoading(true);
     void getNativeRouteAppIcon()
       .then((icon) => { if (icon) setAppIcon(icon); })
       .catch((cause) => console.warn('[DANDULI current launcher icon refresh]', cause))
@@ -140,13 +126,14 @@ export function MoreServices({
 
   const openSheet = (next: MoreSheet) => {
     setNotice('');
+    if (next === 'app-icon' && nativeAppIconSupported) setAppIconStateLoading(true);
     setSheet(next);
   };
 
   const chooseTheme = (next: ThemeId) => {
     setTheme(next);
     localStorage.setItem('meluni-theme', next);
-    document.documentElement.dataset.meluniTheme = next;
+    document.documentElement.setAttribute('data-meluni-theme', next);
     setNotice('테마를 바로 적용했어요.');
   };
 
@@ -183,12 +170,10 @@ export function MoreServices({
     }
   };
 
-  const addPack = (id: string, price: string) => {
-    if (owned.includes(id)) return;
-    const next = [...owned, id];
-    setOwned(next);
-    localStorage.setItem('route-owned-emoticons', JSON.stringify(next));
-    setNotice(price === '무료' ? '이모티콘을 보관함에 추가했어요.' : '현재 테스트 버전이라 실제 결제 없이 보관함에 추가했어요.');
+  const addPack = (id: string) => {
+    if (chatPreferences.ownedStickerPacks.includes(id)) return;
+    updateChatStyle({ ownedStickerPacks: [...chatPreferences.ownedStickerPacks, id] });
+    setNotice('이모티콘을 대화 보관함에 추가했어요.');
   };
 
   const updateChatStyle = (patch: Partial<ChatPreferences>) => {
@@ -243,7 +228,7 @@ export function MoreServices({
         </div></>}
 
         {sheet === 'emoticon' && <><HeaderBar title="이모티콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">대화에서 사용할 단둘이 이모티콘을 모아보세요.</p><div className="emoticon-store">
-          {EMOTICON_PACKS.map((pack) => <article key={pack.id}><div className="emoticon-preview">{pack.preview.map((emoji) => <span key={emoji}>{emoji}</span>)}</div><div className="emoticon-copy"><b>{pack.name}</b><small>{pack.price}</small></div><button type="button" disabled={owned.includes(pack.id)} onClick={() => addPack(pack.id, pack.price)}>{owned.includes(pack.id) ? '보유 중' : pack.price === '무료' ? '받기' : '구매하기'}</button></article>)}
+          {STICKER_PACKS.map((pack) => <article key={pack.id}><div className="emoticon-preview">{pack.stickers.slice(0, 4).map((sticker) => { const id = stickerIdFromToken(sticker); return id ? <DanduliSticker key={sticker} id={id} /> : <span key={sticker}>{sticker}</span>; })}</div><div className="emoticon-copy"><b>{pack.name}</b><small>{pack.priceLabel === '기본' ? '기본 제공' : '무료'}</small></div><button type="button" disabled={chatPreferences.ownedStickerPacks.includes(pack.id)} onClick={() => addPack(pack.id)}>{chatPreferences.ownedStickerPacks.includes(pack.id) ? '사용 중' : '받기'}</button></article>)}
         </div></>}
 
         {sheet === 'chat-style' && <><HeaderBar title="채팅 꾸미기" onClose={() => setSheet(null)} /><p className="more-sheet-description">대화방의 배경과 메시지 글자 크기를 여기서 바로 바꿔요.</p>

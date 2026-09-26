@@ -92,7 +92,7 @@ export function PlaceTimeline({ memories, visits, schedules, datePlans, initialP
   onOpenMemory: (id: number) => void;
   onOpenLocation?: (place: string) => void;
 }) {
-  const [selectedPlace, setSelectedPlace] = useState<string>();
+  const [selectedPlace, setSelectedPlace] = useState(() => initialPlace?.trim() || undefined);
 
   const groups = useMemo(() => {
     const events: PlaceEvent[] = [];
@@ -168,7 +168,6 @@ export function PlaceTimeline({ memories, visits, schedules, datePlans, initialP
 
   useEffect(() => {
     if (!initialPlace?.trim()) return;
-    setSelectedPlace(initialPlace.trim());
     onConsumeInitialPlace?.();
   }, [initialPlace, onConsumeInitialPlace]);
 

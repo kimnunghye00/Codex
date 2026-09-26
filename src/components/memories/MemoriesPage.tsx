@@ -1,4 +1,4 @@
-import { CalendarDays, ChevronRight, Crown, GripVertical, Heart, MapPin, Pencil, Phone, Plus, Settings2, Sparkles, Trash2, Trophy, Video, X } from 'lucide-react';
+import { CalendarDays, ChevronRight, Crown, GripVertical, Heart, MapPin, Pencil, Plus, Settings2, Sparkles, Trash2, Trophy, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
@@ -21,6 +21,7 @@ type DatePlan = { id: number; title: string; date: string; time: string; locatio
 type AnniversaryItem = { title: string; date: string; icon: string; special?: boolean };
 
 const DEFAULT_TABS: HubTabId[] = ['album', 'anniversary', 'record', 'tier', 'schedule', 'date'];
+const EMPTY_SCHEDULES: Schedule[] = [];
 const TAB_LABEL: Record<HubTabId, string> = { album: '앨범', anniversary: '기념일', record: '기록', tier: '티어', schedule: '일정', date: '약속' };
 
 function normalizeTabOrder(value: unknown): HubTabId[] {
@@ -109,9 +110,9 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
   const profile = sharedProfile ?? (uid ? loadProfile(uid) : null);
   const [fallbackConnection, setFallbackConnection] = useState<RealCoupleConnection | null>(null);
   const connection = sharedConnection !== undefined ? sharedConnection : fallbackConnection;
-  const [fallbackRelationshipStartDate, setFallbackRelationshipStartDate] = useState<string>();
-  const relationshipStartDate = sharedRelationshipStartDate ?? fallbackRelationshipStartDate;
-  const [activeTab, setActiveTab] = useState<HubTabId>(requestedTab ?? 'album');
+  const [fallbackRelationship, setFallbackRelationship] = useState<{ coupleId: string; date?: string }>();
+  const relationshipStartDate = sharedRelationshipStartDate ?? (fallbackRelationship?.coupleId === connection?.coupleId ? fallbackRelationship?.date : undefined);
+  const [activeTab, setActiveTab] = useState<HubTabId>(() => initialDraft || initialMemoryId !== undefined ? 'album' : requestedTab ?? 'album');
   const [tabOrder, setTabOrder] = useState<HubTabId[]>(() => {
     try {
       const parsed = JSON.parse(localStorage.getItem(`route-hub-tabs:${uid}`) || '[]') as unknown;
@@ -131,9 +132,10 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
   const draggingTabRef = useRef<HubTabId | null>(null);
   const [draggingTab, setDraggingTab] = useState<HubTabId | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
-  const [selected, setSelected] = useState<number | undefined>(initialMemoryId);
-  const [editing, setEditing] = useState<Memory | null>();
-  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [selected, setSelected] = useState<number | undefined>(initialDraft ? undefined : initialMemoryId);
+  const [editing, setEditing] = useState<Memory | null | undefined>(initialDraft ? null : undefined);
+  const [remoteSchedules, setRemoteSchedules] = useState<{ coupleId: string; items: Schedule[] }>();
+  const schedules = remoteSchedules?.coupleId === connection?.coupleId ? remoteSchedules?.items ?? EMPTY_SCHEDULES : EMPTY_SCHEDULES;
   const [localSchedules, setLocalSchedules] = useState<Schedule[]>(() => { try { return JSON.parse(localStorage.getItem(`route-local-schedules:${uid}`) || '[]') as Schedule[]; } catch { return []; } });
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [editingScheduleId, setEditingScheduleId] = useState<string>();
@@ -147,6 +149,21 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
   const [dateSourceKey, setDateSourceKey] = useState<string>();
   const [dateForm, setDateForm] = useState({ title: '', date: todayKey(), time: '18:00', location: '', memo: '' });
   const [placeTimelineFocus, setPlaceTimelineFocus] = useState<string>();
+  const [seenDraft, setSeenDraft] = useState(initialDraft);
+  if (seenDraft !== initialDraft) {
+    setSeenDraft(initialDraft);
+    if (initialDraft) { setSelected(undefined); setActiveTab('album'); setEditing(null); }
+  }
+  const [seenRequestedTab, setSeenRequestedTab] = useState(requestedTab);
+  if (seenRequestedTab !== requestedTab) {
+    setSeenRequestedTab(requestedTab);
+    if (requestedTab) setActiveTab(requestedTab);
+  }
+  const [seenInitialMemoryId, setSeenInitialMemoryId] = useState(initialMemoryId);
+  if (seenInitialMemoryId !== initialMemoryId) {
+    setSeenInitialMemoryId(initialMemoryId);
+    if (initialMemoryId !== undefined) { setActiveTab('album'); setSelected(initialMemoryId); }
+  }
 
   useEffect(() => {
     if (sharedConnection !== undefined || !uid) return;
@@ -154,36 +171,19 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
   }, [sharedConnection, uid]);
   useEffect(() => {
     if (sharedRelationshipStartDate !== undefined) return;
-    if (!connection?.coupleId) {
-      setFallbackRelationshipStartDate(undefined);
-      return;
-    }
-    return subscribeCoupleShared(connection.coupleId, (shared) => setFallbackRelationshipStartDate(shared.relationshipStartDate));
+    if (!connection?.coupleId) return;
+    const coupleId = connection.coupleId;
+    return subscribeCoupleShared(coupleId, (shared) => setFallbackRelationship({ coupleId, date: shared.relationshipStartDate }));
   }, [connection?.coupleId, sharedRelationshipStartDate]);
-  useEffect(() => { if (!connection?.coupleId) { setSchedules([]); return; } const q = query(collection(db, 'couples', connection.coupleId, 'schedules'), orderBy('date', 'asc')); return onSnapshot(q, (snap) => setSchedules(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Schedule, 'id'>) }))), () => setScheduleFeedback('공유 일정을 불러오지 못해 이 기기에 저장된 일정만 표시해요.')); }, [connection?.coupleId]);
-  useEffect(() => { try { localStorage.setItem(`route-hub-tabs:${uid}`, JSON.stringify(tabOrder)); } catch {} }, [tabOrder, uid]);
+  useEffect(() => { if (!connection?.coupleId) return; const coupleId = connection.coupleId; const q = query(collection(db, 'couples', coupleId, 'schedules'), orderBy('date', 'asc')); return onSnapshot(q, (snap) => setRemoteSchedules({ coupleId, items: snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Schedule, 'id'>) })) }), () => setScheduleFeedback('공유 일정을 불러오지 못해 이 기기에 저장된 일정만 표시해요.')); }, [connection?.coupleId]);
+  useEffect(() => { try { localStorage.setItem(`route-hub-tabs:${uid}`, JSON.stringify(tabOrder)); } catch { /* Tab order is optional when storage is unavailable. */ } }, [tabOrder, uid]);
   useEffect(() => {
     try {
       localStorage.setItem(`route-show-default-anniversaries:${uid}`, String(showDefaultAnniversaries));
-    } catch {}
+    } catch { /* Anniversary preference remains in memory for this session. */ }
   }, [showDefaultAnniversaries, uid]);
-  useEffect(() => { try { localStorage.setItem(`route-date-plans:${uid}`, JSON.stringify(datePlans)); window.dispatchEvent(new Event('route-schedules-local-change')); } catch { setDateFeedback('기기 저장 공간을 확인해 주세요.'); } }, [datePlans, uid]);
-  useEffect(() => { try { localStorage.setItem(`route-local-schedules:${uid}`, JSON.stringify(localSchedules)); window.dispatchEvent(new Event('route-schedules-local-change')); } catch { setScheduleFeedback('기기 저장 공간을 확인해 주세요.'); } }, [localSchedules, uid]);
-  useEffect(() => {
-    if (!initialDraft) return;
-    setSelected(undefined);
-    setActiveTab('album');
-    setEditing(null);
-  }, [initialDraft]);
-  useEffect(() => {
-    if (!requestedTab) return;
-    setActiveTab(requestedTab);
-  }, [requestedTab]);
-  useEffect(() => {
-    if (initialMemoryId === undefined) return;
-    setActiveTab('album');
-    setSelected(initialMemoryId);
-  }, [initialMemoryId]);
+  useEffect(() => { try { localStorage.setItem(`route-date-plans:${uid}`, JSON.stringify(datePlans)); window.dispatchEvent(new Event('route-schedules-local-change')); } catch { window.setTimeout(() => setDateFeedback('기기 저장 공간을 확인해 주세요.'), 0); } }, [datePlans, uid]);
+  useEffect(() => { try { localStorage.setItem(`route-local-schedules:${uid}`, JSON.stringify(localSchedules)); window.dispatchEvent(new Event('route-schedules-local-change')); } catch { window.setTimeout(() => setScheduleFeedback('기기 저장 공간을 확인해 주세요.'), 0); } }, [localSchedules, uid]);
 
   useEffect(() => {
     const handleBack = (event: Event) => {
@@ -658,10 +658,10 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
     }
   };
 
-  if (selectedMemory) return <><MemoryDetail memory={selectedMemory} onBack={() => { setSelected(undefined); onClearInitial(); }} onFavorite={() => favorite(selectedMemory.id)} onEdit={() => setEditing(selectedMemory)} onDelete={() => { setMemories((items) => items.filter((item) => item.id !== selectedMemory.id)); setSelected(undefined); }} onOpenPlaceTimeline={(place) => { setSelected(undefined); onClearInitial(); setActiveTab('record'); setPlaceTimelineFocus(place); }} onOpenFootprints={onOpenFootprints ? () => onOpenFootprints(selectedMemory.id) : undefined} />{editing && <MemoryForm memory={editing} onClose={() => setEditing(undefined)} onSave={(memory) => { update(memory); setEditing(undefined); }} />}</>;
+  if (selectedMemory) return <><MemoryDetail key={selectedMemory.id} memory={selectedMemory} onBack={() => { setSelected(undefined); onClearInitial(); }} onFavorite={() => favorite(selectedMemory.id)} onEdit={() => setEditing(selectedMemory)} onDelete={() => { setMemories((items) => items.filter((item) => item.id !== selectedMemory.id)); setSelected(undefined); }} onOpenPlaceTimeline={(place) => { setSelected(undefined); onClearInitial(); setActiveTab('record'); setPlaceTimelineFocus(place); }} onOpenFootprints={onOpenFootprints ? () => onOpenFootprints(selectedMemory.id) : undefined} onOpenLocation={onOpenLocation} />{editing && <MemoryForm memory={editing} onClose={() => setEditing(undefined)} onSave={(memory) => { update(memory); setEditing(undefined); }} />}</>;
 
   return <div className="page memories-page route-hub"><Header title="추억" />
-    <div className="hub-head"><div><small>ROUTE TOGETHER</small><h1>{TAB_LABEL[activeTab]}</h1></div><button type="button" className="hub-settings" onClick={() => setOrderOpen(true)}><Settings2 size={18} /></button></div>
+    <div className="hub-head"><div><small>단둘이</small><h1>{TAB_LABEL[activeTab]}</h1></div><button type="button" className="hub-settings" onClick={() => setOrderOpen(true)}><Settings2 size={18} /></button></div>
     <div className="hub-tabs">{tabOrder.map((tab) => <button key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>{TAB_LABEL[tab]}</button>)}</div>
 
     {activeTab === 'album' && <>
@@ -674,7 +674,7 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
 
     {activeTab === 'anniversary' && <div className="hub-stack"><section className="hub-hero anniversary-hero"><Heart fill="currentColor" /><div><small>OUR DAYS</small><h2>함께 기다리는 날</h2><p>기념일에서 바로 약속을 만들 수 있어요.</p></div></section>{anniversaries.map((item) => { const planned = datePlans.some((plan) => plan.anniversaryKey === anniversaryPlanKey(item)); return <article className="anniversary-row" key={`${item.title}-${item.date}`}><span>{item.icon}</span><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')}</small></div><div className="anniversary-flow-actions"><strong>{dayBadge(item.date)}</strong><button type="button" className={planned ? 'planned' : ''} onClick={() => openDatePlan(item)}><Plus size={12} />{planned ? '약속 보기' : '약속'}</button></div></article>; })}</div>}
 
-    {activeTab === 'record' && <div className="hub-stack"><section className="hub-hero record-hero"><Crown /><div><small>우리의 기록</small><h2>우리의 기록</h2><p>ROUTE 안에서 쌓인 둘의 기록을 모아봤어요.</p></div></section><div className="record-grid"><article><Phone /><small>앱 통화</small><b>준비 중</b><span>ROUTE 통화 기능 연결 예정</span></article><article><Video /><small>영상통화</small><b>준비 중</b><span>앱 영상통화 기록</span></article><article><MapPin /><small>방문 장소</small><b>{visits.length}회</b><span>{topPlace ? `${topPlace[0]} · ${topPlace[1]}회` : '위치 기록을 시작해보세요'}</span></article><article><Heart /><small>추억</small><b>{memories.length}개</b><span>함께 남긴 사진과 영상</span></article></div><PlaceTimeline memories={memories} visits={visits} schedules={visibleSchedules} datePlans={datePlans} initialPlace={placeTimelineFocus} onConsumeInitialPlace={() => setPlaceTimelineFocus(undefined)} onOpenMemory={(id) => setSelected(id)} onOpenLocation={onOpenLocation} /></div>}
+    {activeTab === 'record' && <div className="hub-stack"><section className="hub-hero record-hero"><Crown /><div><small>우리의 기록</small><h2>우리의 기록</h2><p>단둘이에서 쌓인 둘의 기록을 모아봤어요.</p></div></section><div className="record-grid"><article><MapPin /><small>방문 장소</small><b>{visits.length}회</b><span>{topPlace ? `${topPlace[0]} · ${topPlace[1]}회` : '위치 기록을 시작해보세요'}</span></article><article><Heart /><small>추억</small><b>{memories.length}개</b><span>함께 남긴 사진과 영상</span></article></div><PlaceTimeline memories={memories} visits={visits} schedules={visibleSchedules} datePlans={datePlans} initialPlace={placeTimelineFocus} onConsumeInitialPlace={() => setPlaceTimelineFocus(undefined)} onOpenMemory={(id) => setSelected(id)} onOpenLocation={onOpenLocation} /></div>}
 
     {activeTab === 'tier' && <div className="hub-stack"><section className="hub-hero tier-hero"><Trophy /><div><small>COUPLE TIER</small><h2>이번 달 커플 랭킹</h2><p>공개 참여를 선택한 커플끼리 재미로 경쟁해요.</p></div></section><div className="tier-card"><span>🥇</span><div><b>달달커플</b><small>이번 달 데이트 기록</small></div><strong>24회</strong></div><div className="tier-card"><span>🥈</span><div><b>콩떡커플</b><small>이번 달 데이트 기록</small></div><strong>21회</strong></div><div className="tier-card"><span>🥉</span><div><b>{realName(profile,'나')} ❤️ {realName(partner,'상대방')}</b><small>내 커플 · 샘플 순위</small></div><strong>{Math.max(0, Math.min(20, datePlans.length))}회</strong></div><p className="hub-note">실제 전체 사용자 순위는 서버 집계와 공개 동의 기능을 연결한 뒤 활성화돼요.</p></div>}
 

@@ -71,7 +71,7 @@ function MemoryCardComponent({ memory, onOpen }: { memory: Memory; onOpen: (id: 
       // Removing src and forcing load() asks Chromium/WebView to release the
       // decoded frame/buffer instead of retaining every video card ever seen.
       video.removeAttribute('src');
-      try { video.load(); } catch {}
+      try { video.load(); } catch { /* The element may already be detached during cleanup. */ }
     };
   }, [cover, mediaActive]);
 
