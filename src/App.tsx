@@ -23,6 +23,9 @@ import {
 } from './utils/notifications';
 import { subscribeCoupleActivities } from './lib/coupleActivity';
 import { activityAlertEnabled, installActivityAlertClicks, openActivityFromUrl, requestActivityAlerts, showPartnerActivityAlert } from './lib/activityAlerts';
+import { sendScheduledCoupleMessage } from './lib/chatRealtime';
+import { dueScheduledChatDrafts, loadScheduledChatDrafts, removeScheduledChatDraft, SCHEDULED_CHAT_CHANGED } from './lib/scheduledChat';
+import { PERSISTENT_STATE_CHANGE_EVENT } from './utils/persistenceSignal';
 import { ChevronRight, Heart, Image, MapPin, MapPinned, Plus } from 'lucide-react';
 import './home-simple.css';
 import './home-dashboard.css';
@@ -246,6 +249,68 @@ function App({ user, profile, onProfileChange }: AppProps) {
   }, [user.uid]);
 
   useEffect(() => installActivityAlertClicks(), []);
+  useEffect(() => {
+    const coupleId = connection?.coupleId;
+    if (!coupleId) return;
+    const uid = user.uid;
+    let stopped = false;
+    let sending = false;
+    let retryAfter = 0;
+    let timer: number | undefined;
+
+    const check = () => {
+      if (stopped || sending) return;
+      if (timer !== undefined) window.clearTimeout(timer);
+      const drafts = loadScheduledChatDrafts(uid).filter((draft) => draft.coupleId === coupleId);
+      const now = Date.now();
+      const due = dueScheduledChatDrafts(drafts, coupleId, now);
+      if (due.length && now >= retryAfter) {
+        sending = true;
+        void (async () => {
+          for (const draft of due) {
+            if (stopped) break;
+            if (!loadScheduledChatDrafts(uid).some((item) => item.id === draft.id && item.coupleId === coupleId)) continue;
+            try {
+              await sendScheduledCoupleMessage(coupleId, uid, draft);
+              removeScheduledChatDraft(uid, draft.id, coupleId);
+              retryAfter = 0;
+            } catch (cause) {
+              console.warn('[DANDULI scheduled chat retry]', cause);
+              retryAfter = Date.now() + 30_000;
+              break;
+            }
+          }
+          sending = false;
+          check();
+        })();
+        return;
+      }
+      const next = drafts.reduce((earliest, draft) => Math.min(earliest, Date.parse(draft.sendAt)), Infinity);
+      const wait = due.length ? retryAfter - now : next - now;
+      timer = window.setTimeout(check, Math.max(250, Math.min(60 * 60 * 1000, Number.isFinite(wait) ? wait : 60 * 60 * 1000)));
+    };
+    const onDraftChange = (event: Event) => {
+      if ((event as CustomEvent<string>).detail === uid) check();
+    };
+    const onVisibility = () => { if (!document.hidden) check(); };
+    window.addEventListener(SCHEDULED_CHAT_CHANGED, onDraftChange);
+    window.addEventListener(PERSISTENT_STATE_CHANGE_EVENT, check);
+    window.addEventListener('storage', check);
+    window.addEventListener('online', check);
+    window.addEventListener('focus', check);
+    document.addEventListener('visibilitychange', onVisibility);
+    check();
+    return () => {
+      stopped = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+      window.removeEventListener(SCHEDULED_CHAT_CHANGED, onDraftChange);
+      window.removeEventListener(PERSISTENT_STATE_CHANGE_EVENT, check);
+      window.removeEventListener('storage', check);
+      window.removeEventListener('online', check);
+      window.removeEventListener('focus', check);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [user.uid, connection?.coupleId]);
   useEffect(() => {
     void activityAlertEnabled().then((enabled) => setAlertStatus(enabled ? '기기 알림 켜짐' : '기기 알림 받기'));
   }, []);

@@ -96,6 +96,26 @@ jobs:
         working-directory: android
         run: ./gradlew assembleRelease --stacktrace
 
+      # The production signing key is kept by the owner outside GitHub. This
+      # kit lets the same verified build be signed locally for a store update.
+      - name: Prepare unsigned production signing kit
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_TOOLS="$(find "${ANDROID_HOME}/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          mkdir -p signing-kit
+          cp android/app/build/outputs/apk/release/app-release-unsigned.apk signing-kit/
+          cp "${BUILD_TOOLS}/lib/apksigner.jar" "${BUILD_TOOLS}/zipalign" "${BUILD_TOOLS}/aapt" signing-kit/
+          (cd signing-kit && sha256sum app-release-unsigned.apk > unsigned-sha256.txt)
+
+      - name: Upload unsigned production signing kit
+        uses: actions/upload-artifact@v4
+        with:
+          name: DANDULI-unsigned-production-signing-kit
+          path: signing-kit/
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Align and sign QA APK with the test key
         shell: bash
         run: |

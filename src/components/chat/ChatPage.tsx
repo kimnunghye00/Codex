@@ -1,5 +1,5 @@
 import { Bot, CalendarClock, ContactRound, Gift, Heart, MoreHorizontal, Phone, Trash2, Video, X } from 'lucide-react';
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { collection, doc, limit, onSnapshot, orderBy, query, setDoc, where } from 'firebase/firestore';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -14,6 +14,8 @@ import type { Message } from '../../types';
 import { localDateKey, messageDateLabel } from '../../utils/dates';
 import { isChatMediaMessage, loadChatMemoryMessageIds, toggleChatMessageMemory } from '../../utils/featureFlow';
 import { createMessageId } from '../../utils/messageId';
+import { addScheduledChatDraft, loadScheduledChatDrafts, removeScheduledChatDraft, SCHEDULED_CHAT_CHANGED } from '../../lib/scheduledChat';
+import { PERSISTENT_STATE_CHANGE_EVENT } from '../../utils/persistenceSignal';
 import { typingTimeRemaining } from '../../utils/typingStatus';
 import { ChatBubble } from './ChatBubble';
 import { ChatComposer } from './ChatComposer';
@@ -21,7 +23,6 @@ import { ChatToolsPanel, loadChatPreferences, saveChatPreferences, type ChatPref
 import { stickerIdFromToken } from './DanduliSticker';
 
 type ChatSchedule = { id: string; title: string; date: string; startTime: string; type: 'personal' | 'couple'; ownerId: string };
-type ScheduledDraft = { id: number; text: string; sendAt: string };
 type CallMode = 'voice' | 'video' | 'screen';
 type MediaProgress = { completed: number; total: number };
 type ChatRow =
@@ -35,7 +36,6 @@ const MAX_GIF_BYTES = 9 * 1024 * 1024;
 const MAX_CHAT_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 const MAX_CHAT_PHOTOS = 100;
 const CHAT_MEDIA_BATCH_SIZE = 4;
-const MAX_SCHEDULE_SLEEP_MS = 60 * 60 * 1000;
 const CHAT_BOTTOM_SLOP_PX = 140;
 const FINE_POINTER_WHEEL_MULTIPLIER = 2.35;
 const DELETE_FOR_EVERYONE_WINDOW_MS = 10 * 60 * 1000;
@@ -192,7 +192,7 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
   const [preferences, setPreferences] = useState(() => loadChatPreferences(currentUid || 'guest'));
   const [schedules, setSchedules] = useState<ChatSchedule[]>([]);
   const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [scheduledDrafts, setScheduledDrafts] = useState<ScheduledDraft[]>(() => { try { return JSON.parse(localStorage.getItem(`route-scheduled-chat:${currentUid}`) || '[]'); } catch { return []; } });
+  const [scheduledDrafts, setScheduledDrafts] = useState(() => loadScheduledChatDrafts(currentUid));
   const [scheduleForm, setScheduleForm] = useState({ text: '', date: '', time: '' });
   const [scheduleError, setScheduleError] = useState('');
   const [giftOpen, setGiftOpen] = useState(false);
@@ -308,7 +308,21 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
     window.addEventListener('route-chat-preferences-change', syncPreferences);
     return () => window.removeEventListener('route-chat-preferences-change', syncPreferences);
   }, []);
-  useEffect(() => { localStorage.setItem(`route-scheduled-chat:${currentUid}`, JSON.stringify(scheduledDrafts)); }, [scheduledDrafts, currentUid]);
+  useEffect(() => {
+    const refresh = () => setScheduledDrafts(loadScheduledChatDrafts(currentUid));
+    const changed = (event: Event) => {
+      if ((event as CustomEvent<string>).detail === currentUid) refresh();
+    };
+    window.addEventListener(SCHEDULED_CHAT_CHANGED, changed);
+    window.addEventListener(PERSISTENT_STATE_CHANGE_EVENT, refresh);
+    window.addEventListener('storage', refresh);
+    refresh();
+    return () => {
+      window.removeEventListener(SCHEDULED_CHAT_CHANGED, changed);
+      window.removeEventListener(PERSISTENT_STATE_CHANGE_EVENT, refresh);
+      window.removeEventListener('storage', refresh);
+    };
+  }, [currentUid]);
   useEffect(() => {
     const refreshSavedMedia = () => setSavedMediaIds(loadChatMemoryMessageIds());
     window.addEventListener('route-memories-local-change', refreshSavedMedia);
@@ -486,7 +500,6 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
     const message: Message = { id: createMessageId(), sender: 'me', type: 'text', text: text.trim(), timestamp: new Date().toISOString(), read: usingAiPartner, replyTo, scheduledFor };
     deliver(message); setReplyTo(undefined);
   };
-  const sendScheduledText = useEffectEvent((text: string, sendAt: string) => sendText(text, sendAt));
 
   const sendStickerChoice = (value: string) => {
     const stickerId = stickerIdFromToken(value);
@@ -500,35 +513,6 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
     deliver(message);
     setReplyTo(undefined);
   };
-
-  useEffect(() => {
-    if (!scheduledDrafts.length) return;
-    let timer: number | undefined;
-    let cancelled = false;
-
-    const arm = () => {
-      if (cancelled) return;
-      const nextAt = Math.min(...scheduledDrafts.map((item) => new Date(item.sendAt).getTime()).filter(Number.isFinite));
-      if (!Number.isFinite(nextAt)) return;
-      const delay = Math.min(MAX_SCHEDULE_SLEEP_MS, Math.max(250, nextAt - Date.now()));
-      timer = window.setTimeout(() => {
-        timer = undefined;
-        const due = scheduledDrafts.filter((item) => new Date(item.sendAt).getTime() <= Date.now());
-        if (due.length) {
-          due.forEach((item) => sendScheduledText(item.text, item.sendAt));
-          setScheduledDrafts((items) => items.filter((item) => !due.some((dueItem) => dueItem.id === item.id)));
-          return;
-        }
-        arm();
-      }, delay);
-    };
-
-    arm();
-    return () => {
-      cancelled = true;
-      if (timer !== undefined) window.clearTimeout(timer);
-    };
-  }, [scheduledDrafts]);
 
   const send = () => { const text = draft; setDraft(''); sendText(text); };
   const sendImages = async (files: File[]) => {
@@ -746,6 +730,7 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
 
   const reserveMessage = () => {
     setScheduleError('');
+    if (!connection?.coupleId || !currentUid) return setScheduleError('상대방과 연결한 뒤 예약할 수 있어요.');
     if (!scheduleForm.text.trim()) return setScheduleError('예약할 메시지를 입력해 주세요.');
     if (!scheduleDateIsValid(scheduleForm.date)) return setScheduleError('날짜를 YYYY-MM-DD 형식으로 정확하게 입력해 주세요.');
     if (!/^\d{2}:\d{2}$/.test(scheduleForm.time)) return setScheduleError('보낼 시간을 입력해 주세요.');
@@ -754,7 +739,11 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
     const sendAtMs = new Date(sendAt).getTime();
     if (!Number.isFinite(sendAtMs) || sendAtMs <= Date.now()) return setScheduleError('현재보다 이후 날짜와 시간을 입력해 주세요.');
 
-    setScheduledDrafts((items) => [...items, { id: createMessageId(), text: scheduleForm.text.trim(), sendAt }]);
+    try {
+      addScheduledChatDraft(currentUid, { id: createMessageId(), text: scheduleForm.text.trim(), sendAt, coupleId: connection.coupleId });
+    } catch {
+      return setScheduleError('예약을 저장하지 못했어요. 저장 공간을 확인한 뒤 다시 시도해 주세요.');
+    }
     setScheduleForm({ text: '', date: '', time: '' });
     setScheduleError('');
     setScheduleOpen(false);
@@ -933,7 +922,7 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
         return <>{row.showDate && <div className="date-chip">{messageDateLabel(message.timestamp)}</div>}<ChatBubble message={displayedMessage} reply={message.replyTo ? byId.get(message.replyTo) : undefined} partnerName={partnerName} partnerInitial={partnerInitial} active={active === message.id} highlighted={highlighted === message.id} selectionMode={Boolean(deleteSelection)} selected={Boolean(deleteSelection?.has(message.id))} onAction={() => setActive(active === message.id ? undefined : message.id)} onReact={(emoji) => react(message.id, emoji)} onReply={() => { setReplyTo(message.id); setActive(undefined); }} onSave={() => saveMessage(displayedMessage)} onDelete={() => beginDeleteSelection(displayedMessage)} onToggleSelect={() => toggleDeleteSelection(displayedMessage)} onImage={setLightbox} onJump={jump} /></>;
       })() : row.kind === 'typing-ai' ? <TypingIndicator ai initial={partnerInitial} /> : <TypingIndicator ai={false} initial={partnerInitial} heart />}</div>;
     })}</div><div ref={bottomRef} /></div>
-    {scheduledDrafts.length > 0 && !deleteSelection && <div className="scheduled-strip"><CalendarClock size={14} /><span>예약 메시지 {scheduledDrafts.length}개</span><small>앱 실행 중 자동 전송</small></div>}
+    {scheduledDrafts.length > 0 && !deleteSelection && <div className="scheduled-chat-list"><div className="scheduled-strip"><CalendarClock size={14} /><span>예약 메시지 {scheduledDrafts.length}개</span><small>앱을 열어 둔 동안 전송 · 오프라인이면 재시도</small></div>{scheduledDrafts.map((item) => <div className="scheduled-chat-item" key={item.id}><span><b>{item.text}</b><small>{item.coupleId ? new Date(item.sendAt).toLocaleString('ko-KR') : '이전 버전 예약 · 다시 예약해 주세요'}</small></span><button type="button" onClick={() => removeScheduledChatDraft(currentUid, item.id)} aria-label="예약 메시지 취소">취소</button></div>)}</div>}
     {!deleteSelection && <ChatComposer draft={draft} reply={replyTo ? byId.get(replyTo) : undefined} partnerName={partnerName} ownedStickerPacks={preferences.ownedStickerPacks} onDraft={setDraft} onSend={send} onImages={sendImages} onGif={sendGif} onQuick={sendText} onSticker={sendStickerChoice} onSchedule={openScheduleMessage} onGift={() => setGiftOpen(true)} onFile={(file) => sendAttachment(file, 'file')} onContact={() => void openContactPicker()} onVoice={(file, duration) => sendAttachment(file, 'audio', duration)} onVoiceError={setSyncError} onStickerStore={openStickerStore} onCancelReply={() => setReplyTo(undefined)} />}
     {toolsOpen && <ChatToolsPanel key={toolsInitialSection} initialSection={toolsInitialSection} messages={messages} partnerName={partnerName} preferences={preferences} onPreferences={setPreferences} onJump={jump} onImage={setLightbox} onImport={(imported) => setMessages(imported)} onSticker={sendStickerChoice} onClose={() => setToolsOpen(false)} />}
     {lightbox && <div className="lightbox" role="dialog" onClick={() => setLightbox(undefined)}><button aria-label="닫기"><X /></button><img src={lightbox} alt="확대된 채팅 사진" /></div>}
@@ -950,7 +939,7 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
       </section>
     </div>}
 
-    {scheduleOpen && <div className="chat-extra-backdrop" onMouseDown={() => { setScheduleOpen(false); setScheduleError(''); }}><section className="chat-extra-modal" onMouseDown={(event) => event.stopPropagation()}><button className="chat-extra-close" onClick={() => { setScheduleOpen(false); setScheduleError(''); }}><X /></button><CalendarClock className="modal-accent-icon" /><h2>예약 메시지</h2><p>현재 버전에서는 단둘이가 실행 중일 때 예약 시간이 되면 자동으로 보내요.</p><label>메시지<textarea value={scheduleForm.text} onChange={(event) => { setScheduleForm({ ...scheduleForm, text: event.target.value }); setScheduleError(''); }} placeholder="나중에 전할 말을 적어주세요" /></label><div className="chat-schedule-datetime"><label>보낼 날짜<input type="text" inputMode="numeric" autoComplete="off" maxLength={10} value={scheduleForm.date} onChange={(event) => { setScheduleForm({ ...scheduleForm, date: formatScheduleDateInput(event.target.value) }); setScheduleError(''); }} placeholder="YYYY-MM-DD" aria-label="예약 메시지 보낼 날짜" /></label><label>보낼 시간<input type="time" value={scheduleForm.time} onChange={(event) => { setScheduleForm({ ...scheduleForm, time: event.target.value }); setScheduleError(''); }} aria-label="예약 메시지 보낼 시간" /></label></div>{scheduleError && <p className="chat-schedule-error" role="alert">{scheduleError}</p>}<button className="primary" disabled={!scheduleForm.text.trim() || scheduleForm.date.length !== 10 || !scheduleForm.time} onClick={reserveMessage}>예약하기</button></section></div>}
+    {scheduleOpen && <div className="chat-extra-backdrop" onMouseDown={() => { setScheduleOpen(false); setScheduleError(''); }}><section className="chat-extra-modal" onMouseDown={(event) => event.stopPropagation()}><button className="chat-extra-close" onClick={() => { setScheduleOpen(false); setScheduleError(''); }}><X /></button><CalendarClock className="modal-accent-icon" /><h2>예약 메시지</h2><p>앱이 열려 있는 동안 예약 시간이 되면 보내요. 앱을 종료했다면 다음에 열었을 때 전송합니다.</p><label>메시지<textarea value={scheduleForm.text} onChange={(event) => { setScheduleForm({ ...scheduleForm, text: event.target.value }); setScheduleError(''); }} placeholder="나중에 전할 말을 적어주세요" /></label><div className="chat-schedule-datetime"><label>보낼 날짜<input type="text" inputMode="numeric" autoComplete="off" maxLength={10} value={scheduleForm.date} onChange={(event) => { setScheduleForm({ ...scheduleForm, date: formatScheduleDateInput(event.target.value) }); setScheduleError(''); }} placeholder="YYYY-MM-DD" aria-label="예약 메시지 보낼 날짜" /></label><label>보낼 시간<input type="time" value={scheduleForm.time} onChange={(event) => { setScheduleForm({ ...scheduleForm, time: event.target.value }); setScheduleError(''); }} aria-label="예약 메시지 보낼 시간" /></label></div>{scheduleError && <p className="chat-schedule-error" role="alert">{scheduleError}</p>}<button className="primary" disabled={!scheduleForm.text.trim() || scheduleForm.date.length !== 10 || !scheduleForm.time} onClick={reserveMessage}>예약하기</button></section></div>}
 
     {contactOpen && <div className="chat-extra-backdrop" onMouseDown={() => setContactOpen(false)}><section className="chat-extra-modal contact-modal" onMouseDown={(event) => event.stopPropagation()}><button className="chat-extra-close" onClick={() => setContactOpen(false)}><X /></button><ContactRound className="modal-accent-icon" /><h2>연락처 보내기</h2><p>기기 연락처 선택을 지원하지 않는 환경에서는 이름과 전화번호를 직접 입력할 수 있어요.</p><label>이름<input value={contactForm.name} onChange={(event) => setContactForm({ ...contactForm, name: event.target.value })} placeholder="이름" autoComplete="name" /></label><label>전화번호<input value={contactForm.phone} onChange={(event) => setContactForm({ ...contactForm, phone: event.target.value })} placeholder="010-0000-0000" inputMode="tel" autoComplete="tel" /></label><button className="primary" disabled={!contactForm.name.trim() || !contactForm.phone.trim()} onClick={() => sendContact(contactForm.name, contactForm.phone)}>연락처 보내기</button></section></div>}
 

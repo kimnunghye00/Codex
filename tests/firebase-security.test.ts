@@ -14,7 +14,7 @@ vi.mock('../src/lib/firebaseStorage', () => ({ get storage() { return client.sto
 import { syncUserProfile } from '../src/lib/coupleData';
 import { createCoupleInvite, connectWithInviteCode, finalizeInviteAsOwner, completeJoinerConnection, getRealCoupleConnection, subscribeRealCoupleConnection } from '../src/lib/coupleConnection';
 import { disconnectCouple } from '../src/lib/coupleDisconnect';
-import { sendCoupleMessage, toggleCoupleMessageReaction, setCoupleMessageReactions, hideCoupleMessageForMe, deleteCoupleMessageForEveryone, clearCoupleChatForMe } from '../src/lib/chatRealtime';
+import { sendCoupleMessage, sendScheduledCoupleMessage, toggleCoupleMessageReaction, setCoupleMessageReactions, hideCoupleMessageForMe, deleteCoupleMessageForEveryone, clearCoupleChatForMe } from '../src/lib/chatRealtime';
 import { uploadChatAttachment, uploadChatMedia } from '../src/lib/chatMedia';
 import { addDatePlace, saveDateCourse, setPlaceLike, addPlaceOpinion } from '../src/lib/dateMap';
 import { addDatePlanCandidate, createDatePlanDraft, readDatePlanCandidates, subscribeDatePlanCandidates, updateDatePlanCandidateMemo, updateDatePlanDraft } from '../src/lib/datePlanDrafts';
@@ -62,6 +62,24 @@ async function pair(owner = 'alice', joiner = 'bob') {
   return { coupleId: result!.coupleId, code: invite.code };
 }
 function message(id: number) { return { id, sender: 'me' as const, type: 'text' as const, text: '우리의 대화', timestamp: new Date().toISOString(), read: false }; }
+
+test('scheduled chat retries use one message and never send into another couple', async () => {
+  const { coupleId } = await pair();
+  const draft = { id: 874223, text: '저녁에 만나자', sendAt: '2026-09-26T20:00', coupleId };
+  as('alice');
+  await sendScheduledCoupleMessage(coupleId, 'alice', draft);
+  const ref = doc(client.db, 'couples', coupleId, 'messages', String(draft.id));
+  const first = (await getDocFromServer(ref)).data()!;
+  await sendScheduledCoupleMessage(coupleId, 'alice', draft);
+  const second = (await getDocFromServer(ref)).data()!;
+  expect(second.createdAt).toEqual(first.createdAt);
+  expect(second.text).toBe(draft.text);
+  await expect(sendScheduledCoupleMessage(coupleId, 'alice', { ...draft, text: '다른 내용' })).rejects.toThrow('scheduled-chat-id-conflict');
+  await expect(sendScheduledCoupleMessage(coupleId, 'alice', { ...draft, coupleId: 'old' })).rejects.toThrow('scheduled-chat-couple-changed');
+  as('bob');
+  expect((await getDocFromServer(doc(client.db, 'couples', coupleId, 'messages', String(draft.id)))).data()?.text).toBe(draft.text);
+  expect((await getDocFromServer(doc(client.db, 'couples', coupleId, 'activity', 'chat-' + draft.id))).exists()).toBe(true);
+});
 async function seed(path: string, data: object) { await env.withSecurityRulesDisabled(async c => { await setDoc(doc(c.firestore() as unknown as Firestore, path), data); }); }
 
 async function phoneSignup(phone: string) {
