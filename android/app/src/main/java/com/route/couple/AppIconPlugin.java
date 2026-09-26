@@ -2,10 +2,12 @@ package com.route.couple;
 
 import android.app.Activity;
 import android.content.ComponentName;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Process;
 import android.util.Log;
 
 import com.getcapacitor.JSObject;
@@ -14,60 +16,29 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 @CapacitorPlugin(name = "RouteAppIcon")
 public class AppIconPlugin extends Plugin {
     private static final String PREFS = "route_app_icon";
     private static final String PREF_ICON = "selected_icon";
-    private static final String DEFAULT_COMPONENT = "RouteLauncherActivity";
-    private static final long MOVE_HOME_DELAY_MS = 220L;
-    private static final long APPLY_DELAY_MS = 320L;
+    private static final String DEFAULT_COMPONENT = "DanduliDefaultLauncher";
     private static final String TAG = "DanduliAppIcon";
 
-    private static final Map<String, String> ICON_COMPONENTS = new LinkedHashMap<>();
-    private static final Map<String, String> LEGACY_ICON_COMPONENTS = new LinkedHashMap<>();
-    private static final String[] LEGACY_COMPONENTS = {
-            "DanduliRouteIconV2", "DanduliRouteIconV3", "DanduliRouteIconV4",
-            "DanduliHeartChatIconV2", "DanduliHeartChatIconV3", "DanduliHeartChatIconV4",
-            "DanduliCoupleLoveIconV2", "DanduliCoupleLoveIconV3", "DanduliCoupleLoveIconV4",
-            "DanduliCoupleDateIconV2", "DanduliCoupleDateIconV3", "DanduliCoupleDateIconV4",
-            "RouteDefaultIcon", "RouteHeartIcon", "RoutePinDuoIcon", "RouteHeartChatIcon",
-            "RouteOurRouteIcon", "RouteNightIcon", "RouteCreamIcon", "RouteMinimalIcon",
-            "DanduliCoupleLoveIcon", "DanduliCoupleDateIcon"
-    };
+    private static final long GO_HOME_DELAY_MS = 180L;
+    private static final long REMOVE_OLD_DELAY_MS = 180L;
+    private static final long ADD_NEW_DELAY_MS = 260L;
+    private static final long PROCESS_EXIT_DELAY_MS = 700L;
 
+    private static final Map<String, String> ICON_COMPONENTS = new LinkedHashMap<>();
     private boolean swapInProgress = false;
 
     static {
-        ICON_COMPONENTS.put("route", "RouteLauncherActivity");
-        ICON_COMPONENTS.put("heart-chat", "HeartChatLauncherActivity");
-        ICON_COMPONENTS.put("couple-love", "CoupleLoveLauncherActivity");
-        ICON_COMPONENTS.put("couple-date", "CoupleDateLauncherActivity");
-
-        LEGACY_ICON_COMPONENTS.put("DanduliRouteIconV2", "route");
-        LEGACY_ICON_COMPONENTS.put("DanduliRouteIconV3", "route");
-        LEGACY_ICON_COMPONENTS.put("DanduliRouteIconV4", "route");
-        LEGACY_ICON_COMPONENTS.put("RouteDefaultIcon", "route");
-
-        LEGACY_ICON_COMPONENTS.put("DanduliHeartChatIconV2", "heart-chat");
-        LEGACY_ICON_COMPONENTS.put("DanduliHeartChatIconV3", "heart-chat");
-        LEGACY_ICON_COMPONENTS.put("DanduliHeartChatIconV4", "heart-chat");
-        LEGACY_ICON_COMPONENTS.put("RouteHeartChatIcon", "heart-chat");
-
-        LEGACY_ICON_COMPONENTS.put("DanduliCoupleLoveIconV2", "couple-love");
-        LEGACY_ICON_COMPONENTS.put("DanduliCoupleLoveIconV3", "couple-love");
-        LEGACY_ICON_COMPONENTS.put("DanduliCoupleLoveIconV4", "couple-love");
-        LEGACY_ICON_COMPONENTS.put("DanduliCoupleLoveIcon", "couple-love");
-
-        LEGACY_ICON_COMPONENTS.put("DanduliCoupleDateIconV2", "couple-date");
-        LEGACY_ICON_COMPONENTS.put("DanduliCoupleDateIconV3", "couple-date");
-        LEGACY_ICON_COMPONENTS.put("DanduliCoupleDateIconV4", "couple-date");
-        LEGACY_ICON_COMPONENTS.put("DanduliCoupleDateIcon", "couple-date");
+        ICON_COMPONENTS.put("route", "DanduliDefaultLauncher");
+        ICON_COMPONENTS.put("heart-chat", "DanduliChatLauncher");
+        ICON_COMPONENTS.put("couple-love", "DanduliLoveLauncher");
+        ICON_COMPONENTS.put("couple-date", "DanduliDateLauncher");
     }
 
     private ComponentName componentFor(String component) {
@@ -80,21 +51,22 @@ public class AppIconPlugin extends Plugin {
         if (state == PackageManager.COMPONENT_ENABLED_STATE_ENABLED) return true;
         if (state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED
                 || state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER
-                || state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED) return false;
+                || state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED) {
+            return false;
+        }
         return DEFAULT_COMPONENT.equals(component);
     }
 
-    private List<String> allManagedComponents() {
-        List<String> components = new ArrayList<>(ICON_COMPONENTS.values());
-        components.addAll(Arrays.asList(LEGACY_COMPONENTS));
-        return components;
+    private void setState(String component, int state) {
+        getContext().getPackageManager().setComponentEnabledSetting(
+                componentFor(component),
+                state,
+                PackageManager.DONT_KILL_APP
+        );
     }
 
     private String enabledLauncherComponent() {
         for (String component : ICON_COMPONENTS.values()) {
-            if (componentEnabled(component)) return component;
-        }
-        for (String component : LEGACY_COMPONENTS) {
             if (componentEnabled(component)) return component;
         }
         return null;
@@ -109,76 +81,34 @@ public class AppIconPlugin extends Plugin {
         for (Map.Entry<String, String> entry : ICON_COMPONENTS.entrySet()) {
             if (componentEnabled(entry.getValue())) return entry.getKey();
         }
-        for (Map.Entry<String, String> entry : LEGACY_ICON_COMPONENTS.entrySet()) {
-            if (componentEnabled(entry.getKey())) return entry.getValue();
-        }
         return "route";
     }
 
-    private void setState(String component, int state, int flags) {
-        getContext().getPackageManager().setComponentEnabledSetting(
-                componentFor(component),
-                state,
-                flags
-        );
-    }
-
-    private void applyExclusiveComponent(String selectedComponent, String previousComponent) {
-        setState(
-                selectedComponent,
-                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                PackageManager.DONT_KILL_APP
-        );
-
-        for (String component : allManagedComponents()) {
-            if (component.equals(selectedComponent) || component.equals(previousComponent)) continue;
-            setState(
-                    component,
-                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                    PackageManager.DONT_KILL_APP
-            );
-        }
-
-        if (previousComponent != null && !previousComponent.equals(selectedComponent)) {
-            // The task was moved to Home first. Let Android restart this process
-            // while removing the old launcher Activity so One UI refreshes the
-            // icon using the newly enabled Activity component.
-            setState(
-                    previousComponent,
-                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                    0
-            );
-        }
-    }
-
-    private void rollback(String selectedComponent, String previousComponent, String previousIcon) {
-        try {
-            setState(
-                    selectedComponent,
-                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                    PackageManager.DONT_KILL_APP
-            );
-            if (previousComponent != null) {
-                setState(
-                        previousComponent,
-                        PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                        PackageManager.DONT_KILL_APP
-                );
-            } else {
-                setState(
-                        DEFAULT_COMPONENT,
-                        PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                        PackageManager.DONT_KILL_APP
-                );
+    private void disableEveryLauncherExcept(String keep) {
+        for (String component : ICON_COMPONENTS.values()) {
+            if (!component.equals(keep)) {
+                setState(component, PackageManager.COMPONENT_ENABLED_STATE_DISABLED);
             }
-            getContext().getSharedPreferences(PREFS, 0)
-                    .edit()
-                    .putString(PREF_ICON, previousIcon)
-                    .apply();
-        } catch (Exception rollbackError) {
-            Log.e(TAG, "Could not roll back launcher component switch", rollbackError);
-        } finally {
-            swapInProgress = false;
+        }
+    }
+
+    private void openHomeScreen() {
+        Activity activity = getActivity();
+        if (activity != null) {
+            try {
+                activity.moveTaskToBack(true);
+            } catch (Exception ignored) {
+                // Fall through to an explicit HOME intent.
+            }
+        }
+
+        try {
+            Intent home = new Intent(Intent.ACTION_MAIN);
+            home.addCategory(Intent.CATEGORY_HOME);
+            home.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(home);
+        } catch (Exception error) {
+            Log.w(TAG, "Could not explicitly open Home", error);
         }
     }
 
@@ -206,7 +136,6 @@ public class AppIconPlugin extends Plugin {
 
         try {
             String previousComponent = enabledLauncherComponent();
-            String previousIcon = currentIcon();
 
             boolean saved = getContext().getSharedPreferences(PREFS, 0)
                     .edit()
@@ -233,25 +162,50 @@ public class AppIconPlugin extends Plugin {
 
             Handler mainHandler = new Handler(Looper.getMainLooper());
             mainHandler.postDelayed(() -> {
-                Activity activity = getActivity();
-                if (activity != null) {
-                    try {
-                        activity.moveTaskToBack(true);
-                    } catch (Exception ignored) {
-                        // Continue with the component swap even if Home transition fails.
-                    }
-                }
+                openHomeScreen();
 
+                // Phase 1: remove the old launcher entry first. A short interval with
+                // no launcher entry makes One UI drop its stale component/icon cache.
                 mainHandler.postDelayed(() -> {
                     try {
-                        applyExclusiveComponent(selectedComponent, previousComponent);
-                        swapInProgress = false;
+                        if (previousComponent != null && !previousComponent.equals(selectedComponent)) {
+                            setState(previousComponent, PackageManager.COMPONENT_ENABLED_STATE_DISABLED);
+                        }
+                        disableEveryLauncherExcept(selectedComponent);
                     } catch (Exception error) {
-                        Log.e(TAG, "Could not switch launcher Activity", error);
-                        rollback(selectedComponent, previousComponent, previousIcon);
+                        Log.e(TAG, "Could not remove previous launcher component", error);
                     }
-                }, APPLY_DELAY_MS);
-            }, MOVE_HOME_DELAY_MS);
+
+                    // Phase 2: add exactly one new launcher component with its own
+                    // DANDULI drawable. Then exit this process after PackageManager
+                    // has committed the state so the next launch starts cleanly.
+                    mainHandler.postDelayed(() -> {
+                        try {
+                            setState(selectedComponent, PackageManager.COMPONENT_ENABLED_STATE_ENABLED);
+                            disableEveryLauncherExcept(selectedComponent);
+
+                            // Resolve the icon once through PackageManager. This also
+                            // verifies the selected component has a real icon resource.
+                            getContext().getPackageManager().getActivityIcon(componentFor(selectedComponent));
+                            Log.i(TAG, "Launcher icon switched to " + selectedComponent);
+                        } catch (Exception error) {
+                            Log.e(TAG, "Could not enable selected launcher component", error);
+                            try {
+                                setState(DEFAULT_COMPONENT, PackageManager.COMPONENT_ENABLED_STATE_ENABLED);
+                            } catch (Exception ignored) {
+                                // Keep the plugin from crashing even if recovery fails.
+                            }
+                        } finally {
+                            swapInProgress = false;
+                        }
+
+                        mainHandler.postDelayed(
+                                () -> Process.killProcess(Process.myPid()),
+                                PROCESS_EXIT_DELAY_MS
+                        );
+                    }, ADD_NEW_DELAY_MS);
+                }, REMOVE_OLD_DELAY_MS);
+            }, GO_HOME_DELAY_MS);
         } catch (Exception error) {
             swapInProgress = false;
             call.reject("ICON_CHANGE_FAILED", error);
