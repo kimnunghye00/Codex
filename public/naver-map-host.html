@@ -226,10 +226,10 @@
         if (restore && lastRender.visits.length) render(lastRender, true);
       };
 
-      const render = ({ visits = [], mode = 'map', keepViewport = false, connectStops = false, numbered = false } = {}, preserveViewport = false) => {
+      const render = ({ visits = [], mode = 'map', keepViewport = false, connectStops = false, numbered = false, routeOnly = false } = {}, preserveViewport = false) => {
         if (playback) stopPlayback(false);
         const modeChanged = lastRender.mode !== mode;
-        lastRender = { visits: Array.isArray(visits) ? visits : [], mode, keepViewport, connectStops, numbered };
+        lastRender = { visits: Array.isArray(visits) ? visits : [], mode, keepViewport, connectStops, numbered, routeOnly };
         if (!map || !hasMapSdk()) return;
         if (modeChanged) restoredForMode = restoreViewport(mode);
         const naver = window.naver;
@@ -271,7 +271,10 @@
           }));
         }
 
-        (numbered ? validVisits.map((visit) => [visit]) : clustersFor(validVisits, mode, map.getZoom())).forEach((group) => {
+        const markerGroups = routeOnly
+          ? (validVisits.length > 1 ? [[validVisits[0]], [validVisits[validVisits.length - 1]]] : validVisits.map((visit) => [visit]))
+          : (numbered ? validVisits.map((visit) => [visit]) : clustersFor(validVisits, mode, map.getZoom()));
+        markerGroups.forEach((group) => {
           if (group.length > 1) {
             const latitude = group.reduce((sum, visit) => sum + Number(visit.latitude), 0) / group.length;
             const longitude = group.reduce((sum, visit) => sum + Number(visit.longitude), 0) / group.length;

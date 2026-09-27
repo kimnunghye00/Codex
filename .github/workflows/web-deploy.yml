@@ -8,6 +8,7 @@ on:
       - 'src/**'
       - 'functions/**'
       - 'functions-date-plan/**'
+      - 'functions-location/**'
       - 'public/**'
       - 'index.html'
       - 'package.json'
@@ -62,6 +63,14 @@ jobs:
 
       - name: Verify date-plan delete Function syntax
         run: node --check functions-date-plan/index.js
+
+      - name: Install location upload Function dependencies
+        run: npm install --prefix functions-location --no-audit --no-fund
+
+      - name: Verify location upload Function
+        run: |
+          node --check functions-location/index.js
+          node --test functions-location/location-upload.test.js
 
       - name: Verify Firebase permissions and two-account flow
         run: npm run test:security
@@ -168,6 +177,11 @@ jobs:
           # deployment never needs access to unrelated Secret Manager values.
           npx --yes firebase-tools@15.29.0 deploy \
             --only functions:date-plan-delete:deleteDatePlanDraftV2 \
+            --project meluni-f4e00 \
+            --non-interactive \
+            --force
+          npx --yes firebase-tools@15.29.0 deploy \
+            --only functions:location-upload:registerLocationUploadDevice,functions:location-upload:revokeLocationUploadDevice,functions:location-upload:uploadBackgroundLocation \
             --project meluni-f4e00 \
             --non-interactive \
             --force

@@ -11,6 +11,10 @@
     {
       "source": "functions-date-plan",
       "codebase": "date-plan-delete"
+    },
+    {
+      "source": "functions-location",
+      "codebase": "location-upload"
     }
   ],
   "firestore": {

@@ -22,6 +22,8 @@ const required = [
   'android/app/src/main/java/com/e2/danduli/BackgroundLocationPlugin.java',
   'android/app/src/main/java/com/e2/danduli/BackgroundLocationService.java',
   'android/app/src/main/java/com/e2/danduli/BackgroundLocationStore.java',
+  'android/app/src/main/java/com/e2/danduli/BackgroundLocationCredentials.java',
+  'android/app/src/main/java/com/e2/danduli/BackgroundLocationUploader.java',
   'src/components/more/MoreServices.tsx',
   'scripts/prepare_character_launcher_icons.py',
   'capacitor.config.ts',
@@ -46,6 +48,8 @@ const launcherRepair = read('android/app/src/main/java/com/e2/danduli/LauncherRe
 const iconPlugin = read('android/app/src/main/java/com/e2/danduli/AppIconPlugin.java');
 const backgroundLocationPlugin = read('android/app/src/main/java/com/e2/danduli/BackgroundLocationPlugin.java');
 const backgroundLocationService = read('android/app/src/main/java/com/e2/danduli/BackgroundLocationService.java');
+const backgroundLocationCredentials = read('android/app/src/main/java/com/e2/danduli/BackgroundLocationCredentials.java');
+const backgroundLocationUploader = read('android/app/src/main/java/com/e2/danduli/BackgroundLocationUploader.java');
 const moreServices = read('src/components/more/MoreServices.tsx');
 const iconPrep = read('scripts/prepare_character_launcher_icons.py');
 const capacitorConfig = read('capacitor.config.ts');
@@ -92,9 +96,23 @@ check('background location bridge starts only through foreground service',
   backgroundLocationPlugin.includes('ContextCompat.startForegroundService')
   && backgroundLocationService.includes('FOREGROUND_SERVICE_TYPE_LOCATION')
   && backgroundLocationService.includes('START_STICKY'));
-check('background location cache is drainable on resume',
-  backgroundLocationPlugin.includes('BackgroundLocationStore.drain')
+check('background location cache is replayable without bypassing server acknowledgement',
+  backgroundLocationPlugin.includes('BackgroundLocationStore.peek')
+  && !backgroundLocationPlugin.includes('BackgroundLocationStore.drain(getContext())')
   && backgroundLocationPlugin.includes('notifyListeners("location"'));
+check('background uploader credential is Android Keystore protected',
+  backgroundLocationCredentials.includes('AndroidKeyStore')
+  && backgroundLocationCredentials.includes('AES/GCM/NoPadding')
+  && backgroundLocationCredentials.includes('KeyProperties.PURPOSE_ENCRYPT'));
+check('background uploader requires scoped configuration before start',
+  backgroundLocationPlugin.includes('BACKGROUND_LOCATION_CREDENTIALS_REQUIRED')
+  && backgroundLocationPlugin.includes('BackgroundLocationCredentials.save'));
+check('background uploader sends only HTTPS and drops queue after success',
+  backgroundLocationUploader.includes('"https".equalsIgnoreCase')
+  && backgroundLocationUploader.indexOf('getResponseCode()') < backgroundLocationUploader.indexOf('BackgroundLocationStore.drop'));
+check('foreground service uploads queued points off the location thread',
+  backgroundLocationService.includes('Executors.newSingleThreadExecutor')
+  && backgroundLocationService.includes('BackgroundLocationUploader.uploadPending'));
 check('Android broad media permission is not requested', !manifest.includes('READ_MEDIA_IMAGES') && !manifest.includes('READ_MEDIA_VIDEO'));
 
 check('four DANDULI launcher aliases exist', ['DanduliDefaultLauncher', 'DanduliChatLauncher', 'DanduliLoveLauncher', 'DanduliDateLauncher'].every((name) => manifest.includes(name)));

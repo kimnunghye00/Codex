@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildJointFootprints, buildJointRoutePoints, previewLegacyFootprints, suggestLegacyMemoryLinks } from '../src/lib/footprintFoundation.ts';
+import { buildJointDateSessions, buildJointFootprints, buildJointRoutePoints, previewLegacyFootprints, suggestLegacyMemoryLinks } from '../src/lib/footprintFoundation.ts';
 import type { Memory } from '../src/types.ts';
 import type { LocationVisit } from '../src/utils/location.ts';
 
@@ -217,4 +217,39 @@ test('joint route rejects repeated samples when the two phones are not traveling
   }));
 
   assert.equal(buildJointRoutePoints('me', 'partner', mine, partner).length, 0);
+});
+
+
+test('brief separation reconnects into one date session but a long gap splits it', () => {
+  const point = (id: string, minute: number) => ({
+    id,
+    source: 'gps-cross-check-route' as const,
+    visibility: 'shared' as const,
+    verification: 'both-gps' as const,
+    memberUids: ['me', 'partner'] as [string, string],
+    myVisitId: 'm-' + id,
+    partnerVisitId: 'p-' + id,
+    latitude: 37.5665,
+    longitude: 126.978,
+    accuracy: 20,
+    arrivedAt: new Date(Date.parse('2026-09-27T04:00:00.000Z') + minute * 60_000).toISOString(),
+    separationMeters: 12,
+    sampleDeltaSeconds: 15,
+  });
+
+  const sessions = buildJointDateSessions([
+    point('a', 0),
+    point('b', 2),
+    point('c', 14),
+    point('d', 16),
+    point('e', 60),
+    point('f', 62),
+  ]);
+
+  assert.equal(sessions.length, 2);
+  assert.equal(sessions[0].verifiedPointCount, 4);
+  assert.equal(sessions[0].reconnectCount, 1);
+  assert.equal(sessions[0].durationMinutes, 16);
+  assert.equal(sessions[1].verifiedPointCount, 2);
+  assert.equal(sessions[1].reconnectCount, 0);
 });

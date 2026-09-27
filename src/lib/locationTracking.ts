@@ -1,4 +1,5 @@
-import { saveCoupleLocationVisit } from './locationRealtime';
+import { saveCoupleLocationSample, saveCoupleLocationVisit } from './locationRealtime';
+import { provisionBackgroundLocationUpload, revokeBackgroundLocationUpload } from './backgroundLocationUpload';
 import { startRouteLocationWatch, type RouteLocationError, type RouteLocationWatch } from './native';
 import {
   distanceMeters,
@@ -80,6 +81,23 @@ export async function startCoupleLocationTracking({
     await saveCoupleLocationVisit(ownerCoupleId, ownerUid, visit);
   };
 
+  const syncSample = async (
+    latitude: number,
+    longitude: number,
+    accuracy: number,
+    sampleAtMs: number,
+    background: boolean,
+  ) => {
+    await saveCoupleLocationSample(ownerCoupleId, ownerUid, {
+      id: String(sampleAtMs),
+      latitude,
+      longitude,
+      accuracy,
+      recordedAt: new Date(sampleAtMs).toISOString(),
+      background,
+    });
+  };
+
   const record = async (
     latitude: number,
     longitude: number,
@@ -98,6 +116,7 @@ export async function startCoupleLocationTracking({
       if (sampleAtMs > Date.now() + 5 * 60_000) return;
       const now = new Date(sampleAtMs).toISOString();
       const nowMs = Date.parse(now);
+      await syncSample(latitude, longitude, accuracy, sampleAtMs, background);
       const current = visits[0];
       if (current && nowMs <= Date.parse(current.arrivedAt)) return;
       const point = { latitude, longitude };
@@ -154,6 +173,7 @@ export async function startCoupleLocationTracking({
   };
 
   notify('starting', '위치 권한과 GPS를 확인하고 있어요.');
+  await provisionBackgroundLocationUpload(ownerCoupleId, ownerUid);
   const watch = await startRouteLocationWatch(
     (position) => {
       pendingRecord = pendingRecord
@@ -175,6 +195,7 @@ export async function startCoupleLocationTracking({
       stopped = true;
       await watch.stop();
       await pendingRecord;
+      await revokeBackgroundLocationUpload(ownerCoupleId);
     },
   };
 }

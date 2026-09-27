@@ -35,6 +35,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install location upload Function dependencies
+        run: npm install --prefix functions-location --no-audit --no-fund
+
+      - name: Verify location upload Function
+        run: |
+          node --check functions-location/index.js
+          node --test functions-location/location-upload.test.js
+
       - name: Check code quality
         run: npm run lint
 

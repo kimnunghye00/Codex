@@ -58,6 +58,26 @@ public class BackgroundLocationPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void configure(PluginCall call) {
+        String endpoint = call.getString("endpoint", "").trim();
+        String coupleId = call.getString("coupleId", "").trim();
+        String ownerUid = call.getString("ownerUid", "").trim();
+        String secret = call.getString("secret", "").trim();
+        if (!endpoint.startsWith("https://") || coupleId.isEmpty() || ownerUid.isEmpty() || secret.length() < 32) {
+            call.reject("INVALID_BACKGROUND_LOCATION_CREDENTIALS");
+            return;
+        }
+        try {
+            BackgroundLocationCredentials.save(getContext(), endpoint, coupleId, ownerUid, secret);
+            JSObject result = new JSObject();
+            result.put("configured", true);
+            call.resolve(result);
+        } catch (Exception error) {
+            call.reject("BACKGROUND_LOCATION_CREDENTIAL_SAVE_FAILED", error);
+        }
+    }
+
+    @PluginMethod
     public void start(PluginCall call) {
         if (!hasLocationPermission()) {
             call.reject("LOCATION_PERMISSION_REQUIRED");
@@ -65,6 +85,10 @@ public class BackgroundLocationPlugin extends Plugin {
         }
 
         try {
+            if (BackgroundLocationCredentials.load(getContext()) == null) {
+                call.reject("BACKGROUND_LOCATION_CREDENTIALS_REQUIRED");
+                return;
+            }
             Intent intent = new Intent(getContext(), BackgroundLocationService.class);
             ContextCompat.startForegroundService(getContext(), intent);
             JSObject result = new JSObject();
@@ -82,6 +106,7 @@ public class BackgroundLocationPlugin extends Plugin {
             Intent intent = new Intent(getContext(), BackgroundLocationService.class)
                     .setAction(BackgroundLocationService.ACTION_STOP);
             getContext().stopService(intent);
+            BackgroundLocationCredentials.clear(getContext());
             JSObject result = new JSObject();
             result.put("running", false);
             call.resolve(result);
@@ -99,7 +124,9 @@ public class BackgroundLocationPlugin extends Plugin {
 
     @PluginMethod
     public void drain(PluginCall call) {
-        JSONArray pending = BackgroundLocationStore.drain(getContext());
+        // Return a snapshot to the WebView without deleting the native retry
+        // queue. Only a successful HTTPS upload may remove queued GPS points.
+        JSONArray pending = BackgroundLocationStore.peek(getContext(), 2880);
         JSArray points = new JSArray();
         for (int index = 0; index < pending.length(); index++) {
             JSONObject source = pending.optJSONObject(index);

@@ -19,6 +19,9 @@ import android.os.Looper;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 public class BackgroundLocationService extends Service implements LocationListener {
     static final String ACTION_LOCATION = "com.e2.danduli.BACKGROUND_LOCATION";
     static final String ACTION_STOP = "com.e2.danduli.STOP_BACKGROUND_LOCATION";
@@ -33,11 +36,13 @@ public class BackgroundLocationService extends Service implements LocationListen
     private long lastAcceptedAt = 0L;
     private double lastLatitude = Double.NaN;
     private double lastLongitude = Double.NaN;
+    private ExecutorService uploadExecutor;
 
     @Override
     public void onCreate() {
         super.onCreate();
         locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        uploadExecutor = Executors.newSingleThreadExecutor();
         createNotificationChannel();
     }
 
@@ -54,6 +59,7 @@ public class BackgroundLocationService extends Service implements LocationListen
         startAsForeground();
         BackgroundLocationStore.setEnabled(this, true);
         startUpdates();
+        queueUpload();
         return START_STICKY;
     }
 
@@ -149,6 +155,20 @@ public class BackgroundLocationService extends Service implements LocationListen
         } catch (SecurityException ignored) {}
     }
 
+    private void queueUpload() {
+        ExecutorService executor = uploadExecutor;
+        if (executor == null || executor.isShutdown()) return;
+        executor.execute(() -> {
+            // Drain several small batches without holding the location thread.
+            // If the network is unavailable, leave the queue intact for the next
+            // location sample or service restart.
+            for (int attempt = 0; attempt < 4; attempt++) {
+                if (!BackgroundLocationUploader.uploadPending(getApplicationContext())) break;
+                if (BackgroundLocationStore.peek(getApplicationContext(), 1).length() == 0) break;
+            }
+        });
+    }
+
     private static double distanceMeters(double lat1, double lon1, double lat2, double lon2) {
         double radius = 6_371_000d;
         double dLat = Math.toRadians(lat2 - lat1);
@@ -177,6 +197,7 @@ public class BackgroundLocationService extends Service implements LocationListen
         lastLatitude = location.getLatitude();
         lastLongitude = location.getLongitude();
         BackgroundLocationStore.append(this, location);
+        queueUpload();
 
         Intent update = new Intent(ACTION_LOCATION)
                 .setPackage(getPackageName())
@@ -200,6 +221,10 @@ public class BackgroundLocationService extends Service implements LocationListen
     @Override
     public void onDestroy() {
         stopUpdates();
+        if (uploadExecutor != null) {
+            uploadExecutor.shutdownNow();
+            uploadExecutor = null;
+        }
         super.onDestroy();
     }
 
