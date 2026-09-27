@@ -26,6 +26,24 @@ function json(res, status, body) {
   res.status(status).set('Cache-Control', 'private, no-store').json(body);
 }
 
+function allowCors(req, res) {
+  const origin = req.get('origin') || '';
+  if (!origin) return true;
+  if (!allowedOrigins.has(origin)) {
+    json(res, 403, { error: 'origin-not-allowed' });
+    return false;
+  }
+  res.set('Access-Control-Allow-Origin', origin);
+  res.set('Vary', 'Origin');
+  res.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return false;
+  }
+  return true;
+}
+
 function validId(value) {
   return typeof value === 'string' && /^[A-Za-z0-9_-]{1,160}$/.test(value);
 }
@@ -74,11 +92,6 @@ function normalizePoint(value, now = Date.now()) {
 }
 
 async function authenticatedUser(req, res) {
-  const origin = req.get('origin') || '';
-  if (origin && !allowedOrigins.has(origin)) {
-    json(res, 403, { error: 'origin-not-allowed' });
-    return null;
-  }
   const authorization = req.get('authorization') || '';
   if (!authorization.startsWith('Bearer ')) {
     json(res, 401, { error: 'authentication-required' });
@@ -103,6 +116,7 @@ exports.registerLocationUploadDevice = onRequest({
   timeoutSeconds: 15,
   memory: '256MiB',
 }, async (req, res) => {
+  if (!allowCors(req, res)) return;
   if (req.method !== 'POST') return json(res, 405, { error: 'method-not-allowed' });
   const decoded = await authenticatedUser(req, res);
   if (!decoded) return;
@@ -137,6 +151,7 @@ exports.revokeLocationUploadDevice = onRequest({
   timeoutSeconds: 15,
   memory: '256MiB',
 }, async (req, res) => {
+  if (!allowCors(req, res)) return;
   if (req.method !== 'POST') return json(res, 405, { error: 'method-not-allowed' });
   const decoded = await authenticatedUser(req, res);
   if (!decoded) return;
