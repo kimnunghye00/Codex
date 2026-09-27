@@ -22,6 +22,8 @@ const required = [
   'android/app/src/main/java/com/e2/danduli/BackgroundLocationPlugin.java',
   'android/app/src/main/java/com/e2/danduli/BackgroundLocationService.java',
   'android/app/src/main/java/com/e2/danduli/BackgroundLocationStore.java',
+  'android/app/src/main/java/com/e2/danduli/BackgroundLocationCredentials.java',
+  'android/app/src/main/java/com/e2/danduli/BackgroundLocationUploader.java',
   'src/components/more/MoreServices.tsx',
   'scripts/prepare_character_launcher_icons.py',
   'capacitor.config.ts',
@@ -46,6 +48,8 @@ const launcherRepair = read('android/app/src/main/java/com/e2/danduli/LauncherRe
 const iconPlugin = read('android/app/src/main/java/com/e2/danduli/AppIconPlugin.java');
 const backgroundLocationPlugin = read('android/app/src/main/java/com/e2/danduli/BackgroundLocationPlugin.java');
 const backgroundLocationService = read('android/app/src/main/java/com/e2/danduli/BackgroundLocationService.java');
+const backgroundLocationCredentials = read('android/app/src/main/java/com/e2/danduli/BackgroundLocationCredentials.java');
+const backgroundLocationUploader = read('android/app/src/main/java/com/e2/danduli/BackgroundLocationUploader.java');
 const moreServices = read('src/components/more/MoreServices.tsx');
 const iconPrep = read('scripts/prepare_character_launcher_icons.py');
 const capacitorConfig = read('capacitor.config.ts');
