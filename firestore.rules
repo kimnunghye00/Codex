@@ -314,9 +314,8 @@ service cloud.firestore {
           && resource.data.ownerUid == request.auth.uid;
       }
 
-      // Raw GPS samples are the replay source. They always remain attributed to
-      // one member; a shared/together route is derived only after both streams
-      // independently agree on time and distance.
+      // Raw GPS samples remain owned by one member. Shared routes are derived
+      // only after the two independent streams agree on time and distance.
       match /locationSamples/{sampleId} {
         function validLocationSample() {
           return request.resource.data.keys().hasOnly([
@@ -723,8 +722,7 @@ service cloud.firestore {
           && resource.data.ownerUid == request.auth.uid;
       }
 
-      // Native upload credentials are server-only. No client can read or mutate
-      // the credential documents even though they live under the couple path.
+      // Native upload credentials are server-only.
       match /locationUploadTokens/{uid} {
         allow read, write: if false;
       }
