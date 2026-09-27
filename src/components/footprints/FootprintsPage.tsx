@@ -16,13 +16,18 @@ import {
 import type { Memory } from '../../types';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
 import {
+  buildJointDateSessions,
   buildJointFootprints,
   buildJointRoutePoints,
   suggestLegacyMemoryLinks,
   type JointFootprint,
   type JointRoutePoint,
 } from '../../lib/footprintFoundation';
-import { subscribeMemberLocationVisits } from '../../lib/locationRealtime';
+import {
+  subscribeMemberLocationSamples,
+  subscribeMemberLocationVisits,
+  type LocationSample,
+} from '../../lib/locationRealtime';
 import { ensureLocationPermission } from '../../lib/native';
 import { PERSISTENT_STATE_CHANGE_EVENT } from '../../utils/persistenceSignal';
 import {
@@ -50,9 +55,11 @@ const KOREAN_DATE = new Intl.DateTimeFormat('en-US', {
   day: '2-digit',
 });
 const EMPTY_VISITS: LocationVisit[] = [];
+const EMPTY_SAMPLES: LocationSample[] = [];
 
 type FootprintScope = 'partner' | 'together';
 type SnapshotState = { key: string; visits: LocationVisit[]; error?: string };
+type SampleSnapshotState = { key: string; samples: LocationSample[]; error?: string };
 
 function dayKey(iso: string) {
   const parts = KOREAN_DATE.formatToParts(new Date(iso));
@@ -81,6 +88,18 @@ function mergeVisits(cloud: readonly LocationVisit[], local: readonly LocationVi
 function sameDayVisits(visits: readonly LocationVisit[], day: string) {
   return visits.filter((visit) => dayKey(visit.arrivedAt) === day);
 }
+
+function samplesAsVisits(samples: readonly LocationSample[]): LocationVisit[] {
+  return samples.map((sample) => ({
+    id: 'sample-' + sample.id,
+    latitude: sample.latitude,
+    longitude: sample.longitude,
+    accuracy: sample.accuracy,
+    arrivedAt: sample.recordedAt,
+    lastSeenAt: sample.recordedAt,
+  }));
+}
+
 
 type Props = {
   uid: string;
@@ -116,6 +135,8 @@ export function FootprintsPage({
   const [, setLocalRevision] = useState(0);
   const [mySnapshot, setMySnapshot] = useState<SnapshotState>();
   const [partnerSnapshot, setPartnerSnapshot] = useState<SnapshotState>();
+  const [mySampleSnapshot, setMySampleSnapshot] = useState<SampleSnapshotState>();
+  const [partnerSampleSnapshot, setPartnerSampleSnapshot] = useState<SampleSnapshotState>();
   const [mapReady, setMapReady] = useState(false);
   const [mapFailed, setMapFailed] = useState(false);
   const [playbackState, setPlaybackState] = useState<'idle' | 'playing'>('idle');
@@ -128,6 +149,8 @@ export function FootprintsPage({
   const snapshotKey = (connection?.coupleId ?? '') + ':' + day;
   const myCloudVisits = mySnapshot?.key === snapshotKey ? mySnapshot.visits : EMPTY_VISITS;
   const partnerVisits = partnerSnapshot?.key === snapshotKey ? partnerSnapshot.visits : EMPTY_VISITS;
+  const mySamples = mySampleSnapshot?.key === snapshotKey ? mySampleSnapshot.samples : EMPTY_SAMPLES;
+  const partnerSamples = partnerSampleSnapshot?.key === snapshotKey ? partnerSampleSnapshot.samples : EMPTY_SAMPLES;
 
   useEffect(() => {
     const syncLocalState = () => {
@@ -168,9 +191,25 @@ export function FootprintsPage({
       (visits) => setPartnerSnapshot({ key, visits }),
       () => setPartnerSnapshot({ key, visits: [], error: partnerName + '의 GPS 기록을 불러오지 못했어요.' }),
     );
+    const stopMySamples = subscribeMemberLocationSamples(
+      coupleId,
+      uid,
+      day,
+      (samples) => setMySampleSnapshot({ key, samples }),
+      () => setMySampleSnapshot({ key, samples: [], error: '내 실시간 GPS 경로를 불러오지 못했어요.' }),
+    );
+    const stopPartnerSamples = subscribeMemberLocationSamples(
+      coupleId,
+      partnerUid,
+      day,
+      (samples) => setPartnerSampleSnapshot({ key, samples }),
+      () => setPartnerSampleSnapshot({ key, samples: [], error: partnerName + '의 실시간 GPS 경로를 불러오지 못했어요.' }),
+    );
     return () => {
       stopMine();
       stopPartner();
+      stopMySamples();
+      stopPartnerSamples();
     };
   }, [connection?.coupleId, day, partnerName, partnerUid, uid]);
 
@@ -183,20 +222,27 @@ export function FootprintsPage({
     () => buildJointFootprints(uid, partnerUid, myVisits, partnerVisits),
     [myVisits, partnerUid, partnerVisits, uid],
   );
+  const myRouteSource = useMemo(
+    () => mySamples.length ? samplesAsVisits(mySamples) : myVisits,
+    [mySamples, myVisits],
+  );
+  const partnerRouteSource = useMemo(
+    () => partnerSamples.length ? samplesAsVisits(partnerSamples) : partnerVisits,
+    [partnerSamples, partnerVisits],
+  );
   const jointRoutePoints = useMemo(
-    () => buildJointRoutePoints(uid, partnerUid, myVisits, partnerVisits),
-    [myVisits, partnerUid, partnerVisits, uid],
+    () => buildJointRoutePoints(uid, partnerUid, myRouteSource, partnerRouteSource),
+    [myRouteSource, partnerUid, partnerRouteSource, uid],
+  );
+  const dateSessions = useMemo(
+    () => buildJointDateSessions(jointRoutePoints),
+    [jointRoutePoints],
   );
   const jointById = useMemo(
     () => new Map(jointVisits.map((visit) => [visit.id, visit])),
     [jointVisits],
   );
-  const jointRouteById = useMemo(
-    () => new Map(jointRoutePoints.map((visit) => [visit.id, visit])),
-    [jointRoutePoints],
-  );
-  const togetherVisible = jointRoutePoints.length ? jointRoutePoints : jointVisits;
-  const visible = scope === 'partner' ? partnerVisits : togetherVisible;
+  const visible = scope === 'partner' ? partnerVisits : jointVisits;
   const linked = useMemo(
     () => suggestLegacyMemoryLinks(jointVisits, memories),
     [jointVisits, memories],
@@ -205,15 +251,27 @@ export function FootprintsPage({
     () => new Map(linked.map((item) => [item.footprintId, item.memoryIds])),
     [linked],
   );
-  const mapVisits = useMemo(() => visible.map((visit) => ({
-    id: visit.id,
-    latitude: visit.latitude,
-    longitude: visit.longitude,
-    accuracy: visit.accuracy,
-    placeName: visit.placeName,
-    arrivedAt: visit.arrivedAt,
-    leftAt: 'leftAt' in visit ? visit.leftAt : undefined,
-  })), [visible]);
+  const mapVisits = useMemo(() => {
+    if (scope === 'partner' && partnerSamples.length) {
+      return partnerSamples.map((sample) => ({
+        id: 'partner-sample-' + sample.id,
+        latitude: sample.latitude,
+        longitude: sample.longitude,
+        accuracy: sample.accuracy,
+        arrivedAt: sample.recordedAt,
+      }));
+    }
+    const source = scope === 'together' && jointRoutePoints.length ? jointRoutePoints : visible;
+    return source.map((visit) => ({
+      id: visit.id,
+      latitude: visit.latitude,
+      longitude: visit.longitude,
+      accuracy: visit.accuracy,
+      placeName: 'placeName' in visit ? visit.placeName : undefined,
+      arrivedAt: visit.arrivedAt,
+      leftAt: 'leftAt' in visit ? visit.leftAt : undefined,
+    }));
+  }, [jointRoutePoints, partnerSamples, scope, visible]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setMapFailed(true), 12_000);
@@ -297,6 +355,9 @@ export function FootprintsPage({
   const shown = [...visible].reverse();
   const partnerError = partnerSnapshot?.key === snapshotKey ? partnerSnapshot.error : undefined;
   const myError = mySnapshot?.key === snapshotKey ? mySnapshot.error : undefined;
+  const partnerSampleError = partnerSampleSnapshot?.key === snapshotKey ? partnerSampleSnapshot.error : undefined;
+  const mySampleError = mySampleSnapshot?.key === snapshotKey ? mySampleSnapshot.error : undefined;
+  const latestPartnerSample = partnerSamples[partnerSamples.length - 1];
   const selectedDate = DISPLAY_DATE.format(new Date(day + 'T12:00:00+09:00'));
 
   return <div className="page footprints-page">
@@ -365,7 +426,9 @@ export function FootprintsPage({
         </button>
         <div className="footprints-map-badge">
           {scope === 'partner'
-            ? partnerName + '의 GPS 경로만 표시'
+            ? partnerSamples.length
+              ? partnerName + ' GPS · 서버 실시간 샘플 ' + partnerSamples.length + '개'
+              : partnerName + '의 GPS 경로만 표시'
             : jointRoutePoints.length
               ? '반복 교차검증된 함께 이동 구간'
               : '두 사람 GPS 교차검증 완료 장소'}
@@ -378,18 +441,34 @@ export function FootprintsPage({
             <small>{scope === 'partner' ? 'PARTNER GPS' : 'CROSS-CHECKED'}</small>
             <h2>{scope === 'partner' ? partnerName + '의 발자취' : '함께 있었던 장소'}</h2>
           </div>
-          <span>{shown.length}곳</span>
+          <span>{scope === 'together' && dateSessions.length ? dateSessions.length + '번 데이트' : shown.length + '곳'}</span>
         </div>
+
+        {scope === 'partner' && latestPartnerSample && <div className="footprints-live">
+          <span className="footprints-live-dot" />
+          <div><b>최근 GPS 서버 반영</b><small>{timeLabel(latestPartnerSample.recordedAt)} · 오차 약 {Math.round(latestPartnerSample.accuracy)}m</small></div>
+        </div>}
+
+        {scope === 'together' && dateSessions.length > 0 && <div className="footprints-sessions">
+          {dateSessions.map((session, index) => <article key={session.id}>
+            <span><UsersRound size={15} /></span>
+            <div>
+              <b>데이트 {index + 1}</b>
+              <small>{timeLabel(session.startedAt)} ~ {timeLabel(session.endedAt)} · 약 {session.durationMinutes}분</small>
+              {session.reconnectCount > 0 && <em>잠깐 떨어졌다 다시 만난 구간 {session.reconnectCount}회 포함</em>}
+            </div>
+          </article>)}
+        </div>}
 
         {!connection ? <div className="footprints-empty">
           <MapPin size={26} />
           <strong>상대방 연결이 필요해요</strong>
           <p>커플 연결을 완료하면 서로 동의해 공유한 GPS 발자취를 확인할 수 있어요.</p>
-        </div> : (partnerError || (scope === 'together' && myError)) ? <div className="footprints-empty">
+        </div> : (partnerError || partnerSampleError || (scope === 'together' && (myError || mySampleError))) ? <div className="footprints-empty">
           <ShieldCheck size={26} />
           <strong>GPS 기록을 불러오지 못했어요</strong>
-          <p>{partnerError || myError}</p>
-        </div> : !shown.length ? <div className="footprints-empty">
+          <p>{partnerError || partnerSampleError || myError || mySampleError}</p>
+        </div> : !shown.length && !(scope === 'together' && dateSessions.length) ? <div className="footprints-empty">
           {scope === 'partner' ? <MapPin size={26} /> : <UsersRound size={26} />}
           <strong>{scope === 'partner' ? '이 날짜의 상대방 발자취가 없어요' : '함께 있었던 것으로 확인된 기록이 없어요'}</strong>
           <p>{scope === 'partner'
@@ -397,19 +476,16 @@ export function FootprintsPage({
             : '한 사람의 GPS만으로는 기록하지 않아요. 두 기기의 시간·거리·정확도 기준이 모두 맞아야 표시돼요.'}</p>
         </div> : shown.map((visit) => {
           const joint = jointById.get(visit.id) as JointFootprint | undefined;
-          const routePoint = jointRouteById.get(visit.id) as JointRoutePoint | undefined;
-          const verified = Boolean(joint || routePoint);
-          const leftAt = 'leftAt' in visit ? visit.leftAt : undefined;
+          const verified = Boolean(joint);
+          const leftAt = visit.leftAt;
           return <article className="footprints-visit" key={visit.id}>
             <div className={'footprints-pin ' + (verified ? 'verified' : '')}>{verified ? <UsersRound size={16} /> : <MapPin size={17} />}</div>
             <div className="footprints-visit-text">
-              <small>{timeLabel(visit.arrivedAt)}{leftAt ? ' ~ ' + timeLabel(leftAt) : routePoint ? ' · 함께 이동' : ' ~ 현재'}</small>
+              <small>{timeLabel(visit.arrivedAt)}{leftAt ? ' ~ ' + timeLabel(leftAt) : ' ~ 현재'}</small>
               <strong>{visit.placeName || (verified ? '함께 있었던 위치' : '위치 기록')}</strong>
               {joint
                 ? <span className="footprints-verified-text"><ShieldCheck size={12} /> GPS 교차검증 · 두 기기 약 {joint.separationMeters}m · 함께 {joint.overlapMinutes}분</span>
-                : routePoint
-                  ? <span className="footprints-verified-text"><ShieldCheck size={12} /> 이동 경로 교차검증 · 두 기기 약 {routePoint.separationMeters}m · 시간차 {routePoint.sampleDeltaSeconds}초</span>
-                  : <span>GPS 오차 약 {Math.round(visit.accuracy)}m · {partnerName} GPS 기록</span>}
+                : <span>GPS 오차 약 {Math.round(visit.accuracy)}m · {partnerName} GPS 기록</span>}
               {joint && Boolean(suggested.get(visit.id)?.length) && <div className="footprints-related">
                 {suggested.get(visit.id)?.map((memoryId) => {
                   const memory = memories.find((item) => item.id === memoryId);
@@ -425,7 +501,7 @@ export function FootprintsPage({
     </div>
 
     <p className="footprints-footnote">
-      우리의 장소 기록은 두 사람의 GPS가 약 120m 이내에서 2분 이상 겹칠 때만 생성해요. 이동 경로도 한 번 스친 위치는 제외하고 반복해서 두 GPS가 일치한 구간만 재생해요. GPS 신호가 좋지 않은 실내에서는 실제로 함께 있어도 기록이 누락될 수 있어요.
+      우리의 장소 기록은 두 사람의 GPS가 약 120m 이내에서 2분 이상 겹칠 때만 생성해요. 원본 GPS 샘플은 서버에 각자 소유 기록으로 저장되고, 반복해서 두 GPS가 일치한 구간만 공동 경로로 계산해요. 30분 이내 잠깐 떨어졌다 다시 확인되면 같은 데이트로 묶어요.
     </p>
   </div>;
 }
