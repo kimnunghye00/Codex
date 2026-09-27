@@ -40,7 +40,7 @@ import './FootprintsPage.css';
 
 const MAP_ORIGIN = typeof window !== 'undefined' && window.location.hostname === 'danduli.web.app'
   ? 'https://danduli.web.app' : 'https://meluni-f4e00.web.app';
-const MAP_URL = MAP_ORIGIN + '/naver-map-host.html?v=13';
+const MAP_URL = MAP_ORIGIN + '/naver-map-host.html?v=14';
 const DISPLAY_DATE = new Intl.DateTimeFormat('ko-KR', {
   timeZone: 'Asia/Seoul',
   year: 'numeric',
