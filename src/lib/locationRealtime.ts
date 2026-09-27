@@ -30,9 +30,9 @@ export async function saveCoupleLocationVisit(coupleId: string, ownerUid: string
   await setDoc(visitRef(coupleId, ownerUid, visit.id), payload, { merge: true });
 }
 
-export function subscribePartnerLocationVisits(
+export function subscribeMemberLocationVisits(
   coupleId: string,
-  partnerUid: string,
+  memberUid: string,
   dayKey: string,
   onVisits: (visits: LocationVisit[]) => void,
   onError?: (error: unknown) => void,
@@ -42,7 +42,7 @@ export function subscribePartnerLocationVisits(
   // entire location history and discarding unrelated days on the device.
   const q = query(
     locations,
-    where('ownerUid', '==', partnerUid),
+    where('ownerUid', '==', memberUid),
     where('dayKey', '==', dayKey),
   );
 
@@ -58,6 +58,7 @@ export function subscribePartnerLocationVisits(
           accuracy: data.accuracy,
           placeName: data.placeName,
           arrivedAt: data.arrivedAt,
+          lastSeenAt: data.lastSeenAt,
           leftAt: data.leftAt,
         }, snapshotDoc.id);
       })
@@ -71,10 +72,23 @@ export function subscribePartnerLocationVisits(
       visit.accuracy,
       visit.placeName ?? '',
       visit.arrivedAt,
+      visit.lastSeenAt ?? '',
       visit.leftAt ?? '',
     ]));
     if (signature === lastSignature) return;
     lastSignature = signature;
     onVisits(visits);
   }, onError);
+}
+
+
+/** Backwards-compatible name for existing location screens. */
+export function subscribePartnerLocationVisits(
+  coupleId: string,
+  partnerUid: string,
+  dayKey: string,
+  onVisits: (visits: LocationVisit[]) => void,
+  onError?: (error: unknown) => void,
+) {
+  return subscribeMemberLocationVisits(coupleId, partnerUid, dayKey, onVisits, onError);
 }
