@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildJointFootprints, previewLegacyFootprints, suggestLegacyMemoryLinks } from '../src/lib/footprintFoundation.ts';
+import { buildJointFootprints, buildJointRoutePoints, previewLegacyFootprints, suggestLegacyMemoryLinks } from '../src/lib/footprintFoundation.ts';
 import type { Memory } from '../src/types.ts';
 import type { LocationVisit } from '../src/utils/location.ts';
 
@@ -171,4 +171,50 @@ test('open legacy samples do not become joint visits without fresh last-seen evi
   assert.equal(buildJointFootprints('me', 'partner', [mine], [partner], {
     now: '2026-09-27T10:00:00.000Z',
   }).length, 0);
+});
+
+
+test('joint route needs repeated dual-phone matches instead of one nearby sample', () => {
+  const mine: LocationVisit[] = [0, 1, 2].map((index) => ({
+    id: 'me-route-' + index,
+    latitude: 37.5665 + index * 0.0004,
+    longitude: 126.9780 + index * 0.0004,
+    accuracy: 18,
+    arrivedAt: new Date(Date.parse('2026-09-27T04:00:00.000Z') + index * 60_000).toISOString(),
+  }));
+  const partner: LocationVisit[] = [0, 1, 2].map((index) => ({
+    id: 'partner-route-' + index,
+    latitude: 37.5666 + index * 0.0004,
+    longitude: 126.9781 + index * 0.0004,
+    accuracy: 21,
+    arrivedAt: new Date(Date.parse('2026-09-27T04:00:20.000Z') + index * 60_000).toISOString(),
+  }));
+
+  assert.equal(buildJointRoutePoints('me', 'partner', [mine[0]], [partner[0]]).length, 0);
+
+  const route = buildJointRoutePoints('me', 'partner', mine, partner);
+  assert.equal(route.length, 3);
+  assert.ok(route.every((point) => point.verification === 'both-gps'));
+  assert.ok(route.every((point) => point.separationMeters < 120));
+  assert.ok(route.every((point) => point.sampleDeltaSeconds === 20));
+});
+
+test('joint route rejects repeated samples when the two phones are not traveling together', () => {
+  const base = Date.parse('2026-09-27T04:00:00.000Z');
+  const mine: LocationVisit[] = [0, 1, 2, 3].map((index) => ({
+    id: 'mine-apart-' + index,
+    latitude: 37.5665 + index * 0.0003,
+    longitude: 126.9780,
+    accuracy: 15,
+    arrivedAt: new Date(base + index * 60_000).toISOString(),
+  }));
+  const partner: LocationVisit[] = [0, 1, 2, 3].map((index) => ({
+    id: 'partner-apart-' + index,
+    latitude: 37.5765 + index * 0.0003,
+    longitude: 126.9880,
+    accuracy: 15,
+    arrivedAt: new Date(base + index * 60_000).toISOString(),
+  }));
+
+  assert.equal(buildJointRoutePoints('me', 'partner', mine, partner).length, 0);
 });
