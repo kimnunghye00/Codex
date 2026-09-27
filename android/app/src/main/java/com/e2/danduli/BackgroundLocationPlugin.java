@@ -81,7 +81,7 @@ public class BackgroundLocationPlugin extends Plugin {
             BackgroundLocationStore.setEnabled(getContext(), false);
             Intent intent = new Intent(getContext(), BackgroundLocationService.class)
                     .setAction(BackgroundLocationService.ACTION_STOP);
-            getContext().startService(intent);
+            getContext().stopService(intent);
             JSObject result = new JSObject();
             result.put("running", false);
             call.resolve(result);
