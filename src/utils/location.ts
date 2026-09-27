@@ -9,6 +9,7 @@ export type LocationVisit = {
   accuracy: number;
   placeName?: string;
   arrivedAt: string;
+  lastSeenAt?: string;
   leftAt?: string;
 };
 
@@ -55,7 +56,7 @@ function normalizeLocationDateValue(value: unknown): string | undefined {
 
 export function normalizeLocationVisit(value: unknown, fallbackId = ''): LocationVisit | null {
   if (!value || typeof value !== 'object') return null;
-  const raw = value as Partial<LocationVisit> & { arrivedAt?: unknown; leftAt?: unknown };
+  const raw = value as Partial<LocationVisit> & { arrivedAt?: unknown; lastSeenAt?: unknown; leftAt?: unknown };
   const latitude = Number(raw.latitude);
   const longitude = Number(raw.longitude);
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
@@ -64,6 +65,15 @@ export function normalizeLocationVisit(value: unknown, fallbackId = ''): Locatio
   const arrivedAt = normalizeLocationDateValue(raw.arrivedAt);
   if (!arrivedAt) return null;
   const leftAt = normalizeLocationDateValue(raw.leftAt);
+  const lastSeenCandidate = normalizeLocationDateValue(raw.lastSeenAt);
+  const arrivedAtMs = Date.parse(arrivedAt);
+  const leftAtMs = leftAt ? Date.parse(leftAt) : NaN;
+  const lastSeenMs = lastSeenCandidate ? Date.parse(lastSeenCandidate) : NaN;
+  const validLeftAt = Number.isFinite(leftAtMs) && leftAtMs >= arrivedAtMs ? leftAt : undefined;
+  const validLastSeenAt = Number.isFinite(lastSeenMs) && lastSeenMs >= arrivedAtMs
+    && (!validLeftAt || lastSeenMs <= Date.parse(validLeftAt))
+    ? lastSeenCandidate
+    : undefined;
   const accuracyValue = Number(raw.accuracy);
 
   return {
@@ -73,7 +83,8 @@ export function normalizeLocationVisit(value: unknown, fallbackId = ''): Locatio
     accuracy: Number.isFinite(accuracyValue) && accuracyValue >= 0 ? accuracyValue : 0,
     placeName: typeof raw.placeName === 'string' && raw.placeName.trim() ? raw.placeName.trim() : undefined,
     arrivedAt,
-    leftAt,
+    ...(validLastSeenAt ? { lastSeenAt: validLastSeenAt } : {}),
+    ...(validLeftAt ? { leftAt: validLeftAt } : {}),
   };
 }
 
