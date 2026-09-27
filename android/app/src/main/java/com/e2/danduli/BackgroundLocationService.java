@@ -111,7 +111,7 @@ public class BackgroundLocationService extends Service implements LocationListen
 
     private void startUpdates() {
         stopUpdates();
-        if (locationManager == null || !hasCoarseLocation()) {
+        if (locationManager == null || (!hasCoarseLocation() && !hasFineLocation())) {
             stopSelf();
             return;
         }
