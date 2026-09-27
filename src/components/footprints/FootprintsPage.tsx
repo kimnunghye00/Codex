@@ -306,7 +306,8 @@ export function FootprintsPage({
       type: 'render',
       visits: mapVisits,
       mode: 'footprints',
-      numbered: true,
+      numbered: mapVisits.length <= 20,
+      routeOnly: mapVisits.length > 20,
     }, MAP_ORIGIN);
   }, [mapReady, mapVisits]);
 
