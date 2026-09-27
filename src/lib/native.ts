@@ -1,4 +1,4 @@
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 
 export const isNativePlatform = () => Capacitor.isNativePlatform();
 export const nativePlatform = () => Capacitor.getPlatform();
@@ -17,7 +17,29 @@ export type RouteLocationPosition = {
     accuracy: number;
   };
   timestamp?: number;
+  background?: boolean;
 };
+
+type BackgroundLocationPoint = {
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+  timestamp: number;
+  background?: boolean;
+};
+
+type RouteBackgroundLocationPlugin = {
+  start: () => Promise<{ running: boolean }>;
+  stop: () => Promise<{ running: boolean }>;
+  status: () => Promise<{ running: boolean }>;
+  drain: () => Promise<{ points: BackgroundLocationPoint[] }>;
+  addListener: (
+    eventName: 'location',
+    listener: (point: BackgroundLocationPoint) => void,
+  ) => Promise<PluginListenerHandle>;
+};
+
+const RouteBackgroundLocation = registerPlugin<RouteBackgroundLocationPlugin>('RouteBackgroundLocation');
 
 export type RouteLocationError = {
   code?: string | number;
@@ -214,6 +236,72 @@ export async function startRouteLocationWatch(
   if (isNativePlatform()) {
     const allowed = await ensureLocationPermission();
     if (!allowed) throw new Error('route-location-permission-denied');
+
+    if (nativePlatform() === 'android') {
+      let stopped = false;
+      const seen = new Set<string>();
+      const pointKey = (point: BackgroundLocationPoint) =>
+        point.timestamp + ':' + point.latitude.toFixed(6) + ':' + point.longitude.toFixed(6);
+      const emit = (point: BackgroundLocationPoint) => {
+        if (stopped || !Number.isFinite(point.latitude) || !Number.isFinite(point.longitude)
+          || !Number.isFinite(point.accuracy) || !Number.isFinite(point.timestamp)) return;
+        const key = pointKey(point);
+        if (seen.has(key)) return;
+        if (seen.size > 2_000) seen.clear();
+        seen.add(key);
+        onPosition({
+          coords: {
+            latitude: point.latitude,
+            longitude: point.longitude,
+            accuracy: point.accuracy,
+          },
+          timestamp: point.timestamp,
+          background: point.background !== false,
+        });
+      };
+      const drainPending = async () => {
+        if (stopped) return;
+        try {
+          const pending = await RouteBackgroundLocation.drain();
+          [...(pending.points ?? [])]
+            .sort((a, b) => a.timestamp - b.timestamp)
+            .forEach(emit);
+        } catch (error) {
+          onError({ code: 'BACKGROUND_DRAIN_FAILED', message: error instanceof Error ? error.message : String(error) });
+        }
+      };
+
+      const listener = await RouteBackgroundLocation.addListener('location', emit);
+      try {
+        await drainPending();
+        await RouteBackgroundLocation.start();
+      } catch (error) {
+        await listener.remove();
+        throw error;
+      }
+
+      let resumeTimer: number | undefined;
+      const resume = () => {
+        if (resumeTimer !== undefined) window.clearTimeout(resumeTimer);
+        // Native Firestore network is re-enabled on resume. Give it a moment
+        // before queued GPS samples trigger cloud writes.
+        resumeTimer = window.setTimeout(() => {
+          resumeTimer = undefined;
+          void drainPending();
+        }, 1_500);
+      };
+      window.addEventListener('route-app-resume', resume);
+
+      return {
+        stop: async () => {
+          stopped = true;
+          if (resumeTimer !== undefined) window.clearTimeout(resumeTimer);
+          window.removeEventListener('route-app-resume', resume);
+          await listener.remove();
+          await RouteBackgroundLocation.stop();
+        },
+      };
+    }
 
     const { Geolocation } = await import('@capacitor/geolocation');
     let activeId: string | undefined;

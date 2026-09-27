@@ -64,8 +64,8 @@ export async function startCoupleLocationTracking({
   if (!ownerUid || !ownerCoupleId) throw new Error('route-location-owner-missing');
 
   let visits = loadLocationVisits(ownerUid);
-  let recording = false;
   let stopped = false;
+  let pendingRecord = Promise.resolve();
 
   const notify = (state: LocationTrackingStatus['state'], message: string) => {
     if (!stopped) onStatus?.({ state, message });
@@ -80,68 +80,91 @@ export async function startCoupleLocationTracking({
     await saveCoupleLocationVisit(ownerCoupleId, ownerUid, visit);
   };
 
-  const record = async (latitude: number, longitude: number, accuracy: number) => {
-    if (recording || stopped || !validPoint(latitude, longitude, accuracy)) return;
+  const record = async (
+    latitude: number,
+    longitude: number,
+    accuracy: number,
+    timestamp?: number,
+    background = false,
+  ) => {
+    if (stopped || !validPoint(latitude, longitude, accuracy)) return;
     if (accuracy > MAX_RECORDABLE_ACCURACY_METERS) {
       notify('poor-signal', 'GPS 오차가 커서 이 위치는 발자취에 저장하지 않았어요.');
       return;
     }
 
-    recording = true;
     try {
-      const now = new Date().toISOString();
+      const sampleAtMs = Number.isFinite(timestamp) ? Number(timestamp) : Date.now();
+      if (sampleAtMs > Date.now() + 5 * 60_000) return;
+      const now = new Date(sampleAtMs).toISOString();
       const nowMs = Date.parse(now);
       const current = visits[0];
+      if (current && nowMs <= Date.parse(current.arrivedAt)) return;
       const point = { latitude, longitude };
 
       if (current && !current.leftAt && distanceMeters(current, point) < MIN_MOVE_METERS) {
         if (nowMs - lastEvidenceMs(current) < HEARTBEAT_MS) {
-          notify('tracking', 'GPS를 확인하며 발자취를 기록하고 있어요.');
+          notify('tracking', background ? '백그라운드 발자취를 이어서 기록하고 있어요.' : 'GPS를 확인하며 발자취를 기록하고 있어요.');
           return;
         }
+        const placeName = !background && !current.placeName
+          ? await reverseGeocode(latitude, longitude)
+          : current.placeName;
         const updated: LocationVisit = {
           ...current,
           latitude,
           longitude,
           accuracy,
+          ...(placeName ? { placeName } : {}),
           lastSeenAt: now,
         };
         persist([updated, ...visits.slice(1)]);
         await sync(updated);
-        notify('tracking', '현재 위치를 다시 확인했어요.');
+        notify('tracking', background ? '백그라운드 위치 기록을 동기화했어요.' : '현재 위치를 다시 확인했어요.');
         return;
       }
 
-      const placeName = await reverseGeocode(latitude, longitude);
+      // Background samples prioritize preserving the actual route. Reverse
+      // geocoding every moving point would create unnecessary network traffic;
+      // foreground samples can still enrich a stop with a human-readable name.
+      const placeName = background ? undefined : await reverseGeocode(latitude, longitude);
       const closed: LocationVisit | undefined = current && !current.leftAt
         ? { ...current, lastSeenAt: now, leftAt: now }
         : undefined;
       const rest = current ? visits.slice(1) : visits;
       const nextVisit: LocationVisit = {
-        id: String(Date.now()),
+        id: String(sampleAtMs),
         latitude,
         longitude,
         accuracy,
-        placeName,
+        ...(placeName ? { placeName } : {}),
         arrivedAt: now,
         lastSeenAt: now,
       };
       persist([nextVisit, ...(closed ? [closed] : current ? [current] : []), ...rest]);
       if (closed) await sync(closed);
       await sync(nextVisit);
-      notify('recorded', placeName ? placeName + ' 위치가 기록됐어요.' : '새 위치가 발자취에 기록됐어요.');
+      notify('recorded', placeName
+        ? placeName + ' 위치가 기록됐어요.'
+        : background ? '백그라운드 이동 경로를 동기화했어요.' : '새 위치가 발자취에 기록됐어요.');
     } catch (error) {
       console.warn('[DANDULI location tracking]', error);
       notify('error', '위치는 기기에 남겼지만 서버 동기화에 실패했어요.');
-    } finally {
-      recording = false;
     }
   };
 
   notify('starting', '위치 권한과 GPS를 확인하고 있어요.');
   const watch = await startRouteLocationWatch(
     (position) => {
-      void record(position.coords.latitude, position.coords.longitude, position.coords.accuracy);
+      pendingRecord = pendingRecord
+        .then(() => record(
+          position.coords.latitude,
+          position.coords.longitude,
+          position.coords.accuracy,
+          position.timestamp,
+          position.background === true,
+        ))
+        .catch((error) => console.warn('[DANDULI queued location]', error));
     },
     (error) => notify('error', errorMessage(error)),
   );
@@ -151,6 +174,7 @@ export async function startCoupleLocationTracking({
     stop: async () => {
       stopped = true;
       await watch.stop();
+      await pendingRecord;
     },
   };
 }

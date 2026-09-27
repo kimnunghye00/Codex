@@ -19,6 +19,9 @@ const required = [
   'android/app/src/main/AndroidManifest.xml',
   'android/app/src/main/java/com/e2/danduli/LauncherRepairReceiver.java',
   'android/app/src/main/java/com/e2/danduli/AppIconPlugin.java',
+  'android/app/src/main/java/com/e2/danduli/BackgroundLocationPlugin.java',
+  'android/app/src/main/java/com/e2/danduli/BackgroundLocationService.java',
+  'android/app/src/main/java/com/e2/danduli/BackgroundLocationStore.java',
   'src/components/more/MoreServices.tsx',
   'scripts/prepare_character_launcher_icons.py',
   'capacitor.config.ts',
@@ -41,6 +44,8 @@ const stabilityCss = read('src/route-stability-v15.css');
 const manifest = read('android/app/src/main/AndroidManifest.xml');
 const launcherRepair = read('android/app/src/main/java/com/e2/danduli/LauncherRepairReceiver.java');
 const iconPlugin = read('android/app/src/main/java/com/e2/danduli/AppIconPlugin.java');
+const backgroundLocationPlugin = read('android/app/src/main/java/com/e2/danduli/BackgroundLocationPlugin.java');
+const backgroundLocationService = read('android/app/src/main/java/com/e2/danduli/BackgroundLocationService.java');
 const moreServices = read('src/components/more/MoreServices.tsx');
 const iconPrep = read('scripts/prepare_character_launcher_icons.py');
 const capacitorConfig = read('capacitor.config.ts');
@@ -76,7 +81,20 @@ check('Android camera permission exists', manifest.includes('android.permission.
 check('Android microphone permission exists', manifest.includes('android.permission.RECORD_AUDIO'));
 check('Android fine location permission exists', manifest.includes('android.permission.ACCESS_FINE_LOCATION'));
 check('Android notification permission exists', manifest.includes('android.permission.POST_NOTIFICATIONS'));
+check('Android foreground service permission exists', manifest.includes('android.permission.FOREGROUND_SERVICE'));
+check('Android location foreground service permission exists', manifest.includes('android.permission.FOREGROUND_SERVICE_LOCATION'));
 check('Android background location is not requested', !manifest.includes('ACCESS_BACKGROUND_LOCATION'));
+check('Android footprint service is explicit and non-exported',
+  manifest.includes('BackgroundLocationService')
+  && manifest.includes('android:foregroundServiceType="location"')
+  && manifest.includes('android:exported="false"'));
+check('background location bridge starts only through foreground service',
+  backgroundLocationPlugin.includes('ContextCompat.startForegroundService')
+  && backgroundLocationService.includes('FOREGROUND_SERVICE_TYPE_LOCATION')
+  && backgroundLocationService.includes('START_STICKY'));
+check('background location cache is drainable on resume',
+  backgroundLocationPlugin.includes('BackgroundLocationStore.drain')
+  && backgroundLocationPlugin.includes('notifyListeners("location"'));
 check('Android broad media permission is not requested', !manifest.includes('READ_MEDIA_IMAGES') && !manifest.includes('READ_MEDIA_VIDEO'));
 
 check('four DANDULI launcher aliases exist', ['DanduliDefaultLauncher', 'DanduliChatLauncher', 'DanduliLoveLauncher', 'DanduliDateLauncher'].every((name) => manifest.includes(name)));

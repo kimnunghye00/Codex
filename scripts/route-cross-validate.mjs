@@ -163,6 +163,8 @@ const requiredPermissions = [
   'android.permission.RECORD_AUDIO',
   'android.permission.ACCESS_COARSE_LOCATION',
   'android.permission.ACCESS_FINE_LOCATION',
+  'android.permission.FOREGROUND_SERVICE',
+  'android.permission.FOREGROUND_SERVICE_LOCATION',
   'android.permission.POST_NOTIFICATIONS',
 ];
 for (const permission of requiredPermissions) {
@@ -172,7 +174,6 @@ for (const permission of requiredPermissions) {
 
 const forbiddenPermissions = [
   'android.permission.ACCESS_BACKGROUND_LOCATION',
-  'android.permission.FOREGROUND_SERVICE_LOCATION',
   'android.permission.READ_MEDIA_IMAGES',
   'android.permission.READ_MEDIA_VIDEO',
 ];
@@ -181,6 +182,10 @@ for (const permission of forbiddenPermissions) {
   check(`native configure strips: ${permission}`, configureNative.includes(permission));
 }
 
+check('Android location foreground service is declared',
+  manifest.includes('BackgroundLocationService')
+  && manifest.includes('android:foregroundServiceType="location"')
+  && manifest.includes('android:exported="false"'));
 check('Android WebView uses adjustResize', manifest.includes('android:windowSoftInputMode="adjustResize"'));
 check('Android backup is disabled', manifest.includes('android:allowBackup="false"'));
 check('four launcher icon aliases remain configured', ['DanduliDefaultLauncher', 'DanduliChatLauncher', 'DanduliLoveLauncher', 'DanduliDateLauncher'].every((name) => manifest.includes(name)));

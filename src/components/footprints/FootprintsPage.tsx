@@ -8,15 +8,19 @@ import {
   MapPin,
   Navigation,
   PauseCircle,
+  Play,
   ShieldCheck,
+  Square,
   UsersRound,
 } from 'lucide-react';
 import type { Memory } from '../../types';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
 import {
   buildJointFootprints,
+  buildJointRoutePoints,
   suggestLegacyMemoryLinks,
   type JointFootprint,
+  type JointRoutePoint,
 } from '../../lib/footprintFoundation';
 import { subscribeMemberLocationVisits } from '../../lib/locationRealtime';
 import { ensureLocationPermission } from '../../lib/native';
@@ -31,7 +35,7 @@ import './FootprintsPage.css';
 
 const MAP_ORIGIN = typeof window !== 'undefined' && window.location.hostname === 'danduli.web.app'
   ? 'https://danduli.web.app' : 'https://meluni-f4e00.web.app';
-const MAP_URL = MAP_ORIGIN + '/naver-map-host.html?v=12';
+const MAP_URL = MAP_ORIGIN + '/naver-map-host.html?v=13';
 const DISPLAY_DATE = new Intl.DateTimeFormat('ko-KR', {
   timeZone: 'Asia/Seoul',
   year: 'numeric',
@@ -114,6 +118,7 @@ export function FootprintsPage({
   const [partnerSnapshot, setPartnerSnapshot] = useState<SnapshotState>();
   const [mapReady, setMapReady] = useState(false);
   const [mapFailed, setMapFailed] = useState(false);
+  const [playbackState, setPlaybackState] = useState<'idle' | 'playing'>('idle');
   const frame = useRef<HTMLIFrameElement>(null);
 
   const partnerUid = connection?.partnerUid ?? '';
@@ -178,11 +183,20 @@ export function FootprintsPage({
     () => buildJointFootprints(uid, partnerUid, myVisits, partnerVisits),
     [myVisits, partnerUid, partnerVisits, uid],
   );
+  const jointRoutePoints = useMemo(
+    () => buildJointRoutePoints(uid, partnerUid, myVisits, partnerVisits),
+    [myVisits, partnerUid, partnerVisits, uid],
+  );
   const jointById = useMemo(
     () => new Map(jointVisits.map((visit) => [visit.id, visit])),
     [jointVisits],
   );
-  const visible = scope === 'partner' ? partnerVisits : jointVisits;
+  const jointRouteById = useMemo(
+    () => new Map(jointRoutePoints.map((visit) => [visit.id, visit])),
+    [jointRoutePoints],
+  );
+  const togetherVisible = jointRoutePoints.length ? jointRoutePoints : jointVisits;
+  const visible = scope === 'partner' ? partnerVisits : togetherVisible;
   const linked = useMemo(
     () => suggestLegacyMemoryLinks(jointVisits, memories),
     [jointVisits, memories],
@@ -198,18 +212,21 @@ export function FootprintsPage({
     accuracy: visit.accuracy,
     placeName: visit.placeName,
     arrivedAt: visit.arrivedAt,
-    leftAt: visit.leftAt,
+    leftAt: 'leftAt' in visit ? visit.leftAt : undefined,
   })), [visible]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setMapFailed(true), 12_000);
-    const receive = (event: MessageEvent<{ source?: string; type?: string }>) => {
+    const receive = (event: MessageEvent<{ source?: string; type?: string; state?: string }>) => {
       if (event.origin !== MAP_ORIGIN || event.source !== frame.current?.contentWindow
         || event.data?.source !== 'route-map-host') return;
       if (event.data.type === 'ready') {
         window.clearTimeout(timeout);
         setMapReady(true);
         setMapFailed(false);
+      }
+      if (event.data.type === 'playback-state') {
+        setPlaybackState(event.data.state === 'playing' ? 'playing' : 'idle');
       }
       if (event.data.type === 'auth-error' || event.data.type === 'sdk-error'
         || event.data.type === 'script-error' || event.data.type === 'render-error') {
@@ -235,6 +252,16 @@ export function FootprintsPage({
     }, MAP_ORIGIN);
   }, [mapReady, mapVisits]);
 
+  const togglePlayback = () => {
+    if (!mapReady || mapVisits.length < 2) return;
+    frame.current?.contentWindow?.postMessage({
+      source: 'route-map-parent',
+      type: playbackState === 'playing' ? 'stop-route-playback' : 'play-route',
+      visits: mapVisits,
+      follow: true,
+    }, MAP_ORIGIN);
+  };
+
   const setLocationSharing = async (enabled: boolean) => {
     if (!uid || sharingBusy) return;
     if (enabled && !connection?.coupleId) {
@@ -253,7 +280,7 @@ export function FootprintsPage({
       saveLocationSharing(uid, enabled);
       setSharing(enabled);
       setTrackingStatus(enabled
-        ? '내 GPS 공유를 시작했어요. 앱을 사용하는 동안 발자취가 기록돼요.'
+        ? '내 GPS 공유를 시작했어요. Android 앱에서는 화면을 내려도 발자취 기록을 이어가요.'
         : '내 GPS 공유를 껐어요. 새 위치 기록만 중지되고 기존 기록은 남아 있어요.');
     } finally {
       setSharingBusy(false);
@@ -328,8 +355,20 @@ export function FootprintsPage({
       <section className="footprints-map" aria-label="발자취 지도">
         <iframe ref={frame} title="네이버 발자취 지도" src={MAP_URL} referrerPolicy="strict-origin-when-cross-origin" onError={() => setMapFailed(true)} />
         {!mapReady && <div className="footprints-map-status" role="status">{mapFailed ? '지도를 불러오지 못했어요. 네트워크와 지도 인증을 확인해 주세요.' : '네이버 지도를 불러오는 중이에요…'}</div>}
+        <button
+          type="button"
+          className={'footprints-playback ' + (playbackState === 'playing' ? 'playing' : '')}
+          disabled={!mapReady || mapVisits.length < 2}
+          onClick={togglePlayback}
+        >
+          {playbackState === 'playing' ? <><Square size={14} fill="currentColor" />재생 중지</> : <><Play size={15} fill="currentColor" />발자취 재생</>}
+        </button>
         <div className="footprints-map-badge">
-          {scope === 'partner' ? partnerName + '의 GPS 경로만 표시' : '두 사람 GPS 교차검증 완료 구간만 표시'}
+          {scope === 'partner'
+            ? partnerName + '의 GPS 경로만 표시'
+            : jointRoutePoints.length
+              ? '반복 교차검증된 함께 이동 구간'
+              : '두 사람 GPS 교차검증 완료 장소'}
         </div>
       </section>
 
@@ -358,14 +397,19 @@ export function FootprintsPage({
             : '한 사람의 GPS만으로는 기록하지 않아요. 두 기기의 시간·거리·정확도 기준이 모두 맞아야 표시돼요.'}</p>
         </div> : shown.map((visit) => {
           const joint = jointById.get(visit.id) as JointFootprint | undefined;
+          const routePoint = jointRouteById.get(visit.id) as JointRoutePoint | undefined;
+          const verified = Boolean(joint || routePoint);
+          const leftAt = 'leftAt' in visit ? visit.leftAt : undefined;
           return <article className="footprints-visit" key={visit.id}>
-            <div className={'footprints-pin ' + (joint ? 'verified' : '')}>{joint ? <UsersRound size={16} /> : <MapPin size={17} />}</div>
+            <div className={'footprints-pin ' + (verified ? 'verified' : '')}>{verified ? <UsersRound size={16} /> : <MapPin size={17} />}</div>
             <div className="footprints-visit-text">
-              <small>{timeLabel(visit.arrivedAt)}{visit.leftAt ? ' ~ ' + timeLabel(visit.leftAt) : ' ~ 현재'}</small>
-              <strong>{visit.placeName || (joint ? '함께 있었던 위치' : '위치 기록')}</strong>
+              <small>{timeLabel(visit.arrivedAt)}{leftAt ? ' ~ ' + timeLabel(leftAt) : routePoint ? ' · 함께 이동' : ' ~ 현재'}</small>
+              <strong>{visit.placeName || (verified ? '함께 있었던 위치' : '위치 기록')}</strong>
               {joint
                 ? <span className="footprints-verified-text"><ShieldCheck size={12} /> GPS 교차검증 · 두 기기 약 {joint.separationMeters}m · 함께 {joint.overlapMinutes}분</span>
-                : <span>GPS 오차 약 {Math.round(visit.accuracy)}m · {partnerName} GPS 기록</span>}
+                : routePoint
+                  ? <span className="footprints-verified-text"><ShieldCheck size={12} /> 이동 경로 교차검증 · 두 기기 약 {routePoint.separationMeters}m · 시간차 {routePoint.sampleDeltaSeconds}초</span>
+                  : <span>GPS 오차 약 {Math.round(visit.accuracy)}m · {partnerName} GPS 기록</span>}
               {joint && Boolean(suggested.get(visit.id)?.length) && <div className="footprints-related">
                 {suggested.get(visit.id)?.map((memoryId) => {
                   const memory = memories.find((item) => item.id === memoryId);
@@ -381,7 +425,7 @@ export function FootprintsPage({
     </div>
 
     <p className="footprints-footnote">
-      우리의 발자취는 두 사람의 GPS가 약 120m 이내에서 2분 이상 겹치고 양쪽 위치 정확도가 기준을 만족할 때만 생성해요. GPS 신호가 좋지 않은 실내에서는 실제로 함께 있어도 기록이 누락될 수 있어요.
+      우리의 장소 기록은 두 사람의 GPS가 약 120m 이내에서 2분 이상 겹칠 때만 생성해요. 이동 경로도 한 번 스친 위치는 제외하고 반복해서 두 GPS가 일치한 구간만 재생해요. GPS 신호가 좋지 않은 실내에서는 실제로 함께 있어도 기록이 누락될 수 있어요.
     </p>
   </div>;
 }

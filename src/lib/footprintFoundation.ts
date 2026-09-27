@@ -57,6 +57,31 @@ export type JointFootprintOptions = {
   maxAccuracyMeters?: number;
 };
 
+export type JointRoutePoint = {
+  id: string;
+  source: 'gps-cross-check-route';
+  visibility: 'shared';
+  verification: 'both-gps';
+  memberUids: [string, string];
+  myVisitId: string;
+  partnerVisitId: string;
+  placeName?: string;
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+  arrivedAt: string;
+  separationMeters: number;
+  sampleDeltaSeconds: number;
+};
+
+export type JointRouteOptions = {
+  maxDistanceMeters?: number;
+  maxAccuracyMeters?: number;
+  maxTimeDeltaMs?: number;
+  minVerifiedSpanMs?: number;
+  maxGapMs?: number;
+};
+
 /** A suggestion for the user to review; never an automatic photo attachment. */
 export type LegacyMemorySuggestion = {
   footprintId: string;
@@ -273,6 +298,108 @@ export function buildJointFootprints(
   }
 
   return result.sort((a, b) => a.arrivedAt.localeCompare(b.arrivedAt) || a.id.localeCompare(b.id));
+}
+
+/**
+ * Build an animated-route source from repeated dual-phone GPS matches.
+ *
+ * A single moment of proximity is deliberately insufficient. Matched points are
+ * grouped into continuous runs, and only runs spanning at least two minutes are
+ * returned. This prevents two people merely passing near one another from
+ * becoming a "together" route.
+ */
+export function buildJointRoutePoints(
+  myUid: string,
+  partnerUid: string,
+  myVisits: readonly LocationVisit[],
+  partnerVisits: readonly LocationVisit[],
+  options: JointRouteOptions = {},
+): JointRoutePoint[] {
+  const mine = myUid.trim();
+  const partner = partnerUid.trim();
+  if (!mine || !partner || mine === partner || !myVisits.length || !partnerVisits.length) return [];
+
+  const maxDistance = options.maxDistanceMeters ?? JOINT_FOOTPRINT_MAX_DISTANCE_METERS;
+  const maxAccuracy = options.maxAccuracyMeters ?? JOINT_FOOTPRINT_MAX_ACCURACY_METERS;
+  const maxTimeDelta = options.maxTimeDeltaMs ?? 2 * 60 * 1000;
+  const minVerifiedSpan = options.minVerifiedSpanMs ?? JOINT_FOOTPRINT_MIN_OVERLAP_MS;
+  const maxGap = options.maxGapMs ?? 4 * 60 * 1000;
+
+  const validMine = myVisits
+    .filter((visit) => Number.isFinite(visitStartMs(visit))
+      && Number.isFinite(visit.accuracy) && visit.accuracy >= 0 && visit.accuracy <= maxAccuracy)
+    .sort((a, b) => visitStartMs(a) - visitStartMs(b));
+  const validPartner = partnerVisits
+    .filter((visit) => Number.isFinite(visitStartMs(visit))
+      && Number.isFinite(visit.accuracy) && visit.accuracy >= 0 && visit.accuracy <= maxAccuracy)
+    .sort((a, b) => visitStartMs(a) - visitStartMs(b));
+
+  const usedPartner = new Set<string>();
+  const matched: JointRoutePoint[] = [];
+
+  for (const myVisit of validMine) {
+    const myTime = visitStartMs(myVisit);
+    let best: { visit: LocationVisit; distance: number; delta: number } | undefined;
+
+    for (const partnerVisit of validPartner) {
+      if (usedPartner.has(partnerVisit.id)) continue;
+      const partnerTime = visitStartMs(partnerVisit);
+      const delta = Math.abs(partnerTime - myTime);
+      if (delta > maxTimeDelta) continue;
+
+      const distance = distanceMeters(myVisit, partnerVisit);
+      if (!Number.isFinite(distance) || distance > maxDistance) continue;
+      if (!best || delta < best.delta || (delta === best.delta && distance < best.distance)) {
+        best = { visit: partnerVisit, distance, delta };
+      }
+    }
+
+    if (!best) continue;
+    usedPartner.add(best.visit.id);
+    const partnerTime = visitStartMs(best.visit);
+    const sampleAt = Math.round((myTime + partnerTime) / 2);
+    matched.push({
+      id: 'joint-route:' + myVisit.id + ':' + best.visit.id + ':' + sampleAt,
+      source: 'gps-cross-check-route',
+      visibility: 'shared',
+      verification: 'both-gps',
+      memberUids: [mine, partner],
+      myVisitId: myVisit.id,
+      partnerVisitId: best.visit.id,
+      placeName: preferredJointPlace(myVisit.placeName, best.visit.placeName),
+      latitude: (myVisit.latitude + best.visit.latitude) / 2,
+      longitude: (myVisit.longitude + best.visit.longitude) / 2,
+      accuracy: Math.max(myVisit.accuracy, best.visit.accuracy),
+      arrivedAt: new Date(sampleAt).toISOString(),
+      separationMeters: Math.round(best.distance),
+      sampleDeltaSeconds: Math.round(best.delta / 1000),
+    });
+  }
+
+  matched.sort((a, b) => a.arrivedAt.localeCompare(b.arrivedAt));
+  const result: JointRoutePoint[] = [];
+  let run: JointRoutePoint[] = [];
+
+  const flush = () => {
+    if (run.length >= 2) {
+      const first = Date.parse(run[0].arrivedAt);
+      const last = Date.parse(run[run.length - 1].arrivedAt);
+      if (last - first >= minVerifiedSpan) result.push(...run);
+    }
+    run = [];
+  };
+
+  for (const point of matched) {
+    if (run.length) {
+      const previous = Date.parse(run[run.length - 1].arrivedAt);
+      const current = Date.parse(point.arrivedAt);
+      if (current - previous > maxGap) flush();
+    }
+    run.push(point);
+  }
+  flush();
+
+  return result;
 }
 
 /**

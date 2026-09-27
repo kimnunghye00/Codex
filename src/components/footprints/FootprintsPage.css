@@ -99,3 +99,18 @@
   .footprints-scope-tabs > button { padding:9px 10px; }
   .footprints-scope-tabs > button small { font-size:9px; }
 }
+
+.footprints-playback {
+  position:absolute; right:12px; top:12px; z-index:2;
+  display:flex; align-items:center; justify-content:center; gap:6px;
+  min-height:36px; padding:8px 12px; border:1px solid var(--border);
+  border-radius:12px; background:color-mix(in srgb,var(--surface) 94%,transparent);
+  color:var(--text-primary); box-shadow:0 3px 14px #1c20321f;
+  font-size:11px; font-weight:800; backdrop-filter:blur(8px);
+}
+.footprints-playback:not(:disabled):hover { border-color:var(--primary); color:var(--primary); }
+.footprints-playback.playing { background:var(--primary); border-color:var(--primary); color:white; }
+.footprints-playback:disabled { opacity:.45; cursor:not-allowed; }
+@media(max-width:760px) {
+  .footprints-playback { top:10px; right:10px; min-height:34px; padding:7px 10px; }
+}
