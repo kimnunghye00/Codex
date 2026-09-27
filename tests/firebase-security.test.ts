@@ -20,6 +20,7 @@ import { addDatePlace, saveDateCourse, setPlaceLike, addPlaceOpinion } from '../
 import { addDatePlanCandidate, createDatePlanDraft, readDatePlanCandidates, subscribeDatePlanCandidates, updateDatePlanCandidateMemo, updateDatePlanDraft } from '../src/lib/datePlanDrafts';
 import { readDatePlanSchedule, saveDatePlanSchedule, subscribeDatePlanSchedule } from '../src/lib/datePlanSchedule';
 import { subscribeCoupleActivities } from '../src/lib/coupleActivity';
+import { saveCoupleLocationSample } from '../src/lib/locationRealtime';
 import { approveDatePlan, proposeDatePlanChange, readDatePlanApproval, requestDatePlanApproval, subscribeDatePlanApproval, withdrawDatePlanReview } from '../src/lib/datePlanApproval';
 import { addDatePlanCandidateComment, deleteDatePlanCandidateComment, removeDatePlanCandidateWithFeedback,
   setDatePlanCandidatePreference, subscribeDatePlanCandidateComments } from '../src/lib/datePlanOpinions';
@@ -772,4 +773,45 @@ test('date plan V2: a server deletion marker freezes edits while direct client d
   await assertFails(deleteDoc(doc(client.db,planPath)));
   await assertFails(deleteDoc(doc(client.db,planPath,'schedule','draft')));
   expect((await getDocFromServer(doc(client.db,planPath))).exists()).toBe(true);
+});
+
+
+test('raw GPS samples are readable by the couple but writable only by their owner', async () => {
+  const { coupleId } = await pair();
+
+  as('alice');
+  await saveCoupleLocationSample(coupleId, 'alice', {
+    id: '1780000000000',
+    latitude: 37.5665,
+    longitude: 126.978,
+    accuracy: 18,
+    recordedAt: '2026-09-27T08:00:00.000Z',
+    background: false,
+  });
+
+  const path = ['couples', coupleId, 'locationSamples', 'alice-1780000000000'] as const;
+  as('bob');
+  expect((await getDocFromServer(doc(client.db, ...path))).data()?.ownerUid).toBe('alice');
+
+  await assertFails(setDoc(doc(client.db, ...path), {
+    id: '1780000000000',
+    ownerUid: 'alice',
+    dayKey: '2026-09-27',
+    latitude: 37.57,
+    longitude: 126.98,
+    accuracy: 10,
+    recordedAt: '2026-09-27T08:00:00.000Z',
+    background: true,
+    updatedAt: serverTimestamp(),
+  }, { merge: true }));
+
+  await signup('eve');
+  const outsider = as('eve');
+  await assertFails(getDocFromServer(doc(outsider.db, ...path)));
+
+  as('alice');
+  await assertFails(setDoc(doc(client.db, 'couples', coupleId, 'locationUploadTokens', 'alice'), {
+    secretHash: 'forged',
+  }));
+  await assertFails(getDocFromServer(doc(client.db, 'couples', coupleId, 'locationUploadTokens', 'alice')));
 });
