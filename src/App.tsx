@@ -2,7 +2,7 @@ import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState
 import { transitionCoupleCache } from './utils/coupleCacheIsolation';
 import type { HubTabId } from './components/memories/MemoriesPage';
 import { previewLegacyFootprints } from './lib/footprintFoundation';
-import { loadLocationVisits } from './utils/location';
+import { loadLocationSharing, loadLocationVisits, saveLocationSharing } from './utils/location';
 import type { MoreNavigationTarget } from './components/more/MoreServices';
 import { AppHeader as SharedAppHeader } from './components/navigation/AppHeader';
 import { BottomNav, type AppTab } from './components/navigation/BottomNav';
@@ -195,6 +195,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
   const [notificationPlanRequest, setNotificationPlanRequest] = useState(0);
   const [notifications, setNotifications] = useState<AppNotification[]>(() => loadNotifications(user.uid));
   const [tab, setTab] = useState<Tab>('home');
+  const [locationSharingEnabled, setLocationSharingEnabled] = useState(() => loadLocationSharing(user.uid).enabled);
   const [messages, setMessages] = useState<Message[]>(() => loadMessages(initialMessages));
   const [memories, setMemories] = useState<Memory[]>(() => loadMemories(initialMemories));
   const [memoryToOpen, setMemoryToOpen] = useState<number>();
@@ -249,6 +250,50 @@ function App({ user, profile, onProfileChange }: AppProps) {
   }, [user.uid]);
 
   useEffect(() => installActivityAlertClicks(), []);
+
+  useEffect(() => {
+    const refreshLocationSharing = () => setLocationSharingEnabled(loadLocationSharing(user.uid).enabled);
+    refreshLocationSharing();
+    window.addEventListener(PERSISTENT_STATE_CHANGE_EVENT, refreshLocationSharing);
+    window.addEventListener('storage', refreshLocationSharing);
+    return () => {
+      window.removeEventListener(PERSISTENT_STATE_CHANGE_EVENT, refreshLocationSharing);
+      window.removeEventListener('storage', refreshLocationSharing);
+    };
+  }, [user.uid]);
+
+  useEffect(() => {
+    const coupleId = connection?.coupleId;
+    if (!coupleId || !locationSharingEnabled) return;
+
+    let disposed = false;
+    let activeWatch: { stop: () => Promise<void> } | undefined;
+    const publishStatus = (detail: { state: string; message: string }) => {
+      window.dispatchEvent(new CustomEvent('route-location-tracking-status', { detail }));
+    };
+
+    void import('./lib/locationTracking')
+      .then(({ startCoupleLocationTracking }) => startCoupleLocationTracking({
+        uid: user.uid,
+        coupleId,
+        onStatus: publishStatus,
+      }))
+      .then((watch) => {
+        if (disposed) void watch.stop();
+        else activeWatch = watch;
+      })
+      .catch((cause) => {
+        console.warn('[DANDULI global location tracking]', cause);
+        saveLocationSharing(user.uid, false);
+        setLocationSharingEnabled(false);
+        publishStatus({ state: 'error', message: '위치 기록을 시작하지 못했어요. 위치 권한과 GPS를 확인해 주세요.' });
+      });
+
+    return () => {
+      disposed = true;
+      if (activeWatch) void activeWatch.stop();
+    };
+  }, [connection?.coupleId, locationSharingEnabled, user.uid]);
   useEffect(() => {
     const coupleId = connection?.coupleId;
     if (!coupleId) return;
@@ -696,7 +741,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
     <div className="app-shell"><main><Suspense fallback={<div className="page auth-loading" role="status" aria-live="polite"><div className="loading-mark" /><p>화면을 불러오는 중이에요</p></div>}>
       {tab === 'home' && <HomePage uid={user.uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} memories={memories} onNavigate={navigateTab} onOpenMemory={openMemory} onOpenFootprints={() => openFootprints()} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'memories' && <MemoriesPage key={user.uid} requestedTab={requestedHubTab} Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={(place) => { setLocationFocus(place); navigateTab('location'); }} onOpenFootprints={(memoryId) => openFootprints(memoryId)} sharedProfile={profile} sharedConnection={connection} sharedRelationshipStartDate={relationshipStartDate} />}
-      {tab === 'footprints' && <FootprintsPage key={`${user.uid}:${footprintMemoryId ?? ''}`} uid={user.uid} memories={memories} initialMemoryId={footprintMemoryId} onOpenMemory={openMemory} onBack={closeFootprints} Header={AppHeader} />}
+      {tab === 'footprints' && <FootprintsPage key={`${user.uid}:${footprintMemoryId ?? ''}`} uid={user.uid} connection={connection} memories={memories} initialMemoryId={footprintMemoryId} onOpenMemory={openMemory} onBack={closeFootprints} Header={AppHeader} />}
       {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} connection={connection} initialMessageId={notificationMessageId} notificationRequest={notificationMessageRequest}/>}
       {tab === 'location' && <DateMapPage Header={AppHeader} connection={connection} focusPlace={locationFocus} onClearFocus={() => setLocationFocus(undefined)} initialPlanId={notificationPlanId} notificationRequest={notificationPlanRequest}/>}
       {tab === 'anniversary' && <AnniversaryPage key={relationshipStartDate ?? ''} connected={Boolean(connection)} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} onSaveStartDate={saveStartDate} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
