@@ -109,7 +109,7 @@ export function FootprintsPage({
   const [trackingStatus, setTrackingStatus] = useState(
     sharing ? '내 GPS 공유가 켜져 있어요.' : '내 GPS 공유가 꺼져 있어요.',
   );
-  const [localRevision, setLocalRevision] = useState(0);
+  const [, setLocalRevision] = useState(0);
   const [mySnapshot, setMySnapshot] = useState<SnapshotState>();
   const [partnerSnapshot, setPartnerSnapshot] = useState<SnapshotState>();
   const [mapReady, setMapReady] = useState(false);
@@ -146,11 +146,7 @@ export function FootprintsPage({
 
   useEffect(() => {
     const coupleId = connection?.coupleId;
-    if (!coupleId || !uid || !partnerUid) {
-      setMySnapshot(undefined);
-      setPartnerSnapshot(undefined);
-      return;
-    }
+    if (!coupleId || !uid || !partnerUid) return;
 
     const key = coupleId + ':' + day;
     const stopMine = subscribeMemberLocationVisits(
@@ -173,10 +169,7 @@ export function FootprintsPage({
     };
   }, [connection?.coupleId, day, partnerName, partnerUid, uid]);
 
-  const localMine = useMemo(
-    () => sameDayVisits(loadLocationVisits(uid), day),
-    [day, localRevision, uid],
-  );
+  const localMine = sameDayVisits(loadLocationVisits(uid), day);
   const myVisits = useMemo(
     () => mergeVisits(myCloudVisits, localMine),
     [localMine, myCloudVisits],
