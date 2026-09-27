@@ -158,11 +158,13 @@ exports.revokeLocationUploadDevice = onRequest({
 
   const coupleId = typeof req.body?.coupleId === 'string' ? req.body.coupleId.trim() : '';
   if (!validId(coupleId)) return json(res, 400, { error: 'invalid-couple' });
-  if (!(await verifyMembership(coupleId, decoded.uid))) {
-    return json(res, 403, { error: 'couple-membership-required' });
-  }
 
-  await getFirestore().doc('couples/' + coupleId + '/locationUploadTokens/' + decoded.uid).delete();
+  const tokenRef = getFirestore().doc('couples/' + coupleId + '/locationUploadTokens/' + decoded.uid);
+  const tokenDoc = await tokenRef.get();
+  if (tokenDoc.exists && tokenDoc.data()?.ownerUid !== decoded.uid) {
+    return json(res, 403, { error: 'upload-token-owner-mismatch' });
+  }
+  await tokenRef.delete();
   return json(res, 200, { revoked: true });
 });
 
