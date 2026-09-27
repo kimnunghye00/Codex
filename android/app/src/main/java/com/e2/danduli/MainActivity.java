@@ -12,6 +12,7 @@ public class MainActivity extends BridgeActivity {
         LauncherRepairReceiver.ensureLauncherAvailable(this);
         registerPlugin(AppIconPlugin.class);
         registerPlugin(MediaSaverPlugin.class);
+        registerPlugin(BackgroundLocationPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
