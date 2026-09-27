@@ -18,6 +18,8 @@ const allowedOrigins = new Set([
   'https://danduli.web.app',
   'https://danduli.firebaseapp.com',
   'http://localhost:5173',
+  'http://localhost',
+  'capacitor://localhost',
 ]);
 
 function json(res, status, body) {
