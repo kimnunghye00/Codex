@@ -124,7 +124,9 @@ public class BackgroundLocationPlugin extends Plugin {
 
     @PluginMethod
     public void drain(PluginCall call) {
-        JSONArray pending = BackgroundLocationStore.drain(getContext());
+        // Return a snapshot to the WebView without deleting the native retry
+        // queue. Only a successful HTTPS upload may remove queued GPS points.
+        JSONArray pending = BackgroundLocationStore.peek(getContext(), 2880);
         JSArray points = new JSArray();
         for (int index = 0; index < pending.length(); index++) {
             JSONObject source = pending.optJSONObject(index);
