@@ -82,6 +82,21 @@ export type JointRouteOptions = {
   maxGapMs?: number;
 };
 
+export type JointDateSession = {
+  id: string;
+  startedAt: string;
+  endedAt: string;
+  durationMinutes: number;
+  verifiedPointCount: number;
+  reconnectCount: number;
+  pointIds: string[];
+};
+
+export type JointDateSessionOptions = {
+  reconnectGapMs?: number;
+  continuousGapMs?: number;
+};
+
 /** A suggestion for the user to review; never an automatic photo attachment. */
 export type LegacyMemorySuggestion = {
   footprintId: string;
@@ -400,6 +415,61 @@ export function buildJointRoutePoints(
   flush();
 
   return result;
+}
+
+/**
+ * Group verified route points into human-sized dates. A short period apart does
+ * not split the date immediately: if the couple is verified together again
+ * within the reconnect window, the same session continues and records a
+ * reconnect. Long gaps create a new date session.
+ */
+export function buildJointDateSessions(
+  points: readonly JointRoutePoint[],
+  options: JointDateSessionOptions = {},
+): JointDateSession[] {
+  const reconnectGap = options.reconnectGapMs ?? 30 * 60 * 1000;
+  const continuousGap = options.continuousGapMs ?? 5 * 60 * 1000;
+  const ordered = [...points]
+    .filter((point) => Number.isFinite(Date.parse(point.arrivedAt)))
+    .sort((a, b) => a.arrivedAt.localeCompare(b.arrivedAt));
+  if (!ordered.length) return [];
+
+  const sessions: JointDateSession[] = [];
+  let current: JointRoutePoint[] = [];
+  let reconnectCount = 0;
+
+  const flush = () => {
+    if (!current.length) return;
+    const started = Date.parse(current[0].arrivedAt);
+    const ended = Date.parse(current[current.length - 1].arrivedAt);
+    sessions.push({
+      id: 'joint-session:' + current[0].id + ':' + current[current.length - 1].id,
+      startedAt: new Date(started).toISOString(),
+      endedAt: new Date(ended).toISOString(),
+      durationMinutes: Math.max(1, Math.round((ended - started) / 60_000)),
+      verifiedPointCount: current.length,
+      reconnectCount,
+      pointIds: current.map((point) => point.id),
+    });
+    current = [];
+    reconnectCount = 0;
+  };
+
+  for (const point of ordered) {
+    if (current.length) {
+      const previous = Date.parse(current[current.length - 1].arrivedAt);
+      const next = Date.parse(point.arrivedAt);
+      const gap = next - previous;
+      if (gap > reconnectGap) {
+        flush();
+      } else if (gap > continuousGap) {
+        reconnectCount += 1;
+      }
+    }
+    current.push(point);
+  }
+  flush();
+  return sessions;
 }
 
 /**
