@@ -5,7 +5,7 @@
  * A joint footprint is derived only when BOTH members have independent GPS
  * evidence that overlaps in time and remains within a conservative distance.
  */
-import { distanceMeters, type LocationVisit } from '../utils/location';
+import type { LocationVisit } from '../utils/location';
 import type { Memory } from '../types';
 
 export type FootprintVisibility = 'personal' | 'shared';
@@ -78,6 +78,18 @@ function dateKey(iso: string): string {
 
 function normalizePlace(value?: string): string {
   return (value ?? '').normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('ko-KR');
+}
+
+function distanceMeters(a: Pick<LocationVisit, 'latitude' | 'longitude'>, b: Pick<LocationVisit, 'latitude' | 'longitude'>) {
+  const radius = 6_371_000;
+  const toRad = (degree: number) => degree * Math.PI / 180;
+  const dLat = toRad(b.latitude - a.latitude);
+  const dLon = toRad(b.longitude - a.longitude);
+  const lat1 = toRad(a.latitude);
+  const lat2 = toRad(b.latitude);
+  const h = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return 2 * radius * Math.asin(Math.sqrt(h));
 }
 
 function visitStartMs(visit: LocationVisit): number {
