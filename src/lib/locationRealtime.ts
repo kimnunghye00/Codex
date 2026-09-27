@@ -84,7 +84,7 @@ export function subscribeMemberLocationSamples(
   let lastSignature = '';
   return onSnapshot(q, (snapshot) => {
     const values = snapshot.docs
-      .map((snapshotDoc) => {
+      .flatMap((snapshotDoc): LocationSample[] => {
         const data = snapshotDoc.data() as Partial<CloudLocationSample>;
         const latitude = Number(data.latitude);
         const longitude = Number(data.longitude);
@@ -94,17 +94,16 @@ export function subscribeMemberLocationSamples(
         if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90
           || !Number.isFinite(longitude) || longitude < -180 || longitude > 180
           || !Number.isFinite(accuracy) || accuracy < 0
-          || !Number.isFinite(recordedAtMs)) return null;
-        return {
+          || !Number.isFinite(recordedAtMs)) return [];
+        return [{
           id: typeof data.id === 'string' && data.id ? data.id : snapshotDoc.id,
           latitude,
           longitude,
           accuracy,
           recordedAt: new Date(recordedAtMs).toISOString(),
           background: data.background === true,
-        } satisfies LocationSample;
+        }];
       })
-      .filter((sample): sample is LocationSample => Boolean(sample))
       .sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
 
     const signature = JSON.stringify(values.map((sample) => [
