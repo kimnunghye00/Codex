@@ -113,6 +113,11 @@ const manifest = read('android/app/src/main/AndroidManifest.xml');
 const configureNative = read('scripts/configure-native.mjs');
 const pkg = JSON.parse(read('package.json'));
 const workflow = read('.github/workflows/stability-gate.yml');
+const webDeploy = read('.github/workflows/web-deploy.yml');
+const firebaseConfig = read('firebase.json');
+const locationUpload = read('functions-location/index.js');
+const locationRealtime = read('src/lib/locationRealtime.ts');
+const backgroundLocationUpload = read('src/lib/backgroundLocationUpload.ts');
 
 check('single React root remains', (main.match(/createRoot\(/g) || []).length === 1);
 check('runtime recovery is explicitly imported', main.includes("import { initializeRuntimeRecovery } from './recovery-runtime';"));
@@ -201,6 +206,24 @@ check('full stability command runs runtime and static gates', typeof pkg.scripts
   && pkg.scripts.stability.includes('stability:cross'));
 check('CI executes runtime validation', workflow.includes('npm run stability:runtime'));
 check('CI executes cross validation', workflow.includes('npm run stability:cross'));
+check('location upload functions are isolated in their own codebase',
+  firebaseConfig.includes('"source": "functions-location"')
+  && firebaseConfig.includes('"codebase": "location-upload"'));
+check('web deploy verifies and publishes location upload functions',
+  webDeploy.includes('functions-location/location-upload.test.js')
+  && webDeploy.includes('functions:location-upload:registerLocationUploadDevice')
+  && webDeploy.includes('functions:location-upload:uploadBackgroundLocation'));
+check('native uploader token is issued from verified Firebase auth',
+  locationUpload.includes('verifyIdToken')
+  && locationUpload.includes('verifyMembership')
+  && locationUpload.includes('secretHash'));
+check('location upload endpoint writes owner-attributed raw samples only',
+  locationUpload.includes('/locationSamples/')
+  && locationUpload.includes('ownerUid')
+  && !locationUpload.includes("source: 'gps-cross-check'"));
+check('web client subscribes to owner-separated raw GPS samples',
+  locationRealtime.includes('subscribeMemberLocationSamples')
+  && backgroundLocationUpload.includes('getIdToken(true)'));
 
 console.log(`\nROUTE cross validation: ${passes.length} checks passed.`);
 for (const pass of passes) console.log(`  ✓ ${pass}`);
