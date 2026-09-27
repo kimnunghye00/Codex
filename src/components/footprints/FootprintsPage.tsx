@@ -21,7 +21,6 @@ import {
   buildJointRoutePoints,
   suggestLegacyMemoryLinks,
   type JointFootprint,
-  type JointRoutePoint,
 } from '../../lib/footprintFoundation';
 import {
   subscribeMemberLocationSamples,
