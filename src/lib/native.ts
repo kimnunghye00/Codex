@@ -29,6 +29,12 @@ type BackgroundLocationPoint = {
 };
 
 type RouteBackgroundLocationPlugin = {
+  configure: (options: {
+    endpoint: string;
+    coupleId: string;
+    ownerUid: string;
+    secret: string;
+  }) => Promise<{ configured: boolean }>;
   start: () => Promise<{ running: boolean }>;
   stop: () => Promise<{ running: boolean }>;
   status: () => Promise<{ running: boolean }>;
@@ -40,6 +46,16 @@ type RouteBackgroundLocationPlugin = {
 };
 
 const RouteBackgroundLocation = registerPlugin<RouteBackgroundLocationPlugin>('RouteBackgroundLocation');
+
+export async function configureRouteBackgroundLocationUpload(options: {
+  endpoint: string;
+  coupleId: string;
+  ownerUid: string;
+  secret: string;
+}) {
+  if (!isNativePlatform() || nativePlatform() !== 'android') return;
+  await RouteBackgroundLocation.configure(options);
+}
 
 export type RouteLocationError = {
   code?: string | number;
