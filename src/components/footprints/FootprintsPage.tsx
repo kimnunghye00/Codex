@@ -140,7 +140,7 @@ export function FootprintsPage({
   const [mapFailed, setMapFailed] = useState(false);
   const [playbackState, setPlaybackState] = useState<'idle' | 'playing'>('idle');
   const [selectedSessionId, setSelectedSessionId] = useState<string>();
-  const [queuedSessionPlaybackId, setQueuedSessionPlaybackId] = useState<string>();
+  const sessionPlaybackRequest = useRef<string>();
   const frame = useRef<HTMLIFrameElement>(null);
 
   const partnerUid = connection?.partnerUid ?? '';
@@ -249,18 +249,6 @@ export function FootprintsPage({
     return jointRoutePoints.filter((point) => pointIds.has(point.id));
   }, [jointRoutePoints, selectedSession]);
 
-  useEffect(() => {
-    if (scope !== 'together') {
-      if (selectedSessionId) setSelectedSessionId(undefined);
-      if (queuedSessionPlaybackId) setQueuedSessionPlaybackId(undefined);
-      return;
-    }
-    if (selectedSessionId && selectedSessionIndex < 0) {
-      setSelectedSessionId(undefined);
-      setQueuedSessionPlaybackId(undefined);
-    }
-  }, [queuedSessionPlaybackId, scope, selectedSessionId, selectedSessionIndex]);
-
   const jointById = useMemo(
     () => new Map(jointVisits.map((visit) => [visit.id, visit])),
     [jointVisits],
@@ -335,10 +323,11 @@ export function FootprintsPage({
   }, [mapReady, mapVisits]);
 
   useEffect(() => {
-    if (!queuedSessionPlaybackId || !mapReady || !selectedSession
-      || selectedSession.id !== queuedSessionPlaybackId) return;
+    const requestedSessionId = sessionPlaybackRequest.current;
+    if (!requestedSessionId || !mapReady || !selectedSession
+      || selectedSession.id !== requestedSessionId) return;
     if (mapVisits.length < 2) {
-      setQueuedSessionPlaybackId(undefined);
+      sessionPlaybackRequest.current = undefined;
       return;
     }
     frame.current?.contentWindow?.postMessage({
@@ -347,24 +336,55 @@ export function FootprintsPage({
       visits: mapVisits,
       follow: true,
     }, MAP_ORIGIN);
-    setQueuedSessionPlaybackId(undefined);
-  }, [mapReady, mapVisits, queuedSessionPlaybackId, selectedSession]);
+    sessionPlaybackRequest.current = undefined;
+  }, [mapReady, mapVisits, selectedSession]);
+
+  const stopPlayback = () => {
+    if (playbackState !== 'playing') return;
+    frame.current?.contentWindow?.postMessage({
+      source: 'route-map-parent',
+      type: 'stop-route-playback',
+    }, MAP_ORIGIN);
+  };
 
   const playSession = (sessionId: string) => {
     if (!dateSessions.some((session) => session.id === sessionId)) return;
+    if (selectedSessionId === sessionId && mapReady && mapVisits.length >= 2) {
+      frame.current?.contentWindow?.postMessage({
+        source: 'route-map-parent',
+        type: 'play-route',
+        visits: mapVisits,
+        follow: true,
+      }, MAP_ORIGIN);
+      return;
+    }
+    sessionPlaybackRequest.current = sessionId;
     setSelectedSessionId(sessionId);
-    setQueuedSessionPlaybackId(sessionId);
+  };
+
+  const clearSessionSelection = () => {
+    stopPlayback();
+    sessionPlaybackRequest.current = undefined;
+    setSelectedSessionId(undefined);
   };
 
   const showWholeDay = () => {
-    if (playbackState === 'playing') {
-      frame.current?.contentWindow?.postMessage({
-        source: 'route-map-parent',
-        type: 'stop-route-playback',
-      }, MAP_ORIGIN);
-    }
+    clearSessionSelection();
+  };
+
+  const changeScope = (nextScope: FootprintScope) => {
+    stopPlayback();
+    sessionPlaybackRequest.current = undefined;
     setSelectedSessionId(undefined);
-    setQueuedSessionPlaybackId(undefined);
+    setScope(nextScope);
+  };
+
+  const changeDay = (nextDay: string) => {
+    if (!nextDay || nextDay > todayKey()) return;
+    stopPlayback();
+    sessionPlaybackRequest.current = undefined;
+    setSelectedSessionId(undefined);
+    setDay(nextDay);
   };
 
   const togglePlayback = () => {
@@ -406,7 +426,7 @@ export function FootprintsPage({
     const current = new Date(day + 'T12:00:00+09:00');
     current.setDate(current.getDate() + amount);
     const next = dayKey(current.toISOString());
-    if (next <= todayKey()) setDay(next);
+    if (next <= todayKey()) changeDay(next);
   };
 
   const shown = [...visible].reverse();
@@ -454,17 +474,17 @@ export function FootprintsPage({
     </div>
 
     <div className="footprints-scope-tabs" role="tablist" aria-label="발자취 종류">
-      <button type="button" role="tab" aria-selected={scope === 'partner'} className={scope === 'partner' ? 'active' : ''} onClick={() => setScope('partner')}>
+      <button type="button" role="tab" aria-selected={scope === 'partner'} className={scope === 'partner' ? 'active' : ''} onClick={() => changeScope('partner')}>
         <MapPin size={16} /><span><b>{partnerName} 발자취</b><small>상대방 GPS만</small></span>
       </button>
-      <button type="button" role="tab" aria-selected={scope === 'together'} className={scope === 'together' ? 'active' : ''} onClick={() => setScope('together')}>
+      <button type="button" role="tab" aria-selected={scope === 'together'} className={scope === 'together' ? 'active' : ''} onClick={() => changeScope('together')}>
         <UsersRound size={16} /><span><b>우리 둘의 발자취</b><small>두 GPS 교차검증</small></span>
       </button>
     </div>
 
     <div className="footprints-datebar">
       <button type="button" aria-label="이전 날짜" onClick={() => moveDay(-1)}>‹</button>
-      <label><CalendarDays size={16} /><input type="date" value={day} max={todayKey()} onChange={(event) => setDay(event.target.value)} /></label>
+      <label><CalendarDays size={16} /><input type="date" value={day} max={todayKey()} onChange={(event) => changeDay(event.target.value)} /></label>
       <button type="button" aria-label="다음 날짜" disabled={day >= todayKey()} onClick={() => moveDay(1)}>›</button>
       <span>{selectedDate}</span>
     </div>
