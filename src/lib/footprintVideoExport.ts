@@ -65,8 +65,10 @@ const RouteMediaSaver = registerPlugin<RouteMediaSaverPlugin>('RouteMediaSaver')
 const INTRO_MS = 900;
 const OUTRO_MS = 1_200;
 const MEMORY_PHOTO_HOLD_MS = 1_450;
-const MEMORY_PHOTO_MAX = 6;
-const MEMORY_PHOTO_LOAD_TIMEOUT_MS = 9_000;
+const MEMORY_VIDEO_MAX_MS = 3_000;
+const MEMORY_VIDEO_MIN_MS = 1_200;
+const MEMORY_MEDIA_MAX = 6;
+const MEMORY_MEDIA_LOAD_TIMEOUT_MS = 9_000;
 
 function clamp(min: number, max: number, value: number) {
   return Math.min(max, Math.max(min, value));
@@ -526,34 +528,36 @@ function drawOutro(
   context.restore();
 }
 
-type LoadedMemoryPhoto = {
+type LoadedMemoryMedia = {
   id: string;
   pointId: string;
-  image: CanvasImageSource;
+  kind: 'photo' | 'video';
+  media: CanvasImageSource;
+  video?: HTMLVideoElement;
   width: number;
   height: number;
+  durationMs: number;
+  placeName: string;
+  memoryTitle: string;
   cleanup: () => void;
 };
 
-type MemoryPresentationFrame = LoadedMemoryPhoto & {
+type MemoryPresentationFrame = LoadedMemoryMedia & {
   routeOffsetMs: number;
   presentationStartMs: number;
   presentationEndMs: number;
 };
 
-async function resolveMemoryPhotoUrl(source: string) {
+async function resolveMemoryMediaUrl(source: string) {
   const preview = chatMediaPreviewUrl(source);
   if (!preview.startsWith('gs://')) return preview;
   return getDownloadURL(ref(storage, preview));
 }
 
-async function loadMemoryPhoto(moment: FootprintVideoMemoryMoment): Promise<LoadedMemoryPhoto | undefined> {
-  const source = await resolveMemoryPhotoUrl(moment.imageUrl);
-  if (!source) return undefined;
-
+async function fetchMemoryMediaBlob(source: string) {
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : undefined;
   const timer = controller
-    ? window.setTimeout(() => controller.abort(), MEMORY_PHOTO_LOAD_TIMEOUT_MS)
+    ? window.setTimeout(() => controller.abort(), MEMORY_MEDIA_LOAD_TIMEOUT_MS)
     : undefined;
   try {
     const response = await fetch(source, {
@@ -562,22 +566,43 @@ async function loadMemoryPhoto(moment: FootprintVideoMemoryMoment): Promise<Load
       cache: 'force-cache',
     });
     if (!response.ok) return undefined;
-    const blob = await response.blob();
-    if (blob.type && !blob.type.startsWith('image/')) return undefined;
+    return await response.blob();
+  } catch {
+    return undefined;
+  } finally {
+    if (timer !== undefined) window.clearTimeout(timer);
+  }
+}
 
-    if (typeof createImageBitmap === 'function') {
+async function loadMemoryPhoto(
+  moment: FootprintVideoMemoryMoment,
+  source: string,
+): Promise<LoadedMemoryMedia | undefined> {
+  const blob = await fetchMemoryMediaBlob(source);
+  if (!blob || (blob.type && !blob.type.startsWith('image/'))) return undefined;
+
+  if (typeof createImageBitmap === 'function') {
+    try {
       const bitmap = await createImageBitmap(blob);
       return {
         id: moment.id,
         pointId: moment.pointId,
-        image: bitmap,
+        kind: 'photo',
+        media: bitmap,
         width: bitmap.width,
         height: bitmap.height,
+        durationMs: MEMORY_PHOTO_HOLD_MS,
+        placeName: moment.placeName,
+        memoryTitle: moment.memoryTitle,
         cleanup: () => bitmap.close(),
       };
+    } catch {
+      return undefined;
     }
+  }
 
-    const objectUrl = URL.createObjectURL(blob);
+  const objectUrl = URL.createObjectURL(blob);
+  try {
     const image = await new Promise<HTMLImageElement>((resolve, reject) => {
       const element = new Image();
       element.onload = () => resolve(element);
@@ -587,27 +612,107 @@ async function loadMemoryPhoto(moment: FootprintVideoMemoryMoment): Promise<Load
     return {
       id: moment.id,
       pointId: moment.pointId,
-      image,
+      kind: 'photo',
+      media: image,
       width: image.naturalWidth || image.width,
       height: image.naturalHeight || image.height,
+      durationMs: MEMORY_PHOTO_HOLD_MS,
+      placeName: moment.placeName,
+      memoryTitle: moment.memoryTitle,
       cleanup: () => URL.revokeObjectURL(objectUrl),
     };
   } catch {
+    URL.revokeObjectURL(objectUrl);
     return undefined;
-  } finally {
-    if (timer !== undefined) window.clearTimeout(timer);
   }
 }
 
-async function loadMemoryPhotos(
+async function loadMemoryVideo(
+  moment: FootprintVideoMemoryMoment,
+  source: string,
+): Promise<LoadedMemoryMedia | undefined> {
+  const blob = await fetchMemoryMediaBlob(source);
+  if (!blob) return undefined;
+  const objectUrl = URL.createObjectURL(blob);
+  const video = document.createElement('video');
+  video.src = objectUrl;
+  video.muted = true;
+  video.defaultMuted = true;
+  video.playsInline = true;
+  video.preload = 'auto';
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const timer = window.setTimeout(() => reject(new Error('VIDEO_MEMORY_CLIP_TIMEOUT')), MEMORY_MEDIA_LOAD_TIMEOUT_MS);
+      const done = () => {
+        window.clearTimeout(timer);
+        video.removeEventListener('loadeddata', done);
+        video.removeEventListener('error', fail);
+        resolve();
+      };
+      const fail = () => {
+        window.clearTimeout(timer);
+        video.removeEventListener('loadeddata', done);
+        video.removeEventListener('error', fail);
+        reject(new Error('VIDEO_MEMORY_CLIP_LOAD_FAILED'));
+      };
+      video.addEventListener('loadeddata', done, { once: true });
+      video.addEventListener('error', fail, { once: true });
+      video.load();
+    });
+
+    const durationSeconds = Number.isFinite(video.duration) && video.duration > 0
+      ? video.duration
+      : MEMORY_VIDEO_MAX_MS / 1000;
+    const durationMs = Math.round(clamp(
+      MEMORY_VIDEO_MIN_MS,
+      MEMORY_VIDEO_MAX_MS,
+      durationSeconds * 1000,
+    ));
+    video.currentTime = 0;
+    return {
+      id: moment.id,
+      pointId: moment.pointId,
+      kind: 'video',
+      media: video,
+      video,
+      width: video.videoWidth || 1280,
+      height: video.videoHeight || 720,
+      durationMs,
+      placeName: moment.placeName,
+      memoryTitle: moment.memoryTitle,
+      cleanup: () => {
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+        URL.revokeObjectURL(objectUrl);
+      },
+    };
+  } catch {
+    video.pause();
+    video.removeAttribute('src');
+    URL.revokeObjectURL(objectUrl);
+    return undefined;
+  }
+}
+
+async function loadMemoryMedia(moment: FootprintVideoMemoryMoment) {
+  const source = await resolveMemoryMediaUrl(moment.mediaUrl).catch(() => '');
+  if (!source) return undefined;
+  return moment.kind === 'video'
+    ? loadMemoryVideo(moment, source)
+    : loadMemoryPhoto(moment, source);
+}
+
+async function loadMemoryMediaMoments(
   moments: readonly FootprintVideoMemoryMoment[] | undefined,
   allowedPointIds: ReadonlySet<string>,
 ) {
   const selected = [...(moments ?? [])]
     .filter((moment) => allowedPointIds.has(moment.pointId))
-    .slice(0, MEMORY_PHOTO_MAX);
-  const loaded = await Promise.all(selected.map((moment) => loadMemoryPhoto(moment)));
-  return loaded.filter((photo): photo is LoadedMemoryPhoto => Boolean(photo));
+    .slice(0, MEMORY_MEDIA_MAX);
+  const loaded = await Promise.all(selected.map((moment) => loadMemoryMedia(moment)));
+  return loaded.filter((media): media is LoadedMemoryMedia => Boolean(media));
 }
 
 function routeOffsetForPoint(plan: FootprintVideoPlan, pointId: string) {
@@ -618,16 +723,16 @@ function routeOffsetForPoint(plan: FootprintVideoPlan, pointId: string) {
   return Math.round(plan.playbackDurationMs * (pointIndex / Math.max(1, plan.points.length - 1)));
 }
 
-function buildMemoryPresentationFrames(plan: FootprintVideoPlan, photos: readonly LoadedMemoryPhoto[]) {
+function buildMemoryPresentationFrames(plan: FootprintVideoPlan, media: readonly LoadedMemoryMedia[]) {
   let insertedMs = 0;
-  return [...photos]
-    .map((photo) => ({ photo, routeOffsetMs: routeOffsetForPoint(plan, photo.pointId) }))
-    .sort((a, b) => a.routeOffsetMs - b.routeOffsetMs || a.photo.id.localeCompare(b.photo.id))
-    .map(({ photo, routeOffsetMs }) => {
+  return [...media]
+    .map((item) => ({ item, routeOffsetMs: routeOffsetForPoint(plan, item.pointId) }))
+    .sort((a, b) => a.routeOffsetMs - b.routeOffsetMs || a.item.id.localeCompare(b.item.id))
+    .map(({ item, routeOffsetMs }) => {
       const presentationStartMs = routeOffsetMs + insertedMs;
-      const presentationEndMs = presentationStartMs + MEMORY_PHOTO_HOLD_MS;
-      insertedMs += MEMORY_PHOTO_HOLD_MS;
-      return { ...photo, routeOffsetMs, presentationStartMs, presentationEndMs };
+      const presentationEndMs = presentationStartMs + item.durationMs;
+      insertedMs += item.durationMs;
+      return { ...item, routeOffsetMs, presentationStartMs, presentationEndMs };
     });
 }
 
@@ -652,11 +757,11 @@ function presentationState(
         frameProgress: clamp(
           0,
           1,
-          (presentationElapsedMs - frame.presentationStartMs) / MEMORY_PHOTO_HOLD_MS,
+          (presentationElapsedMs - frame.presentationStartMs) / Math.max(1, frame.durationMs),
         ),
       };
     }
-    insertedMs += MEMORY_PHOTO_HOLD_MS;
+    insertedMs += frame.durationMs;
   }
   return {
     routeElapsedMs: clamp(0, routeDurationMs, presentationElapsedMs - insertedMs),
@@ -665,7 +770,7 @@ function presentationState(
   };
 }
 
-function drawMemoryPhoto(
+function drawMemoryMedia(
   context: CanvasRenderingContext2D,
   width: number,
   height: number,
@@ -673,16 +778,19 @@ function drawMemoryPhoto(
   frame: MemoryPresentationFrame,
   progress: number,
 ) {
-  const edgeFade = 0.18;
+  const edgeFade = 0.16;
   const alpha = progress < edgeFade
     ? progress / edgeFade
     : progress > 1 - edgeFade
       ? (1 - progress) / edgeFade
       : 1;
-  const cardWidth = orientation === 'portrait' ? width * 0.76 : width * 0.46;
-  const cardHeight = orientation === 'portrait' ? height * 0.52 : height * 0.64;
+  const settle = 0.975 + Math.min(0.025, progress * 0.05);
+  const baseWidth = orientation === 'portrait' ? width * 0.76 : width * 0.48;
+  const baseHeight = orientation === 'portrait' ? height * 0.52 : height * 0.64;
+  const cardWidth = baseWidth * settle;
+  const cardHeight = baseHeight * settle;
   const x = (width - cardWidth) / 2;
-  const y = (height - cardHeight) / 2 - (orientation === 'portrait' ? 12 : 0);
+  const y = (height - cardHeight) / 2 - (orientation === 'portrait' ? 4 : 0);
   const sourceRatio = frame.width / Math.max(1, frame.height);
   const targetRatio = cardWidth / cardHeight;
   let sourceX = 0;
@@ -699,14 +807,28 @@ function drawMemoryPhoto(
 
   context.save();
   context.globalAlpha = clamp(0, 1, alpha);
-  context.fillStyle = 'rgba(30,30,39,.54)';
+  context.fillStyle = 'rgba(30,30,39,.62)';
   context.fillRect(0, 0, width, height);
+
+  const badgeText = (frame.placeName || '함께 있었던 장소') + ' · 도착';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.font = '900 ' + (orientation === 'portrait' ? 24 : 21) + 'px system-ui, sans-serif';
+  const badgeWidth = Math.min(width - 80, Math.max(190, context.measureText(badgeText).width + 48));
+  const badgeHeight = orientation === 'portrait' ? 52 : 46;
+  const badgeX = (width - badgeWidth) / 2;
+  const badgeY = Math.max(orientation === 'portrait' ? 120 : 54, y - badgeHeight - 28);
+  context.fillStyle = 'rgba(42,42,54,.92)';
+  roundedRect(context, badgeX, badgeY, badgeWidth, badgeHeight, badgeHeight / 2);
+  context.fill();
+  context.fillStyle = '#FFFFFF';
+  context.fillText(badgeText.length > 30 ? badgeText.slice(0, 29) + '…' : badgeText, width / 2, badgeY + badgeHeight / 2 + 1);
 
   context.shadowColor = 'rgba(20,20,30,.34)';
   context.shadowBlur = orientation === 'portrait' ? 34 : 26;
   context.shadowOffsetY = 12;
   context.fillStyle = '#FFFFFF';
-  roundedRect(context, x - 12, y - 12, cardWidth + 24, cardHeight + 58, 28);
+  roundedRect(context, x - 12, y - 12, cardWidth + 24, cardHeight + 64, 28);
   context.fill();
 
   context.shadowColor = 'transparent';
@@ -714,7 +836,7 @@ function drawMemoryPhoto(
   roundedRect(context, x, y, cardWidth, cardHeight, 20);
   context.clip();
   context.drawImage(
-    frame.image,
+    frame.media,
     sourceX,
     sourceY,
     sourceWidth,
@@ -726,11 +848,23 @@ function drawMemoryPhoto(
   );
   context.restore();
 
+  if (frame.kind === 'video') {
+    const pillWidth = orientation === 'portrait' ? 96 : 86;
+    const pillHeight = orientation === 'portrait' ? 34 : 30;
+    context.fillStyle = 'rgba(20,20,28,.72)';
+    roundedRect(context, x + 16, y + 16, pillWidth, pillHeight, pillHeight / 2);
+    context.fill();
+    context.fillStyle = '#FFFFFF';
+    context.font = '800 ' + (orientation === 'portrait' ? 13 : 12) + 'px system-ui, sans-serif';
+    context.fillText('▶ 짧은 영상', x + 16 + pillWidth / 2, y + 16 + pillHeight / 2 + 1);
+  }
+
   context.fillStyle = '#3A3944';
   context.textAlign = 'center';
   context.textBaseline = 'middle';
   context.font = '800 ' + (orientation === 'portrait' ? 18 : 16) + 'px system-ui, sans-serif';
-  context.fillText('그날의 추억 ♡', width / 2, y + cardHeight + 28);
+  const caption = frame.memoryTitle || '그날의 추억 ♡';
+  context.fillText(caption.length > 28 ? caption.slice(0, 27) + '…' : caption, width / 2, y + cardHeight + 31);
   context.restore();
 }
 
@@ -766,8 +900,8 @@ async function recordCanvasVideo(
     throw new Error('VIDEO_ROUTE_TOO_SHORT');
   }
   const allowedPointIds = new Set(plan.points.map((point) => point.id));
-  const loadedMemoryPhotos = await loadMemoryPhotos(options.memoryMoments, allowedPointIds);
-  const memoryFrames = buildMemoryPresentationFrames(plan, loadedMemoryPhotos);
+  const loadedMemoryMedia = await loadMemoryMediaMoments(options.memoryMoments, allowedPointIds);
+  const memoryFrames = buildMemoryPresentationFrames(plan, loadedMemoryMedia);
 
   const { width, height } = dimensions(options.orientation);
   const canvas = document.createElement('canvas');
@@ -797,9 +931,11 @@ async function recordCanvasVideo(
 
   const palette = readPalette();
   const coordinates = projectedPoints(plan, width, height, options.orientation);
-  const presentationDurationMs = plan.playbackDurationMs + memoryFrames.length * MEMORY_PHOTO_HOLD_MS;
+  const presentationDurationMs = plan.playbackDurationMs
+    + memoryFrames.reduce((sum, frame) => sum + frame.durationMs, 0);
   const totalMs = INTRO_MS + presentationDurationMs + OUTRO_MS;
   let lastProgress = -1;
+  let activeVideoId = '';
 
   recorder.start(500);
   const startedAt = performance.now();
@@ -839,7 +975,20 @@ async function recordCanvasVideo(
         activePoint?.placeName,
       );
       if (memoryState.frame) {
-        drawMemoryPhoto(
+        if (memoryState.frame.kind === 'video' && memoryState.frame.video) {
+          if (activeVideoId !== memoryState.frame.id) {
+            loadedMemoryMedia.forEach((item) => {
+              if (item.video && item.id !== memoryState.frame?.id) item.video.pause();
+            });
+            activeVideoId = memoryState.frame.id;
+            try { memoryState.frame.video.currentTime = 0; } catch { /* keep the decoded frame */ }
+            void memoryState.frame.video.play().catch(() => undefined);
+          }
+        } else if (activeVideoId) {
+          loadedMemoryMedia.forEach((item) => item.video?.pause());
+          activeVideoId = '';
+        }
+        drawMemoryMedia(
           context,
           width,
           height,
@@ -847,6 +996,9 @@ async function recordCanvasVideo(
           memoryState.frame,
           memoryState.frameProgress,
         );
+      } else if (activeVideoId) {
+        loadedMemoryMedia.forEach((item) => item.video?.pause());
+        activeVideoId = '';
       }
 
       if (elapsed < INTRO_MS) drawIntro(context, width, height, options.title, elapsed / INTRO_MS);
@@ -882,7 +1034,7 @@ async function recordCanvasVideo(
   await stopped;
   stream.getTracks().forEach((track) => track.stop());
   const blob = new Blob(chunks, { type: mimeType });
-  loadedMemoryPhotos.forEach((photo) => photo.cleanup());
+  loadedMemoryMedia.forEach((item) => item.cleanup());
   if (!blob.size) throw new Error('VIDEO_RECORDING_EMPTY');
   return { blob, mimeType, privacy, includedMemoryCount: memoryFrames.length };
 }
