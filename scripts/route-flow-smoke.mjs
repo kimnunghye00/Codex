@@ -41,6 +41,8 @@ const requiredFiles = [
   'src/components/navigation/BottomNav.tsx',
   'src/components/more/MoreServices.tsx',
   'src/components/chat/ChatPage.tsx',
+  'src/components/chat/DanduliSticker.tsx',
+  'src/danduli-stickers.css',
   'src/components/call/DanduliCallManager.tsx',
   'src/lib/coupleCall.ts',
   'src/components/memories/MemoriesPage.tsx',
@@ -85,6 +87,8 @@ const header = read('src/components/navigation/AppHeader.tsx');
 const bottomNav = read('src/components/navigation/BottomNav.tsx');
 const more = read('src/components/more/MoreServices.tsx');
 const chat = read('src/components/chat/ChatPage.tsx');
+const danduliSticker = read('src/components/chat/DanduliSticker.tsx');
+const danduliStickerStyles = read('src/danduli-stickers.css');
 const chatStyles = read('src/styles/features/chat.ts');
 const memories = read('src/components/memories/MemoriesPage.tsx');
 const memoryMedia = read('src/components/memories/MemoryMedia.tsx');
@@ -134,6 +138,19 @@ check('voice/video call controls remain intentionally hidden', releaseFlags.incl
 check('call manager stays unmounted while calling is paused', !app.includes('<DanduliCallManager') && callManager.includes('subscribeCoupleCall'));
 check('call signaling is couple-scoped', coupleCall.includes("doc(db, 'couples', coupleId)") && coupleCall.includes('activeCall'));
 check('chat room CSS is feature-loaded only', chatStyles.includes('route-chat-room-v26.css') && !app.includes("import './route-chat-room-v26.css'"));
+check('portrait sticker sheets render through an isolated sprite layer',
+  danduliSticker.includes('danduli-sticker-sprite-layer')
+  && danduliSticker.includes('danduli-sticker-col-')
+  && danduliSticker.includes('danduli-sticker-row-')
+  && danduliStickerStyles.includes('background-image: none !important'));
+check('portrait sticker sprite edges mask neighbouring-cell bleed without zoom distortion',
+  danduliStickerStyles.includes('--sticker-safe-left: 10%')
+  && danduliStickerStyles.includes('--sticker-safe-top: 7.5%')
+  && danduliStickerStyles.includes('clip-path: inset(')
+  && danduliStickerStyles.includes('background-size: 400% 400%'));
+check('legacy square sticker pack keeps direct sprite rendering',
+  danduliSticker.includes("style={item.sheet ? undefined : { backgroundPosition:")
+  && danduliStickerStyles.includes("background-image: url('/danduli-stickers-v3-clean.webp')"));
 
 check('memories exposes album tab', memories.includes("album: '앨범'"));
 check('memories exposes anniversary tab', memories.includes("anniversary: '기념일'"));
