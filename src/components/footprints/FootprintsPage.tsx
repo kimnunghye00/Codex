@@ -39,7 +39,7 @@ import './FootprintsPage.css';
 
 const MAP_ORIGIN = typeof window !== 'undefined' && window.location.hostname === 'danduli.web.app'
   ? 'https://danduli.web.app' : 'https://meluni-f4e00.web.app';
-const MAP_URL = MAP_ORIGIN + '/naver-map-host.html?v=14';
+const MAP_URL = MAP_ORIGIN + '/naver-map-host.html?v=15';
 const DISPLAY_DATE = new Intl.DateTimeFormat('ko-KR', {
   timeZone: 'Asia/Seoul',
   year: 'numeric',
@@ -76,6 +76,13 @@ function timeLabel(iso: string) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(iso));
+}
+
+function distanceLabel(meters: number) {
+  if (!Number.isFinite(meters) || meters <= 0) return '0m';
+  if (meters >= 10_000) return Math.round(meters / 1000) + 'km';
+  if (meters >= 1000) return (meters / 1000).toFixed(1) + 'km';
+  return Math.round(meters) + 'm';
 }
 
 function mergeVisits(cloud: readonly LocationVisit[], local: readonly LocationVisit[]) {
@@ -311,7 +318,7 @@ export function FootprintsPage({
   }, []);
 
   useEffect(() => {
-    if (!mapReady) return;
+    if (!mapReady || playbackState === 'playing') return;
     frame.current?.contentWindow?.postMessage({
       source: 'route-map-parent',
       type: 'render',
@@ -320,7 +327,7 @@ export function FootprintsPage({
       numbered: mapVisits.length <= 20,
       routeOnly: mapVisits.length > 20,
     }, MAP_ORIGIN);
-  }, [mapReady, mapVisits]);
+  }, [mapReady, mapVisits, playbackState]);
 
   useEffect(() => {
     const requestedSessionAnchorId = sessionPlaybackRequest.current;
@@ -509,7 +516,7 @@ export function FootprintsPage({
               ? partnerName + ' GPS · 서버 실시간 샘플 ' + partnerSamples.length + '개'
               : partnerName + '의 GPS 경로만 표시'
             : selectedSession
-              ? '데이트 ' + (selectedSessionIndex + 1) + ' · 교차검증 ' + selectedSession.verifiedPointCount + '개 지점'
+              ? '데이트 ' + (selectedSessionIndex + 1) + ' · ' + distanceLabel(selectedSession.distanceMeters) + ' · 교차검증 ' + selectedSession.verifiedPointCount + '개 지점'
               : jointRoutePoints.length
                 ? '반복 교차검증된 함께 이동 구간'
                 : '두 사람 GPS 교차검증 완료 장소'}
@@ -552,7 +559,7 @@ export function FootprintsPage({
               <span className="footprints-session-icon"><UsersRound size={15} /></span>
               <span className="footprints-session-copy">
                 <b>데이트 {index + 1}</b>
-                <small>{timeLabel(session.startedAt)} ~ {timeLabel(session.endedAt)} · 약 {session.durationMinutes}분 · 검증 {session.verifiedPointCount}개</small>
+                <small>{timeLabel(session.startedAt)} ~ {timeLabel(session.endedAt)} · 약 {session.durationMinutes}분 · {distanceLabel(session.distanceMeters)} · 검증 {session.verifiedPointCount}개</small>
                 {session.reconnectCount > 0 && <em>잠깐 떨어졌다 다시 만난 구간 {session.reconnectCount}회 포함</em>}
               </span>
               <span className="footprints-session-action">

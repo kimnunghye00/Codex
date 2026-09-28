@@ -87,6 +87,7 @@ export type JointDateSession = {
   startedAt: string;
   endedAt: string;
   durationMinutes: number;
+  distanceMeters: number;
   verifiedPointCount: number;
   reconnectCount: number;
   pointIds: string[];
@@ -442,11 +443,21 @@ export function buildJointDateSessions(
     if (!current.length) return;
     const started = Date.parse(current[0].arrivedAt);
     const ended = Date.parse(current[current.length - 1].arrivedAt);
+    const traveledMeters = current.slice(1).reduce((sum, point, index) => {
+      const previous = current[index];
+      const gap = Date.parse(point.arrivedAt) - Date.parse(previous.arrivedAt);
+      if (!Number.isFinite(gap) || gap > continuousGap) return sum;
+      const segmentMeters = distanceMeters(previous, point);
+      if (!Number.isFinite(segmentMeters)) return sum;
+      const stationaryDrift = gap >= 75 * 1000 && segmentMeters <= 45;
+      return stationaryDrift ? sum : sum + segmentMeters;
+    }, 0);
     sessions.push({
       id: 'joint-session:' + current[0].id + ':' + current[current.length - 1].id,
       startedAt: new Date(started).toISOString(),
       endedAt: new Date(ended).toISOString(),
       durationMinutes: Math.max(1, Math.round((ended - started) / 60_000)),
+      distanceMeters: Math.round(traveledMeters),
       verifiedPointCount: current.length,
       reconnectCount,
       pointIds: current.map((point) => point.id),

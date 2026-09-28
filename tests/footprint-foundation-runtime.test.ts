@@ -250,6 +250,39 @@ test('brief separation reconnects into one date session but a long gap splits it
   assert.equal(sessions[0].verifiedPointCount, 4);
   assert.equal(sessions[0].reconnectCount, 1);
   assert.equal(sessions[0].durationMinutes, 16);
+  assert.equal(sessions[0].distanceMeters, 0);
   assert.equal(sessions[1].verifiedPointCount, 2);
   assert.equal(sessions[1].reconnectCount, 0);
+});
+
+
+test('date session distance excludes reconnect jumps that were not continuously verified', () => {
+  const base = Date.parse('2026-09-27T04:00:00.000Z');
+  const point = (id: string, minute: number, longitude: number) => ({
+    id,
+    source: 'gps-cross-check-route' as const,
+    visibility: 'shared' as const,
+    verification: 'both-gps' as const,
+    memberUids: ['me', 'partner'] as [string, string],
+    myVisitId: 'm-' + id,
+    partnerVisitId: 'p-' + id,
+    latitude: 37.5665,
+    longitude,
+    accuracy: 18,
+    arrivedAt: new Date(base + minute * 60_000).toISOString(),
+    separationMeters: 10,
+    sampleDeltaSeconds: 12,
+  });
+
+  const sessions = buildJointDateSessions([
+    point('a', 0, 126.9780),
+    point('b', 2, 126.9790),
+    point('c', 14, 127.0790),
+    point('d', 16, 127.0800),
+  ]);
+
+  assert.equal(sessions.length, 1);
+  assert.equal(sessions[0].reconnectCount, 1);
+  assert.ok(sessions[0].distanceMeters > 100);
+  assert.ok(sessions[0].distanceMeters < 500);
 });

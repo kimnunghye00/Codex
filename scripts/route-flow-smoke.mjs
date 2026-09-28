@@ -143,6 +143,21 @@ check('location footprints tab is present', location.includes("activeTab === 'fo
 check('Naver map host remains configured', location.includes('meluni-f4e00.web.app'));
 check('map route uses exact shared LatLng path', mapHost.includes('path: points') && mapHost.includes('position: points[index]'));
 check('map route follows active theme', mapHost.includes("--route-accent") && mapHost.includes('strokeColor: palette.accent'));
+check('footprint replay uses adaptive timeline instead of fixed segment timing',
+  mapHost.includes('buildPlaybackTimeline')
+  && mapHost.includes('PLAYBACK_CONTINUOUS_GAP_MS')
+  && !mapHost.includes('const duration = 900;'));
+check('footprint replay exposes cinematic HUD', mapHost.includes('playback-hud') && mapHost.includes('playback-clock') && mapHost.includes('playback-distance'));
+check('footprint replay does not draw unverified reconnect jumps',
+  mapHost.includes("segment.kind === 'reconnect'") && mapHost.includes('createPlaybackLine'));
+check('footprint replay inline script parses',
+  (() => {
+    const inlineScript = mapHost.match(/<script>\s*([\s\S]*?)<\/script>/)?.[1];
+    if (!inlineScript) return false;
+    try { new Function(inlineScript); return true; } catch { return false; }
+  })());
+check('live footprint updates wait until replay ends',
+  read('src/components/footprints/FootprintsPage.tsx').includes("if (!mapReady || playbackState === 'playing') return;"));
 
 check('Root protects unauthenticated flow', root.includes('if (!user) return <Suspense') && root.includes('<AuthFlow />'));
 check('Root protects first profile setup flow', root.includes('<ProfileSetup'));
