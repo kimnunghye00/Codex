@@ -318,7 +318,7 @@ export function FootprintsPage({
   }, []);
 
   useEffect(() => {
-    if (!mapReady) return;
+    if (!mapReady || playbackState === 'playing') return;
     frame.current?.contentWindow?.postMessage({
       source: 'route-map-parent',
       type: 'render',
@@ -327,7 +327,7 @@ export function FootprintsPage({
       numbered: mapVisits.length <= 20,
       routeOnly: mapVisits.length > 20,
     }, MAP_ORIGIN);
-  }, [mapReady, mapVisits]);
+  }, [mapReady, mapVisits, playbackState]);
 
   useEffect(() => {
     const requestedSessionAnchorId = sessionPlaybackRequest.current;
