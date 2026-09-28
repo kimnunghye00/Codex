@@ -606,12 +606,8 @@ async function loadMemoryPhotos(
   const selected = [...(moments ?? [])]
     .filter((moment) => allowedPointIds.has(moment.pointId))
     .slice(0, MEMORY_PHOTO_MAX);
-  const photos: LoadedMemoryPhoto[] = [];
-  for (const moment of selected) {
-    const loaded = await loadMemoryPhoto(moment);
-    if (loaded) photos.push(loaded);
-  }
-  return photos;
+  const loaded = await Promise.all(selected.map((moment) => loadMemoryPhoto(moment)));
+  return loaded.filter((photo): photo is LoadedMemoryPhoto => Boolean(photo));
 }
 
 function routeOffsetForPoint(plan: FootprintVideoPlan, pointId: string) {
