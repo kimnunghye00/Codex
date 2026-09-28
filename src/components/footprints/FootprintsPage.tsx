@@ -295,6 +295,8 @@ export function FootprintsPage({
       : [],
     [jointVisits, memories, selectedSession, selectedSessionRoutePoints],
   );
+  const videoMemoryPhotoCount = videoMemoryMoments.filter((item) => item.kind === 'photo').length;
+  const videoMemoryClipCount = videoMemoryMoments.filter((item) => item.kind === 'video').length;
 
   const jointById = useMemo(
     () => new Map(jointVisits.map((visit) => [visit.id, visit])),
@@ -503,7 +505,7 @@ export function FootprintsPage({
         ? ' · 민감 위치 보호 적용' + (result.hiddenPointCount ? ' (' + result.hiddenPointCount + '개 경로점 제외)' : '')
         : '';
       const memoryText = result.includedMemoryCount
-        ? ' · 추억 사진 ' + result.includedMemoryCount + '장 포함'
+        ? ' · 추억 미디어 ' + result.includedMemoryCount + '개 포함'
         : '';
       setVideoExportStatus(result.savedTo === 'gallery'
         ? result.fileName + ' · 갤러리 Movies/DANDULI에 저장했어요.' + privacyText + memoryText
@@ -533,7 +535,7 @@ export function FootprintsPage({
           ? ' 민감 위치 주변 경로점 ' + result.hiddenPointCount + '개를 제외했어요.'
           : ' 시작·종료 위치 정보는 보호했어요.';
         const memoryText = result.includedMemoryCount
-          ? ' 추억 사진 ' + result.includedMemoryCount + '장도 포함됐어요.'
+          ? ' 추억 미디어 ' + result.includedMemoryCount + '개도 포함됐어요.'
           : '';
         if (result.shared) {
           setVideoExportStatus('공유 화면을 열었어요.' + privacyText + memoryText);
@@ -574,7 +576,7 @@ export function FootprintsPage({
           ? ' 민감 위치 주변 경로점 ' + result.hiddenPointCount + '개를 제외했어요.'
           : ' 시작·종료 위치 정보는 보호했어요.';
         const memoryText = result.includedMemoryCount
-          ? ' 추억 사진 ' + result.includedMemoryCount + '장도 함께 넣었어요.'
+          ? ' 추억 미디어 ' + result.includedMemoryCount + '개도 함께 넣었어요.'
           : '';
         setVideoExportStatus(result.shared
           ? '공유 화면을 열었어요.' + privacyText + memoryText
@@ -590,7 +592,7 @@ export function FootprintsPage({
         ? ' 민감 위치 주변 경로점 ' + prepared.hiddenPointCount + '개를 제외했어요.'
         : ' 시작·종료 위치 정보는 보호했어요.';
       const memoryText = prepared.includedMemoryCount
-        ? ' 추억 사진 ' + prepared.includedMemoryCount + '장도 함께 넣었어요.'
+        ? ' 추억 미디어 ' + prepared.includedMemoryCount + '개도 함께 넣었어요.'
         : '';
       setVideoExportStatus('공유 영상이 준비됐어요. 아래의 ‘공유 화면 열기’를 눌러 주세요.' + privacyText + memoryText);
     } catch (error) {
@@ -880,8 +882,10 @@ export function FootprintsPage({
             <div className="footprints-video-summary">
               <span><b>영상 내용</b><small>GPS 교차검증 경로 · 시간 · 누적 이동거리 · 정차/재연결 · 엔딩 카드</small></span>
               <span className="memory"><b><ImageIcon size={13} />앨범 추억 자동 삽입</b><small>{videoMemoryMoments.length
-                ? '같은 날짜·장소가 확인된 사진 ' + videoMemoryMoments.length + '장을 이동 중간에 자동으로 보여줘요.'
-                : '같은 날짜와 장소가 모두 일치한 앨범 사진이 없어 이번 영상은 경로 중심으로 만들어요.'}</small></span>
+                ? '같은 날짜·장소가 확인된 사진 ' + videoMemoryPhotoCount + '장'
+                  + (videoMemoryClipCount ? ' · 짧은 영상 ' + videoMemoryClipCount + '개' : '')
+                  + '를 도착 지점 사이에 자동으로 보여줘요. 영상 클립은 최대 약 3초, 무음으로 넣어요.'
+                : '같은 날짜와 장소가 모두 일치한 앨범 미디어가 없어 이번 영상은 경로 중심으로 만들어요.'}</small></span>
               <span className="privacy"><b><ShieldCheck size={13} />민감 위치 자동 보호</b><small>저장·공유 영상은 첫·마지막 약 200m를 자동으로 제외해요. 경로가 너무 짧으면 시작·종료 장소명만 제거해 영상을 유지해요.</small></span>
               <span><b>지도 개인정보</b><small>원본 좌표 숫자와 지도 타일은 영상에 넣지 않아요. 발자취 전용 그래픽만 사용해요.</small></span>
             </div>
