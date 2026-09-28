@@ -70,9 +70,12 @@ test('same-day memory photos attach only to a GPS-verified matching place', () =
   assert.equal(moments.length, 1);
   assert.equal(moments[0].memoryId, 1);
   assert.equal(moments[0].pointId, 'b');
+  assert.equal(moments[0].kind, 'photo');
+  assert.equal(moments[0].mediaUrl, 'https://example.com/a.jpg');
+  assert.equal(moments[0].placeName, '서울숲');
 });
 
-test('memory video sources are skipped and at most two photos per memory are used', () => {
+test('memory photos and one short video are matched per verified stop', () => {
   const moments = buildFootprintVideoMemoryMoments(
     [route('a', 0, 126.9780), route('b', 5, 126.9810)],
     [visit('v1', 5, 126.9810, '안목해변')],
@@ -81,13 +84,31 @@ test('memory video sources are skipped and at most two photos per memory are use
       'https://example.com/a.jpg',
       'https://example.com/b.jpg',
       'https://example.com/c.jpg',
+      'https://example.com/b.webm',
     ])],
   );
 
-  assert.deepEqual(moments.map((item) => item.imageUrl), [
-    'https://example.com/a.jpg',
-    'https://example.com/b.jpg',
+  assert.deepEqual(moments.map((item) => [item.kind, item.mediaUrl]), [
+    ['photo', 'https://example.com/a.jpg'],
+    ['photo', 'https://example.com/b.jpg'],
+    ['video', 'https://example.com/a.mp4'],
   ]);
+});
+
+test('legacy memory videos are included but total video clips stay capped at two', () => {
+  const memories = Array.from({ length: 4 }, (_, index) => ({
+    ...memory(index + 1, '중앙시장', ['https://example.com/' + index + '.jpg']),
+    videos: ['https://example.com/' + index + '.mp4'],
+  }));
+  const moments = buildFootprintVideoMemoryMoments(
+    [route('a', 0, 126.9780), route('b', 5, 126.9810)],
+    [visit('v1', 5, 126.9810, '중앙시장')],
+    memories,
+    8,
+  );
+
+  assert.equal(moments.filter((item) => item.kind === 'video').length, 2);
+  assert.ok(moments.every((item) => item.placeName === '중앙시장'));
 });
 
 test('unlocated memories are not placed at an invented stop', () => {
