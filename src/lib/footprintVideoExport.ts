@@ -1,6 +1,10 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import type { JointRoutePoint } from './footprintFoundation';
 import { buildFootprintVideoPlan, type FootprintVideoPlan } from './footprintVideoPlan';
+import {
+  protectFootprintVideoRoute,
+  type FootprintVideoPrivacyResult,
+} from './footprintVideoPrivacy';
 
 export type FootprintVideoOrientation = 'portrait' | 'landscape';
 
@@ -11,6 +15,7 @@ export type FootprintVideoExportOptions = {
   subtitle: string;
   durationMinutes: number;
   fileBaseName: string;
+  hideSensitiveLocations?: boolean;
   onProgress?: (progress: number) => void;
 };
 
@@ -19,6 +24,13 @@ export type FootprintVideoExportResult = {
   mimeType: string;
   savedTo: 'gallery' | 'download';
   uri?: string;
+  privacyProtected: boolean;
+  hiddenPointCount: number;
+};
+
+export type FootprintVideoShareResult = FootprintVideoExportResult & {
+  shared: boolean;
+  shareFallback: boolean;
 };
 
 type RouteMediaSaverPlugin = {
@@ -27,6 +39,11 @@ type RouteMediaSaverPlugin = {
     fileName: string;
     mimeType: string;
   }): Promise<{ saved: boolean; uri: string }>;
+  shareVideo(options: {
+    uri: string;
+    mimeType: string;
+    title: string;
+  }): Promise<{ shared: boolean }>;
 };
 
 const RouteMediaSaver = registerPlugin<RouteMediaSaverPlugin>('RouteMediaSaver');
@@ -505,11 +522,15 @@ function chooseVideoMimeType() {
 
 async function recordCanvasVideo(
   options: FootprintVideoExportOptions,
-): Promise<{ blob: Blob; mimeType: string }> {
+): Promise<{ blob: Blob; mimeType: string; privacy: FootprintVideoPrivacyResult }> {
   if (typeof document === 'undefined' || typeof MediaRecorder === 'undefined') {
     throw new Error('VIDEO_RECORDING_UNSUPPORTED');
   }
-  const plan = buildFootprintVideoPlan(options.points);
+  const privacy = protectFootprintVideoRoute(
+    options.points,
+    options.hideSensitiveLocations !== false,
+  );
+  const plan = buildFootprintVideoPlan(privacy.points);
   if (plan.points.length < 2 || !plan.segments.length) {
     throw new Error('VIDEO_ROUTE_TOO_SHORT');
   }
@@ -611,7 +632,7 @@ async function recordCanvasVideo(
   stream.getTracks().forEach((track) => track.stop());
   const blob = new Blob(chunks, { type: mimeType });
   if (!blob.size) throw new Error('VIDEO_RECORDING_EMPTY');
-  return { blob, mimeType };
+  return { blob, mimeType, privacy };
 }
 
 function extensionFor(mimeType: string) {
@@ -676,19 +697,89 @@ function downloadWebVideo(blob: Blob, fileName: string) {
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2_000);
 }
 
+function privacyFields(privacy: FootprintVideoPrivacyResult) {
+  return {
+    privacyProtected: privacy.enabled,
+    hiddenPointCount: privacy.hiddenPointCount,
+  };
+}
+
+async function shareWebVideo(blob: Blob, fileName: string, mimeType: string, title: string) {
+  if (typeof navigator.share !== 'function') return false;
+  const file = new File([blob], fileName, { type: mimeType });
+  if (typeof navigator.canShare === 'function' && !navigator.canShare({ files: [file] })) return false;
+  try {
+    await navigator.share({
+      title,
+      text: '단둘이에서 만든 우리 데이트 발자취 영상이에요.',
+      files: [file],
+    });
+    return true;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') throw new Error('VIDEO_SHARE_CANCELLED');
+    throw error;
+  }
+}
+
 export async function exportFootprintVideo(
   options: FootprintVideoExportOptions,
 ): Promise<FootprintVideoExportResult> {
-  const { blob, mimeType } = await recordCanvasVideo(options);
+  const { blob, mimeType, privacy } = await recordCanvasVideo(options);
   const extension = extensionFor(mimeType);
   const fileName = safeFileBaseName(options.fileBaseName) + '.' + extension;
 
   if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
     const uri = await saveAndroidVideo(blob, fileName, mimeType);
     if (!uri) throw new Error('VIDEO_NATIVE_SAVE_FAILED');
-    return { fileName, mimeType, savedTo: 'gallery', uri };
+    return { fileName, mimeType, savedTo: 'gallery', uri, ...privacyFields(privacy) };
   }
 
   downloadWebVideo(blob, fileName);
-  return { fileName, mimeType, savedTo: 'download' };
+  return { fileName, mimeType, savedTo: 'download', ...privacyFields(privacy) };
+}
+
+export async function shareFootprintVideo(
+  options: FootprintVideoExportOptions,
+): Promise<FootprintVideoShareResult> {
+  const { blob, mimeType, privacy } = await recordCanvasVideo(options);
+  const extension = extensionFor(mimeType);
+  const fileName = safeFileBaseName(options.fileBaseName) + '.' + extension;
+  const title = options.title || '단둘이 발자취';
+
+  if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
+    const uri = await saveAndroidVideo(blob, fileName, mimeType);
+    if (!uri) throw new Error('VIDEO_NATIVE_SAVE_FAILED');
+    const result = await RouteMediaSaver.shareVideo({ uri, mimeType, title });
+    return {
+      fileName,
+      mimeType,
+      savedTo: 'gallery',
+      uri,
+      shared: result.shared,
+      shareFallback: false,
+      ...privacyFields(privacy),
+    };
+  }
+
+  const shared = await shareWebVideo(blob, fileName, mimeType, title);
+  if (shared) {
+    return {
+      fileName,
+      mimeType,
+      savedTo: 'download',
+      shared: true,
+      shareFallback: false,
+      ...privacyFields(privacy),
+    };
+  }
+
+  downloadWebVideo(blob, fileName);
+  return {
+    fileName,
+    mimeType,
+    savedTo: 'download',
+    shared: false,
+    shareFallback: true,
+    ...privacyFields(privacy),
+  };
 }
