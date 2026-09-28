@@ -118,6 +118,8 @@ const firebaseConfig = read('firebase.json');
 const locationUpload = read('functions-location/index.js');
 const locationRealtime = read('src/lib/locationRealtime.ts');
 const backgroundLocationUpload = read('src/lib/backgroundLocationUpload.ts');
+const footprintVideoExport = read('src/lib/footprintVideoExport.ts');
+const mediaSaver = read('android/app/src/main/java/com/e2/danduli/MediaSaverPlugin.java');
 
 check('single React root remains', (main.match(/createRoot\(/g) || []).length === 1);
 check('runtime recovery is explicitly imported', main.includes("import { initializeRuntimeRecovery } from './recovery-runtime';"));
@@ -224,6 +226,14 @@ check('location upload endpoint writes owner-attributed raw samples only',
 check('web client subscribes to owner-separated raw GPS samples',
   locationRealtime.includes('subscribeMemberLocationSamples')
   && backgroundLocationUpload.includes('getIdToken(true)'));
+check('footprint video export does not require map tile capture',
+  footprintVideoExport.includes('canvas.captureStream(30)')
+  && !footprintVideoExport.includes('naver-map-host'));
+check('Android video export writes through scoped MediaStore without broad media permission',
+  mediaSaver.includes('MediaStore.Video.Media.RELATIVE_PATH')
+  && mediaSaver.includes('Environment.DIRECTORY_MOVIES + "/DANDULI"')
+  && !manifest.includes('READ_MEDIA_VIDEO')
+  && !manifest.includes('WRITE_EXTERNAL_STORAGE'));
 
 console.log(`\nROUTE cross validation: ${passes.length} checks passed.`);
 for (const pass of passes) console.log(`  ✓ ${pass}`);
