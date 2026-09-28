@@ -716,7 +716,9 @@ async function shareWebVideo(blob: Blob, fileName: string, mimeType: string, tit
     });
     return true;
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') throw new Error('VIDEO_SHARE_CANCELLED');
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('VIDEO_SHARE_CANCELLED', { cause: error });
+    }
     throw error;
   }
 }
