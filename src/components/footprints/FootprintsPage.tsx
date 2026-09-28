@@ -79,7 +79,7 @@ function timeLabel(iso: string) {
 }
 
 function distanceLabel(meters: number) {
-  if (!Number.isFinite(meters) || meters <= 0) return '이동거리 계산 중';
+  if (!Number.isFinite(meters) || meters <= 0) return '0m';
   if (meters >= 10_000) return Math.round(meters / 1000) + 'km';
   if (meters >= 1000) return (meters / 1000).toFixed(1) + 'km';
   return Math.round(meters) + 'm';
