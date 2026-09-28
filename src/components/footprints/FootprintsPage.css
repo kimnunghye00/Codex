@@ -361,3 +361,14 @@
 @media(max-width:430px) {
   .footprints-video-actions { grid-template-columns:1fr; }
 }
+
+
+.footprints-video-summary > span.memory {
+  border:1px solid color-mix(in srgb,var(--route-accent,var(--primary)) 24%,var(--border));
+  border-radius:11px; padding:9px;
+  background:color-mix(in srgb,var(--route-accent,var(--primary)) 8%,var(--surface));
+}
+.footprints-video-summary > span.memory b {
+  display:flex; align-items:center; gap:5px;
+  color:color-mix(in srgb,var(--route-accent,var(--primary)) 74%,var(--text-primary));
+}

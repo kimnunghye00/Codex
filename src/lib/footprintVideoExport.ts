@@ -1,5 +1,9 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
+import { getDownloadURL, ref } from 'firebase/storage';
 import type { JointRoutePoint } from './footprintFoundation';
+import { storage } from './firebaseStorage';
+import { chatMediaPreviewUrl } from './chatMediaReference';
+import type { FootprintVideoMemoryMoment } from './footprintVideoMemories';
 import { buildFootprintVideoPlan, type FootprintVideoPlan } from './footprintVideoPlan';
 import {
   protectFootprintVideoRoute,
@@ -16,6 +20,7 @@ export type FootprintVideoExportOptions = {
   durationMinutes: number;
   fileBaseName: string;
   hideSensitiveLocations?: boolean;
+  memoryMoments?: readonly FootprintVideoMemoryMoment[];
   onProgress?: (progress: number) => void;
 };
 
@@ -26,6 +31,7 @@ export type FootprintVideoExportResult = {
   uri?: string;
   privacyProtected: boolean;
   hiddenPointCount: number;
+  includedMemoryCount: number;
 };
 
 export type FootprintVideoShareResult = FootprintVideoExportResult & {
@@ -39,6 +45,7 @@ export type PreparedFootprintVideoShare = {
   mimeType: string;
   privacyProtected: boolean;
   hiddenPointCount: number;
+  includedMemoryCount: number;
 };
 
 type RouteMediaSaverPlugin = {
@@ -57,6 +64,9 @@ type RouteMediaSaverPlugin = {
 const RouteMediaSaver = registerPlugin<RouteMediaSaverPlugin>('RouteMediaSaver');
 const INTRO_MS = 900;
 const OUTRO_MS = 1_200;
+const MEMORY_PHOTO_HOLD_MS = 1_450;
+const MEMORY_PHOTO_MAX = 6;
+const MEMORY_PHOTO_LOAD_TIMEOUT_MS = 9_000;
 
 function clamp(min: number, max: number, value: number) {
   return Math.min(max, Math.max(min, value));
@@ -516,6 +526,214 @@ function drawOutro(
   context.restore();
 }
 
+type LoadedMemoryPhoto = {
+  id: string;
+  pointId: string;
+  image: CanvasImageSource;
+  width: number;
+  height: number;
+  cleanup: () => void;
+};
+
+type MemoryPresentationFrame = LoadedMemoryPhoto & {
+  routeOffsetMs: number;
+  presentationStartMs: number;
+  presentationEndMs: number;
+};
+
+async function resolveMemoryPhotoUrl(source: string) {
+  const preview = chatMediaPreviewUrl(source);
+  if (!preview.startsWith('gs://')) return preview;
+  return getDownloadURL(ref(storage, preview));
+}
+
+async function loadMemoryPhoto(moment: FootprintVideoMemoryMoment): Promise<LoadedMemoryPhoto | undefined> {
+  const source = await resolveMemoryPhotoUrl(moment.imageUrl);
+  if (!source) return undefined;
+
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : undefined;
+  const timer = controller
+    ? window.setTimeout(() => controller.abort(), MEMORY_PHOTO_LOAD_TIMEOUT_MS)
+    : undefined;
+  try {
+    const response = await fetch(source, {
+      signal: controller?.signal,
+      credentials: 'omit',
+      cache: 'force-cache',
+    });
+    if (!response.ok) return undefined;
+    const blob = await response.blob();
+    if (blob.type && !blob.type.startsWith('image/')) return undefined;
+
+    if (typeof createImageBitmap === 'function') {
+      const bitmap = await createImageBitmap(blob);
+      return {
+        id: moment.id,
+        pointId: moment.pointId,
+        image: bitmap,
+        width: bitmap.width,
+        height: bitmap.height,
+        cleanup: () => bitmap.close(),
+      };
+    }
+
+    const objectUrl = URL.createObjectURL(blob);
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = () => reject(new Error('VIDEO_MEMORY_IMAGE_LOAD_FAILED'));
+      element.src = objectUrl;
+    });
+    return {
+      id: moment.id,
+      pointId: moment.pointId,
+      image,
+      width: image.naturalWidth || image.width,
+      height: image.naturalHeight || image.height,
+      cleanup: () => URL.revokeObjectURL(objectUrl),
+    };
+  } catch {
+    return undefined;
+  } finally {
+    if (timer !== undefined) window.clearTimeout(timer);
+  }
+}
+
+async function loadMemoryPhotos(
+  moments: readonly FootprintVideoMemoryMoment[] | undefined,
+  allowedPointIds: ReadonlySet<string>,
+) {
+  const selected = [...(moments ?? [])]
+    .filter((moment) => allowedPointIds.has(moment.pointId))
+    .slice(0, MEMORY_PHOTO_MAX);
+  const loaded = await Promise.all(selected.map((moment) => loadMemoryPhoto(moment)));
+  return loaded.filter((photo): photo is LoadedMemoryPhoto => Boolean(photo));
+}
+
+function routeOffsetForPoint(plan: FootprintVideoPlan, pointId: string) {
+  const pointIndex = plan.points.findIndex((point) => point.id === pointId);
+  if (pointIndex <= 0) return 0;
+  const segment = plan.segments.find((item) => item.toIndex === pointIndex);
+  if (segment) return segment.startOffsetMs + segment.durationMs;
+  return Math.round(plan.playbackDurationMs * (pointIndex / Math.max(1, plan.points.length - 1)));
+}
+
+function buildMemoryPresentationFrames(plan: FootprintVideoPlan, photos: readonly LoadedMemoryPhoto[]) {
+  let insertedMs = 0;
+  return [...photos]
+    .map((photo) => ({ photo, routeOffsetMs: routeOffsetForPoint(plan, photo.pointId) }))
+    .sort((a, b) => a.routeOffsetMs - b.routeOffsetMs || a.photo.id.localeCompare(b.photo.id))
+    .map(({ photo, routeOffsetMs }) => {
+      const presentationStartMs = routeOffsetMs + insertedMs;
+      const presentationEndMs = presentationStartMs + MEMORY_PHOTO_HOLD_MS;
+      insertedMs += MEMORY_PHOTO_HOLD_MS;
+      return { ...photo, routeOffsetMs, presentationStartMs, presentationEndMs };
+    });
+}
+
+function presentationState(
+  presentationElapsedMs: number,
+  frames: readonly MemoryPresentationFrame[],
+  routeDurationMs: number,
+) {
+  let insertedMs = 0;
+  for (const frame of frames) {
+    if (presentationElapsedMs < frame.presentationStartMs) {
+      return {
+        routeElapsedMs: clamp(0, routeDurationMs, presentationElapsedMs - insertedMs),
+        frame: undefined as MemoryPresentationFrame | undefined,
+        frameProgress: 0,
+      };
+    }
+    if (presentationElapsedMs < frame.presentationEndMs) {
+      return {
+        routeElapsedMs: clamp(0, routeDurationMs, frame.routeOffsetMs),
+        frame,
+        frameProgress: clamp(
+          0,
+          1,
+          (presentationElapsedMs - frame.presentationStartMs) / MEMORY_PHOTO_HOLD_MS,
+        ),
+      };
+    }
+    insertedMs += MEMORY_PHOTO_HOLD_MS;
+  }
+  return {
+    routeElapsedMs: clamp(0, routeDurationMs, presentationElapsedMs - insertedMs),
+    frame: undefined as MemoryPresentationFrame | undefined,
+    frameProgress: 0,
+  };
+}
+
+function drawMemoryPhoto(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  orientation: FootprintVideoOrientation,
+  frame: MemoryPresentationFrame,
+  progress: number,
+) {
+  const edgeFade = 0.18;
+  const alpha = progress < edgeFade
+    ? progress / edgeFade
+    : progress > 1 - edgeFade
+      ? (1 - progress) / edgeFade
+      : 1;
+  const cardWidth = orientation === 'portrait' ? width * 0.76 : width * 0.46;
+  const cardHeight = orientation === 'portrait' ? height * 0.52 : height * 0.64;
+  const x = (width - cardWidth) / 2;
+  const y = (height - cardHeight) / 2 - (orientation === 'portrait' ? 12 : 0);
+  const sourceRatio = frame.width / Math.max(1, frame.height);
+  const targetRatio = cardWidth / cardHeight;
+  let sourceX = 0;
+  let sourceY = 0;
+  let sourceWidth = frame.width;
+  let sourceHeight = frame.height;
+  if (sourceRatio > targetRatio) {
+    sourceWidth = frame.height * targetRatio;
+    sourceX = (frame.width - sourceWidth) / 2;
+  } else {
+    sourceHeight = frame.width / targetRatio;
+    sourceY = (frame.height - sourceHeight) / 2;
+  }
+
+  context.save();
+  context.globalAlpha = clamp(0, 1, alpha);
+  context.fillStyle = 'rgba(30,30,39,.54)';
+  context.fillRect(0, 0, width, height);
+
+  context.shadowColor = 'rgba(20,20,30,.34)';
+  context.shadowBlur = orientation === 'portrait' ? 34 : 26;
+  context.shadowOffsetY = 12;
+  context.fillStyle = '#FFFFFF';
+  roundedRect(context, x - 12, y - 12, cardWidth + 24, cardHeight + 58, 28);
+  context.fill();
+
+  context.shadowColor = 'transparent';
+  context.save();
+  roundedRect(context, x, y, cardWidth, cardHeight, 20);
+  context.clip();
+  context.drawImage(
+    frame.image,
+    sourceX,
+    sourceY,
+    sourceWidth,
+    sourceHeight,
+    x,
+    y,
+    cardWidth,
+    cardHeight,
+  );
+  context.restore();
+
+  context.fillStyle = '#3A3944';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.font = '800 ' + (orientation === 'portrait' ? 18 : 16) + 'px system-ui, sans-serif';
+  context.fillText('그날의 추억 ♡', width / 2, y + cardHeight + 28);
+  context.restore();
+}
+
 function chooseVideoMimeType() {
   if (typeof MediaRecorder === 'undefined') return '';
   const candidates = [
@@ -530,7 +748,12 @@ function chooseVideoMimeType() {
 
 async function recordCanvasVideo(
   options: FootprintVideoExportOptions,
-): Promise<{ blob: Blob; mimeType: string; privacy: FootprintVideoPrivacyResult }> {
+): Promise<{
+  blob: Blob;
+  mimeType: string;
+  privacy: FootprintVideoPrivacyResult;
+  includedMemoryCount: number;
+}> {
   if (typeof document === 'undefined' || typeof MediaRecorder === 'undefined') {
     throw new Error('VIDEO_RECORDING_UNSUPPORTED');
   }
@@ -542,6 +765,9 @@ async function recordCanvasVideo(
   if (plan.points.length < 2 || !plan.segments.length) {
     throw new Error('VIDEO_ROUTE_TOO_SHORT');
   }
+  const allowedPointIds = new Set(plan.points.map((point) => point.id));
+  const loadedMemoryPhotos = await loadMemoryPhotos(options.memoryMoments, allowedPointIds);
+  const memoryFrames = buildMemoryPresentationFrames(plan, loadedMemoryPhotos);
 
   const { width, height } = dimensions(options.orientation);
   const canvas = document.createElement('canvas');
@@ -571,7 +797,8 @@ async function recordCanvasVideo(
 
   const palette = readPalette();
   const coordinates = projectedPoints(plan, width, height, options.orientation);
-  const totalMs = INTRO_MS + plan.playbackDurationMs + OUTRO_MS;
+  const presentationDurationMs = plan.playbackDurationMs + memoryFrames.length * MEMORY_PHOTO_HOLD_MS;
+  const totalMs = INTRO_MS + presentationDurationMs + OUTRO_MS;
   let lastProgress = -1;
 
   recorder.start(500);
@@ -580,7 +807,13 @@ async function recordCanvasVideo(
   await new Promise<void>((resolve) => {
     const render = (now: number) => {
       const elapsed = clamp(0, totalMs, now - startedAt);
-      const routeElapsed = clamp(0, plan.playbackDurationMs, elapsed - INTRO_MS);
+      const presentationElapsed = clamp(0, presentationDurationMs, elapsed - INTRO_MS);
+      const memoryState = presentationState(
+        presentationElapsed,
+        memoryFrames,
+        plan.playbackDurationMs,
+      );
+      const routeElapsed = memoryState.routeElapsedMs;
       drawBackground(context, width, height);
       drawHeader(context, width, options.orientation, options.title, options.subtitle);
       const active = drawRoute(
@@ -605,9 +838,19 @@ async function recordCanvasVideo(
         active.distanceMeters,
         activePoint?.placeName,
       );
+      if (memoryState.frame) {
+        drawMemoryPhoto(
+          context,
+          width,
+          height,
+          options.orientation,
+          memoryState.frame,
+          memoryState.frameProgress,
+        );
+      }
 
       if (elapsed < INTRO_MS) drawIntro(context, width, height, options.title, elapsed / INTRO_MS);
-      if (elapsed > INTRO_MS + plan.playbackDurationMs) {
+      if (elapsed > INTRO_MS + presentationDurationMs) {
         drawOutro(
           context,
           width,
@@ -615,7 +858,7 @@ async function recordCanvasVideo(
           options.orientation,
           plan,
           options.durationMinutes,
-          (elapsed - INTRO_MS - plan.playbackDurationMs) / OUTRO_MS,
+          (elapsed - INTRO_MS - presentationDurationMs) / OUTRO_MS,
         );
       }
 
@@ -639,8 +882,9 @@ async function recordCanvasVideo(
   await stopped;
   stream.getTracks().forEach((track) => track.stop());
   const blob = new Blob(chunks, { type: mimeType });
+  loadedMemoryPhotos.forEach((photo) => photo.cleanup());
   if (!blob.size) throw new Error('VIDEO_RECORDING_EMPTY');
-  return { blob, mimeType, privacy };
+  return { blob, mimeType, privacy, includedMemoryCount: memoryFrames.length };
 }
 
 function extensionFor(mimeType: string) {
@@ -737,29 +981,30 @@ async function shareWebVideo(blob: Blob, fileName: string, mimeType: string, tit
 export async function exportFootprintVideo(
   options: FootprintVideoExportOptions,
 ): Promise<FootprintVideoExportResult> {
-  const { blob, mimeType, privacy } = await recordCanvasVideo(options);
+  const { blob, mimeType, privacy, includedMemoryCount } = await recordCanvasVideo(options);
   const extension = extensionFor(mimeType);
   const fileName = safeFileBaseName(options.fileBaseName) + '.' + extension;
 
   if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
     const uri = await saveAndroidVideo(blob, fileName, mimeType);
     if (!uri) throw new Error('VIDEO_NATIVE_SAVE_FAILED');
-    return { fileName, mimeType, savedTo: 'gallery', uri, ...privacyFields(privacy) };
+    return { fileName, mimeType, savedTo: 'gallery', uri, includedMemoryCount, ...privacyFields(privacy) };
   }
 
   downloadWebVideo(blob, fileName);
-  return { fileName, mimeType, savedTo: 'download', ...privacyFields(privacy) };
+  return { fileName, mimeType, savedTo: 'download', includedMemoryCount, ...privacyFields(privacy) };
 }
 
 export async function prepareFootprintVideoShare(
   options: FootprintVideoExportOptions,
 ): Promise<PreparedFootprintVideoShare> {
-  const { blob, mimeType, privacy } = await recordCanvasVideo(options);
+  const { blob, mimeType, privacy, includedMemoryCount } = await recordCanvasVideo(options);
   const extension = extensionFor(mimeType);
   return {
     blob,
     mimeType,
     fileName: safeFileBaseName(options.fileBaseName) + '.' + extension,
+    includedMemoryCount,
     ...privacyFields(privacy),
   };
 }
@@ -778,6 +1023,7 @@ export async function sharePreparedFootprintVideo(
       shareFallback: false,
       privacyProtected: prepared.privacyProtected,
       hiddenPointCount: prepared.hiddenPointCount,
+      includedMemoryCount: prepared.includedMemoryCount,
     };
   }
 
@@ -790,6 +1036,7 @@ export async function sharePreparedFootprintVideo(
     shareFallback: true,
     privacyProtected: prepared.privacyProtected,
     hiddenPointCount: prepared.hiddenPointCount,
+    includedMemoryCount: prepared.includedMemoryCount,
   };
 }
 
@@ -816,6 +1063,7 @@ export async function shareFootprintVideo(
       shareFallback: false,
       privacyProtected: prepared.privacyProtected,
       hiddenPointCount: prepared.hiddenPointCount,
+      includedMemoryCount: prepared.includedMemoryCount,
     };
   }
 
@@ -830,5 +1078,6 @@ export async function shareFootprintVideo(
     shareFallback: true,
     privacyProtected: prepared.privacyProtected,
     hiddenPointCount: prepared.hiddenPointCount,
+    includedMemoryCount: prepared.includedMemoryCount,
   };
 }

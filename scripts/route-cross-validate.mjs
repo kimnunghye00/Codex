@@ -119,6 +119,7 @@ const locationUpload = read('functions-location/index.js');
 const locationRealtime = read('src/lib/locationRealtime.ts');
 const backgroundLocationUpload = read('src/lib/backgroundLocationUpload.ts');
 const footprintVideoPrivacy = read('src/lib/footprintVideoPrivacy.ts');
+const footprintVideoMemories = read('src/lib/footprintVideoMemories.ts');
 const footprintVideoExport = read('src/lib/footprintVideoExport.ts');
 const mediaSaver = read('android/app/src/main/java/com/e2/danduli/MediaSaverPlugin.java');
 
@@ -238,6 +239,9 @@ check('Android video export writes through scoped MediaStore without broad media
 check('shared footprint videos redact endpoints before timeline rendering',
   footprintVideoExport.indexOf('protectFootprintVideoRoute') < footprintVideoExport.indexOf('buildFootprintVideoPlan(privacy.points)')
   && footprintVideoPrivacy.includes('sanitizeBoundaryNames'));
+check('album photos cannot bypass sensitive-route trimming',
+  footprintVideoExport.indexOf('const allowedPointIds = new Set(plan.points.map') < footprintVideoExport.indexOf('loadMemoryPhotos(options.memoryMoments, allowedPointIds)')
+  && footprintVideoMemories.includes('pointId: nearest.id'));
 check('Android sharing grants only temporary read access to saved media',
   mediaSaver.includes('Intent.FLAG_GRANT_READ_URI_PERMISSION')
   && mediaSaver.includes('content')

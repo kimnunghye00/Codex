@@ -31,6 +31,7 @@ const requiredFiles = [
   'src/lib/firestoreCacheReset.ts',
   'src/lib/footprintVideoPlan.ts',
   'src/lib/footprintVideoPrivacy.ts',
+  'src/lib/footprintVideoMemories.ts',
   'src/lib/footprintVideoExport.ts',
   'src/lib/coupleConnection.ts',
   'src/components/couple/CoupleConnect.tsx',
@@ -69,6 +70,7 @@ const firebaseAuth = read('src/lib/firebaseAuth.ts');
 const firestoreCacheReset = read('src/lib/firestoreCacheReset.ts');
 const footprintVideoPlan = read('src/lib/footprintVideoPlan.ts');
 const footprintVideoPrivacy = read('src/lib/footprintVideoPrivacy.ts');
+const footprintVideoMemories = read('src/lib/footprintVideoMemories.ts');
 const footprintVideoExport = read('src/lib/footprintVideoExport.ts');
 const accountPolicy = read('src/utils/accountIsolationPolicy.ts');
 const coupleConnection = read('src/lib/coupleConnection.ts');
@@ -196,6 +198,21 @@ check('footprint video UI forces sensitive-location protection for save and shar
   read('src/components/footprints/FootprintsPage.tsx').includes('hideSensitiveLocations: true')
   && read('src/components/footprints/FootprintsPage.tsx').includes('민감 위치 자동 보호')
   && read('src/components/footprints/FootprintsPage.tsx').includes('바로 공유'));
+check('footprint videos attach album photos only through verified date/place matches',
+  footprintVideoMemories.includes('buildFootprintVideoMemoryMoments')
+  && footprintVideoMemories.includes('memory.date !== routeDay')
+  && footprintVideoMemories.includes('samePlace(item.placeName, memory.location)')
+  && footprintVideoMemories.includes('nearestDistance > 300'));
+check('footprint video memory photos pause route playback and stay privacy-filtered',
+  footprintVideoExport.includes('MEMORY_PHOTO_HOLD_MS')
+  && footprintVideoExport.includes('presentationState')
+  && footprintVideoExport.includes('drawMemoryPhoto')
+  && footprintVideoExport.includes('allowedPointIds')
+  && footprintVideoExport.includes('loadMemoryPhotos(options.memoryMoments, allowedPointIds)'));
+check('footprint video UI passes matched album moments into save and share exports',
+  read('src/components/footprints/FootprintsPage.tsx').includes('videoMemoryMoments')
+  && read('src/components/footprints/FootprintsPage.tsx').includes('memoryMoments: videoMemoryMoments')
+  && read('src/components/footprints/FootprintsPage.tsx').includes('앨범 추억 자동 삽입'));
 
 check('Root protects unauthenticated flow', root.includes('if (!user) return <Suspense') && root.includes('<AuthFlow />'));
 check('Root protects first profile setup flow', root.includes('<ProfileSetup'));
