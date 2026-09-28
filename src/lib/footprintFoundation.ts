@@ -448,7 +448,9 @@ export function buildJointDateSessions(
       const gap = Date.parse(point.arrivedAt) - Date.parse(previous.arrivedAt);
       if (!Number.isFinite(gap) || gap > continuousGap) return sum;
       const segmentMeters = distanceMeters(previous, point);
-      return Number.isFinite(segmentMeters) ? sum + segmentMeters : sum;
+      if (!Number.isFinite(segmentMeters)) return sum;
+      const stationaryDrift = gap >= 75 * 1000 && segmentMeters <= 45;
+      return stationaryDrift ? sum : sum + segmentMeters;
     }, 0);
     sessions.push({
       id: 'joint-session:' + current[0].id + ':' + current[current.length - 1].id,
