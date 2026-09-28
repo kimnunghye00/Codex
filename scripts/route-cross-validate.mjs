@@ -239,9 +239,10 @@ check('Android video export writes through scoped MediaStore without broad media
 check('shared footprint videos redact endpoints before timeline rendering',
   footprintVideoExport.indexOf('protectFootprintVideoRoute') < footprintVideoExport.indexOf('buildFootprintVideoPlan(privacy.points)')
   && footprintVideoPrivacy.includes('sanitizeBoundaryNames'));
-check('album photos cannot bypass sensitive-route trimming',
-  footprintVideoExport.indexOf('const allowedPointIds = new Set(plan.points.map') < footprintVideoExport.indexOf('loadMemoryPhotos(options.memoryMoments, allowedPointIds)')
-  && footprintVideoMemories.includes('pointId: nearest.id'));
+check('album media cannot bypass sensitive-route trimming',
+  footprintVideoExport.indexOf('const allowedPointIds = new Set(plan.points.map') < footprintVideoExport.indexOf('loadMemoryMediaMoments(options.memoryMoments, allowedPointIds)')
+  && footprintVideoMemories.includes('pointId: nearest.id')
+  && footprintVideoMemories.includes('placeName: visit.placeName'));
 check('Android sharing grants only temporary read access to saved media',
   mediaSaver.includes('Intent.FLAG_GRANT_READ_URI_PERMISSION')
   && mediaSaver.includes('content')
