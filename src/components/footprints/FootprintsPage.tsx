@@ -31,11 +31,14 @@ import {
   subscribeMemberLocationVisits,
   type LocationSample,
 } from '../../lib/locationRealtime';
-import { ensureLocationPermission } from '../../lib/native';
+import { ensureLocationPermission, isNativePlatform, nativePlatform } from '../../lib/native';
 import {
   exportFootprintVideo,
+  prepareFootprintVideoShare,
   shareFootprintVideo,
+  sharePreparedFootprintVideo,
   type FootprintVideoOrientation,
+  type PreparedFootprintVideoShare,
 } from '../../lib/footprintVideoExport';
 import { PERSISTENT_STATE_CHANGE_EVENT } from '../../utils/persistenceSignal';
 import {
@@ -175,6 +178,8 @@ export function FootprintsPage({
   const [videoExportBusy, setVideoExportBusy] = useState(false);
   const [videoExportProgress, setVideoExportProgress] = useState(0);
   const [videoExportStatus, setVideoExportStatus] = useState('세로 또는 가로 형식을 선택해 주세요.');
+  const [videoShareReady, setVideoShareReady] = useState(false);
+  const preparedVideoShare = useRef<PreparedFootprintVideoShare | undefined>(undefined);
   const sessionPlaybackRequest = useRef<string | undefined>(undefined);
   const frame = useRef<HTMLIFrameElement>(null);
 
@@ -437,9 +442,15 @@ export function FootprintsPage({
     }, MAP_ORIGIN);
   };
 
+  const clearPreparedVideoShare = () => {
+    preparedVideoShare.current = undefined;
+    setVideoShareReady(false);
+  };
+
   const openVideoExporter = () => {
     if (!selectedSession || selectedSessionRoutePoints.length < 2) return;
     stopPlayback();
+    clearPreparedVideoShare();
     setVideoExportProgress(0);
     setVideoExportStatus('세로 또는 가로 형식을 선택해 주세요.');
     setVideoExportOpen(true);
@@ -447,8 +458,17 @@ export function FootprintsPage({
 
   const closeVideoExporter = () => {
     if (videoExportBusy) return;
+    clearPreparedVideoShare();
     setVideoExportOpen(false);
     setVideoExportProgress(0);
+  };
+
+  const changeVideoOrientation = (orientation: FootprintVideoOrientation) => {
+    if (videoExportBusy || orientation === videoOrientation) return;
+    clearPreparedVideoShare();
+    setVideoExportProgress(0);
+    setVideoExportStatus('영상 비율을 바꿨어요. 공유 영상은 다시 준비해 주세요.');
+    setVideoOrientation(orientation);
   };
 
   const saveSelectedSessionVideo = async () => {
@@ -487,36 +507,74 @@ export function FootprintsPage({
 
   const shareSelectedSessionVideo = async () => {
     if (!selectedSession || selectedSessionIndex < 0 || selectedSessionRoutePoints.length < 2 || videoExportBusy) return;
+    const title = selectedDate + ' 우리 데이트';
+    const nativeAndroid = isNativePlatform() && nativePlatform() === 'android';
+
+    if (!nativeAndroid && preparedVideoShare.current && videoShareReady) {
+      setVideoExportBusy(true);
+      // Web Share requires transient user activation. Invoke the share API
+      // synchronously from this fresh second click, before awaiting anything.
+      const sharePromise = sharePreparedFootprintVideo(preparedVideoShare.current, title);
+      try {
+        const result = await sharePromise;
+        setVideoExportProgress(1);
+        const privacyText = result.hiddenPointCount
+          ? ' 민감 위치 주변 경로점 ' + result.hiddenPointCount + '개를 제외했어요.'
+          : ' 시작·종료 위치 정보는 보호했어요.';
+        if (result.shared) {
+          setVideoExportStatus('공유 화면을 열었어요.' + privacyText);
+        } else {
+          setVideoExportStatus('이 브라우저는 파일 공유를 지원하지 않아 대신 영상을 다운로드했어요.' + privacyText);
+        }
+      } catch (error) {
+        setVideoExportStatus(videoExportErrorMessage(error));
+      } finally {
+        setVideoExportBusy(false);
+      }
+      return;
+    }
+
     setVideoExportBusy(true);
     setVideoExportProgress(0);
     setVideoExportStatus('민감 위치를 보호한 공유 영상을 준비하고 있어요.');
     try {
-      const result = await shareFootprintVideo({
+      const options = {
         points: selectedSessionRoutePoints,
         orientation: videoOrientation,
-        title: selectedDate + ' 우리 데이트',
+        title,
         subtitle: '데이트 ' + (selectedSessionIndex + 1),
         durationMinutes: selectedSession.durationMinutes,
         fileBaseName: 'DANDULI-' + day + '-date-' + (selectedSessionIndex + 1) + '-' + videoOrientation,
         hideSensitiveLocations: true,
-        onProgress: (progress) => {
+        onProgress: (progress: number) => {
           setVideoExportProgress(progress);
           if (progress < 0.98) setVideoExportStatus('공유 영상 만드는 중 · ' + Math.round(progress * 100) + '%');
         },
-      });
-      setVideoExportProgress(1);
-      const privacyText = result.hiddenPointCount
-        ? ' 민감 위치 주변 경로점 ' + result.hiddenPointCount + '개를 제외했어요.'
-        : ' 시작·종료 위치 정보는 보호했어요.';
-      if (result.shared) {
-        setVideoExportStatus('공유 화면을 열었어요.' + privacyText);
-      } else if (result.shareFallback) {
-        setVideoExportStatus('이 브라우저는 파일 공유를 지원하지 않아 대신 영상을 다운로드했어요.' + privacyText);
-      } else {
-        setVideoExportStatus('공유 영상을 준비했어요.' + privacyText);
+      };
+
+      if (nativeAndroid) {
+        const result = await shareFootprintVideo(options);
+        setVideoExportProgress(1);
+        const privacyText = result.hiddenPointCount
+          ? ' 민감 위치 주변 경로점 ' + result.hiddenPointCount + '개를 제외했어요.'
+          : ' 시작·종료 위치 정보는 보호했어요.';
+        setVideoExportStatus(result.shared
+          ? '공유 화면을 열었어요.' + privacyText
+          : '공유 영상을 갤러리에 저장했어요.' + privacyText);
+        return;
       }
+
+      const prepared = await prepareFootprintVideoShare(options);
+      preparedVideoShare.current = prepared;
+      setVideoShareReady(true);
+      setVideoExportProgress(1);
+      const privacyText = prepared.hiddenPointCount
+        ? ' 민감 위치 주변 경로점 ' + prepared.hiddenPointCount + '개를 제외했어요.'
+        : ' 시작·종료 위치 정보는 보호했어요.';
+      setVideoExportStatus('공유 영상이 준비됐어요. 아래의 ‘공유 화면 열기’를 눌러 주세요.' + privacyText);
     } catch (error) {
       setVideoExportProgress(0);
+      clearPreparedVideoShare();
       setVideoExportStatus(videoExportErrorMessage(error));
     } finally {
       setVideoExportBusy(false);
@@ -778,7 +836,7 @@ export function FootprintsPage({
                 aria-checked={videoOrientation === 'portrait'}
                 className={videoOrientation === 'portrait' ? 'active' : ''}
                 disabled={videoExportBusy}
-                onClick={() => setVideoOrientation('portrait')}
+                onClick={() => changeVideoOrientation('portrait')}
               >
                 <span className="portrait-shape" />
                 <b>세로 9:16</b>
@@ -790,7 +848,7 @@ export function FootprintsPage({
                 aria-checked={videoOrientation === 'landscape'}
                 className={videoOrientation === 'landscape' ? 'active' : ''}
                 disabled={videoExportBusy}
-                onClick={() => setVideoOrientation('landscape')}
+                onClick={() => changeVideoOrientation('landscape')}
               >
                 <span className="landscape-shape" />
                 <b>가로 16:9</b>
@@ -818,7 +876,7 @@ export function FootprintsPage({
               >
                 {videoExportBusy
                   ? <><Video size={16} />영상 만드는 중…</>
-                  : <><Share2 size={16} />바로 공유</>}
+                  : <><Share2 size={16} />{videoShareReady ? '공유 화면 열기' : '바로 공유'}</>}
               </button>
               <button
                 type="button"
