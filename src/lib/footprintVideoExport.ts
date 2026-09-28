@@ -33,6 +33,14 @@ export type FootprintVideoShareResult = FootprintVideoExportResult & {
   shareFallback: boolean;
 };
 
+export type PreparedFootprintVideoShare = {
+  blob: Blob;
+  fileName: string;
+  mimeType: string;
+  privacyProtected: boolean;
+  hiddenPointCount: number;
+};
+
 type RouteMediaSaverPlugin = {
   saveVideo(options: {
     uri: string;
@@ -740,48 +748,84 @@ export async function exportFootprintVideo(
   return { fileName, mimeType, savedTo: 'download', ...privacyFields(privacy) };
 }
 
+export async function prepareFootprintVideoShare(
+  options: FootprintVideoExportOptions,
+): Promise<PreparedFootprintVideoShare> {
+  const { blob, mimeType, privacy } = await recordCanvasVideo(options);
+  const extension = extensionFor(mimeType);
+  return {
+    blob,
+    mimeType,
+    fileName: safeFileBaseName(options.fileBaseName) + '.' + extension,
+    ...privacyFields(privacy),
+  };
+}
+
+export async function sharePreparedFootprintVideo(
+  prepared: PreparedFootprintVideoShare,
+  title: string,
+): Promise<FootprintVideoShareResult> {
+  const shared = await shareWebVideo(prepared.blob, prepared.fileName, prepared.mimeType, title);
+  if (shared) {
+    return {
+      fileName: prepared.fileName,
+      mimeType: prepared.mimeType,
+      savedTo: 'download',
+      shared: true,
+      shareFallback: false,
+      privacyProtected: prepared.privacyProtected,
+      hiddenPointCount: prepared.hiddenPointCount,
+    };
+  }
+
+  downloadWebVideo(prepared.blob, prepared.fileName);
+  return {
+    fileName: prepared.fileName,
+    mimeType: prepared.mimeType,
+    savedTo: 'download',
+    shared: false,
+    shareFallback: true,
+    privacyProtected: prepared.privacyProtected,
+    hiddenPointCount: prepared.hiddenPointCount,
+  };
+}
+
 export async function shareFootprintVideo(
   options: FootprintVideoExportOptions,
 ): Promise<FootprintVideoShareResult> {
-  const { blob, mimeType, privacy } = await recordCanvasVideo(options);
-  const extension = extensionFor(mimeType);
-  const fileName = safeFileBaseName(options.fileBaseName) + '.' + extension;
+  const prepared = await prepareFootprintVideoShare(options);
   const title = options.title || '단둘이 발자취';
 
   if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
-    const uri = await saveAndroidVideo(blob, fileName, mimeType);
+    const uri = await saveAndroidVideo(prepared.blob, prepared.fileName, prepared.mimeType);
     if (!uri) throw new Error('VIDEO_NATIVE_SAVE_FAILED');
-    const result = await RouteMediaSaver.shareVideo({ uri, mimeType, title });
+    const result = await RouteMediaSaver.shareVideo({
+      uri,
+      mimeType: prepared.mimeType,
+      title,
+    });
     return {
-      fileName,
-      mimeType,
+      fileName: prepared.fileName,
+      mimeType: prepared.mimeType,
       savedTo: 'gallery',
       uri,
       shared: result.shared,
       shareFallback: false,
-      ...privacyFields(privacy),
+      privacyProtected: prepared.privacyProtected,
+      hiddenPointCount: prepared.hiddenPointCount,
     };
   }
 
-  const shared = await shareWebVideo(blob, fileName, mimeType, title);
-  if (shared) {
-    return {
-      fileName,
-      mimeType,
-      savedTo: 'download',
-      shared: true,
-      shareFallback: false,
-      ...privacyFields(privacy),
-    };
-  }
-
-  downloadWebVideo(blob, fileName);
+  // Web Share requires a fresh transient user gesture. Callers should prepare
+  // first, then invoke sharePreparedFootprintVideo from a second explicit click.
+  downloadWebVideo(prepared.blob, prepared.fileName);
   return {
-    fileName,
-    mimeType,
+    fileName: prepared.fileName,
+    mimeType: prepared.mimeType,
     savedTo: 'download',
     shared: false,
     shareFallback: true,
-    ...privacyFields(privacy),
+    privacyProtected: prepared.privacyProtected,
+    hiddenPointCount: prepared.hiddenPointCount,
   };
 }
