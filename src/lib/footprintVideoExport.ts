@@ -727,6 +727,9 @@ async function shareWebVideo(blob: Blob, fileName: string, mimeType: string, tit
     if (error instanceof DOMException && error.name === 'AbortError') {
       throw new Error('VIDEO_SHARE_CANCELLED', { cause: error });
     }
+    if (error instanceof DOMException && (error.name === 'NotAllowedError' || error.name === 'SecurityError')) {
+      return false;
+    }
     throw error;
   }
 }
