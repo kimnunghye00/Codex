@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   CalendarDays,
   ChevronRight,
+  Download,
   Image as ImageIcon,
   MapPin,
   Navigation,
@@ -12,6 +13,8 @@ import {
   ShieldCheck,
   Square,
   UsersRound,
+  Video,
+  X,
 } from 'lucide-react';
 import type { Memory } from '../../types';
 import type { RealCoupleConnection } from '../../lib/coupleConnection';
@@ -28,6 +31,10 @@ import {
   type LocationSample,
 } from '../../lib/locationRealtime';
 import { ensureLocationPermission } from '../../lib/native';
+import {
+  exportFootprintVideo,
+  type FootprintVideoOrientation,
+} from '../../lib/footprintVideoExport';
 import { PERSISTENT_STATE_CHANGE_EVENT } from '../../utils/persistenceSignal';
 import {
   loadLocationSharing,
@@ -83,6 +90,18 @@ function distanceLabel(meters: number) {
   if (meters >= 10_000) return Math.round(meters / 1000) + 'km';
   if (meters >= 1000) return (meters / 1000).toFixed(1) + 'km';
   return Math.round(meters) + 'm';
+}
+
+function videoExportErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  if (message.includes('VIDEO_ROUTE_TOO_SHORT')) return '영상으로 만들 GPS 경로가 너무 짧아요.';
+  if (message.includes('VIDEO_RECORDING_UNSUPPORTED') || message.includes('VIDEO_CANVAS_UNSUPPORTED')) {
+    return '이 기기에서는 영상 렌더링 기능을 사용할 수 없어요.';
+  }
+  if (message.includes('VIDEO_FORMAT_UNSUPPORTED')) return '이 기기에서 저장 가능한 영상 형식을 찾지 못했어요.';
+  if (message.includes('VIDEO_SAVE_REQUIRES_ANDROID_10')) return 'Android 10 이상에서 갤러리 영상 저장을 지원해요.';
+  if (message.includes('VIDEO_SAVE') || message.includes('VIDEO_NATIVE_SAVE')) return '영상 파일을 저장하지 못했어요.';
+  return '영상 생성 중 오류가 발생했어요. 다시 시도해 주세요.';
 }
 
 function mergeVisits(cloud: readonly LocationVisit[], local: readonly LocationVisit[]) {
@@ -147,6 +166,11 @@ export function FootprintsPage({
   const [mapFailed, setMapFailed] = useState(false);
   const [playbackState, setPlaybackState] = useState<'idle' | 'playing'>('idle');
   const [selectedSessionAnchorId, setSelectedSessionAnchorId] = useState<string>();
+  const [videoExportOpen, setVideoExportOpen] = useState(false);
+  const [videoOrientation, setVideoOrientation] = useState<FootprintVideoOrientation>('portrait');
+  const [videoExportBusy, setVideoExportBusy] = useState(false);
+  const [videoExportProgress, setVideoExportProgress] = useState(0);
+  const [videoExportStatus, setVideoExportStatus] = useState('세로 또는 가로 형식을 선택해 주세요.');
   const sessionPlaybackRequest = useRef<string | undefined>(undefined);
   const frame = useRef<HTMLIFrameElement>(null);
 
@@ -376,21 +400,26 @@ export function FootprintsPage({
   };
 
   const showWholeDay = () => {
+    if (videoExportBusy) return;
+    setVideoExportOpen(false);
     clearSessionSelection();
   };
 
   const changeScope = (nextScope: FootprintScope) => {
+    if (videoExportBusy) return;
     stopPlayback();
     sessionPlaybackRequest.current = undefined;
     setSelectedSessionAnchorId(undefined);
+    setVideoExportOpen(false);
     setScope(nextScope);
   };
 
   const changeDay = (nextDay: string) => {
-    if (!nextDay || nextDay > todayKey()) return;
+    if (!nextDay || nextDay > todayKey() || videoExportBusy) return;
     stopPlayback();
     sessionPlaybackRequest.current = undefined;
     setSelectedSessionAnchorId(undefined);
+    setVideoExportOpen(false);
     setDay(nextDay);
   };
 
@@ -402,6 +431,50 @@ export function FootprintsPage({
       visits: mapVisits,
       follow: true,
     }, MAP_ORIGIN);
+  };
+
+  const openVideoExporter = () => {
+    if (!selectedSession || selectedSessionRoutePoints.length < 2) return;
+    stopPlayback();
+    setVideoExportProgress(0);
+    setVideoExportStatus('세로 또는 가로 형식을 선택해 주세요.');
+    setVideoExportOpen(true);
+  };
+
+  const closeVideoExporter = () => {
+    if (videoExportBusy) return;
+    setVideoExportOpen(false);
+    setVideoExportProgress(0);
+  };
+
+  const saveSelectedSessionVideo = async () => {
+    if (!selectedSession || selectedSessionIndex < 0 || selectedSessionRoutePoints.length < 2 || videoExportBusy) return;
+    setVideoExportBusy(true);
+    setVideoExportProgress(0);
+    setVideoExportStatus('영상 렌더링을 준비하고 있어요.');
+    try {
+      const result = await exportFootprintVideo({
+        points: selectedSessionRoutePoints,
+        orientation: videoOrientation,
+        title: selectedDate + ' 우리 데이트',
+        subtitle: '데이트 ' + (selectedSessionIndex + 1),
+        durationMinutes: selectedSession.durationMinutes,
+        fileBaseName: 'DANDULI-' + day + '-date-' + (selectedSessionIndex + 1) + '-' + videoOrientation,
+        onProgress: (progress) => {
+          setVideoExportProgress(progress);
+          if (progress < 0.98) setVideoExportStatus('영상 만드는 중 · ' + Math.round(progress * 100) + '%');
+        },
+      });
+      setVideoExportProgress(1);
+      setVideoExportStatus(result.savedTo === 'gallery'
+        ? result.fileName + ' · 갤러리 Movies/DANDULI에 저장했어요.'
+        : result.fileName + ' · 다운로드를 시작했어요.');
+    } catch (error) {
+      setVideoExportProgress(0);
+      setVideoExportStatus(videoExportErrorMessage(error));
+    } finally {
+      setVideoExportBusy(false);
+    }
   };
 
   const setLocationSharing = async (enabled: boolean) => {
@@ -544,7 +617,12 @@ export function FootprintsPage({
         {scope === 'together' && dateSessions.length > 0 && <div className="footprints-sessions">
           <div className="footprints-session-toolbar">
             <span>데이트를 누르면 해당 구간만 지도에 남기고 바로 재생해요.</span>
-            {selectedSession && <button type="button" onClick={showWholeDay}>하루 전체 보기</button>}
+            {selectedSession && <div className="footprints-session-toolbar-actions">
+              <button type="button" className="video" onClick={openVideoExporter}>
+                <Video size={12} />영상 만들기
+              </button>
+              <button type="button" onClick={showWholeDay}>하루 전체 보기</button>
+            </div>}
           </div>
           {dateSessions.map((session, index) => {
             const sessionAnchorId = session.pointIds[0];
@@ -609,6 +687,95 @@ export function FootprintsPage({
         })}
       </section>
     </div>
+
+    {videoExportOpen && selectedSession && <div
+      className="footprints-video-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) closeVideoExporter();
+      }}
+    >
+      <section className="footprints-video-dialog" role="dialog" aria-modal="true" aria-labelledby="footprints-video-title">
+        <header>
+          <div>
+            <small>FOOTPRINT VIDEO</small>
+            <h2 id="footprints-video-title">데이트 영상 만들기</h2>
+            <p>{selectedDate} · 데이트 {selectedSessionIndex + 1} · {distanceLabel(selectedSession.distanceMeters)}</p>
+          </div>
+          <button type="button" aria-label="영상 만들기 닫기" disabled={videoExportBusy} onClick={closeVideoExporter}>
+            <X size={18} />
+          </button>
+        </header>
+
+        <div className="footprints-video-body">
+          <div className={'footprints-video-preview ' + videoOrientation}>
+            <div className="footprints-video-preview-title">우리의 발자취 ♡</div>
+            <svg viewBox="0 0 100 100" role="img" aria-label="발자취 영상 레이아웃 미리보기">
+              <path className="road" d="M4 77 C22 62 24 28 47 42 S72 82 96 30" />
+              <path className="route" d="M12 74 C25 62 28 35 47 44 S68 73 88 38" />
+              <circle className="start" cx="12" cy="74" r="3" />
+              <circle className="end" cx="88" cy="38" r="3" />
+            </svg>
+            <div className="footprints-video-preview-duo">♡♡</div>
+            <div className="footprints-video-preview-hud">
+              <span>함께 이동 중</span>
+              <b>{timeLabel(selectedSession.startedAt)}</b>
+              <strong>{distanceLabel(selectedSession.distanceMeters)}</strong>
+            </div>
+          </div>
+
+          <div className="footprints-video-controls">
+            <div className="footprints-video-orientation" role="radiogroup" aria-label="영상 비율">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={videoOrientation === 'portrait'}
+                className={videoOrientation === 'portrait' ? 'active' : ''}
+                disabled={videoExportBusy}
+                onClick={() => setVideoOrientation('portrait')}
+              >
+                <span className="portrait-shape" />
+                <b>세로 9:16</b>
+                <small>쇼츠·릴스용 · 720×1280</small>
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={videoOrientation === 'landscape'}
+                className={videoOrientation === 'landscape' ? 'active' : ''}
+                disabled={videoExportBusy}
+                onClick={() => setVideoOrientation('landscape')}
+              >
+                <span className="landscape-shape" />
+                <b>가로 16:9</b>
+                <small>일반 영상용 · 1280×720</small>
+              </button>
+            </div>
+
+            <div className="footprints-video-summary">
+              <span><b>영상 내용</b><small>GPS 교차검증 경로 · 시간 · 누적 이동거리 · 정차/재연결 · 엔딩 카드</small></span>
+              <span><b>개인정보</b><small>원본 좌표 숫자는 영상에 표시하지 않아요. 지도 타일 대신 발자취 전용 그래픽으로 저장해요.</small></span>
+            </div>
+
+            {(videoExportBusy || videoExportProgress > 0) && <div className="footprints-video-progress" aria-label="영상 생성 진행률">
+              <span style={{ width: Math.round(videoExportProgress * 100) + '%' }} />
+            </div>}
+            <p className={'footprints-video-status ' + (videoExportProgress >= 1 ? 'done' : '')}>{videoExportStatus}</p>
+
+            <button
+              type="button"
+              className="footprints-video-save"
+              disabled={videoExportBusy}
+              onClick={() => void saveSelectedSessionVideo()}
+            >
+              {videoExportBusy
+                ? <><Video size={16} />영상 만드는 중…</>
+                : <><Download size={16} />{videoExportProgress >= 1 ? '다시 저장하기' : '영상 파일 저장'}</>}
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>}
 
     <p className="footprints-footnote">
       우리의 장소 기록은 두 사람의 GPS가 약 120m 이내에서 2분 이상 겹칠 때만 생성해요. 원본 GPS 샘플은 서버에 각자 소유 기록으로 저장되고, 반복해서 두 GPS가 일치한 구간만 공동 경로로 계산해요. 30분 이내 잠깐 떨어졌다 다시 확인되면 같은 데이트로 묶어요.

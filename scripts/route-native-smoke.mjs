@@ -17,6 +17,8 @@ const required = [
   'src/input-ime-stability.ts',
   'src/route-stability-v15.css',
   'android/app/src/main/AndroidManifest.xml',
+  'android/app/src/main/java/com/e2/danduli/MainActivity.java',
+  'android/app/src/main/java/com/e2/danduli/MediaSaverPlugin.java',
   'android/app/src/main/java/com/e2/danduli/LauncherRepairReceiver.java',
   'android/app/src/main/java/com/e2/danduli/AppIconPlugin.java',
   'android/app/src/main/java/com/e2/danduli/BackgroundLocationPlugin.java',
@@ -44,6 +46,8 @@ const icon = read('src/app-icon-native.ts');
 const ime = read('src/input-ime-stability.ts');
 const stabilityCss = read('src/route-stability-v15.css');
 const manifest = read('android/app/src/main/AndroidManifest.xml');
+const mainActivity = read('android/app/src/main/java/com/e2/danduli/MainActivity.java');
+const mediaSaver = read('android/app/src/main/java/com/e2/danduli/MediaSaverPlugin.java');
 const launcherRepair = read('android/app/src/main/java/com/e2/danduli/LauncherRepairReceiver.java');
 const iconPlugin = read('android/app/src/main/java/com/e2/danduli/AppIconPlugin.java');
 const backgroundLocationPlugin = read('android/app/src/main/java/com/e2/danduli/BackgroundLocationPlugin.java');
@@ -114,6 +118,15 @@ check('foreground service uploads queued points off the location thread',
   backgroundLocationService.includes('Executors.newSingleThreadExecutor')
   && backgroundLocationService.includes('BackgroundLocationUploader.uploadPending'));
 check('Android broad media permission is not requested', !manifest.includes('READ_MEDIA_IMAGES') && !manifest.includes('READ_MEDIA_VIDEO'));
+check('Android media saver plugin is registered', mainActivity.includes('registerPlugin(MediaSaverPlugin.class)'));
+check('Android footprint video saves into app-owned Movies folder',
+  mediaSaver.includes('saveVideo(PluginCall call)')
+  && mediaSaver.includes('MediaStore.Video.Media.EXTERNAL_CONTENT_URI')
+  && mediaSaver.includes('Environment.DIRECTORY_MOVIES + "/DANDULI"')
+  && mediaSaver.includes('MediaStore.Video.Media.IS_PENDING'));
+check('Android video saver does not widen legacy storage access',
+  mediaSaver.includes('VIDEO_SAVE_REQUIRES_ANDROID_10')
+  && !manifest.includes('WRITE_EXTERNAL_STORAGE'));
 
 check('four DANDULI launcher aliases exist', ['DanduliDefaultLauncher', 'DanduliChatLauncher', 'DanduliLoveLauncher', 'DanduliDateLauncher'].every((name) => manifest.includes(name)));
 check('launcher repair receiver is registered', manifest.includes('LauncherRepairReceiver') && manifest.includes('android.intent.action.MY_PACKAGE_REPLACED'));

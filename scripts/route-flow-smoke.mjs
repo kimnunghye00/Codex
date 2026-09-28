@@ -29,6 +29,8 @@ const requiredFiles = [
   'src/lib/firebaseAuth.ts',
   'src/lib/firebase.ts',
   'src/lib/firestoreCacheReset.ts',
+  'src/lib/footprintVideoPlan.ts',
+  'src/lib/footprintVideoExport.ts',
   'src/lib/coupleConnection.ts',
   'src/components/couple/CoupleConnect.tsx',
   'src/components/home/CoupleHomeTools.tsx',
@@ -64,6 +66,8 @@ const recovery = read('src/recovery-runtime.ts');
 const firebase = read('src/lib/firebase.ts');
 const firebaseAuth = read('src/lib/firebaseAuth.ts');
 const firestoreCacheReset = read('src/lib/firestoreCacheReset.ts');
+const footprintVideoPlan = read('src/lib/footprintVideoPlan.ts');
+const footprintVideoExport = read('src/lib/footprintVideoExport.ts');
 const accountPolicy = read('src/utils/accountIsolationPolicy.ts');
 const coupleConnection = read('src/lib/coupleConnection.ts');
 const coupleConnect = read('src/components/couple/CoupleConnect.tsx');
@@ -158,6 +162,20 @@ check('footprint replay inline script parses',
   })());
 check('live footprint updates wait until replay ends',
   read('src/components/footprints/FootprintsPage.tsx').includes("if (!mapReady || playbackState === 'playing') return;"));
+check('footprint video plan separates reconnects from verified travel',
+  footprintVideoPlan.includes("kind: FootprintVideoSegmentKind")
+  && footprintVideoPlan.includes("kind === 'move'")
+  && footprintVideoPlan.includes("kind === 'reconnect'"));
+check('footprint video export supports portrait and landscape 720p',
+  footprintVideoExport.includes("orientation === 'portrait'")
+  && footprintVideoExport.includes('{ width: 720, height: 1280 }')
+  && footprintVideoExport.includes('{ width: 1280, height: 720 }'));
+check('footprint video export prefers mp4 and falls back to webm',
+  footprintVideoExport.includes("'video/mp4'")
+  && footprintVideoExport.includes("'video/webm;codecs=vp9'"));
+check('footprint video export saves Android output through RouteMediaSaver',
+  footprintVideoExport.includes("registerPlugin<RouteMediaSaverPlugin>('RouteMediaSaver')")
+  && footprintVideoExport.includes('RouteMediaSaver.saveVideo'));
 
 check('Root protects unauthenticated flow', root.includes('if (!user) return <Suspense') && root.includes('<AuthFlow />'));
 check('Root protects first profile setup flow', root.includes('<ProfileSetup'));
