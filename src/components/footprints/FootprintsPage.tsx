@@ -139,7 +139,7 @@ export function FootprintsPage({
   const [mapReady, setMapReady] = useState(false);
   const [mapFailed, setMapFailed] = useState(false);
   const [playbackState, setPlaybackState] = useState<'idle' | 'playing'>('idle');
-  const [selectedSessionId, setSelectedSessionId] = useState<string>();
+  const [selectedSessionAnchorId, setSelectedSessionAnchorId] = useState<string>();
   const sessionPlaybackRequest = useRef<string | undefined>(undefined);
   const frame = useRef<HTMLIFrameElement>(null);
 
@@ -239,8 +239,8 @@ export function FootprintsPage({
     () => buildJointDateSessions(jointRoutePoints),
     [jointRoutePoints],
   );
-  const selectedSessionIndex = selectedSessionId
-    ? dateSessions.findIndex((session) => session.id === selectedSessionId)
+  const selectedSessionIndex = selectedSessionAnchorId
+    ? dateSessions.findIndex((session) => session.pointIds[0] === selectedSessionAnchorId)
     : -1;
   const selectedSession = selectedSessionIndex >= 0 ? dateSessions[selectedSessionIndex] : undefined;
   const selectedSessionRoutePoints = useMemo(() => {
@@ -323,9 +323,9 @@ export function FootprintsPage({
   }, [mapReady, mapVisits]);
 
   useEffect(() => {
-    const requestedSessionId = sessionPlaybackRequest.current;
-    if (!requestedSessionId || !mapReady || !selectedSession
-      || selectedSession.id !== requestedSessionId) return;
+    const requestedSessionAnchorId = sessionPlaybackRequest.current;
+    if (!requestedSessionAnchorId || !mapReady || !selectedSession
+      || selectedSession.pointIds[0] !== requestedSessionAnchorId) return;
     if (mapVisits.length < 2) {
       sessionPlaybackRequest.current = undefined;
       return;
@@ -347,9 +347,9 @@ export function FootprintsPage({
     }, MAP_ORIGIN);
   };
 
-  const playSession = (sessionId: string) => {
-    if (!dateSessions.some((session) => session.id === sessionId)) return;
-    if (selectedSessionId === sessionId && mapReady && mapVisits.length >= 2) {
+  const playSession = (sessionAnchorId: string) => {
+    if (!dateSessions.some((session) => session.pointIds[0] === sessionAnchorId)) return;
+    if (selectedSessionAnchorId === sessionAnchorId && mapReady && mapVisits.length >= 2) {
       frame.current?.contentWindow?.postMessage({
         source: 'route-map-parent',
         type: 'play-route',
@@ -358,14 +358,14 @@ export function FootprintsPage({
       }, MAP_ORIGIN);
       return;
     }
-    sessionPlaybackRequest.current = sessionId;
-    setSelectedSessionId(sessionId);
+    sessionPlaybackRequest.current = sessionAnchorId;
+    setSelectedSessionAnchorId(sessionAnchorId);
   };
 
   const clearSessionSelection = () => {
     stopPlayback();
     sessionPlaybackRequest.current = undefined;
-    setSelectedSessionId(undefined);
+    setSelectedSessionAnchorId(undefined);
   };
 
   const showWholeDay = () => {
@@ -375,7 +375,7 @@ export function FootprintsPage({
   const changeScope = (nextScope: FootprintScope) => {
     stopPlayback();
     sessionPlaybackRequest.current = undefined;
-    setSelectedSessionId(undefined);
+    setSelectedSessionAnchorId(undefined);
     setScope(nextScope);
   };
 
@@ -383,7 +383,7 @@ export function FootprintsPage({
     if (!nextDay || nextDay > todayKey()) return;
     stopPlayback();
     sessionPlaybackRequest.current = undefined;
-    setSelectedSessionId(undefined);
+    setSelectedSessionAnchorId(undefined);
     setDay(nextDay);
   };
 
@@ -540,13 +540,14 @@ export function FootprintsPage({
             {selectedSession && <button type="button" onClick={showWholeDay}>하루 전체 보기</button>}
           </div>
           {dateSessions.map((session, index) => {
-            const selected = session.id === selectedSessionId;
+            const sessionAnchorId = session.pointIds[0];
+            const selected = sessionAnchorId === selectedSessionAnchorId;
             return <button
               type="button"
               key={session.id}
               className={'footprints-session-card ' + (selected ? 'selected' : '')}
               aria-pressed={selected}
-              onClick={() => playSession(session.id)}
+              onClick={() => playSession(sessionAnchorId)}
             >
               <span className="footprints-session-icon"><UsersRound size={15} /></span>
               <span className="footprints-session-copy">
