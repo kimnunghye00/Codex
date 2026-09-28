@@ -91,7 +91,7 @@ export function buildFootprintVideoPlan(points: readonly JointRoutePoint[]): Foo
     if (kind === 'stay') stopCount += 1;
     if (kind === 'reconnect') reconnectCount += 1;
 
-    let rawDurationMs = 0;
+    let rawDurationMs: number;
     let rawHoldMs = 0;
     if (kind === 'reconnect') {
       rawDurationMs = 520;
