@@ -187,6 +187,11 @@ check('footprint video share supports native chooser and web file share fallback
   && footprintVideoExport.includes('navigator.share')
   && footprintVideoExport.includes('navigator.canShare')
   && footprintVideoExport.includes('downloadWebVideo'));
+check('web footprint sharing is staged behind a fresh second user gesture',
+  footprintVideoExport.includes('prepareFootprintVideoShare')
+  && footprintVideoExport.includes('sharePreparedFootprintVideo')
+  && read('src/components/footprints/FootprintsPage.tsx').includes('preparedVideoShare.current')
+  && read('src/components/footprints/FootprintsPage.tsx').includes('공유 화면 열기'));
 check('footprint video UI forces sensitive-location protection for save and share',
   read('src/components/footprints/FootprintsPage.tsx').includes('hideSensitiveLocations: true')
   && read('src/components/footprints/FootprintsPage.tsx').includes('민감 위치 자동 보호')
