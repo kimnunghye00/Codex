@@ -82,13 +82,26 @@ export function DanduliSticker({ id, className = '' }: { id?: string; className?
   if (!item) return null;
   const x = item.col * (100 / 3);
   const y = item.row * (100 / 3);
+  const portraitClass = item.sheet
+    ? `danduli-sticker-portrait danduli-sticker-col-${item.col} danduli-sticker-row-${item.row}`
+    : '';
+
   return (
     <span
-      className={`danduli-sticker ${item.sheet ? 'danduli-sticker-portrait' : ''} ${className}`}
+      className={`danduli-sticker ${portraitClass} ${className}`}
       role="img"
       aria-label={item.label}
       title={item.label}
-      style={{ backgroundPosition: `${x}% ${y}%`, ...(item.sheet ? { backgroundImage: `url('${item.sheet}')` } : {}) }}
-    />
+      style={item.sheet ? undefined : { backgroundPosition: `${x}% ${y}%` }}
+    >
+      {item.sheet && <span
+        className="danduli-sticker-sprite-layer"
+        aria-hidden="true"
+        style={{
+          backgroundImage: `url('${item.sheet}')`,
+          backgroundPosition: `${x}% ${y}%`,
+        }}
+      />}
+    </span>
   );
 }
