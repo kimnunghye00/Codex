@@ -108,5 +108,10 @@ export function buildFootprintVideoMemoryMoments(
   return candidates
     .sort((a, b) => a.routeIndex - b.routeIndex || a.distanceMeters - b.distanceMeters || a.memoryId - b.memoryId)
     .slice(0, Math.max(0, Math.floor(maxMoments)))
-    .map(({ routeIndex: _routeIndex, distanceMeters: _distanceMeters, ...moment }) => moment);
+    .map((item) => ({
+      id: item.id,
+      memoryId: item.memoryId,
+      pointId: item.pointId,
+      imageUrl: item.imageUrl,
+    }));
 }
