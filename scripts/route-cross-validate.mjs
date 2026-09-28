@@ -118,6 +118,7 @@ const firebaseConfig = read('firebase.json');
 const locationUpload = read('functions-location/index.js');
 const locationRealtime = read('src/lib/locationRealtime.ts');
 const backgroundLocationUpload = read('src/lib/backgroundLocationUpload.ts');
+const footprintVideoPrivacy = read('src/lib/footprintVideoPrivacy.ts');
 const footprintVideoExport = read('src/lib/footprintVideoExport.ts');
 const mediaSaver = read('android/app/src/main/java/com/e2/danduli/MediaSaverPlugin.java');
 
@@ -234,6 +235,13 @@ check('Android video export writes through scoped MediaStore without broad media
   && mediaSaver.includes('Environment.DIRECTORY_MOVIES + "/DANDULI"')
   && !manifest.includes('READ_MEDIA_VIDEO')
   && !manifest.includes('WRITE_EXTERNAL_STORAGE'));
+check('shared footprint videos redact endpoints before timeline rendering',
+  footprintVideoExport.indexOf('protectFootprintVideoRoute') < footprintVideoExport.indexOf('buildFootprintVideoPlan(privacy.points)')
+  && footprintVideoPrivacy.includes('sanitizeBoundaryNames'));
+check('Android sharing grants only temporary read access to saved media',
+  mediaSaver.includes('Intent.FLAG_GRANT_READ_URI_PERMISSION')
+  && mediaSaver.includes('content')
+  && !manifest.includes('READ_MEDIA_VIDEO'));
 
 console.log(`\nROUTE cross validation: ${passes.length} checks passed.`);
 for (const pass of passes) console.log(`  ✓ ${pass}`);
