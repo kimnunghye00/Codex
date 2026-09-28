@@ -566,7 +566,8 @@
               + (segment.kind === 'move' ? segment.distanceMeters : 0)),
             totalDistanceMeters: timeline.totalDistanceMeters,
           });
-          advanceAfterHold(segment, nextSegment);
+          if (segment.kind === 'reconnect') animateSegment(nextSegment);
+          else advanceAfterHold(segment, nextSegment);
         };
 
         const animateSegment = (segmentIndex) => {
