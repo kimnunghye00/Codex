@@ -30,12 +30,22 @@
     .danduli-place-card strong{display:block;font-size:13px;margin-bottom:3px}
     .danduli-place-card small{display:block;color:#777;line-height:1.5}
     .danduli-place-card img{display:block;width:100%;height:96px;object-fit:cover;border-radius:9px;margin:0 0 7px;background:#f6eff0}
+    #playback-hud{position:fixed;left:50%;bottom:14px;z-index:1500;transform:translateX(-50%);display:grid;grid-template-columns:auto auto;grid-template-areas:"status status" "clock distance";gap:3px 14px;min-width:188px;max-width:calc(100vw - 28px);padding:9px 13px;border:1px solid #ffffffcc;border-radius:15px;background:#242536d9;color:#fff;box-shadow:0 8px 24px #0003;backdrop-filter:blur(10px);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;pointer-events:none}
+    #playback-hud[hidden]{display:none}
+    #playback-status{grid-area:status;font-size:10px;font-weight:800;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff}
+    #playback-clock{grid-area:clock;font-size:14px;font-weight:900}
+    #playback-distance{grid-area:distance;justify-self:end;align-self:end;font-size:11px;font-weight:800;color:#ffffffd9}
   </style>
 </head>
 <body>
   <div id="map"></div>
   <div id="map-status" role="status" aria-live="polite">
     <div class="card"><strong>네이버 지도를 불러오는 중이에요</strong><span>지도 SDK와 인증 상태를 확인하고 있어요.</span><code id="map-status-code">SDK_LOADING</code></div>
+  </div>
+  <div id="playback-hud" hidden aria-live="polite">
+    <span id="playback-status">데이트 재생 준비</span>
+    <strong id="playback-clock">--:--</strong>
+    <span id="playback-distance">0m</span>
   </div>
   <script>
     (() => {
@@ -45,6 +55,10 @@
       const statusTitle = statusRoot.querySelector('strong');
       const statusText = statusRoot.querySelector('span');
       const statusCode = document.getElementById('map-status-code');
+      const playbackHud = document.getElementById('playback-hud');
+      const playbackStatus = document.getElementById('playback-status');
+      const playbackClock = document.getElementById('playback-clock');
+      const playbackDistance = document.getElementById('playback-distance');
       let map;
       let overlays = [];
       let focusOverlay = null;
@@ -216,12 +230,20 @@
         focusOverlay = null;
       };
 
+      const hidePlaybackHud = () => {
+        playbackHud.hidden = true;
+      };
+
       const stopPlayback = (restore = true, state = 'stopped') => {
         if (!playback) return;
         if (playback.raf) cancelAnimationFrame(playback.raf);
+        if (playback.timer) window.clearTimeout(playback.timer);
         try { playback.marker?.setMap(null); } catch {}
-        try { playback.line?.setMap(null); } catch {}
+        for (const line of playback.lines || []) {
+          try { line.setMap(null); } catch {}
+        }
         playback = null;
+        hidePlaybackHud();
         send('playback-state', { state });
         if (restore && lastRender.visits.length) render(lastRender, true);
       };
@@ -330,10 +352,138 @@
         }
       };
 
+      const PLAYBACK_CONTINUOUS_GAP_MS = 5 * 60 * 1000;
+      const PLAYBACK_STOP_GAP_MS = 75 * 1000;
+      const PLAYBACK_STOP_DISTANCE_METERS = 45;
+
+      const clamp = (min, max, value) => Math.min(max, Math.max(min, value));
+
+      const playbackDistanceMeters = (from, to) => {
+        const lat1 = Number(from.latitude) * Math.PI / 180;
+        const lat2 = Number(to.latitude) * Math.PI / 180;
+        const deltaLat = lat2 - lat1;
+        const deltaLng = (Number(to.longitude) - Number(from.longitude)) * Math.PI / 180;
+        const haversine = Math.sin(deltaLat / 2) ** 2
+          + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
+        return 6_371_000 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+      };
+
+      const playbackDistanceText = (meters) => {
+        if (!Number.isFinite(meters) || meters <= 0) return '0m';
+        if (meters >= 10_000) return Math.round(meters / 1000) + 'km';
+        if (meters >= 1000) return (meters / 1000).toFixed(1) + 'km';
+        return Math.round(meters) + 'm';
+      };
+
+      const buildPlaybackTimeline = (ordered) => {
+        const segments = [];
+        let totalDistanceMeters = 0;
+        let stopCount = 0;
+
+        for (let index = 0; index < ordered.length - 1; index += 1) {
+          const from = ordered[index];
+          const to = ordered[index + 1];
+          const fromTime = Date.parse(from.arrivedAt || '');
+          const toTime = Date.parse(to.arrivedAt || '');
+          const realGapMs = Number.isFinite(fromTime) && Number.isFinite(toTime) && toTime > fromTime
+            ? toTime - fromTime
+            : 60_000;
+          const distanceMeters = playbackDistanceMeters(from, to);
+          const reconnect = realGapMs > PLAYBACK_CONTINUOUS_GAP_MS;
+          const staying = !reconnect
+            && realGapMs >= PLAYBACK_STOP_GAP_MS
+            && distanceMeters <= PLAYBACK_STOP_DISTANCE_METERS;
+          const kind = reconnect ? 'reconnect' : staying ? 'stay' : 'move';
+
+          const distanceBeforeMeters = totalDistanceMeters;
+          if (kind === 'move') totalDistanceMeters += distanceMeters;
+          if (kind === 'stay') stopCount += 1;
+
+          let rawDurationMs;
+          let rawHoldMs = 0;
+          if (kind === 'reconnect') {
+            rawDurationMs = 420;
+            rawHoldMs = 650;
+          } else if (kind === 'stay') {
+            rawDurationMs = 320;
+            rawHoldMs = clamp(520, 1_600, 520 + (realGapMs / 60_000) * 95);
+          } else {
+            rawDurationMs = clamp(
+              430,
+              2_200,
+              330 + Math.sqrt(Math.max(1, distanceMeters)) * 34
+                + Math.log1p(realGapMs / 1000) * 62,
+            );
+          }
+
+          segments.push({
+            index,
+            kind,
+            realGapMs,
+            distanceMeters,
+            distanceBeforeMeters,
+            rawDurationMs,
+            rawHoldMs,
+            durationMs: rawDurationMs,
+            holdMs: rawHoldMs,
+          });
+        }
+
+        const rawPlaybackMs = segments.reduce((sum, segment) => sum + segment.rawDurationMs + segment.rawHoldMs, 0);
+        const targetPlaybackMs = clamp(
+          7_000,
+          45_000,
+          3_500 + segments.length * 480 + stopCount * 420,
+        );
+        const scale = rawPlaybackMs > 0 ? clamp(0.45, 1.15, targetPlaybackMs / rawPlaybackMs) : 1;
+        for (const segment of segments) {
+          segment.durationMs = clamp(260, 1_850, Math.round(segment.rawDurationMs * scale));
+          segment.holdMs = segment.rawHoldMs
+            ? clamp(350, 1_450, Math.round(segment.rawHoldMs * scale))
+            : 0;
+        }
+
+        const firstTime = Date.parse(ordered[0]?.arrivedAt || '');
+        const lastTime = Date.parse(ordered[ordered.length - 1]?.arrivedAt || '');
+        return {
+          segments,
+          totalDistanceMeters: Math.round(totalDistanceMeters),
+          realDurationMs: Number.isFinite(firstTime) && Number.isFinite(lastTime) && lastTime >= firstTime
+            ? lastTime - firstTime
+            : 0,
+          playbackDurationMs: segments.reduce((sum, segment) => sum + segment.durationMs + segment.holdMs, 0),
+          stopCount,
+        };
+      };
+
+      const updatePlaybackHud = (ordered, timeline, segment, ratio = 0, statusOverride = '') => {
+        playbackHud.hidden = false;
+        const fromTime = Date.parse(ordered[segment.index]?.arrivedAt || '');
+        const toTime = Date.parse(ordered[segment.index + 1]?.arrivedAt || '');
+        const safeRatio = clamp(0, 1, ratio);
+        const currentTime = Number.isFinite(fromTime) && Number.isFinite(toTime)
+          ? fromTime + (toTime - fromTime) * safeRatio
+          : fromTime;
+        playbackClock.textContent = Number.isFinite(currentTime)
+          ? timeText(new Date(currentTime).toISOString())
+          : '--:--';
+        const traveled = segment.distanceBeforeMeters
+          + (segment.kind === 'move' ? segment.distanceMeters * safeRatio : 0);
+        playbackDistance.textContent = playbackDistanceText(traveled);
+        playbackStatus.textContent = statusOverride || (
+          segment.kind === 'reconnect'
+            ? '잠깐 떨어졌다 다시 만난 구간'
+            : segment.kind === 'stay'
+              ? '함께 머무는 중'
+              : '함께 이동 중'
+        );
+      };
+
       const playRoute = ({ visits = [], follow = true } = {}) => {
         if (!map || !hasMapSdk()) return;
         const ordered = (Array.isArray(visits) ? visits : [])
           .filter((visit) => Number.isFinite(Number(visit.latitude)) && Number.isFinite(Number(visit.longitude)))
+          .filter((visit) => Number.isFinite(Date.parse(visit.arrivedAt || '')))
           .sort((a, b) => new Date(a.arrivedAt || 0).getTime() - new Date(b.arrivedAt || 0).getTime());
         if (ordered.length < 2) {
           send('playback-state', { state: 'stopped', reason: 'not-enough-points' });
@@ -347,13 +497,14 @@
         const naver = window.naver;
         const palette = activePalette();
         const points = ordered.map((visit) => new naver.maps.LatLng(Number(visit.latitude), Number(visit.longitude)));
+        const timeline = buildPlaybackTimeline(ordered);
         const bounds = new naver.maps.LatLngBounds();
         points.forEach((point) => bounds.extend(point));
-        map.fitBounds(bounds, { top: 70, right: 48, bottom: 70, left: 48 });
+        map.fitBounds(bounds, { top: 70, right: 48, bottom: 82, left: 48 });
 
-        const line = new naver.maps.Polyline({
+        const createPlaybackLine = (startPoint) => new naver.maps.Polyline({
           map,
-          path: [points[0]],
+          path: [startPoint],
           strokeColor: palette.accent,
           strokeWeight: 5,
           strokeOpacity: 0.95,
@@ -361,6 +512,8 @@
           strokeLineJoin: 'round',
           zIndex: 900,
         });
+
+        const firstLine = createPlaybackLine(points[0]);
         const marker = new naver.maps.Marker({
           map,
           position: points[0],
@@ -368,33 +521,109 @@
           zIndex: 1200,
         });
 
-        playback = { line, marker, raf: 0, segment: 0, frame: 0 };
-        send('playback-state', { state: 'playing', progress: 0 });
+        playback = {
+          lines: [firstLine],
+          activeLine: firstLine,
+          currentPath: [points[0]],
+          marker,
+          raf: 0,
+          timer: 0,
+          segment: 0,
+          frame: 0,
+          timeline,
+        };
+        const firstSegment = timeline.segments[0];
+        if (firstSegment) updatePlaybackHud(ordered, timeline, firstSegment, 0, '데이트 재생 시작');
+        send('playback-state', {
+          state: 'playing',
+          progress: 0,
+          totalDistanceMeters: timeline.totalDistanceMeters,
+          realDurationMinutes: Math.max(1, Math.round(timeline.realDurationMs / 60_000)),
+          playbackDurationMs: timeline.playbackDurationMs,
+          stopCount: timeline.stopCount,
+        });
 
-        const animateSegment = (segment) => {
-          if (!playback || segment >= points.length - 1) {
+        const advanceAfterHold = (segment, nextSegment) => {
+          if (!playback) return;
+          if (!segment.holdMs) {
+            animateSegment(nextSegment);
+            return;
+          }
+          playback.timer = window.setTimeout(() => {
+            if (playback) animateSegment(nextSegment);
+          }, segment.holdMs);
+        };
+
+        const completeSegment = (segment, nextSegment) => {
+          if (!playback) return;
+          playback.segment = nextSegment;
+          send('playback-state', {
+            state: 'playing',
+            progress: nextSegment / timeline.segments.length,
+            index: nextSegment,
+            kind: segment.kind,
+            distanceMeters: Math.round(segment.distanceBeforeMeters
+              + (segment.kind === 'move' ? segment.distanceMeters : 0)),
+            totalDistanceMeters: timeline.totalDistanceMeters,
+          });
+          advanceAfterHold(segment, nextSegment);
+        };
+
+        const animateSegment = (segmentIndex) => {
+          if (!playback || segmentIndex >= timeline.segments.length) {
             if (playback) {
               playback.raf = 0;
-              send('playback-state', { state: 'ended', progress: 1 });
+              playback.timer = 0;
+              playbackStatus.textContent = '데이트 재생 완료';
+              playbackDistance.textContent = playbackDistanceText(timeline.totalDistanceMeters);
+              playbackClock.textContent = timeText(ordered[ordered.length - 1].arrivedAt);
+              send('playback-state', {
+                state: 'ended',
+                progress: 1,
+                totalDistanceMeters: timeline.totalDistanceMeters,
+                realDurationMinutes: Math.max(1, Math.round(timeline.realDurationMs / 60_000)),
+              });
             }
             return;
           }
 
-          const from = points[segment];
-          const to = points[segment + 1];
+          const segment = timeline.segments[segmentIndex];
+          const from = points[segmentIndex];
+          const to = points[segmentIndex + 1];
+          playback.segment = segmentIndex;
+
+          if (segment.kind === 'reconnect') {
+            updatePlaybackHud(ordered, timeline, segment, 0);
+            playback.timer = window.setTimeout(() => {
+              if (!playback) return;
+              marker.setPosition(to);
+              if (follow) map.panTo(to);
+              const nextLine = createPlaybackLine(to);
+              playback.lines.push(nextLine);
+              playback.activeLine = nextLine;
+              playback.currentPath = [to];
+              updatePlaybackHud(ordered, timeline, segment, 1, '다시 함께한 위치로 이동');
+              playback.timer = window.setTimeout(() => {
+                if (playback) completeSegment(segment, segmentIndex + 1);
+              }, segment.durationMs);
+            }, segment.holdMs);
+            return;
+          }
+
           const startedAt = performance.now();
-          const duration = 900;
-          const completed = points.slice(0, segment + 1);
+          const completed = playback.currentPath.slice();
+          updatePlaybackHud(ordered, timeline, segment, 0);
 
           const frame = (now) => {
             if (!playback) return;
-            const ratio = Math.min(1, Math.max(0, (now - startedAt) / duration));
+            const ratio = Math.min(1, Math.max(0, (now - startedAt) / segment.durationMs));
             const eased = ratio < .5 ? 2 * ratio * ratio : 1 - Math.pow(-2 * ratio + 2, 2) / 2;
             const latitude = from.lat() + (to.lat() - from.lat()) * eased;
             const longitude = from.lng() + (to.lng() - from.lng()) * eased;
             const current = new naver.maps.LatLng(latitude, longitude);
             marker.setPosition(current);
-            line.setPath([...completed, current]);
+            playback.activeLine.setPath([...completed, current]);
+            updatePlaybackHud(ordered, timeline, segment, eased);
 
             playback.frame += 1;
             if (follow && playback.frame % 8 === 0) map.panTo(current);
@@ -404,22 +633,19 @@
               return;
             }
 
-            const nextSegment = segment + 1;
-            playback.segment = nextSegment;
-            send('playback-state', {
-              state: 'playing',
-              progress: nextSegment / (points.length - 1),
-              index: nextSegment,
-            });
-            animateSegment(nextSegment);
+            playback.currentPath = [...completed, to];
+            if (segment.kind === 'stay') {
+              updatePlaybackHud(ordered, timeline, segment, 1, '함께 머문 시간');
+            }
+            completeSegment(segment, segmentIndex + 1);
           };
 
           playback.raf = requestAnimationFrame(frame);
         };
 
-        window.setTimeout(() => {
+        playback.timer = window.setTimeout(() => {
           if (playback) animateSegment(0);
-        }, 280);
+        }, 420);
       };
 
       const focus = (visit, showPopup = true) => {
