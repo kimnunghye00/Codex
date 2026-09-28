@@ -1,5 +1,5 @@
 import type { JointRoutePoint } from './footprintFoundation';
-import { footprintPointDistanceMeters } from './footprintVideoPlan';
+import { footprintPointDistanceMeters } from './footprintVideoPlan.ts';
 
 export const FOOTPRINT_VIDEO_PRIVACY_RADIUS_METERS = 200;
 
