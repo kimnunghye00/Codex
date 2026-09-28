@@ -139,6 +139,8 @@ export function FootprintsPage({
   const [mapReady, setMapReady] = useState(false);
   const [mapFailed, setMapFailed] = useState(false);
   const [playbackState, setPlaybackState] = useState<'idle' | 'playing'>('idle');
+  const [selectedSessionId, setSelectedSessionId] = useState<string>();
+  const [queuedSessionPlaybackId, setQueuedSessionPlaybackId] = useState<string>();
   const frame = useRef<HTMLIFrameElement>(null);
 
   const partnerUid = connection?.partnerUid ?? '';
@@ -237,6 +239,28 @@ export function FootprintsPage({
     () => buildJointDateSessions(jointRoutePoints),
     [jointRoutePoints],
   );
+  const selectedSessionIndex = selectedSessionId
+    ? dateSessions.findIndex((session) => session.id === selectedSessionId)
+    : -1;
+  const selectedSession = selectedSessionIndex >= 0 ? dateSessions[selectedSessionIndex] : undefined;
+  const selectedSessionRoutePoints = useMemo(() => {
+    if (!selectedSession) return jointRoutePoints;
+    const pointIds = new Set(selectedSession.pointIds);
+    return jointRoutePoints.filter((point) => pointIds.has(point.id));
+  }, [jointRoutePoints, selectedSession]);
+
+  useEffect(() => {
+    if (scope !== 'together') {
+      if (selectedSessionId) setSelectedSessionId(undefined);
+      if (queuedSessionPlaybackId) setQueuedSessionPlaybackId(undefined);
+      return;
+    }
+    if (selectedSessionId && selectedSessionIndex < 0) {
+      setSelectedSessionId(undefined);
+      setQueuedSessionPlaybackId(undefined);
+    }
+  }, [queuedSessionPlaybackId, scope, selectedSessionId, selectedSessionIndex]);
+
   const jointById = useMemo(
     () => new Map(jointVisits.map((visit) => [visit.id, visit])),
     [jointVisits],
@@ -260,7 +284,7 @@ export function FootprintsPage({
         arrivedAt: sample.recordedAt,
       }));
     }
-    const source = scope === 'together' && jointRoutePoints.length ? jointRoutePoints : visible;
+    const source = scope === 'together' && selectedSessionRoutePoints.length ? selectedSessionRoutePoints : visible;
     return source.map((visit) => ({
       id: visit.id,
       latitude: visit.latitude,
@@ -270,7 +294,7 @@ export function FootprintsPage({
       arrivedAt: visit.arrivedAt,
       leftAt: 'leftAt' in visit ? visit.leftAt : undefined,
     }));
-  }, [jointRoutePoints, partnerSamples, scope, visible]);
+  }, [partnerSamples, scope, selectedSessionRoutePoints, visible]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setMapFailed(true), 12_000);
@@ -309,6 +333,39 @@ export function FootprintsPage({
       routeOnly: mapVisits.length > 20,
     }, MAP_ORIGIN);
   }, [mapReady, mapVisits]);
+
+  useEffect(() => {
+    if (!queuedSessionPlaybackId || !mapReady || !selectedSession
+      || selectedSession.id !== queuedSessionPlaybackId) return;
+    if (mapVisits.length < 2) {
+      setQueuedSessionPlaybackId(undefined);
+      return;
+    }
+    frame.current?.contentWindow?.postMessage({
+      source: 'route-map-parent',
+      type: 'play-route',
+      visits: mapVisits,
+      follow: true,
+    }, MAP_ORIGIN);
+    setQueuedSessionPlaybackId(undefined);
+  }, [mapReady, mapVisits, queuedSessionPlaybackId, selectedSession]);
+
+  const playSession = (sessionId: string) => {
+    if (!dateSessions.some((session) => session.id === sessionId)) return;
+    setSelectedSessionId(sessionId);
+    setQueuedSessionPlaybackId(sessionId);
+  };
+
+  const showWholeDay = () => {
+    if (playbackState === 'playing') {
+      frame.current?.contentWindow?.postMessage({
+        source: 'route-map-parent',
+        type: 'stop-route-playback',
+      }, MAP_ORIGIN);
+    }
+    setSelectedSessionId(undefined);
+    setQueuedSessionPlaybackId(undefined);
+  };
 
   const togglePlayback = () => {
     if (!mapReady || mapVisits.length < 2) return;
@@ -422,16 +479,20 @@ export function FootprintsPage({
           disabled={!mapReady || mapVisits.length < 2}
           onClick={togglePlayback}
         >
-          {playbackState === 'playing' ? <><Square size={14} fill="currentColor" />재생 중지</> : <><Play size={15} fill="currentColor" />발자취 재생</>}
+          {playbackState === 'playing'
+            ? <><Square size={14} fill="currentColor" />재생 중지</>
+            : <><Play size={15} fill="currentColor" />{selectedSession ? '선택 데이트 재생' : '발자취 재생'}</>}
         </button>
         <div className="footprints-map-badge">
           {scope === 'partner'
             ? partnerSamples.length
               ? partnerName + ' GPS · 서버 실시간 샘플 ' + partnerSamples.length + '개'
               : partnerName + '의 GPS 경로만 표시'
-            : jointRoutePoints.length
-              ? '반복 교차검증된 함께 이동 구간'
-              : '두 사람 GPS 교차검증 완료 장소'}
+            : selectedSession
+              ? '데이트 ' + (selectedSessionIndex + 1) + ' · 교차검증 ' + selectedSession.verifiedPointCount + '개 지점'
+              : jointRoutePoints.length
+                ? '반복 교차검증된 함께 이동 구간'
+                : '두 사람 GPS 교차검증 완료 장소'}
         </div>
       </section>
 
@@ -441,7 +502,11 @@ export function FootprintsPage({
             <small>{scope === 'partner' ? 'PARTNER GPS' : 'CROSS-CHECKED'}</small>
             <h2>{scope === 'partner' ? partnerName + '의 발자취' : '함께 있었던 장소'}</h2>
           </div>
-          <span>{scope === 'together' && dateSessions.length ? dateSessions.length + '번 데이트' : shown.length + '곳'}</span>
+          <span>{scope === 'together' && selectedSession
+            ? '데이트 ' + (selectedSessionIndex + 1) + ' 선택'
+            : scope === 'together' && dateSessions.length
+              ? dateSessions.length + '번 데이트'
+              : shown.length + '곳'}</span>
         </div>
 
         {scope === 'partner' && latestPartnerSample && <div className="footprints-live">
@@ -450,14 +515,31 @@ export function FootprintsPage({
         </div>}
 
         {scope === 'together' && dateSessions.length > 0 && <div className="footprints-sessions">
-          {dateSessions.map((session, index) => <article key={session.id}>
-            <span><UsersRound size={15} /></span>
-            <div>
-              <b>데이트 {index + 1}</b>
-              <small>{timeLabel(session.startedAt)} ~ {timeLabel(session.endedAt)} · 약 {session.durationMinutes}분</small>
-              {session.reconnectCount > 0 && <em>잠깐 떨어졌다 다시 만난 구간 {session.reconnectCount}회 포함</em>}
-            </div>
-          </article>)}
+          <div className="footprints-session-toolbar">
+            <span>데이트를 누르면 해당 구간만 지도에 남기고 바로 재생해요.</span>
+            {selectedSession && <button type="button" onClick={showWholeDay}>하루 전체 보기</button>}
+          </div>
+          {dateSessions.map((session, index) => {
+            const selected = session.id === selectedSessionId;
+            return <button
+              type="button"
+              key={session.id}
+              className={'footprints-session-card ' + (selected ? 'selected' : '')}
+              aria-pressed={selected}
+              onClick={() => playSession(session.id)}
+            >
+              <span className="footprints-session-icon"><UsersRound size={15} /></span>
+              <span className="footprints-session-copy">
+                <b>데이트 {index + 1}</b>
+                <small>{timeLabel(session.startedAt)} ~ {timeLabel(session.endedAt)} · 약 {session.durationMinutes}분 · 검증 {session.verifiedPointCount}개</small>
+                {session.reconnectCount > 0 && <em>잠깐 떨어졌다 다시 만난 구간 {session.reconnectCount}회 포함</em>}
+              </span>
+              <span className="footprints-session-action">
+                <Play size={13} fill="currentColor" />
+                {selected && playbackState === 'playing' ? '재생 중' : '재생'}
+              </span>
+            </button>;
+          })}
         </div>}
 
         {!connection ? <div className="footprints-empty">
