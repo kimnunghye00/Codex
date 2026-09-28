@@ -1,7 +1,9 @@
 package com.e2.danduli;
 
+import android.content.ClipData;
 import android.content.ContentResolver;
 import android.content.ContentValues;
+import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
@@ -169,6 +171,52 @@ public class MediaSaverPlugin extends Plugin {
                 call.reject("VIDEO_SAVE_FAILED", error);
             }
         }, "danduli-video-saver").start();
+    }
+
+
+    @PluginMethod
+    public void shareVideo(PluginCall call) {
+        String sourceUri = call.getString("uri", "").trim();
+        String requestedMimeType = call.getString("mimeType", "video/webm").trim();
+        String title = call.getString("title", "단둘이 발자취").trim();
+        if (sourceUri.isEmpty()) {
+            call.reject("VIDEO_SHARE_URI_REQUIRED");
+            return;
+        }
+
+        String contentType = requestedMimeType.split(";", 2)[0].trim().toLowerCase();
+        if (!"video/mp4".equals(contentType) && !"video/webm".equals(contentType)) {
+            call.reject("VIDEO_SHARE_MIME_UNSUPPORTED");
+            return;
+        }
+
+        try {
+            Uri uri = Uri.parse(sourceUri);
+            if (!"content".equalsIgnoreCase(uri.getScheme())) {
+                call.reject("VIDEO_SHARE_CONTENT_URI_REQUIRED");
+                return;
+            }
+
+            Intent shareIntent = new Intent(Intent.ACTION_SEND);
+            shareIntent.setType(contentType);
+            shareIntent.putExtra(Intent.EXTRA_STREAM, uri);
+            shareIntent.setClipData(ClipData.newRawUri("DANDULI footprint video", uri));
+            shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+            Intent chooser = Intent.createChooser(
+                    shareIntent,
+                    title.isEmpty() ? "단둘이 발자취 공유" : title
+            );
+            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            getContext().startActivity(chooser);
+
+            JSObject result = new JSObject();
+            result.put("shared", true);
+            call.resolve(result);
+        } catch (Exception error) {
+            call.reject("VIDEO_SHARE_FAILED", error);
+        }
     }
 
 }

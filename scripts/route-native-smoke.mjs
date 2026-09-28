@@ -127,6 +127,12 @@ check('Android footprint video saves into app-owned Movies folder',
 check('Android video saver does not widen legacy storage access',
   mediaSaver.includes('VIDEO_SAVE_REQUIRES_ANDROID_10')
   && !manifest.includes('WRITE_EXTERNAL_STORAGE'));
+check('Android footprint video share uses content URI chooser with read grant',
+  mediaSaver.includes('shareVideo(PluginCall call)')
+  && mediaSaver.includes('Intent.ACTION_SEND')
+  && mediaSaver.includes('Intent.createChooser')
+  && mediaSaver.includes('Intent.FLAG_GRANT_READ_URI_PERMISSION')
+  && mediaSaver.includes('VIDEO_SHARE_CONTENT_URI_REQUIRED'));
 
 check('four DANDULI launcher aliases exist', ['DanduliDefaultLauncher', 'DanduliChatLauncher', 'DanduliLoveLauncher', 'DanduliDateLauncher'].every((name) => manifest.includes(name)));
 check('launcher repair receiver is registered', manifest.includes('LauncherRepairReceiver') && manifest.includes('android.intent.action.MY_PACKAGE_REPLACED'));
