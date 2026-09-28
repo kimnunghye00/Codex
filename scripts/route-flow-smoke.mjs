@@ -198,21 +198,28 @@ check('footprint video UI forces sensitive-location protection for save and shar
   read('src/components/footprints/FootprintsPage.tsx').includes('hideSensitiveLocations: true')
   && read('src/components/footprints/FootprintsPage.tsx').includes('민감 위치 자동 보호')
   && read('src/components/footprints/FootprintsPage.tsx').includes('바로 공유'));
-check('footprint videos attach album photos only through verified date/place matches',
+check('footprint videos attach album media only through verified date/place matches',
   footprintVideoMemories.includes('buildFootprintVideoMemoryMoments')
   && footprintVideoMemories.includes('memory.date !== routeDay')
   && footprintVideoMemories.includes('samePlace(item.placeName, memory.location)')
-  && footprintVideoMemories.includes('nearestDistance > 300'));
-check('footprint video memory photos pause route playback and stay privacy-filtered',
+  && footprintVideoMemories.includes('nearestDistance > 300')
+  && footprintVideoMemories.includes("kind: 'photo' | 'video'"));
+check('footprint video memory media pauses route playback and stays privacy-filtered',
   footprintVideoExport.includes('MEMORY_PHOTO_HOLD_MS')
+  && footprintVideoExport.includes('MEMORY_VIDEO_MAX_MS = 3_000')
   && footprintVideoExport.includes('presentationState')
-  && footprintVideoExport.includes('drawMemoryPhoto')
+  && footprintVideoExport.includes('drawMemoryMedia')
   && footprintVideoExport.includes('allowedPointIds')
-  && footprintVideoExport.includes('loadMemoryPhotos(options.memoryMoments, allowedPointIds)'));
+  && footprintVideoExport.includes('loadMemoryMediaMoments(options.memoryMoments, allowedPointIds)'));
+check('footprint video renders muted short clips with arrival titles',
+  footprintVideoExport.includes('video.muted = true')
+  && footprintVideoExport.includes("frame.kind === 'video'")
+  && footprintVideoExport.includes("' · 도착'")
+  && footprintVideoExport.includes("context.fillText('▶ 짧은 영상'"));
 check('footprint video UI passes matched album moments into save and share exports',
   read('src/components/footprints/FootprintsPage.tsx').includes('videoMemoryMoments')
   && read('src/components/footprints/FootprintsPage.tsx').includes('memoryMoments: videoMemoryMoments')
-  && read('src/components/footprints/FootprintsPage.tsx').includes('앨범 추억 자동 삽입'));
+  && read('src/components/footprints/FootprintsPage.tsx').includes('영상 클립은 최대 약 3초, 무음'));
 
 check('Root protects unauthenticated flow', root.includes('if (!user) return <Suspense') && root.includes('<AuthFlow />'));
 check('Root protects first profile setup flow', root.includes('<ProfileSetup'));

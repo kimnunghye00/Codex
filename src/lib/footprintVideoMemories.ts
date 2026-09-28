@@ -6,7 +6,10 @@ export type FootprintVideoMemoryMoment = {
   id: string;
   memoryId: number;
   pointId: string;
-  imageUrl: string;
+  kind: 'photo' | 'video';
+  mediaUrl: string;
+  placeName: string;
+  memoryTitle: string;
 };
 
 const KOREAN_DATE = new Intl.DateTimeFormat('en-US', {
@@ -89,29 +92,47 @@ export function buildFootprintVideoMemoryMoments(
     const photos = memory.images
       .filter((url) => typeof url === 'string' && url.trim() && !isVideoSource(url))
       .slice(0, 2);
+    const embeddedVideos = memory.images
+      .filter((url) => typeof url === 'string' && url.trim() && isVideoSource(url));
+    const legacyVideos = (memory.videos ?? [])
+      .filter((url) => typeof url === 'string' && url.trim() && isVideoSource(url));
+    const videos = Array.from(new Set([...embeddedVideos, ...legacyVideos])).slice(0, 1);
 
-    for (let imageIndex = 0; imageIndex < photos.length; imageIndex += 1) {
-      const imageUrl = photos[imageIndex];
-      if (seenUrls.has(imageUrl)) continue;
-      seenUrls.add(imageUrl);
+    const pushMoment = (kind: 'photo' | 'video', mediaUrl: string, mediaIndex: number) => {
+      if (seenUrls.has(mediaUrl)) return;
+      seenUrls.add(mediaUrl);
       candidates.push({
-        id: 'memory-photo:' + memory.id + ':' + imageIndex,
+        id: 'memory-' + kind + ':' + memory.id + ':' + mediaIndex,
         memoryId: memory.id,
         pointId: nearest.id,
-        imageUrl,
+        kind,
+        mediaUrl,
+        placeName: visit.placeName?.trim() || memory.location?.trim() || '함께 있었던 장소',
+        memoryTitle: memory.title.trim() || '우리의 추억',
         routeIndex: pointIndex.get(nearest.id) ?? Number.MAX_SAFE_INTEGER,
         distanceMeters: nearestDistance,
       });
-    }
+    };
+
+    photos.forEach((url, index) => pushMoment('photo', url, index));
+    videos.forEach((url, index) => pushMoment('video', url, index));
   }
 
   return candidates
     .sort((a, b) => a.routeIndex - b.routeIndex || a.distanceMeters - b.distanceMeters || a.memoryId - b.memoryId)
-    .slice(0, Math.max(0, Math.floor(maxMoments)))
+    .reduce<Array<typeof candidates[number]>>((selected, item) => {
+      if (selected.length >= Math.max(0, Math.floor(maxMoments))) return selected;
+      if (item.kind === 'video' && selected.filter((value) => value.kind === 'video').length >= 2) return selected;
+      selected.push(item);
+      return selected;
+    }, [])
     .map((item) => ({
       id: item.id,
       memoryId: item.memoryId,
       pointId: item.pointId,
-      imageUrl: item.imageUrl,
+      kind: item.kind,
+      mediaUrl: item.mediaUrl,
+      placeName: item.placeName,
+      memoryTitle: item.memoryTitle,
     }));
 }
