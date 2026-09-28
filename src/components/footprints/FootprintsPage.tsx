@@ -11,6 +11,7 @@ import {
   PauseCircle,
   Play,
   ShieldCheck,
+  Share2,
   Square,
   UsersRound,
   Video,
@@ -33,6 +34,7 @@ import {
 import { ensureLocationPermission } from '../../lib/native';
 import {
   exportFootprintVideo,
+  shareFootprintVideo,
   type FootprintVideoOrientation,
 } from '../../lib/footprintVideoExport';
 import { PERSISTENT_STATE_CHANGE_EVENT } from '../../utils/persistenceSignal';
@@ -100,6 +102,8 @@ function videoExportErrorMessage(error: unknown) {
   }
   if (message.includes('VIDEO_FORMAT_UNSUPPORTED')) return '이 기기에서 저장 가능한 영상 형식을 찾지 못했어요.';
   if (message.includes('VIDEO_SAVE_REQUIRES_ANDROID_10')) return 'Android 10 이상에서 갤러리 영상 저장을 지원해요.';
+  if (message.includes('VIDEO_SHARE_CANCELLED')) return '영상 공유를 취소했어요.';
+  if (message.includes('VIDEO_SHARE')) return '영상 공유 화면을 열지 못했어요.';
   if (message.includes('VIDEO_SAVE') || message.includes('VIDEO_NATIVE_SAVE')) return '영상 파일을 저장하지 못했어요.';
   return '영상 생성 중 오류가 발생했어요. 다시 시도해 주세요.';
 }
@@ -460,15 +464,57 @@ export function FootprintsPage({
         subtitle: '데이트 ' + (selectedSessionIndex + 1),
         durationMinutes: selectedSession.durationMinutes,
         fileBaseName: 'DANDULI-' + day + '-date-' + (selectedSessionIndex + 1) + '-' + videoOrientation,
+        hideSensitiveLocations: true,
         onProgress: (progress) => {
           setVideoExportProgress(progress);
           if (progress < 0.98) setVideoExportStatus('영상 만드는 중 · ' + Math.round(progress * 100) + '%');
         },
       });
       setVideoExportProgress(1);
+      const privacyText = result.privacyProtected
+        ? ' · 민감 위치 보호 적용' + (result.hiddenPointCount ? ' (' + result.hiddenPointCount + '개 경로점 제외)' : '')
+        : '';
       setVideoExportStatus(result.savedTo === 'gallery'
-        ? result.fileName + ' · 갤러리 Movies/DANDULI에 저장했어요.'
-        : result.fileName + ' · 다운로드를 시작했어요.');
+        ? result.fileName + ' · 갤러리 Movies/DANDULI에 저장했어요.' + privacyText
+        : result.fileName + ' · 다운로드를 시작했어요.' + privacyText);
+    } catch (error) {
+      setVideoExportProgress(0);
+      setVideoExportStatus(videoExportErrorMessage(error));
+    } finally {
+      setVideoExportBusy(false);
+    }
+  };
+
+  const shareSelectedSessionVideo = async () => {
+    if (!selectedSession || selectedSessionIndex < 0 || selectedSessionRoutePoints.length < 2 || videoExportBusy) return;
+    setVideoExportBusy(true);
+    setVideoExportProgress(0);
+    setVideoExportStatus('민감 위치를 보호한 공유 영상을 준비하고 있어요.');
+    try {
+      const result = await shareFootprintVideo({
+        points: selectedSessionRoutePoints,
+        orientation: videoOrientation,
+        title: selectedDate + ' 우리 데이트',
+        subtitle: '데이트 ' + (selectedSessionIndex + 1),
+        durationMinutes: selectedSession.durationMinutes,
+        fileBaseName: 'DANDULI-' + day + '-date-' + (selectedSessionIndex + 1) + '-' + videoOrientation,
+        hideSensitiveLocations: true,
+        onProgress: (progress) => {
+          setVideoExportProgress(progress);
+          if (progress < 0.98) setVideoExportStatus('공유 영상 만드는 중 · ' + Math.round(progress * 100) + '%');
+        },
+      });
+      setVideoExportProgress(1);
+      const privacyText = result.hiddenPointCount
+        ? ' 민감 위치 주변 경로점 ' + result.hiddenPointCount + '개를 제외했어요.'
+        : ' 시작·종료 위치 정보는 보호했어요.';
+      if (result.shared) {
+        setVideoExportStatus('공유 화면을 열었어요.' + privacyText);
+      } else if (result.shareFallback) {
+        setVideoExportStatus('이 브라우저는 파일 공유를 지원하지 않아 대신 영상을 다운로드했어요.' + privacyText);
+      } else {
+        setVideoExportStatus('공유 영상을 준비했어요.' + privacyText);
+      }
     } catch (error) {
       setVideoExportProgress(0);
       setVideoExportStatus(videoExportErrorMessage(error));
@@ -754,7 +800,8 @@ export function FootprintsPage({
 
             <div className="footprints-video-summary">
               <span><b>영상 내용</b><small>GPS 교차검증 경로 · 시간 · 누적 이동거리 · 정차/재연결 · 엔딩 카드</small></span>
-              <span><b>개인정보</b><small>원본 좌표 숫자는 영상에 표시하지 않아요. 지도 타일 대신 발자취 전용 그래픽으로 저장해요.</small></span>
+              <span className="privacy"><b><ShieldCheck size={13} />민감 위치 자동 보호</b><small>저장·공유 영상은 첫·마지막 약 200m를 자동으로 제외해요. 경로가 너무 짧으면 시작·종료 장소명만 제거해 영상을 유지해요.</small></span>
+              <span><b>지도 개인정보</b><small>원본 좌표 숫자와 지도 타일은 영상에 넣지 않아요. 발자취 전용 그래픽만 사용해요.</small></span>
             </div>
 
             {(videoExportBusy || videoExportProgress > 0) && <div className="footprints-video-progress" aria-label="영상 생성 진행률">
@@ -762,16 +809,26 @@ export function FootprintsPage({
             </div>}
             <p className={'footprints-video-status ' + (videoExportProgress >= 1 ? 'done' : '')}>{videoExportStatus}</p>
 
-            <button
-              type="button"
-              className="footprints-video-save"
-              disabled={videoExportBusy}
-              onClick={() => void saveSelectedSessionVideo()}
-            >
-              {videoExportBusy
-                ? <><Video size={16} />영상 만드는 중…</>
-                : <><Download size={16} />{videoExportProgress >= 1 ? '다시 저장하기' : '영상 파일 저장'}</>}
-            </button>
+            <div className="footprints-video-actions">
+              <button
+                type="button"
+                className="footprints-video-share"
+                disabled={videoExportBusy}
+                onClick={() => void shareSelectedSessionVideo()}
+              >
+                {videoExportBusy
+                  ? <><Video size={16} />영상 만드는 중…</>
+                  : <><Share2 size={16} />바로 공유</>}
+              </button>
+              <button
+                type="button"
+                className="footprints-video-save"
+                disabled={videoExportBusy}
+                onClick={() => void saveSelectedSessionVideo()}
+              >
+                <Download size={16} />{videoExportProgress >= 1 ? '다시 저장' : '파일 저장'}
+              </button>
+            </div>
           </div>
         </div>
       </section>
