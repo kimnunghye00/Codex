@@ -15,8 +15,7 @@ export type FootprintVideoPrivacyResult = {
 
 function stripPlaceName(point: JointRoutePoint): JointRoutePoint {
   if (!point.placeName) return point;
-  const { placeName: _placeName, ...rest } = point;
-  return rest;
+  return { ...point, placeName: undefined };
 }
 
 function sanitizeBoundaryNames(points: readonly JointRoutePoint[]) {
