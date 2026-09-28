@@ -140,7 +140,7 @@ export function FootprintsPage({
   const [mapFailed, setMapFailed] = useState(false);
   const [playbackState, setPlaybackState] = useState<'idle' | 'playing'>('idle');
   const [selectedSessionId, setSelectedSessionId] = useState<string>();
-  const sessionPlaybackRequest = useRef<string>();
+  const sessionPlaybackRequest = useRef<string | undefined>(undefined);
   const frame = useRef<HTMLIFrameElement>(null);
 
   const partnerUid = connection?.partnerUid ?? '';
