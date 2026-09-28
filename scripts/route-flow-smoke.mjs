@@ -30,6 +30,7 @@ const requiredFiles = [
   'src/lib/firebase.ts',
   'src/lib/firestoreCacheReset.ts',
   'src/lib/footprintVideoPlan.ts',
+  'src/lib/footprintVideoPrivacy.ts',
   'src/lib/footprintVideoExport.ts',
   'src/lib/coupleConnection.ts',
   'src/components/couple/CoupleConnect.tsx',
@@ -67,6 +68,7 @@ const firebase = read('src/lib/firebase.ts');
 const firebaseAuth = read('src/lib/firebaseAuth.ts');
 const firestoreCacheReset = read('src/lib/firestoreCacheReset.ts');
 const footprintVideoPlan = read('src/lib/footprintVideoPlan.ts');
+const footprintVideoPrivacy = read('src/lib/footprintVideoPrivacy.ts');
 const footprintVideoExport = read('src/lib/footprintVideoExport.ts');
 const accountPolicy = read('src/utils/accountIsolationPolicy.ts');
 const coupleConnection = read('src/lib/coupleConnection.ts');
@@ -176,6 +178,19 @@ check('footprint video export prefers mp4 and falls back to webm',
 check('footprint video export saves Android output through RouteMediaSaver',
   footprintVideoExport.includes("registerPlugin<RouteMediaSaverPlugin>('RouteMediaSaver')")
   && footprintVideoExport.includes('RouteMediaSaver.saveVideo'));
+check('footprint video exports automatically protect sensitive endpoints',
+  footprintVideoPrivacy.includes('FOOTPRINT_VIDEO_PRIVACY_RADIUS_METERS = 200')
+  && footprintVideoExport.includes('protectFootprintVideoRoute')
+  && footprintVideoExport.includes('options.hideSensitiveLocations !== false'));
+check('footprint video share supports native chooser and web file share fallback',
+  footprintVideoExport.includes('RouteMediaSaver.shareVideo')
+  && footprintVideoExport.includes('navigator.share')
+  && footprintVideoExport.includes('navigator.canShare')
+  && footprintVideoExport.includes('downloadWebVideo'));
+check('footprint video UI forces sensitive-location protection for save and share',
+  read('src/components/footprints/FootprintsPage.tsx').includes('hideSensitiveLocations: true')
+  && read('src/components/footprints/FootprintsPage.tsx').includes('민감 위치 자동 보호')
+  && read('src/components/footprints/FootprintsPage.tsx').includes('바로 공유'));
 
 check('Root protects unauthenticated flow', root.includes('if (!user) return <Suspense') && root.includes('<AuthFlow />'));
 check('Root protects first profile setup flow', root.includes('<ProfileSetup'));
