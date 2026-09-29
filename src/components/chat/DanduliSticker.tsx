@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import '../../danduli-stickers.css';
+import { isolatedStickerSprite } from '../../lib/stickerSpriteIsolation';
 
 export type DanduliStickerId = string;
 
@@ -79,12 +81,23 @@ export function stickerLabel(id: string) {
 
 export function DanduliSticker({ id, className = '' }: { id?: string; className?: string }) {
   const item = id ? STICKER_BY_ID.get(id as DanduliStickerId) : undefined;
+  const [isolatedSrc, setIsolatedSrc] = useState<string>();
+
+  useEffect(() => {
+    let active = true;
+    setIsolatedSrc(undefined);
+    if (!item?.sheet) return () => { active = false; };
+
+    void isolatedStickerSprite(item.sheet, item.row, item.col).then((src) => {
+      if (active && src) setIsolatedSrc(src);
+    });
+    return () => { active = false; };
+  }, [item?.sheet, item?.row, item?.col]);
+
   if (!item) return null;
   const x = item.col * (100 / 3);
   const y = item.row * (100 / 3);
-  const portraitClass = item.sheet
-    ? `danduli-sticker-portrait danduli-sticker-col-${item.col} danduli-sticker-row-${item.row}`
-    : '';
+  const portraitClass = item.sheet ? 'danduli-sticker-portrait' : '';
 
   return (
     <span
@@ -94,13 +107,16 @@ export function DanduliSticker({ id, className = '' }: { id?: string; className?
       title={item.label}
       style={item.sheet ? undefined : { backgroundPosition: `${x}% ${y}%` }}
     >
-      {item.sheet && <span
-        className="danduli-sticker-sprite-layer"
+      {item.sheet && isolatedSrc && <img
+        className="danduli-sticker-isolated-image"
+        src={isolatedSrc}
+        alt=""
         aria-hidden="true"
-        style={{
-          backgroundImage: `url('${item.sheet}')`,
-          backgroundPosition: `${x}% ${y}%`,
-        }}
+        draggable={false}
+      />}
+      {item.sheet && !isolatedSrc && <span
+        className="danduli-sticker-isolation-pending"
+        aria-hidden="true"
       />}
     </span>
   );
