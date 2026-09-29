@@ -33,6 +33,7 @@ const requiredFiles = [
   'src/lib/footprintVideoPrivacy.ts',
   'src/lib/footprintVideoMemories.ts',
   'src/lib/footprintVideoExport.ts',
+  'src/lib/stickerSpriteIsolation.ts',
   'src/lib/coupleConnection.ts',
   'src/components/couple/CoupleConnect.tsx',
   'src/components/home/CoupleHomeTools.tsx',
@@ -74,6 +75,7 @@ const footprintVideoPlan = read('src/lib/footprintVideoPlan.ts');
 const footprintVideoPrivacy = read('src/lib/footprintVideoPrivacy.ts');
 const footprintVideoMemories = read('src/lib/footprintVideoMemories.ts');
 const footprintVideoExport = read('src/lib/footprintVideoExport.ts');
+const stickerSpriteIsolation = read('src/lib/stickerSpriteIsolation.ts');
 const accountPolicy = read('src/utils/accountIsolationPolicy.ts');
 const coupleConnection = read('src/lib/coupleConnection.ts');
 const coupleConnect = read('src/components/couple/CoupleConnect.tsx');
@@ -138,16 +140,21 @@ check('voice/video call controls remain intentionally hidden', releaseFlags.incl
 check('call manager stays unmounted while calling is paused', !app.includes('<DanduliCallManager') && callManager.includes('subscribeCoupleCall'));
 check('call signaling is couple-scoped', coupleCall.includes("doc(db, 'couples', coupleId)") && coupleCall.includes('activeCall'));
 check('chat room CSS is feature-loaded only', chatStyles.includes('route-chat-room-v26.css') && !app.includes("import './route-chat-room-v26.css'"));
-check('portrait sticker sheets render through an isolated sprite layer',
-  danduliSticker.includes('danduli-sticker-sprite-layer')
-  && danduliSticker.includes('danduli-sticker-col-')
-  && danduliSticker.includes('danduli-sticker-row-')
-  && danduliStickerStyles.includes('background-image: none !important'));
-check('portrait sticker sprite edges mask neighbouring-cell bleed without zoom distortion',
-  danduliStickerStyles.includes('--sticker-safe-left: 10%')
-  && danduliStickerStyles.includes('--sticker-safe-top: 7.5%')
-  && danduliStickerStyles.includes('clip-path: inset(')
-  && danduliStickerStyles.includes('background-size: 400% 400%'));
+check('portrait sticker sheets render as isolated per-item images',
+  danduliSticker.includes('isolatedStickerSprite')
+  && danduliSticker.includes('danduli-sticker-isolated-image')
+  && stickerSpriteIsolation.includes('analyseComponents')
+  && stickerSpriteIsolation.includes('createIsolatedCell'));
+check('portrait sticker isolation keeps captions and artwork beyond nominal sprite cells',
+  stickerSpriteIsolation.includes('ROW_BOUNDARY_SHIFT = 0.16')
+  && stickerSpriteIsolation.includes('stickerSpriteOwnerForCentroid')
+  && stickerSpriteIsolation.includes('padX')
+  && stickerSpriteIsolation.includes('padY'));
+check('portrait sticker isolation removes neighboring components instead of clipping the target',
+  stickerSpriteIsolation.includes('ownerByComponent')
+  && stickerSpriteIsolation.includes('shouldKeepComponent')
+  && danduliStickerStyles.includes('object-fit: contain')
+  && !danduliStickerStyles.includes('clip-path: inset('));
 check('legacy square sticker pack keeps direct sprite rendering',
   danduliSticker.includes("style={item.sheet ? undefined : { backgroundPosition:")
   && danduliStickerStyles.includes("background-image: url('/danduli-stickers-v3-clean.webp')"));
