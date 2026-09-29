@@ -1,5 +1,5 @@
 const GRID_SIZE = 4;
-const ROW_BOUNDARY_SHIFT = 0.08;
+const ROW_BOUNDARY_SHIFT = 0.16;
 const ALPHA_THRESHOLD = 1;
 const MIN_COMPONENT_PIXELS = 24;
 
@@ -35,15 +35,27 @@ function loadSpriteImage(sheet: string) {
   });
 }
 
-function componentOwner(component: SpriteComponent, width: number, height: number) {
+export function stickerSpriteOwnerForCentroid(
+  centerX: number,
+  centerY: number,
+  width: number,
+  height: number,
+) {
   const cellWidth = width / GRID_SIZE;
   const cellHeight = height / GRID_SIZE;
-  const centerX = component.sumX / Math.max(1, component.count);
-  const centerY = component.sumY / Math.max(1, component.count);
   const col = clampIndex(Math.floor(centerX / cellWidth));
   const shiftedY = centerY + cellHeight * ROW_BOUNDARY_SHIFT;
   const row = clampIndex(Math.floor(shiftedY / cellHeight));
   return row * GRID_SIZE + col;
+}
+
+function componentOwner(component: SpriteComponent, width: number, height: number) {
+  return stickerSpriteOwnerForCentroid(
+    component.sumX / Math.max(1, component.count),
+    component.sumY / Math.max(1, component.count),
+    width,
+    height,
+  );
 }
 
 function shouldKeepComponent(component: SpriteComponent) {
@@ -54,9 +66,9 @@ function shouldKeepComponent(component: SpriteComponent) {
 
   const boxArea = width * height;
   const fillRatio = component.count / Math.max(1, boxArea);
-  const looksLikeTinySquareArtifact = width <= 14
-    && height <= 14
-    && fillRatio >= 0.72;
+  const looksLikeTinySquareArtifact = width <= 24
+    && height <= 24
+    && fillRatio >= 0.78;
   return !looksLikeTinySquareArtifact;
 }
 
