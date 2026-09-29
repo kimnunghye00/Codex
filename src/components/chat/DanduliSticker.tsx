@@ -81,20 +81,22 @@ export function stickerLabel(id: string) {
 
 export function DanduliSticker({ id, className = '' }: { id?: string; className?: string }) {
   const item = id ? STICKER_BY_ID.get(id as DanduliStickerId) : undefined;
-  const [isolatedSrc, setIsolatedSrc] = useState<string>();
+  const itemKey = item?.sheet ? `${item.sheet}:${item.row}:${item.col}` : '';
+  const [isolated, setIsolated] = useState<{ key: string; src: string }>();
 
   useEffect(() => {
+    if (!item?.sheet) return undefined;
     let active = true;
-    setIsolatedSrc(undefined);
-    if (!item?.sheet) return () => { active = false; };
+    const requestKey = `${item.sheet}:${item.row}:${item.col}`;
 
     void isolatedStickerSprite(item.sheet, item.row, item.col).then((src) => {
-      if (active && src) setIsolatedSrc(src);
+      if (active && src) setIsolated({ key: requestKey, src });
     });
     return () => { active = false; };
   }, [item?.sheet, item?.row, item?.col]);
 
   if (!item) return null;
+  const isolatedSrc = isolated?.key === itemKey ? isolated.src : undefined;
   const x = item.col * (100 / 3);
   const y = item.row * (100 / 3);
   const portraitClass = item.sheet ? 'danduli-sticker-portrait' : '';
