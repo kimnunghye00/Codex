@@ -130,46 +130,25 @@
   position: relative;
   aspect-ratio: 1122 / 1402;
   height: auto;
+  overflow: visible;
   background-image: none !important;
   background-color: transparent !important;
-  overflow: visible;
 }
-.danduli-sticker-sprite-layer {
-  --sticker-safe-top: 5%;
-  --sticker-safe-right: 5%;
-  --sticker-safe-bottom: 4.5%;
-  --sticker-safe-left: 6%;
-  position: absolute;
-  inset: 0;
+.danduli-sticker-isolated-image {
   display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
   pointer-events: none;
-  background-color: transparent;
-  background-repeat: no-repeat;
-  background-size: 400% 400%;
-  image-rendering: auto;
-  clip-path: inset(
-    var(--sticker-safe-top)
-    var(--sticker-safe-right)
-    var(--sticker-safe-bottom)
-    var(--sticker-safe-left)
-  );
+  user-select: none;
+  -webkit-user-drag: none;
 }
-/* The generated portrait sprite sheets contain a few stray edge pixels
- * from neighbouring cells. Keep the real sticker at its original scale
- * and mask only the unsafe outer gutter instead of zooming/distorting it. */
-.danduli-sticker-col-1 .danduli-sticker-sprite-layer,
-.danduli-sticker-col-2 .danduli-sticker-sprite-layer,
-.danduli-sticker-col-3 .danduli-sticker-sprite-layer {
-  --sticker-safe-left: 10%;
-}
-.danduli-sticker-col-3 .danduli-sticker-sprite-layer {
-  --sticker-safe-right: 6%;
-}
-.danduli-sticker-row-0 .danduli-sticker-sprite-layer {
-  --sticker-safe-top: 7.5%;
-}
-.danduli-sticker-row-3 .danduli-sticker-sprite-layer {
-  --sticker-safe-bottom: 6%;
+.danduli-sticker-isolation-pending {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: transparent;
 }
 .composer-sticker-tray .danduli-sticker-portrait { height: 90px; }
 .chat-sticker-art.danduli-sticker-portrait { height: 190px; }
