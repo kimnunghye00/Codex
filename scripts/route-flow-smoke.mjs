@@ -101,7 +101,7 @@ const responsiveFrame = read('src/components/layout/ResponsiveAppFrame.tsx');
 
 check('primary navigation terminology', includesAll(bottomNav, ["'홈'", "'추억'", "'대화'", "'지도'", "'더보기'"]));
 check('shared header owns notifications', header.includes('notification-button') && header.includes('onNotifications'));
-check('shared header owns settings', header.includes('onSettings') && header.includes('aria-label="설정"'));
+check('shared header owns settings', header.includes('onSettings') && header.includes('aria-label={settingsLabel}'));
 check('responsive frame owns desktop viewport', responsiveFrame.includes('lg:[&_.home-page]:!h-dvh') && responsiveFrame.includes('lg:[&_.home-page]:!min-h-0'));
 
 check('App routes home', app.includes("tab === 'home'"));
@@ -131,10 +131,14 @@ check('More does not search DOM for navigation', !more.includes('querySelectorAl
 
 check('chat screen title is 대화', chat.includes('<Header title="대화"'));
 check('chat realtime subscription is present', chat.includes('subscribeCoupleMessages'));
+check('chat header opens its own settings without a duplicate profile bar', chat.includes('onSettings={openChatMenu}') && !chat.includes('className="chat-profile"'));
+check('memories header opens tab and anniversary settings', memories.includes('onSettings={() => setOrderOpen(true)}'));
+check('map header opens search and display settings', read('src/components/location/DateMapPage.tsx').includes('settingsLabel="지도 설정"'));
+check('home and more headers open page settings', app.includes('settingsLabel="홈 설정"') && app.includes('settingsLabel="더보기 설정"') && more.includes('계정·프로필·상대방 연결'));
 check('chat media upload path is present', chat.includes('uploadChatMedia'));
 check('chat composer remains mounted', chat.includes('<ChatComposer'));
 check('chat uses collision-resistant message ids', chat.includes('createMessageId') && messageId.includes('cryptoApi?.getRandomValues'));
-check('voice/video call controls remain intentionally hidden', releaseFlags.includes('CALLING_ENABLED = false') && chat.includes('CALLING_ENABLED && connection') && chat.includes('danduli-call-request'));
+check('voice/video call controls remain intentionally hidden', releaseFlags.includes('CALLING_ENABLED = false') && !chat.includes('aria-label="음성 통화"') && !chat.includes('aria-label="영상 통화"'));
 check('call manager stays unmounted while calling is paused', !app.includes('<DanduliCallManager') && callManager.includes('subscribeCoupleCall'));
 check('call signaling is couple-scoped', coupleCall.includes("doc(db, 'couples', coupleId)") && coupleCall.includes('activeCall'));
 check('chat room CSS is feature-loaded only', chatStyles.includes('route-chat-room-v26.css') && !app.includes("import './route-chat-room-v26.css'"));

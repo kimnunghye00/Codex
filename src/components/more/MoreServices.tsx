@@ -1,3 +1,4 @@
+import { PageSettingsSheet } from '../navigation/PageSettingsSheet';
 import { MessageCircle, Palette, ShoppingBag, Smartphone, Sparkles, Sticker, UserRound, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { auth } from '../../lib/firebaseAuth';
@@ -72,11 +73,15 @@ function HeaderBar({ title, onClose }: { title: string; onClose: () => void }) {
 }
 
 export function MoreServices({
-  onOpenSettings: _onOpenSettings,
+  onOpenSettings,
+  settingsOpen = false,
+  onCloseSettings = () => {},
   onOpenNotifications: _onOpenNotifications,
   onNavigate: _onNavigate,
 }: {
   onOpenSettings: () => void;
+  settingsOpen?: boolean;
+  onCloseSettings?: () => void;
   onOpenNotifications: () => void;
   onNavigate: (target: MoreNavigationTarget) => void;
 }) {
@@ -193,6 +198,15 @@ export function MoreServices({
   };
 
   return <div className="route-more-services">
+    {settingsOpen && <PageSettingsSheet title="더보기 설정" onClose={onCloseSettings}>
+      <p>계정과 앱 전체의 꾸미기 설정을 관리해요.</p>
+      <button type="button" className="page-setting-link" onClick={onOpenSettings}>계정·프로필·상대방 연결 <span aria-hidden="true">›</span></button>
+      <button type="button" className="page-setting-link" onClick={() => {
+        onCloseSettings();
+        void import('../../settings-hub').then((module) => module.openSettingsHub(onOpenSettings)).catch(() => setNotice('앱 전체 설정을 불러오지 못했어요. 다시 시도해 주세요.'));
+      }}>앱 전체 설정 <span aria-hidden="true">›</span></button>
+      {([['theme', '앱 테마'], ['app-icon', '앱 아이콘'], ['profile-style', '프로필 꾸미기']] as const).map(([section, label]) => <button key={section} type="button" className="page-setting-link" onClick={() => { onCloseSettings(); openSheet(section); }}>{label}<span aria-hidden="true">›</span></button>)}
+    </PageSettingsSheet>}
     <section className="more-service-intro">
       <div><small>단둘이 CUSTOM</small><h1>더보기</h1><p>단둘이를 우리 취향에 맞게 꾸미고 확장해요.</p></div>
       <span className={`more-app-icon-preview ${appIcon} ${activeIcon.className} !grid place-items-center`} aria-label={`현재 앱 아이콘 ${activeIcon.label}`}><AppIconGlyph id={appIcon} /></span>

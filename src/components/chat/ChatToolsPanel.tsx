@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, Check, Download, Image as ImageIcon, PackageOpen, Palette, RotateCcw, Search, Settings2, ShoppingBag, SlidersHorizontal, Type, Upload, X } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Message } from '../../types';
 import { DANDULI_NEW_STICKER_PACKS, DANDULI_STICKERS, DanduliSticker, stickerIdFromToken, stickerToken } from './DanduliSticker';
 
@@ -103,6 +103,13 @@ export function ChatToolsPanel({
   const [query, setQuery] = useState('');
   const [feedback, setFeedback] = useState('');
   const importRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const back = (event: Event) => { if (!event.defaultPrevented) { event.preventDefault(); onClose(); } };
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    window.addEventListener('route-native-back', back, true);
+    window.addEventListener('keydown', escape);
+    return () => { window.removeEventListener('route-native-back', back, true); window.removeEventListener('keydown', escape); };
+  }, [onClose]);
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
@@ -148,14 +155,14 @@ export function ChatToolsPanel({
     reader.readAsText(file);
   };
 
-  return <div className="chat-tools-backdrop" role="dialog" aria-modal="true" aria-label="채팅 메뉴" onClick={onClose}>
+  return <div className="chat-tools-backdrop" role="dialog" aria-modal="true" aria-label="대화 설정" onClick={onClose}>
     <section className="chat-tools-sheet" onClick={(event) => event.stopPropagation()}>
       <header className="chat-tools-header">
-        <div><small>CHAT OPTIONS</small><h2>{section === 'menu' ? '채팅 메뉴' : section === 'search' ? '대화 검색' : section === 'media' ? '사진 모아보기' : section === 'store' ? '이모티콘 스토어' : section === 'stickers' ? '이모티콘 설정' : '채팅 설정'}</h2></div>
+        <div><small>CHAT OPTIONS</small><h2>{section === 'menu' ? '대화 설정' : section === 'search' ? '대화 검색' : section === 'media' ? '사진 모아보기' : section === 'store' ? '이모티콘 스토어' : section === 'stickers' ? '이모티콘 설정' : '채팅 설정'}</h2></div>
         <button className="chat-tools-close" type="button" onClick={onClose} aria-label="닫기"><X /></button>
       </header>
 
-      {section !== 'menu' && <button className="chat-tools-back" type="button" onClick={() => { setSection('menu'); setFeedback(''); }}>← 채팅 메뉴</button>}
+      {section !== 'menu' && <button className="chat-tools-back" type="button" onClick={() => { setSection('menu'); setFeedback(''); }}>← 대화 설정</button>}
 
       {section === 'menu' && <div className="chat-tools-menu">
         <button type="button" onClick={() => setSection('search')}><span><Search /></span><div><b>대화 검색</b><small>메시지 내용에서 원하는 기록 찾기</small></div></button>

@@ -54,6 +54,8 @@ type Props = {
   coupleDay: number;
   onOpenConnect: () => void;
   onOpenAnniversary: () => void;
+  showAnniversaries?: boolean;
+  showSchedules?: boolean;
 };
 
 const localKey = (uid: string) => `route-local-schedules:${uid}`;
@@ -276,7 +278,7 @@ async function renderProfileCrop(state: ProfileCropState) {
   return canvas.toDataURL('image/jpeg', target.quality);
 }
 
-export function CoupleHomeTools({ uid, profile, onProfileChange, connection, relationshipStartDate, coupleDay, onOpenConnect, onOpenAnniversary }: Props) {
+export function CoupleHomeTools({ uid, profile, onProfileChange, connection, relationshipStartDate, coupleDay, onOpenConnect, onOpenAnniversary, showAnniversaries = true, showSchedules = true }: Props) {
   const [remoteSchedules, setRemoteSchedules] = useState<Schedule[]>([]);
   const [localSchedules, setLocalSchedules] = useState<Schedule[]>(() => loadLocal(uid));
   const [legacyPromises, setLegacyPromises] = useState<Schedule[]>(() => loadLegacyPromises(uid));
@@ -568,7 +570,7 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
         </button>
       </section>
 
-      <button className="home-romantic-anniversary-card" type="button" onClick={onOpenAnniversary} aria-label="다가오는 연인 기념일 보기">
+      {showAnniversaries && <button className="home-romantic-anniversary-card" type="button" onClick={onOpenAnniversary} aria-label="다가오는 연인 기념일 보기">
         <header className="home-romantic-anniversary-head">
           <span className="home-romantic-anniversary-icon" aria-hidden="true"><Heart size={16} fill="currentColor" /></span>
           <span className="home-romantic-anniversary-title">
@@ -588,9 +590,9 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
           <Heart size={17} aria-hidden="true" />
           <span><b>우리의 시작일을 설정해 주세요</b><small>100일, 1주년 같은 둘만의 기념일을 보여드릴게요.</small></span>
         </span>}
-      </button>
+      </button>}
 
-      <section className="home-schedule-card" aria-label="우리 일정">
+      {showSchedules && <section className="home-schedule-card" aria-label="우리 일정">
         <header className="home-schedule-head">
           <span className="home-schedule-title-icon" aria-hidden="true"><CalendarDays size={16} /></span>
           <span className="home-schedule-title-copy">
@@ -626,7 +628,7 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
           </div>}
         </div>
 
-      </section>
+      </section>}
     </section>
 
     {myProfileOpen && <div className="route-modal-backdrop" onMouseDown={() => setMyProfileOpen(false)}><section className="route-modal home-profile-modal self-profile-modal" onMouseDown={(e) => e.stopPropagation()}>

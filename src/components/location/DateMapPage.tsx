@@ -1,3 +1,4 @@
+import type { PageHeaderProps } from '../navigation/AppHeader';
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { createPortal } from 'react-dom';
@@ -27,6 +28,8 @@ import { groupSavedPlaces, placeRegion } from '../../utils/placeRegions';
 import { matchesPlaceSearchIntent, parsePlaceSearchIntent } from '../../utils/placeSearchIntent.ts';
 import { deduplicatePlaceResults } from '../../utils/placeSearchDedup.ts';
 import { matchClickedSearchPlace } from '../../utils/dateMapClick.ts';
+import { PageSettingToggle, PageSettingsSheet } from '../navigation/PageSettingsSheet';
+import { DEFAULT_MAP_PREFERENCES, loadDateMapPreferences, savePagePreferences, type DateMapPreferences } from '../../utils/pagePreferences';
 import './DateMapPage.css';
 
 type Category = DatePlace['category'];
@@ -68,7 +71,7 @@ function kmApprox(a: { latitude: number; longitude: number }, b: { latitude: num
 }
 
 type DateMapPageProps = {
-  Header: ({ title }: { title?: string }) => React.ReactNode;
+  Header: (props: PageHeaderProps) => React.ReactNode;
   connection: RealCoupleConnection | null;
   focusPlace?: string;
   onClearFocus: () => void;
@@ -100,7 +103,15 @@ function CoupleDateMapPage({ Header, connection, focusPlace, onClearFocus, initi
   const [addingToPlan, setAddingToPlan] = useState(false);
   const [mobilePlanView, setMobilePlanView] = useState<'list' | 'map'>('list');
   const [tab, setTab] = useState<'search' | 'places' | 'courses' | 'plans'>(() => coupleId && initialPlanId ? 'plans' : 'places');
-  const [scope, setScope] = useState<'map' | 'nationwide'>('map');
+  const [mapSettingsOpen, setMapSettingsOpen] = useState(false);
+  const [mapPreferences, setMapPreferences] = useState(() => loadDateMapPreferences(uid));
+  const [storageNotice, setStorageNotice] = useState('');
+  const [scope, setScope] = useState<'map' | 'nationwide'>(() => mapPreferences.searchScope);
+  const updateMapPreferences = (next: DateMapPreferences) => {
+    if (next.searchScope !== mapPreferences.searchScope) setScope(next.searchScope);
+    setMapPreferences(next);
+    setStorageNotice(savePagePreferences(uid, 'map', next) ? '' : '기기 저장 공간을 확인해 주세요. 지금은 이 화면에만 적용돼요.');
+  };
   const [bounds, setBounds] = useState<MapBounds | null>(null);
   const latestViewport = useRef<MapBounds | null>(null);
   const viewportRequestNumber = useRef(0);
@@ -635,13 +646,13 @@ function CoupleDateMapPage({ Header, connection, focusPlace, onClearFocus, initi
   useEffect(() => {
     if (!mapReady) return;
     const target = frame.current?.contentWindow;
-    target?.postMessage({ source: 'route-map-parent', type: 'render', mode: 'date-plan', visits: mapVisits, keepViewport: true, connectStops: tab === 'courses', numbered: tab !== 'places' }, MAP_ORIGIN);
+    target?.postMessage({ source: 'route-map-parent', type: 'render', mode: 'date-plan', visits: mapVisits, keepViewport: true, connectStops: mapPreferences.connectStops && tab === 'courses', numbered: mapPreferences.numbered && tab !== 'places' }, MAP_ORIGIN);
     // If a result was selected before the iframe became ready, apply it after the initial render.
     if (queuedFocus.current && target) {
       target.postMessage({ source: 'route-map-parent', type: 'focus', showPopup: true, visit: queuedFocus.current }, MAP_ORIGIN);
       queuedFocus.current = null;
     }
-  }, [mapReady, mapVisits, tab]);
+  }, [mapReady, mapVisits, tab, mapPreferences.connectStops, mapPreferences.numbered]);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -895,7 +906,16 @@ function CoupleDateMapPage({ Header, connection, focusPlace, onClearFocus, initi
   };
 
   return <div className="page date-map-page">
-    <Header title="지도" />
+    <Header title="지도" onSettings={() => setMapSettingsOpen(true)} settingsLabel="지도 설정" />
+    {mapSettingsOpen && <PageSettingsSheet title="지도 설정" onClose={() => setMapSettingsOpen(false)}>
+      <p>검색 범위와 지도 표시를 이 계정의 현재 기기에 저장해요.</p>
+      <label className="page-setting-field"><b>기본 검색 범위</b><select value={mapPreferences.searchScope} onChange={(event) => updateMapPreferences({ ...mapPreferences, searchScope: event.target.value === 'nationwide' ? 'nationwide' : 'map' })}><option value="map">현재 지도 안</option><option value="nationwide">전국</option></select></label>
+      <p>다음 검색부터 적용돼요. 검색 화면에서도 범위를 바꿀 수 있어요.</p>
+      <PageSettingToggle label="장소 순서 번호 표시" description="코스와 데이트 초안의 핀에 순서를 표시해요." checked={mapPreferences.numbered} onChange={() => updateMapPreferences({ ...mapPreferences, numbered: !mapPreferences.numbered })} />
+      <PageSettingToggle label="코스 연결선 표시" description="기존 코스의 장소를 방문 순서대로 이어 보여줘요." checked={mapPreferences.connectStops} onChange={() => updateMapPreferences({ ...mapPreferences, connectStops: !mapPreferences.connectStops })} />
+      {storageNotice && <p role="status">{storageNotice}</p>}
+      <button type="button" className="page-setting-link" onClick={() => { setScope('map'); updateMapPreferences({ ...DEFAULT_MAP_PREFERENCES }); }}>지도 설정 기본값으로 복원</button>
+    </PageSettingsSheet>}
     <div className="date-map-heading"><div><small>OUR DATE MAP</small><h1>우리의 데이트 지도 ♡</h1><p>가고 싶은 곳을 모아두고, 함께 갈 순서로 데이트 코스를 만들어요.</p></div></div>
     <form className="date-map-search" onSubmit={(event) => { event.preventDefault(); if (tab === 'courses') setAddingToCourse(true); if (tab === 'plans' && activePlan) setAddingToPlan(true); void search(query); }}>
       <Search size={19} aria-hidden="true"/><input ref={searchField} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="가게 이름, 주소, 지역 검색" aria-label="데이트 장소 검색"/>

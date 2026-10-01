@@ -1,4 +1,5 @@
-import { Bot, CalendarClock, ContactRound, Gift, Heart, MoreHorizontal, Phone, Trash2, Video, X } from 'lucide-react';
+import type { PageHeaderProps } from '../navigation/AppHeader';
+import { Bot, CalendarClock, ContactRound, Gift, Heart, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { collection, doc, limit, onSnapshot, orderBy, query, setDoc, where } from 'firebase/firestore';
@@ -163,7 +164,7 @@ function mediaErrorMessage(cause: unknown, kind: 'photo' | 'gif') {
 }
 
 export function ChatPage({ Header, messages, setMessages, connection, initialMessageId, notificationRequest }: {
-  Header: ({ title }: { title?: string }) => React.ReactNode;
+  Header: (props: PageHeaderProps) => React.ReactNode;
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   connection: RealCoupleConnection | null;
@@ -897,8 +898,7 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
         <button type="button" className="chat-delete-toolbar-cancel" aria-label="삭제 선택 취소" disabled={deleteBusy} onClick={closeDeleteSelection}><X size={21} /></button>
         <button type="button" className="chat-delete-toolbar-trash" aria-label="선택 메시지 삭제" disabled={!deleteSelection.size || deleteBusy} onClick={() => setDeleteConfirmOpen(true)}><Trash2 size={21} /></button>
       </div>
-      : <Header title="대화" />}
-    <div className="chat-profile"><div className="avatar large">{usingAiPartner ? <Bot size={22} /> : partnerInitial}</div><div><b>{partnerName}</b><span className={aiTyping || partnerTyping ? 'chat-status typing' : 'chat-status'}><i /> {aiTyping || partnerTyping ? '입력 중...' : connection ? '실시간 연결됨' : usingAiPartner ? 'AI 테스트 파트너 · 연결됨' : '상대방 연결 대기'}</span></div><div className="chat-call-actions">{CALLING_ENABLED && connection && <><button aria-label="음성 통화" onClick={() => window.dispatchEvent(new CustomEvent('danduli-call-request', { detail: { kind: 'voice' } }))}><Phone size={17} /></button><button aria-label="영상 통화" onClick={() => window.dispatchEvent(new CustomEvent('danduli-call-request', { detail: { kind: 'video' } }))}><Video size={17} /></button></>}<button aria-label="대화 메뉴" onClick={openChatMenu}><MoreHorizontal /></button></div></div>
+      : <Header title="대화" onSettings={openChatMenu} settingsLabel="대화 설정" />}
     {nearestSchedule && <div className="chat-next-schedule"><CalendarClock size={16} /><div><small>가장 가까운 일정</small><b>{nearestSchedule.title}</b><span>{nearestSchedule.date.replaceAll('-', '.')} · {nearestSchedule.startTime}</span></div></div>}
     {syncError && <p className="chat-sync-error" role="alert">{syncError}</p>}
     {flowNotice && <p className="chat-flow-notice" role="status">{flowNotice}</p>}
