@@ -48,9 +48,13 @@
   filter: drop-shadow(0 5px 8px rgba(86,60,50,.08));
 }
 .bubble-row.mine .chat-sticker-art { margin-left: auto; }
-.sticker-pack-preview .danduli-sticker { width: 44px; height: 44px; }
-.owned-sticker-preview .danduli-sticker { width: 62px; height: 62px; }
-.owned-sticker-preview > button.danduli-sticker-button { width: 72px; min-width: 72px; height: 72px; padding: 4px; overflow: hidden; }
+.sticker-pack-preview .danduli-sticker { width: 100%; height: auto; aspect-ratio: 1; }
+.owned-sticker-preview .danduli-sticker { width: 100%; max-width: 62px; height: auto; aspect-ratio: 1; }
+.owned-sticker-preview > button.danduli-sticker-button {
+  display: grid; place-items: center; width: 100%; min-width: 0; height: auto;
+  aspect-ratio: 1; padding: 4px; overflow: visible;
+}
+.emoticon-preview .danduli-sticker { width: 100%; max-width: 29px; height: 29px; }
 @media (max-width: 390px) {
   .composer-sticker-tray { gap: 3px; padding-inline: 5px; }
   .composer-sticker-tray > button { min-height: 92px; }
@@ -126,15 +130,14 @@
 .composer-sticker-tabs button.active { color: white; background: var(--primary); }
 .composer-sticker-picker .composer-sticker-tray { border-top: 0; max-height: min(37dvh, 340px); }
 .composer-emoji-sticker { font-size: 32px; }
-.danduli-sticker.danduli-sticker-portrait {
+.danduli-sticker.danduli-sticker-asset {
   position: relative;
-  aspect-ratio: 1122 / 1402;
-  height: auto;
+  aspect-ratio: 1;
   overflow: visible;
   background-image: none !important;
   background-color: transparent !important;
 }
-.danduli-sticker-isolated-image {
+.danduli-sticker-asset-image {
   display: block;
   width: 100%;
   height: 100%;
@@ -143,19 +146,4 @@
   pointer-events: none;
   user-select: none;
   -webkit-user-drag: none;
-}
-.danduli-sticker-isolation-pending {
-  display: block;
-  width: 100%;
-  height: 100%;
-  background: transparent;
-}
-.composer-sticker-tray .danduli-sticker-portrait { height: 90px; }
-.chat-sticker-art.danduli-sticker-portrait { height: 190px; }
-.sticker-pack-preview .danduli-sticker-portrait { height: 55px; }
-.owned-sticker-preview .danduli-sticker-portrait { height: 77px; }
-.owned-sticker-preview > button:has(.danduli-sticker-portrait) { height: 82px; }
-@media (max-width: 390px) {
-  .composer-sticker-tray .danduli-sticker-portrait { height: 80px; }
-  .chat-sticker-art.danduli-sticker-portrait { height: 170px; }
 }

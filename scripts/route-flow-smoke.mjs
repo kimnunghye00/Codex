@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 
 const read = (path) => readFileSync(path, 'utf8');
 const failures = [];
@@ -33,7 +33,6 @@ const requiredFiles = [
   'src/lib/footprintVideoPrivacy.ts',
   'src/lib/footprintVideoMemories.ts',
   'src/lib/footprintVideoExport.ts',
-  'src/lib/stickerSpriteIsolation.ts',
   'src/lib/coupleConnection.ts',
   'src/components/couple/CoupleConnect.tsx',
   'src/components/home/CoupleHomeTools.tsx',
@@ -75,7 +74,6 @@ const footprintVideoPlan = read('src/lib/footprintVideoPlan.ts');
 const footprintVideoPrivacy = read('src/lib/footprintVideoPrivacy.ts');
 const footprintVideoMemories = read('src/lib/footprintVideoMemories.ts');
 const footprintVideoExport = read('src/lib/footprintVideoExport.ts');
-const stickerSpriteIsolation = read('src/lib/stickerSpriteIsolation.ts');
 const accountPolicy = read('src/utils/accountIsolationPolicy.ts');
 const coupleConnection = read('src/lib/coupleConnection.ts');
 const coupleConnect = read('src/components/couple/CoupleConnect.tsx');
@@ -140,23 +138,25 @@ check('voice/video call controls remain intentionally hidden', releaseFlags.incl
 check('call manager stays unmounted while calling is paused', !app.includes('<DanduliCallManager') && callManager.includes('subscribeCoupleCall'));
 check('call signaling is couple-scoped', coupleCall.includes("doc(db, 'couples', coupleId)") && coupleCall.includes('activeCall'));
 check('chat room CSS is feature-loaded only', chatStyles.includes('route-chat-room-v26.css') && !app.includes("import './route-chat-room-v26.css'"));
-check('portrait sticker sheets render as isolated per-item images',
-  danduliSticker.includes('isolatedStickerSprite')
-  && danduliSticker.includes('danduli-sticker-isolated-image')
-  && stickerSpriteIsolation.includes('analyseComponents')
-  && stickerSpriteIsolation.includes('createIsolatedCell'));
-check('portrait sticker isolation keeps captions and artwork beyond nominal sprite cells',
-  stickerSpriteIsolation.includes('ROW_BOUNDARY_SHIFT = 0.16')
-  && stickerSpriteIsolation.includes('stickerSpriteOwnerForCentroid')
-  && stickerSpriteIsolation.includes('padX')
-  && stickerSpriteIsolation.includes('padY'));
-check('portrait sticker isolation removes neighboring components instead of clipping the target',
-  stickerSpriteIsolation.includes('ownerByComponent')
-  && stickerSpriteIsolation.includes('shouldKeepComponent')
+const stickerPackIds = ['daily-cat', 'daily-bunny', 'military-cat', 'military-bunny'];
+const stickerAssetPaths = stickerPackIds.flatMap((pack) =>
+  Array.from({ length: 16 }, (_, index) => `public/stickers/${pack}/${String(index + 1).padStart(2, '0')}.webp`));
+check('all 64 individual sticker assets are nonempty WebP files', stickerAssetPaths.every((path) => {
+  if (!existsSync(path) || statSync(path).size < 20) return false;
+  const signature = readFileSync(path).subarray(0, 12);
+  return signature.toString('ascii', 0, 4) === 'RIFF' && signature.toString('ascii', 8, 12) === 'WEBP';
+}));
+check('four portrait packs use stable IDs and individual asset paths',
+  stickerPackIds.every((id) => danduliSticker.includes(`makePack('${id}'`))
+  && danduliSticker.includes('image: `/stickers/${id}/${String(index + 1).padStart(2, \'0\')}.webp`'));
+check('portrait stickers render transparent full images without crop',
+  danduliSticker.includes('className="danduli-sticker-asset-image"')
+  && danduliSticker.includes('src={item.image}')
   && danduliStickerStyles.includes('object-fit: contain')
+  && danduliStickerStyles.includes('overflow: visible')
   && !danduliStickerStyles.includes('clip-path: inset('));
 check('legacy square sticker pack keeps direct sprite rendering',
-  danduliSticker.includes("style={item.sheet ? undefined : { backgroundPosition:")
+  danduliSticker.includes("style={item.image ? undefined : { backgroundPosition:")
   && danduliStickerStyles.includes("background-image: url('/danduli-stickers-v3-clean.webp')"));
 
 check('memories exposes album tab', memories.includes("album: '앨범'"));
