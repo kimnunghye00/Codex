@@ -3,6 +3,7 @@ import { auth } from './lib/firebase';
 import { SYSTEM_DARK_KEY, isSystemDarkEnabled, setSystemDarkEnabled } from './system-dark';
 
 let bypassSettingsHub = false;
+let accountSettingsAction: (() => void) | undefined;
 
 function clickByText(selector: string, text: string) {
   const elements = Array.from(document.querySelectorAll<HTMLButtonElement>(selector));
@@ -128,6 +129,7 @@ function openPasswordChange() {
 
 function openOriginalProfileSettings() {
   closeHub();
+  if (accountSettingsAction) { accountSettingsAction(); return; }
   bypassSettingsHub = true;
   document.querySelector<HTMLButtonElement>('.header-actions button[aria-label="설정"]')?.click();
   queueMicrotask(() => { bypassSettingsHub = false; });
@@ -141,9 +143,9 @@ function navigateMoreAndOpen(label: string) {
 
 function openChatBackup() {
   closeHub();
-  clickByText('.bottom-nav button', '채팅');
+  clickByText('.bottom-nav button', '대화');
   window.setTimeout(() => {
-    const menu = document.querySelector<HTMLButtonElement>('.chat-call-actions button[aria-label="대화 메뉴"]');
+    const menu = document.querySelector<HTMLButtonElement>('.header-actions button[aria-label="대화 설정"]');
     menu?.click();
     window.setTimeout(() => clickByText('.chat-tools-menu button', '기능 / 옵션'), 80);
   }, 100);
@@ -194,7 +196,8 @@ function section(title: string, children: HTMLElement[]) {
   return wrap;
 }
 
-function openSettingsHub() {
+export function openSettingsHub(onOpenAccount?: () => void) {
+  accountSettingsAction = onOpenAccount;
   closeHub();
   const backdrop = document.createElement('div');
   backdrop.className = 'route-settings-hub-backdrop';
@@ -240,7 +243,7 @@ function openSettingsHub() {
       toggleRow('🔒', '앱 잠금', '단둘이 실행 시 잠금 사용', 'route-setting-app-lock', false),
       settingRow('📍', '위치 및 발자취', '위치 공유와 발자취 설정 확인', () => {
         closeHub();
-        clickByText('.bottom-nav button', '위치');
+        clickByText('.bottom-nav button', '지도');
       }),
     ]),
     section('앱 정보', [

@@ -1,4 +1,5 @@
-import { CalendarDays, ChevronRight, Crown, GripVertical, Heart, MapPin, Pencil, Plus, Settings2, Sparkles, Trash2, Trophy, X } from 'lucide-react';
+import type { PageHeaderProps } from '../navigation/AppHeader';
+import { CalendarDays, ChevronRight, Crown, GripVertical, Heart, MapPin, Pencil, Plus, Sparkles, Trash2, Trophy, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
@@ -93,7 +94,7 @@ function scheduleSignature(item: Pick<Schedule, 'title' | 'date' | 'startTime'>)
 
 export function MemoriesPage({ requestedTab, Header, memories, setMemories, initialMemoryId, initialDraft, onClearInitial, onClearInitialDraft, onOpenLocation, onOpenFootprints, sharedProfile, sharedConnection, sharedRelationshipStartDate }: {
   requestedTab?: HubTabId;
-  Header: ({ title }: { title?: string }) => React.ReactNode;
+  Header: (props: PageHeaderProps) => React.ReactNode;
   memories: Memory[];
   setMemories: React.Dispatch<React.SetStateAction<Memory[]>>;
   initialMemoryId?: number;
@@ -194,8 +195,8 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
       if (orderOpen) { event.preventDefault(); setOrderOpen(false); return; }
       if (selected !== undefined) { event.preventDefault(); setSelected(undefined); onClearInitial(); }
     };
-    window.addEventListener('route-native-back', handleBack);
-    return () => window.removeEventListener('route-native-back', handleBack);
+    window.addEventListener('route-native-back', handleBack, true);
+    return () => window.removeEventListener('route-native-back', handleBack, true);
   }, [dateOpen, editing, initialDraft, onClearInitial, onClearInitialDraft, orderOpen, scheduleOpen, selected]);
 
   const years = useMemo(() => [...new Set(memories.map((memory) => memory.date.slice(0, 4)))].sort().reverse(), [memories]);
@@ -660,8 +661,8 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
 
   if (selectedMemory) return <><MemoryDetail key={selectedMemory.id} memory={selectedMemory} onBack={() => { setSelected(undefined); onClearInitial(); }} onFavorite={() => favorite(selectedMemory.id)} onEdit={() => setEditing(selectedMemory)} onDelete={() => { setMemories((items) => items.filter((item) => item.id !== selectedMemory.id)); setSelected(undefined); }} onOpenPlaceTimeline={(place) => { setSelected(undefined); onClearInitial(); setActiveTab('record'); setPlaceTimelineFocus(place); }} onOpenFootprints={onOpenFootprints ? () => onOpenFootprints(selectedMemory.id) : undefined} onOpenLocation={onOpenLocation} />{editing && <MemoryForm memory={editing} onClose={() => setEditing(undefined)} onSave={(memory) => { update(memory); setEditing(undefined); }} />}</>;
 
-  return <div className="page memories-page route-hub"><Header title="추억" />
-    <div className="hub-head"><div><small>단둘이</small><h1>{TAB_LABEL[activeTab]}</h1></div><button type="button" className="hub-settings" onClick={() => setOrderOpen(true)}><Settings2 size={18} /></button></div>
+  return <div className="page memories-page route-hub"><Header title="추억" onSettings={() => setOrderOpen(true)} settingsLabel="추억 설정" />
+    <div className="hub-head"><div><small>단둘이</small><h1>{TAB_LABEL[activeTab]}</h1></div></div>
     <div className="hub-tabs">{tabOrder.map((tab) => <button key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>{TAB_LABEL[tab]}</button>)}</div>
 
     {activeTab === 'album' && <>

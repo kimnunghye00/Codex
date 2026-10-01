@@ -4,7 +4,9 @@ import type { HubTabId } from './components/memories/MemoriesPage';
 import { previewLegacyFootprints } from './lib/footprintFoundation';
 import { loadLocationSharing, loadLocationVisits, saveLocationSharing } from './utils/location';
 import type { MoreNavigationTarget } from './components/more/MoreServices';
-import { AppHeader as SharedAppHeader } from './components/navigation/AppHeader';
+import { AppHeader as SharedAppHeader, type PageHeaderProps } from './components/navigation/AppHeader';
+import { HomeSettings } from './components/home/HomeSettings';
+import { loadHomePagePreferences, savePagePreferences, type HomePagePreferences } from './utils/pagePreferences';
 import { BottomNav, type AppTab } from './components/navigation/BottomNav';
 import type { RealCoupleConnection } from './lib/coupleConnection';
 import type { User } from 'firebase/auth';
@@ -735,11 +737,11 @@ function App({ user, profile, onProfileChange }: AppProps) {
     if (connection?.coupleId) setRelationship({ coupleId: connection.coupleId, date: value });
   };
 
-  const AppHeader = ({ title }: { title?: string }) => <SharedAppHeader title={title} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />;
+  const AppHeader = ({ title, onSettings = openSettings, settingsLabel }: PageHeaderProps) => <SharedAppHeader title={title} settingsLabel={settingsLabel} onSettings={onSettings} onNotifications={openNotifications} unreadCount={unreadCount} />;
 
   return <>
     <div className="app-shell"><main><Suspense fallback={<div className="page auth-loading" role="status" aria-live="polite"><div className="loading-mark" /><p>화면을 불러오는 중이에요</p></div>}>
-      {tab === 'home' && <HomePage uid={user.uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} memories={memories} onNavigate={navigateTab} onOpenMemory={openMemory} onOpenFootprints={() => openFootprints()} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
+      {tab === 'home' && <HomePage key={user.uid} uid={user.uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} memories={memories} onNavigate={navigateTab} onOpenMemory={openMemory} onOpenFootprints={() => openFootprints()} onSaveStartDate={saveStartDate} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'memories' && <MemoriesPage key={user.uid} requestedTab={requestedHubTab} Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={(place) => { setLocationFocus(place); navigateTab('location'); }} onOpenFootprints={(memoryId) => openFootprints(memoryId)} sharedProfile={profile} sharedConnection={connection} sharedRelationshipStartDate={relationshipStartDate} />}
       {tab === 'footprints' && <FootprintsPage key={`${user.uid}:${footprintMemoryId ?? ''}`} uid={user.uid} connection={connection} memories={memories} initialMemoryId={footprintMemoryId} onOpenMemory={openMemory} onBack={closeFootprints} Header={AppHeader} />}
       {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} connection={connection} initialMessageId={notificationMessageId} notificationRequest={notificationMessageRequest}/>}
@@ -756,13 +758,20 @@ function App({ user, profile, onProfileChange }: AppProps) {
   </>;
 }
 
-const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connection, relationshipStartDate, coupleDay, memories, onNavigate, onOpenMemory, onOpenFootprints, onSettings, onNotifications, unreadCount }: { uid: string; profile: UserProfile; onProfileChange: (profile: UserProfile) => void; connection: RealCoupleConnection | null; relationshipStartDate?: string; coupleDay: number; memories: Memory[]; onNavigate: (tab: Tab) => void; onOpenMemory: (id: number) => void; onOpenFootprints: () => void; onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
+const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connection, relationshipStartDate, coupleDay, memories, onNavigate, onOpenMemory, onOpenFootprints, onSaveStartDate, onSettings, onNotifications, unreadCount }: { uid: string; profile: UserProfile; onProfileChange: (profile: UserProfile) => void; connection: RealCoupleConnection | null; relationshipStartDate?: string; coupleDay: number; memories: Memory[]; onNavigate: (tab: Tab) => void; onOpenMemory: (id: number) => void; onOpenFootprints: () => void; onSaveStartDate: (date: string) => Promise<void>; onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
+  const [homeSettingsOpen, setHomeSettingsOpen] = useState(false);
+  const [homePreferences, setHomePreferences] = useState(() => loadHomePagePreferences(uid));
+  const [storageNotice, setStorageNotice] = useState('');
+  const updateHomePreferences = (next: HomePagePreferences) => {
+    setHomePreferences(next);
+    setStorageNotice(savePagePreferences(uid, 'home', next) ? '' : '기기 저장 공간을 확인해 주세요. 지금은 이 화면에만 적용돼요.');
+  };
   const previewMemories = memories.slice(0, 4);
   const personalVisits = useMemo(() => previewLegacyFootprints(uid, loadLocationVisits(uid)), [uid]);
   const recentPlaces = personalVisits.slice(-3).reverse();
 
   return <div className="page home-page home-dashboard">
-    <SharedAppHeader onSettings={onSettings} onNotifications={onNotifications} unreadCount={unreadCount} />
+    <SharedAppHeader onSettings={() => setHomeSettingsOpen(true)} settingsLabel="홈 설정" onNotifications={onNotifications} unreadCount={unreadCount} />
 
     <div className="home-dashboard-grid">
       <button className="home-map-card" type="button" aria-label="우리의 발자취 열기" onClick={onOpenFootprints}>
@@ -773,12 +782,14 @@ const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connect
         <div className="home-map-locate"><MapPinned size={20} /></div>
       </button>
 
-      <aside className="home-dashboard-side" aria-label="홈 요약">
+      <aside className="home-dashboard-side" aria-label="홈 요약" style={homePreferences.anniversaries && homePreferences.schedules && homePreferences.memories ? undefined : {
+        gridTemplateRows: ['clamp(144px, 23vh, 220px)', homePreferences.anniversaries && 'clamp(130px, 18vh, 160px)', homePreferences.schedules && 'clamp(100px, 14vh, 124px)', homePreferences.memories && 'minmax(160px, 1fr)'].filter(Boolean).join(' '),
+      }}>
         <Suspense fallback={<section className="home-profile-card" aria-label="커플 정보 불러오는 중"><div className="loading-mark" /><small>커플 정보를 불러오는 중이에요</small></section>}>
-          <CoupleHomeTools key={`${uid}:${connection?.coupleId ?? ''}`} uid={uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} onOpenConnect={onSettings} onOpenAnniversary={() => onNavigate('anniversary')} />
+          <CoupleHomeTools key={`${uid}:${connection?.coupleId ?? ''}`} uid={uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} onOpenConnect={onSettings} onOpenAnniversary={() => onNavigate('anniversary')} showAnniversaries={homePreferences.anniversaries} showSchedules={homePreferences.schedules} />
         </Suspense>
 
-        <section className="home-memory-card" aria-label="우리의 추억">
+        {homePreferences.memories && <section className="home-memory-card" aria-label="우리의 추억">
           <header className="home-memory-head">
             <span className="home-memory-title-icon" aria-hidden="true"><Image size={17} /></span>
             <span className="home-memory-title-copy"><b>우리의 추억</b><small>함께한 소중한 순간들을 모아봤어요.</small></span>
@@ -792,10 +803,11 @@ const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connect
               <span className="home-memory-tile-copy"><b>{memory.title}</b><small>{memory.date.replaceAll('-', '.')}</small></span>
             </button>)}
           </div> : <button className="home-memory-empty" type="button" onClick={() => onNavigate('memories')}><Image size={22} /><span><b>첫 추억을 남겨보세요</b><small>함께한 사진과 이야기가 여기에 보여요.</small></span></button>}
-        </section>
+        </section>}
 
       </aside>
     </div>
+    {homeSettingsOpen && <HomeSettings preferences={homePreferences} onPreferences={updateHomePreferences} relationshipStartDate={relationshipStartDate} connected={Boolean(connection)} onSaveStartDate={onSaveStartDate} onClose={() => setHomeSettingsOpen(false)} storageNotice={storageNotice} />}
   </div>;
 });
 
@@ -824,9 +836,10 @@ function AnniversaryPage({ connected, relationshipStartDate, coupleDay, annivers
 }
 
 function MorePage({ onSettings, onNotifications, unreadCount, onNavigate }: { onSettings: () => void; onNotifications: () => void; unreadCount: number; onNavigate: (target: MoreNavigationTarget) => void }) {
+  const [moreSettingsOpen, setMoreSettingsOpen] = useState(false);
   return <div className="page more-page">
-    <SharedAppHeader title="더보기" onSettings={onSettings} onNotifications={onNotifications} unreadCount={unreadCount} />
-    <div className="more-scroll"><MoreServices onOpenSettings={onSettings} onOpenNotifications={onNotifications} onNavigate={onNavigate} /></div>
+    <SharedAppHeader title="더보기" onSettings={() => setMoreSettingsOpen(true)} settingsLabel="더보기 설정" onNotifications={onNotifications} unreadCount={unreadCount} />
+    <div className="more-scroll"><MoreServices onOpenSettings={() => { setMoreSettingsOpen(false); onSettings(); }} settingsOpen={moreSettingsOpen} onCloseSettings={() => setMoreSettingsOpen(false)} onOpenNotifications={onNotifications} onNavigate={onNavigate} /></div>
   </div>;
 }
 

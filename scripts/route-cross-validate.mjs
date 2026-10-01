@@ -149,7 +149,7 @@ check('recovery no longer self-installs on import', !recovery.includes('installR
 
 check('message ids use secure random words', messageId.includes('cryptoApi?.getRandomValues') && messageId.includes('messageIdFromRandomWords'));
 check('chat no longer uses timestamp-only message ids', chat.includes('createMessageId') && !chat.includes('Date.now() * 1000'));
-check('voice/video calls remain release-paused', releaseFlags.includes('CALLING_ENABLED = false') && chat.includes('CALLING_ENABLED && connection') && chat.includes('danduli-call-request'));
+check('voice/video calls remain release-paused', releaseFlags.includes('CALLING_ENABLED = false') && !chat.includes('aria-label="음성 통화"') && !chat.includes('aria-label="영상 통화"'));
 check('calls use realtime couple signaling', coupleCall.includes('subscribeCoupleCall') && coupleCall.includes('startCoupleCall') && coupleCall.includes('appendCoupleCallCandidate'));
 check('call manager owns WebRTC media', callManager.includes('RTCPeerConnection') && callManager.includes('getUserMedia') && callManager.includes('acceptIncoming'));
 

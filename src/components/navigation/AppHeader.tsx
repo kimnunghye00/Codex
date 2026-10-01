@@ -1,9 +1,12 @@
 import { Bell, Settings } from 'lucide-react';
 import { Wordmark } from '../auth/AuthFlow';
 
-export function AppHeader({ title, onSettings, onNotifications, unreadCount }: {
+export type PageHeaderProps = { title?: string; onSettings?: () => void; settingsLabel?: string };
+
+export function AppHeader({ title, onSettings, settingsLabel = '설정', onNotifications, unreadCount }: {
   title?: string;
   onSettings: () => void;
+  settingsLabel?: string;
   onNotifications: () => void;
   unreadCount: number;
 }) {
@@ -25,7 +28,7 @@ export function AppHeader({ title, onSettings, onNotifications, unreadCount }: {
         <Bell size={20} />
         {unreadCount > 0 && <em className="notification-count">{unreadCount > 99 ? '99+' : unreadCount}</em>}
       </button>
-      <button className="!grid !size-11 !min-h-11 !min-w-11 place-items-center" aria-label="설정" onClick={onSettings}><Settings size={20} /></button>
+      <button className="!grid !size-11 !min-h-11 !min-w-11 place-items-center" aria-label={settingsLabel} title={settingsLabel} onClick={onSettings}><Settings size={20} /></button>
     </div>
   </header>;
 }
