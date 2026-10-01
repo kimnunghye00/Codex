@@ -782,7 +782,9 @@ const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connect
         <div className="home-map-locate"><MapPinned size={20} /></div>
       </button>
 
-      <aside className="home-dashboard-side" aria-label="홈 요약">
+      <aside className="home-dashboard-side" aria-label="홈 요약" style={homePreferences.anniversaries && homePreferences.schedules && homePreferences.memories ? undefined : {
+        gridTemplateRows: ['clamp(144px, 23vh, 220px)', homePreferences.anniversaries && 'clamp(130px, 18vh, 160px)', homePreferences.schedules && 'clamp(100px, 14vh, 124px)', homePreferences.memories && 'minmax(160px, 1fr)'].filter(Boolean).join(' '),
+      }}>
         <Suspense fallback={<section className="home-profile-card" aria-label="커플 정보 불러오는 중"><div className="loading-mark" /><small>커플 정보를 불러오는 중이에요</small></section>}>
           <CoupleHomeTools key={`${uid}:${connection?.coupleId ?? ''}`} uid={uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} onOpenConnect={onSettings} onOpenAnniversary={() => onNavigate('anniversary')} showAnniversaries={homePreferences.anniversaries} showSchedules={homePreferences.schedules} />
         </Suspense>
