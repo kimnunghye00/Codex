@@ -195,6 +195,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
   const [notificationMessageRequest, setNotificationMessageRequest] = useState(0);
   const [chatToolsSection, setChatToolsSection] = useState<'settings' | 'stickers' | 'store'>();
   const [chatToolsRequest, setChatToolsRequest] = useState(0);
+  const [profileEditorRequest, setProfileEditorRequest] = useState(0);
   const [notificationPlanId, setNotificationPlanId] = useState<string>();
   const [notificationPlanRequest, setNotificationPlanRequest] = useState(0);
   const [notifications, setNotifications] = useState<AppNotification[]>(() => loadNotifications(user.uid));
@@ -228,6 +229,11 @@ function App({ user, profile, onProfileChange }: AppProps) {
     setTab(next);
   }, [tab]);
   const navigateMoreTarget = useCallback((target: MoreNavigationTarget) => {
+    if (target.area === 'home') {
+      if (target.profileEditor) setProfileEditorRequest((value) => value + 1);
+      navigateTab('home');
+      return;
+    }
     if (target.area === 'chat') {
       if (target.toolsSection) {
         setChatToolsSection(target.toolsSection);
@@ -747,7 +753,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
 
   return <>
     <div className="app-shell"><main><Suspense fallback={<div className="page auth-loading" role="status" aria-live="polite"><div className="loading-mark" /><p>화면을 불러오는 중이에요</p></div>}>
-      {tab === 'home' && <HomePage key={user.uid} uid={user.uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} memories={memories} onNavigate={navigateTab} onOpenMemory={openMemory} onOpenFootprints={() => openFootprints()} onSaveStartDate={saveStartDate} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
+      {tab === 'home' && <HomePage key={user.uid} uid={user.uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} memories={memories} onNavigate={navigateTab} onOpenMemory={openMemory} onOpenFootprints={() => openFootprints()} onSaveStartDate={saveStartDate} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} profileEditorRequest={profileEditorRequest} />}
       {tab === 'memories' && <MemoriesPage key={user.uid} requestedTab={requestedHubTab} Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={(place) => { setLocationFocus(place); navigateTab('location'); }} onOpenFootprints={(memoryId) => openFootprints(memoryId)} sharedProfile={profile} sharedConnection={connection} sharedRelationshipStartDate={relationshipStartDate} />}
       {tab === 'footprints' && <FootprintsPage key={`${user.uid}:${footprintMemoryId ?? ''}`} uid={user.uid} connection={connection} memories={memories} initialMemoryId={footprintMemoryId} onOpenMemory={openMemory} onBack={closeFootprints} Header={AppHeader} />}
       {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} connection={connection} initialMessageId={notificationMessageId} notificationRequest={notificationMessageRequest} initialToolsSection={chatToolsSection} toolsRequest={chatToolsRequest}/>}
@@ -764,7 +770,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
   </>;
 }
 
-const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connection, relationshipStartDate, coupleDay, memories, onNavigate, onOpenMemory, onOpenFootprints, onSaveStartDate, onSettings, onNotifications, unreadCount }: { uid: string; profile: UserProfile; onProfileChange: (profile: UserProfile) => void; connection: RealCoupleConnection | null; relationshipStartDate?: string; coupleDay: number; memories: Memory[]; onNavigate: (tab: Tab) => void; onOpenMemory: (id: number) => void; onOpenFootprints: () => void; onSaveStartDate: (date: string) => Promise<void>; onSettings: () => void; onNotifications: () => void; unreadCount: number }) {
+const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connection, relationshipStartDate, coupleDay, memories, onNavigate, onOpenMemory, onOpenFootprints, onSaveStartDate, onSettings, onNotifications, unreadCount, profileEditorRequest }: { uid: string; profile: UserProfile; onProfileChange: (profile: UserProfile) => void; connection: RealCoupleConnection | null; relationshipStartDate?: string; coupleDay: number; memories: Memory[]; onNavigate: (tab: Tab) => void; onOpenMemory: (id: number) => void; onOpenFootprints: () => void; onSaveStartDate: (date: string) => Promise<void>; onSettings: () => void; onNotifications: () => void; unreadCount: number; profileEditorRequest?: number }) {
   const [homeSettingsOpen, setHomeSettingsOpen] = useState(false);
   const [homePreferences, setHomePreferences] = useState(() => loadHomePagePreferences(uid));
   const [storageNotice, setStorageNotice] = useState('');
@@ -792,7 +798,7 @@ const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connect
         gridTemplateRows: ['clamp(144px, 23vh, 220px)', homePreferences.anniversaries && 'clamp(130px, 18vh, 160px)', homePreferences.schedules && 'clamp(100px, 14vh, 124px)', homePreferences.memories && 'minmax(160px, 1fr)'].filter(Boolean).join(' '),
       }}>
         <Suspense fallback={<section className="home-profile-card" aria-label="커플 정보 불러오는 중"><div className="loading-mark" /><small>커플 정보를 불러오는 중이에요</small></section>}>
-          <CoupleHomeTools key={`${uid}:${connection?.coupleId ?? ''}`} uid={uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} onOpenConnect={onSettings} onOpenAnniversary={() => onNavigate('anniversary')} showAnniversaries={homePreferences.anniversaries} showSchedules={homePreferences.schedules} />
+          <CoupleHomeTools key={`${uid}:${connection?.coupleId ?? ''}`} uid={uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} onOpenConnect={onSettings} onOpenAnniversary={() => onNavigate('anniversary')} showAnniversaries={homePreferences.anniversaries} showSchedules={homePreferences.schedules} profileEditorRequest={profileEditorRequest} />
         </Suspense>
 
         {homePreferences.memories && <section className="home-memory-card" aria-label="우리의 추억">
