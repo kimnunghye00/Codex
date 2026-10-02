@@ -1,5 +1,4 @@
-import { PageSettingsSheet } from '../navigation/PageSettingsSheet';
-import { MessageCircle, Palette, ShoppingBag, Smartphone, Sparkles, Sticker, UserRound, X } from 'lucide-react';
+import { Bell, ChevronLeft, ChevronRight, MessageCircle, Palette, Settings, ShoppingBag, Smartphone, Sparkles, Sticker, UserRound, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { auth } from '../../lib/firebaseAuth';
 import { normalizeRouteAppIcon, updateRouteFavicon, type RouteAppIconId } from '../../utils/appIcon';
@@ -76,7 +75,7 @@ export function MoreServices({
   onOpenSettings,
   settingsOpen = false,
   onCloseSettings = () => {},
-  onOpenNotifications: _onOpenNotifications,
+  onOpenNotifications,
   onNavigate: _onNavigate,
 }: {
   onOpenSettings: () => void;
@@ -197,16 +196,87 @@ export function MoreServices({
     setNotice('프로필 스타일을 적용했어요.');
   };
 
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const handleBack = (event: Event) => {
+      event.preventDefault();
+      onCloseSettings();
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      onCloseSettings();
+    };
+    window.addEventListener('route-native-back', handleBack, true);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('route-native-back', handleBack, true);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [settingsOpen, onCloseSettings]);
+
+  const openFullSettings = () => {
+    onCloseSettings();
+    void import('../../settings-hub')
+      .then((module) => module.openSettingsHub(onOpenSettings))
+      .catch(() => setNotice('앱 전체 설정을 불러오지 못했어요. 다시 시도해 주세요.'));
+  };
+
+  const openMoreSettingSheet = (next: MoreSheet) => {
+    onCloseSettings();
+    openSheet(next);
+  };
+
+  const profileStyleLabel = PROFILE_STYLES.find((item) => item.id === profileStyle)?.label ?? '클린';
+  const themeLabel = theme === 'lavender' ? '라벤더' : theme === 'dark' ? '다크' : '기본';
+
   return <div className="route-more-services">
-    {settingsOpen && <PageSettingsSheet title="더보기 설정" onClose={onCloseSettings}>
-      <p>계정과 앱 전체의 꾸미기 설정을 관리해요.</p>
-      <button type="button" className="page-setting-link" onClick={onOpenSettings}>계정·프로필·상대방 연결 <span aria-hidden="true">›</span></button>
-      <button type="button" className="page-setting-link" onClick={() => {
-        onCloseSettings();
-        void import('../../settings-hub').then((module) => module.openSettingsHub(onOpenSettings)).catch(() => setNotice('앱 전체 설정을 불러오지 못했어요. 다시 시도해 주세요.'));
-      }}>앱 전체 설정 <span aria-hidden="true">›</span></button>
-      {([['theme', '앱 테마'], ['app-icon', '앱 아이콘'], ['profile-style', '프로필 꾸미기']] as const).map(([section, label]) => <button key={section} type="button" className="page-setting-link" onClick={() => { onCloseSettings(); openSheet(section); }}>{label}<span aria-hidden="true">›</span></button>)}
-    </PageSettingsSheet>}
+    {settingsOpen && <div className="more-settings-screen-backdrop" role="dialog" aria-modal="true" aria-label="설정">
+      <section className="more-settings-screen">
+        <header className="more-settings-screen-header">
+          <button type="button" onClick={onCloseSettings} aria-label="설정 닫기"><ChevronLeft size={26} /></button>
+          <strong>설정</strong>
+          <span aria-hidden="true" />
+        </header>
+        <div className="more-settings-screen-body">
+          <section className="more-settings-group" aria-label="계정과 알림">
+            <button type="button" onClick={() => { onCloseSettings(); onOpenSettings(); }}>
+              <UserRound /><span><b>계정 · 프로필 · 상대방 연결</b></span><ChevronRight />
+            </button>
+            <button type="button" onClick={() => { onCloseSettings(); onOpenNotifications(); }}>
+              <Bell /><span><b>알림</b><small>최근 활동과 알림 확인</small></span><ChevronRight />
+            </button>
+          </section>
+
+          <section className="more-settings-group" aria-label="앱 설정">
+            <button type="button" onClick={openFullSettings}>
+              <Settings /><span><b>앱 전체 설정</b><small>보안 · 백업 · 앱 정보</small></span><ChevronRight />
+            </button>
+            <button type="button" onClick={() => openMoreSettingSheet('theme')}>
+              <Palette /><span><b>테마</b><small>{themeLabel}</small></span><ChevronRight />
+            </button>
+            <button type="button" onClick={() => openMoreSettingSheet('app-icon')}>
+              <Smartphone /><span><b>앱 아이콘</b><small>{activeIcon.label}</small></span><ChevronRight />
+            </button>
+            <button type="button" onClick={() => openMoreSettingSheet('profile-style')}>
+              <Sparkles /><span><b>프로필 꾸미기</b><small>{profileStyleLabel}</small></span><ChevronRight />
+            </button>
+          </section>
+
+          <section className="more-settings-group" aria-label="꾸미기와 대화">
+            <button type="button" onClick={() => openMoreSettingSheet('emoticon')}>
+              <Sticker /><span><b>이모티콘</b></span><ChevronRight />
+            </button>
+            <button type="button" onClick={() => openMoreSettingSheet('chat-style')}>
+              <MessageCircle /><span><b>채팅 꾸미기</b><small>배경 · 글자 크기</small></span><ChevronRight />
+            </button>
+            <button type="button" onClick={() => openMoreSettingSheet('store')}>
+              <ShoppingBag /><span><b>단둘이 스토어</b></span><ChevronRight />
+            </button>
+          </section>
+        </div>
+      </section>
+    </div>}
     <section className="more-service-intro">
       <div><small>단둘이 CUSTOM</small><h1>더보기</h1><p>단둘이를 우리 취향에 맞게 꾸미고 확장해요.</p></div>
       <span className={`more-app-icon-preview ${appIcon} ${activeIcon.className} !grid place-items-center`} aria-label={`현재 앱 아이콘 ${activeIcon.label}`}><AppIconGlyph id={appIcon} /></span>
