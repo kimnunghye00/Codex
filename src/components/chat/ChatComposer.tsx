@@ -214,7 +214,18 @@ export function ChatComposer({
     <div className="composer-area">
       {reply && <div className="composer-reply"><div><b>{reply.sender === 'partner' ? `${partnerName}에게 답장` : '내 메시지에 답장'}</b><span>{reply.type === 'sticker' ? '이모티콘' : reply.type === 'file' ? '파일' : reply.type === 'contact' ? '연락처' : reply.type === 'audio' ? '음성 메시지' : reply.type === 'call' ? (reply.callKind === 'video' ? '영상통화 기록' : '음성 통화 기록') : reply.type === 'image' || reply.type === 'gallery' || reply.type === 'gif' ? '미디어' : reply.text}</span></div><button onClick={onCancelReply} aria-label="답장 취소"><X size={17} /></button></div>}
       {stickerOpen && activePack && <div className="composer-sticker-picker" aria-label="이모티콘 선택">
-        <div className="composer-sticker-tabs" role="tablist" aria-label="이모티콘 팩">{availablePacks.map((pack) => <button key={pack.id} type="button" role="tab" aria-selected={pack.id === activePack.id} className={pack.id === activePack.id ? 'active' : ''} onClick={() => setSelectedStickerPack(pack.id)}>{pack.name}</button>)}</div>
+        <div className="composer-sticker-tabs" role="tablist" aria-label="이모티콘 팩">{availablePacks.map((pack) => {
+          const preview = pack.stickers[0] ?? '';
+          const previewId = stickerIdFromToken(preview);
+          return <button key={pack.id} type="button" role="tab" aria-selected={pack.id === activePack.id} className={pack.id === activePack.id ? 'active' : ''} onClick={() => setSelectedStickerPack(pack.id)}>
+            <span className="composer-sticker-pack-thumb" aria-hidden="true">{previewId ? <DanduliSticker id={previewId} /> : <span>{preview}</span>}</span>
+            <span className="composer-sticker-pack-copy"><b>{pack.name}</b><small>{pack.stickers.length}개</small></span>
+          </button>;
+        })}</div>
+        <div className="composer-sticker-pack-head" aria-live="polite">
+          <span><b>{activePack.name}</b><small>{activePack.description}</small></span>
+          <em>{activePack.stickers.length}개</em>
+        </div>
         <div className="composer-sticker-tray" role="tabpanel" aria-label={`${activePack.name} 이모티콘`}>{activePack.stickers.map((sticker, index) => { const id = stickerIdFromToken(sticker); return <button key={`${sticker}-${index}`} type="button" aria-label={`${id ? stickerLabel(id) : sticker} 이모티콘 보내기`} onClick={() => { onSticker(sticker); setStickerOpen(false); }}>{id ? <DanduliSticker id={id} /> : <span className="composer-emoji-sticker">{sticker}</span>}</button>; })}</div>
       </div>}
       {quickOpen && <div className="quick-contact-strip">{QUICK.map((item) => <button key={item} type="button" onClick={() => { onQuick(item); setQuickOpen(false); setStickerOpen(false); }}>{item}</button>)}</div>}
