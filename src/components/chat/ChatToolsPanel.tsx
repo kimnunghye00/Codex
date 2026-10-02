@@ -20,13 +20,13 @@ type StickerPack = { id: string; name: string; description: string; stickers: st
 export const STICKER_PACKS: StickerPack[] = [
   { id: 'danduli-couple', name: '단둘이 커플', description: '고양이와 토끼 커플의 16가지 마음 표현', stickers: DANDULI_STICKERS.map((sticker) => stickerToken(sticker.id)), priceLabel: '기본' },
   ...DANDULI_NEW_STICKER_PACKS.map((pack) => ({ id: pack.id, name: pack.name, description: pack.description, stickers: pack.stickers.map((sticker) => stickerToken(sticker.id)), priceLabel: '기본' })),
-  { id: 'route-hearts', name: '단둘이 하트', description: '커플 대화에 잘 어울리는 기본 팩', stickers: ['🫶', '❤️', '💕', '💗', '💖', '💘'], priceLabel: '기본' },
   { id: 'daily-mood', name: '오늘의 기분', description: '매일 쓰기 좋은 표정 모음', stickers: ['🥰', '😊', '🥹', '😴', '😤', '🤭'], priceLabel: '무료' },
   { id: 'tiny-love', name: '쪼꼬미 러브', description: '짧게 마음을 전하는 팩', stickers: ['🐰💗', '🐻🫶', '🐶💕', '🐱💖', '🐹❤️', '🐥💘'], priceLabel: '무료' },
 ];
 
 const PREF_KEY_PREFIX = 'route-chat-preferences:';
-const fallbackPackIds = ['danduli-couple', ...DANDULI_NEW_STICKER_PACKS.map((pack) => pack.id), 'route-hearts'];
+const fallbackPackIds = ['danduli-couple', ...DANDULI_NEW_STICKER_PACKS.map((pack) => pack.id)];
+const availableStickerPackIds = new Set(STICKER_PACKS.map((pack) => pack.id));
 
 export function defaultChatPreferences(): ChatPreferences {
   return {
@@ -47,8 +47,12 @@ export function loadChatPreferences(uid: string): ChatPreferences {
     return {
       ...fallback,
       ...parsed,
-      stickerPackOrder: Array.isArray(parsed.stickerPackOrder) ? Array.from(new Set([...parsed.stickerPackOrder, ...fallback.stickerPackOrder])) : fallback.stickerPackOrder,
-      ownedStickerPacks: Array.isArray(parsed.ownedStickerPacks) ? Array.from(new Set([...fallback.ownedStickerPacks, ...parsed.ownedStickerPacks])) : fallback.ownedStickerPacks,
+      stickerPackOrder: Array.isArray(parsed.stickerPackOrder)
+        ? Array.from(new Set([...parsed.stickerPackOrder, ...fallback.stickerPackOrder])).filter((id) => availableStickerPackIds.has(id))
+        : fallback.stickerPackOrder,
+      ownedStickerPacks: Array.isArray(parsed.ownedStickerPacks)
+        ? Array.from(new Set([...fallback.ownedStickerPacks, ...parsed.ownedStickerPacks])).filter((id) => availableStickerPackIds.has(id))
+        : fallback.ownedStickerPacks,
     };
   } catch {
     return fallback;
