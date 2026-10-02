@@ -1,6 +1,6 @@
 import type { PageHeaderProps } from '../navigation/AppHeader';
 import { Bot, CalendarClock, ContactRound, Gift, Heart, Trash2, X } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { collection, doc, limit, onSnapshot, orderBy, query, setDoc, where } from 'firebase/firestore';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -270,13 +270,15 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
     element.dataset.routeUserAwayFromBottom = distance > CHAT_BOTTOM_SLOP_PX ? '1' : '0';
   };
 
-  // Use the visible viewport and the actual navigation edge, rather than a
-  // percentage height of main (which grows with virtualized chat history).
-  useEffect(() => {
+  // Dock the composer independently of the virtualized history. Reserve its
+  // measured height so messages and optional trays never cover the input.
+  const selectingMessages = deleteSelection !== null;
+  useLayoutEffect(() => {
     const page = pageRef.current;
     if (!page) return;
     const viewport = window.visualViewport;
     const nav = document.querySelector<HTMLElement>('[data-route-nav]');
+    const composer = page.querySelector<HTMLElement>(':scope > .composer-area');
     let frame = 0;
     const resize = () => {
       frame = 0;
@@ -290,17 +292,32 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
         && navBounds && navBounds.height > 0
         && navBounds.top < visibleBottom && navBounds.bottom > 0;
       const bottom = bottomNavVisible ? Math.min(visibleBottom, navBounds.top) : visibleBottom;
-      const height = `${Math.max(0, bottom - page.getBoundingClientRect().top)}px`;
+      const bounds = page.getBoundingClientRect();
+      const height = `${Math.max(0, bottom - bounds.top)}px`;
       // Inline priority also wins over responsive Tailwind !h-dvh utilities.
       page.style.setProperty('height', height, 'important');
       page.style.setProperty('max-height', height, 'important');
       page.style.setProperty('min-height', '0px', 'important');
+      page.style.setProperty('padding-left', '0px', 'important');
+      page.style.setProperty('padding-right', '0px', 'important');
+      if (composer) {
+        composer.style.setProperty('position', 'fixed', 'important');
+        composer.style.setProperty('bottom', `${Math.max(0, window.innerHeight - bottom)}px`, 'important');
+        composer.style.setProperty('left', `${bounds.left}px`, 'important');
+        composer.style.setProperty('right', 'auto', 'important');
+        composer.style.setProperty('width', `${bounds.width}px`, 'important');
+        composer.style.setProperty('max-width', 'none', 'important');
+        composer.style.setProperty('margin', '0px', 'important');
+        composer.style.setProperty('z-index', '60', 'important');
+      }
+      page.style.setProperty('padding-bottom', `${composer?.getBoundingClientRect().height ?? 0}px`, 'important');
     };
     const scheduleResize = () => {
       if (!frame) frame = window.requestAnimationFrame(resize);
     };
     const observer = new ResizeObserver(scheduleResize);
     if (nav) observer.observe(nav);
+    if (composer) observer.observe(composer);
     const keyboardObserver = new MutationObserver(scheduleResize);
     keyboardObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     window.addEventListener('resize', scheduleResize);
@@ -315,7 +332,7 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
       viewport?.removeEventListener('resize', scheduleResize);
       viewport?.removeEventListener('scroll', scheduleResize);
     };
-  }, []);
+  }, [selectingMessages]);
 
   const finePointerRef = useRef(false);
   useEffect(() => {
