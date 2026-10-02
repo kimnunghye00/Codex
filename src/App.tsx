@@ -193,6 +193,8 @@ function App({ user, profile, onProfileChange }: AppProps) {
     typeof window !== 'undefined' ? openActivityFromUrl() : null);
   const [notificationMessageId, setNotificationMessageId] = useState<number>();
   const [notificationMessageRequest, setNotificationMessageRequest] = useState(0);
+  const [chatToolsSection, setChatToolsSection] = useState<'settings' | 'stickers' | 'store'>();
+  const [chatToolsRequest, setChatToolsRequest] = useState(0);
   const [notificationPlanId, setNotificationPlanId] = useState<string>();
   const [notificationPlanRequest, setNotificationPlanRequest] = useState(0);
   const [notifications, setNotifications] = useState<AppNotification[]>(() => loadNotifications(user.uid));
@@ -227,6 +229,10 @@ function App({ user, profile, onProfileChange }: AppProps) {
   }, [tab]);
   const navigateMoreTarget = useCallback((target: MoreNavigationTarget) => {
     if (target.area === 'chat') {
+      if (target.toolsSection) {
+        setChatToolsSection(target.toolsSection);
+        setChatToolsRequest((value) => value + 1);
+      }
       navigateTab('chat');
       return;
     }
@@ -744,7 +750,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
       {tab === 'home' && <HomePage key={user.uid} uid={user.uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} memories={memories} onNavigate={navigateTab} onOpenMemory={openMemory} onOpenFootprints={() => openFootprints()} onSaveStartDate={saveStartDate} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'memories' && <MemoriesPage key={user.uid} requestedTab={requestedHubTab} Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={(place) => { setLocationFocus(place); navigateTab('location'); }} onOpenFootprints={(memoryId) => openFootprints(memoryId)} sharedProfile={profile} sharedConnection={connection} sharedRelationshipStartDate={relationshipStartDate} />}
       {tab === 'footprints' && <FootprintsPage key={`${user.uid}:${footprintMemoryId ?? ''}`} uid={user.uid} connection={connection} memories={memories} initialMemoryId={footprintMemoryId} onOpenMemory={openMemory} onBack={closeFootprints} Header={AppHeader} />}
-      {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} connection={connection} initialMessageId={notificationMessageId} notificationRequest={notificationMessageRequest}/>}
+      {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} connection={connection} initialMessageId={notificationMessageId} notificationRequest={notificationMessageRequest} initialToolsSection={chatToolsSection} toolsRequest={chatToolsRequest}/>}
       {tab === 'location' && <DateMapPage Header={AppHeader} connection={connection} focusPlace={locationFocus} onClearFocus={() => setLocationFocus(undefined)} initialPlanId={notificationPlanId} notificationRequest={notificationPlanRequest}/>}
       {tab === 'anniversary' && <AnniversaryPage key={relationshipStartDate ?? ''} connected={Boolean(connection)} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} onSaveStartDate={saveStartDate} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
       {tab === 'more' && <MorePage onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} onNavigate={navigateMoreTarget} />}
