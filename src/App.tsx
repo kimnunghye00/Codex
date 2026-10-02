@@ -266,6 +266,12 @@ function App({ user, profile, onProfileChange }: AppProps) {
   useEffect(() => installActivityAlertClicks(), []);
 
   useEffect(() => {
+    const openAllSettings = () => setSettingsOpen(true);
+    window.addEventListener('danduli-open-all-settings', openAllSettings);
+    return () => window.removeEventListener('danduli-open-all-settings', openAllSettings);
+  }, []);
+
+  useEffect(() => {
     const refreshLocationSharing = () => setLocationSharingEnabled(loadLocationSharing(user.uid).enabled);
     refreshLocationSharing();
     window.addEventListener(PERSISTENT_STATE_CHANGE_EVENT, refreshLocationSharing);
