@@ -1,0 +1,23 @@
+/* Keep the chat composer visible above the persistent bottom navigation on mobile/web.
+ * The app shell owns the bottom nav, so the chat page must reserve its height. */
+.chat-page.full-page{
+  height:100%!important;
+  max-height:100%!important;
+  min-height:0!important;
+}
+.chat-page .composer-area{
+  flex:0 0 auto!important;
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+}
+.chat-page .composer-area .composer{
+  display:flex!important;
+}
+@media(max-width:700px){
+  .chat-page .composer-area{
+    position:relative!important;
+    z-index:20!important;
+    padding-bottom:max(7px,env(safe-area-inset-bottom))!important;
+  }
+}
