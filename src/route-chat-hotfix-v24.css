@@ -628,3 +628,26 @@
   color: var(--primary);
   transform: scale(1.04);
 }
+
+/* GIFs use their own encoded ratio, with no surrounding message letterbox. */
+.chat-page .bubble.media-bubble:has(.chat-gif) {
+  width: fit-content !important;
+  max-width: 100% !important;
+  min-height: 0 !important;
+  display: block !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  line-height: 0 !important;
+}
+.chat-page .bubble.media-bubble .chat-image.chat-gif {
+  width: min(260px, 68vw) !important;
+  height: auto !important;
+  max-width: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  aspect-ratio: auto !important;
+  object-fit: contain !important;
+  margin: 0 !important;
+  background: transparent !important;
+}
