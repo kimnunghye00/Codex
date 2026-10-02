@@ -17,13 +17,21 @@ function cameraErrorMessage(cause: unknown) {
   return '카메라를 열지 못했어요. 잠시 후 다시 시도해 주세요.';
 }
 
+// Match object-fit: cover in the 3:4 viewfinder, including its center crop.
 function frameSize(video: HTMLVideoElement) {
   const sourceWidth = video.videoWidth || 720;
   const sourceHeight = video.videoHeight || 1280;
-  const scale = Math.min(1, MAX_FRAME_EDGE / Math.max(sourceWidth, sourceHeight));
+  const ratio = 3 / 4;
+  const cropWidth = Math.min(sourceWidth, sourceHeight * ratio);
+  const cropHeight = cropWidth / ratio;
+  const height = Math.max(4, Math.floor(Math.min(MAX_FRAME_EDGE, cropHeight) / 4) * 4);
   return {
-    width: Math.max(2, Math.round(sourceWidth * scale / 2) * 2),
-    height: Math.max(2, Math.round(sourceHeight * scale / 2) * 2),
+    width: height * ratio,
+    height,
+    sourceX: (sourceWidth - cropWidth) / 2,
+    sourceY: (sourceHeight - cropHeight) / 2,
+    sourceWidth: cropWidth,
+    sourceHeight: cropHeight,
   };
 }
 
@@ -126,7 +134,7 @@ export function GifCameraCapture({ onClose, onCaptured, onError }: {
   const captureFrame = useCallback(() => {
     const video = videoRef.current;
     if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
-    const { width, height } = frameSize(video);
+    const { width, height, sourceX, sourceY, sourceWidth, sourceHeight } = frameSize(video);
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
@@ -134,7 +142,7 @@ export function GifCameraCapture({ onClose, onCaptured, onError }: {
     if (!context) return;
     context.translate(width, 0);
     context.scale(-1, 1);
-    context.drawImage(video, 0, 0, width, height);
+    context.drawImage(video, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, width, height);
     framesRef.current.push({ rgba: context.getImageData(0, 0, width, height).data, width, height });
   }, []);
 
