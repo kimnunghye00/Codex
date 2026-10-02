@@ -4,7 +4,6 @@ import { auth } from '../../lib/firebaseAuth';
 import { SYSTEM_DARK_KEY, isSystemDarkEnabled, setSystemDarkEnabled } from '../../system-dark';
 import { normalizeRouteAppIcon, updateRouteFavicon, type RouteAppIconId } from '../../utils/appIcon';
 import { getNativeRouteAppIcon, setNativeRouteAppIcon, supportsNativeRouteAppIcon } from '../../app-icon-native';
-import { applyRouteProfileStyle, normalizeRouteProfileStyle, type RouteProfileStyle } from '../../utils/profileStyle';
 import {
   loadChatPreferences,
   saveChatPreferences,
@@ -19,9 +18,10 @@ import type { LocationTabId } from '../location/LocationPage';
 
 type AppIconId = RouteAppIconId;
 type ThemeId = 'default' | 'lavender' | 'dark';
-type MoreSheet = 'theme' | 'app-icon' | 'emoticon' | 'chat-style' | 'profile-style' | 'store';
+type MoreSheet = 'theme' | 'app-icon' | 'emoticon' | 'chat-style' | 'store';
 
 export type MoreNavigationTarget =
+  | { area: 'home'; profileEditor?: boolean }
   | { area: 'chat'; toolsSection?: 'settings' | 'stickers' | 'store' }
   | { area: 'memories'; tab: HubTabId }
   | { area: 'location'; tab: LocationTabId };
@@ -53,13 +53,6 @@ const CHAT_FONT_SIZES: Array<{ id: ChatFontSize; label: string }> = [
   { id: 'large', label: '크게' },
   { id: 'xlarge', label: '아주 크게' },
 ];
-
-const PROFILE_STYLES: Array<{ id: RouteProfileStyle; label: string; description: string }> = [
-  { id: 'clean', label: '클린', description: '깔끔하고 기본적인 프로필' },
-  { id: 'soft', label: '소프트', description: '부드러운 링과 은은한 그림자' },
-  { id: 'heart', label: '하트', description: '커플 느낌을 강조한 프로필' },
-];
-
 
 function loadBooleanSetting(key: string, defaultValue: boolean) {
   const saved = localStorage.getItem(key);
@@ -100,7 +93,6 @@ export function MoreServices({
   const nativeAppIconSupported = supportsNativeRouteAppIcon();
   const [appIconStateLoading, setAppIconStateLoading] = useState(nativeAppIconSupported);
   const [appIconChanging, setAppIconChanging] = useState(false);
-  const [profileStyle, setProfileStyle] = useState<RouteProfileStyle>(() => normalizeRouteProfileStyle(localStorage.getItem('route-profile-style')));
   const chatUid = auth.currentUser?.uid ?? 'guest';
   const [chatPreferences, setChatPreferences] = useState<ChatPreferences>(() => loadChatPreferences(chatUid));
   const [notice, setNotice] = useState('');
@@ -200,13 +192,6 @@ export function MoreServices({
     setNotice('채팅 꾸미기를 저장했어요.');
   };
 
-  const chooseProfileStyle = (next: RouteProfileStyle) => {
-    setProfileStyle(next);
-    localStorage.setItem('route-profile-style', next);
-    applyRouteProfileStyle(next);
-    setNotice('프로필 스타일을 적용했어요.');
-  };
-
   useEffect(() => {
     if (!settingsOpen) return;
     const handleBack = (event: Event) => {
@@ -256,6 +241,12 @@ export function MoreServices({
   const openFootprintSettings = () => {
     onCloseSettings();
     onNavigate({ area: 'location', tab: 'footprints' });
+  };
+
+  const openProfileEditor = () => {
+    setSheet(null);
+    onCloseSettings();
+    onNavigate({ area: 'home', profileEditor: true });
   };
 
   const themeLabel = theme === 'lavender' ? '라벤더' : theme === 'dark' ? '다크' : '기본';
@@ -375,7 +366,7 @@ export function MoreServices({
         <button type="button" onClick={() => openSheet('app-icon')}><span className="more-customize-icon icon"><Smartphone /></span><b>앱 아이콘</b><small>4가지 아이콘</small></button>
         <button type="button" onClick={() => openSheet('emoticon')}><span className="more-customize-icon emoticon"><Sticker /></span><b>이모티콘</b><small>보관함 · 팩</small></button>
         <button type="button" onClick={() => openSheet('chat-style')}><span className="more-customize-icon chat"><MessageCircle /></span><b>채팅 꾸미기</b><small>배경 · 글자 크기</small></button>
-        <button type="button" onClick={() => openSheet('profile-style')}><span className="more-customize-icon profile"><UserRound /></span><b>프로필 꾸미기</b><small>아바타 스타일</small></button>
+        <button type="button" onClick={openProfileEditor}><span className="more-customize-icon profile"><UserRound /></span><b>프로필 꾸미기</b><small>사진 · 배경 편집</small></button>
         <button type="button" onClick={() => openSheet('store')}><span className="more-customize-icon store"><ShoppingBag /></span><b>단둘이 스토어</b><small>꾸미기 모아보기</small></button>
       </div>
     </section>
@@ -405,10 +396,6 @@ export function MoreServices({
           <div className="more-chat-style-block"><strong>대화방 배경</strong><div className="more-chat-backgrounds">{CHAT_BACKGROUNDS.map((item) => <button type="button" key={item.id} className={`${item.id} ${chatPreferences.background === item.id ? 'active' : ''}`} onClick={() => updateChatStyle({ background: item.id })}><i /><span>{item.label}</span></button>)}</div></div>
           <div className="more-chat-style-block"><strong>메시지 글자 크기</strong><div className="more-chat-fonts">{CHAT_FONT_SIZES.map((item) => <button type="button" key={item.id} className={chatPreferences.fontSize === item.id ? 'active' : ''} onClick={() => updateChatStyle({ fontSize: item.id })}>{item.label}</button>)}</div></div>
         </>}
-
-        {sheet === 'profile-style' && <><HeaderBar title="프로필 꾸미기" onClose={() => setSheet(null)} /><p className="more-sheet-description">프로필 사진과 아바타의 테두리 분위기를 선택해요.</p><div className="more-profile-style-picker">
-          {PROFILE_STYLES.map((item) => <button type="button" key={item.id} className={profileStyle === item.id ? 'active' : ''} onClick={() => chooseProfileStyle(item.id)}><span className={`more-profile-style-preview ${item.id}`}><UserRound /></span><span><b>{item.label}</b><small>{item.description}</small></span></button>)}
-        </div></>}
 
         {sheet === 'store' && <><HeaderBar title="단둘이 스토어" onClose={() => setSheet(null)} /><p className="more-sheet-description">단둘이의 꾸미기 콘텐츠를 한곳에서 둘러봐요.</p><div className="more-store-hub">
           <button type="button" onClick={() => openSheet('emoticon')}><Sticker /><span><b>이모티콘 팩</b><small>대화에서 쓰는 감정 표현</small></span><em>보기</em></button>
