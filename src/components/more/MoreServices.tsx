@@ -230,53 +230,52 @@ export function MoreServices({
   const profileStyleLabel = PROFILE_STYLES.find((item) => item.id === profileStyle)?.label ?? '클린';
   const themeLabel = theme === 'lavender' ? '라벤더' : theme === 'dark' ? '다크' : '기본';
 
-  return <div className="route-more-services">
-    {settingsOpen && <div className="more-settings-screen-backdrop" role="dialog" aria-modal="true" aria-label="설정">
-      <section className="more-settings-screen">
-        <header className="more-settings-screen-header">
-          <button type="button" onClick={onCloseSettings} aria-label="설정 닫기"><ChevronLeft size={26} /></button>
-          <strong>설정</strong>
-          <span aria-hidden="true" />
-        </header>
-        <div className="more-settings-screen-body">
-          <section className="more-settings-group" aria-label="계정과 알림">
-            <button type="button" onClick={() => { onCloseSettings(); onOpenSettings(); }}>
-              <UserRound /><span><b>계정 · 프로필 · 상대방 연결</b></span><ChevronRight />
-            </button>
-            <button type="button" onClick={() => { onCloseSettings(); onOpenNotifications(); }}>
-              <Bell /><span><b>알림</b><small>최근 활동과 알림 확인</small></span><ChevronRight />
-            </button>
-          </section>
-
-          <section className="more-settings-group" aria-label="앱 설정">
-            <button type="button" onClick={openFullSettings}>
-              <Settings /><span><b>앱 전체 설정</b><small>보안 · 백업 · 앱 정보</small></span><ChevronRight />
-            </button>
-            <button type="button" onClick={() => openMoreSettingSheet('theme')}>
-              <Palette /><span><b>테마</b><small>{themeLabel}</small></span><ChevronRight />
-            </button>
-            <button type="button" onClick={() => openMoreSettingSheet('app-icon')}>
-              <Smartphone /><span><b>앱 아이콘</b><small>{activeIcon.label}</small></span><ChevronRight />
-            </button>
-            <button type="button" onClick={() => openMoreSettingSheet('profile-style')}>
-              <Sparkles /><span><b>프로필 꾸미기</b><small>{profileStyleLabel}</small></span><ChevronRight />
-            </button>
-          </section>
-
-          <section className="more-settings-group" aria-label="꾸미기와 대화">
-            <button type="button" onClick={() => openMoreSettingSheet('emoticon')}>
-              <Sticker /><span><b>이모티콘</b></span><ChevronRight />
-            </button>
-            <button type="button" onClick={() => openMoreSettingSheet('chat-style')}>
-              <MessageCircle /><span><b>채팅 꾸미기</b><small>배경 · 글자 크기</small></span><ChevronRight />
-            </button>
-            <button type="button" onClick={() => openMoreSettingSheet('store')}>
-              <ShoppingBag /><span><b>단둘이 스토어</b></span><ChevronRight />
-            </button>
-          </section>
-        </div>
+  if (settingsOpen) return <div className="more-settings-route" role="region" aria-label="설정">
+    <header className="more-settings-screen-header">
+      <button type="button" onClick={onCloseSettings} aria-label="더보기로 돌아가기"><ChevronLeft size={27} /></button>
+      <strong>설정</strong>
+      <span aria-hidden="true" />
+    </header>
+    <div className="more-settings-screen-body">
+      <section className="more-settings-group" aria-label="계정과 알림">
+        <button type="button" onClick={() => { onCloseSettings(); onOpenSettings(); }}>
+          <UserRound /><span><b>계정 · 프로필 · 상대방 연결</b></span><ChevronRight />
+        </button>
+        <button type="button" onClick={() => { onCloseSettings(); onOpenNotifications(); }}>
+          <Bell /><span><b>알림</b><small>최근 활동과 알림 확인</small></span><ChevronRight />
+        </button>
       </section>
-    </div>}
+
+      <section className="more-settings-group" aria-label="앱 설정">
+        <button type="button" onClick={openFullSettings}>
+          <Settings /><span><b>앱 전체 설정</b><small>보안 · 백업 · 앱 정보</small></span><ChevronRight />
+        </button>
+        <button type="button" onClick={() => openMoreSettingSheet('theme')}>
+          <Palette /><span><b>테마</b><small>{themeLabel}</small></span><ChevronRight />
+        </button>
+        <button type="button" onClick={() => openMoreSettingSheet('app-icon')}>
+          <Smartphone /><span><b>앱 아이콘</b><small>{activeIcon.label}</small></span><ChevronRight />
+        </button>
+        <button type="button" onClick={() => openMoreSettingSheet('profile-style')}>
+          <Sparkles /><span><b>프로필 꾸미기</b><small>{profileStyleLabel}</small></span><ChevronRight />
+        </button>
+      </section>
+
+      <section className="more-settings-group" aria-label="꾸미기와 대화">
+        <button type="button" onClick={() => openMoreSettingSheet('emoticon')}>
+          <Sticker /><span><b>이모티콘</b></span><ChevronRight />
+        </button>
+        <button type="button" onClick={() => openMoreSettingSheet('chat-style')}>
+          <MessageCircle /><span><b>채팅 꾸미기</b><small>배경 · 글자 크기</small></span><ChevronRight />
+        </button>
+        <button type="button" onClick={() => openMoreSettingSheet('store')}>
+          <ShoppingBag /><span><b>단둘이 스토어</b></span><ChevronRight />
+        </button>
+      </section>
+    </div>
+  </div>;
+
+  return <div className="route-more-services">
     <section className="more-service-intro">
       <div><small>단둘이 CUSTOM</small><h1>더보기</h1><p>단둘이를 우리 취향에 맞게 꾸미고 확장해요.</p></div>
       <span className={`more-app-icon-preview ${appIcon} ${activeIcon.className} !grid place-items-center`} aria-label={`현재 앱 아이콘 ${activeIcon.label}`}><AppIconGlyph id={appIcon} /></span>
