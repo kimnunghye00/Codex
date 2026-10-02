@@ -201,6 +201,7 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
   const [giftOpen, setGiftOpen] = useState(false);
   const [callMode, setCallMode] = useState<CallMode>();
   const [mediaStream, setMediaStream] = useState<MediaStream>();
+  const pageRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const initialScrollRef = useRef(false);
@@ -268,6 +269,50 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
     nearBottomRef.current = distance <= CHAT_BOTTOM_SLOP_PX;
     element.dataset.routeUserAwayFromBottom = distance > CHAT_BOTTOM_SLOP_PX ? '1' : '0';
   };
+
+  // Use the visible viewport and the actual navigation edge, rather than a
+  // percentage height of main (which grows with virtualized chat history).
+  useEffect(() => {
+    const page = pageRef.current;
+    if (!page) return;
+    const viewport = window.visualViewport;
+    const nav = document.querySelector<HTMLElement>('[data-route-nav]');
+    let frame = 0;
+    const resize = () => {
+      frame = 0;
+      const visibleBottom = Math.min(window.innerHeight, (viewport?.height ?? window.innerHeight) + (viewport?.offsetTop ?? 0));
+      const navBounds = nav?.getBoundingClientRect();
+      const navStyle = nav ? getComputedStyle(nav) : null;
+      const bottomNavVisible = window.innerWidth < 1024
+        && !document.documentElement.classList.contains('route-keyboard-open')
+        && navStyle?.display !== 'none'
+        && navStyle?.visibility !== 'hidden'
+        && navBounds && navBounds.height > 0
+        && navBounds.top < visibleBottom && navBounds.bottom > 0;
+      const bottom = bottomNavVisible ? Math.min(visibleBottom, navBounds.top) : visibleBottom;
+      const height = `${Math.max(0, bottom - page.getBoundingClientRect().top)}px`;
+      // Inline priority also wins over responsive Tailwind !h-dvh utilities.
+      page.style.setProperty('height', height, 'important');
+      page.style.setProperty('max-height', height, 'important');
+      page.style.setProperty('min-height', '0px', 'important');
+    };
+    const scheduleResize = () => {
+      if (!frame) frame = window.requestAnimationFrame(resize);
+    };
+    const observer = new ResizeObserver(scheduleResize);
+    if (nav) observer.observe(nav);
+    window.addEventListener('resize', scheduleResize);
+    viewport?.addEventListener('resize', scheduleResize);
+    viewport?.addEventListener('scroll', scheduleResize);
+    resize();
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener('resize', scheduleResize);
+      viewport?.removeEventListener('resize', scheduleResize);
+      viewport?.removeEventListener('scroll', scheduleResize);
+    };
+  }, []);
 
   const finePointerRef = useRef(false);
   useEffect(() => {
@@ -897,7 +942,7 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
     setActive(undefined);
   };
 
-  return <div className={`page full-page chat-page chat-bg-${preferences.background} chat-font-${preferences.fontSize} ${deleteSelection ? 'chat-delete-mode' : ''}`}>
+  return <div ref={pageRef} className={`page full-page chat-page chat-bg-${preferences.background} chat-font-${preferences.fontSize} ${deleteSelection ? 'chat-delete-mode' : ''}`}>
     {deleteSelection
       ? <div className="chat-delete-toolbar">
         <button type="button" className="chat-delete-all-button" disabled={deleteBusy || messages.length === 0} onClick={() => void clearAllChat()}>{deleteBusy ? '삭제 중...' : '모든 대화 삭제'}</button>
@@ -913,7 +958,7 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
     {mediaProgress && <p className="chat-media-progress" role="status" aria-live="polite">사진 {mediaProgress.completed} / {mediaProgress.total}장 전송 중...</p>}
     <div
       ref={messagesRef}
-      className="messages !min-h-0 !flex-1 !overflow-y-auto overscroll-contain [scroll-behavior:auto] [touch-action:pan-y] [-webkit-overflow-scrolling:touch]"
+      className="messages !min-h-0 !flex-[1_1_0px] !overflow-y-auto overscroll-contain [scroll-behavior:auto] [touch-action:pan-y] [-webkit-overflow-scrolling:touch]"
       onScroll={updateNearBottom}
       onWheel={handleMessagesWheel}
       onClick={() => active && !deleteSelection && setActive(undefined)}
