@@ -222,11 +222,13 @@ export function ChatComposer({
             <span className="composer-sticker-pack-copy"><b>{pack.name}</b><small>{pack.stickers.length}개</small></span>
           </button>;
         })}</div>
-        <div className="composer-sticker-pack-head" aria-live="polite">
-          <span><b>{activePack.name}</b><small>{activePack.description}</small></span>
-          <em>{activePack.stickers.length}개</em>
+        <div className="composer-sticker-pack-content">
+          <div className="composer-sticker-pack-head" aria-live="polite">
+            <span><b>{activePack.name}</b><small>{activePack.description}</small></span>
+            <em>{activePack.stickers.length}개</em>
+          </div>
+          <div className="composer-sticker-tray" role="tabpanel" aria-label={`${activePack.name} 이모티콘`}>{activePack.stickers.map((sticker, index) => { const id = stickerIdFromToken(sticker); return <button key={`${sticker}-${index}`} type="button" aria-label={`${id ? stickerLabel(id) : sticker} 이모티콘 보내기`} onClick={() => { onSticker(sticker); setStickerOpen(false); }}>{id ? <DanduliSticker id={id} /> : <span className="composer-emoji-sticker">{sticker}</span>}</button>; })}</div>
         </div>
-        <div className="composer-sticker-tray" role="tabpanel" aria-label={`${activePack.name} 이모티콘`}>{activePack.stickers.map((sticker, index) => { const id = stickerIdFromToken(sticker); return <button key={`${sticker}-${index}`} type="button" aria-label={`${id ? stickerLabel(id) : sticker} 이모티콘 보내기`} onClick={() => { onSticker(sticker); setStickerOpen(false); }}>{id ? <DanduliSticker id={id} /> : <span className="composer-emoji-sticker">{sticker}</span>}</button>; })}</div>
       </div>}
       {quickOpen && <div className="quick-contact-strip">{QUICK.map((item) => <button key={item} type="button" onClick={() => { onQuick(item); setQuickOpen(false); setStickerOpen(false); }}>{item}</button>)}</div>}
       {extras && <div className="composer-extra-row">
