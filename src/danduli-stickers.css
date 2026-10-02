@@ -55,50 +55,7 @@
   aspect-ratio: 1; padding: 4px; overflow: visible;
 }
 .emoticon-preview .danduli-sticker { width: 100%; max-width: 29px; height: 29px; }
-@media (min-width: 900px) {
-  .composer-sticker-tabs {
-    width: min(920px, calc(100% - 16px));
-    margin: 0 auto;
-    display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    overflow: visible;
-  }
-  .composer-sticker-tabs button {
-    min-width: 0;
-    grid-template-columns: 30px minmax(0, 1fr);
-    gap: 6px;
-    padding: 7px 7px;
-  }
-  .composer-sticker-pack-thumb {
-    width: 30px;
-    height: 30px;
-  }
-  .composer-sticker-pack-thumb .danduli-sticker {
-    width: 28px;
-    height: 28px;
-  }
-}
 
-@media (max-width: 700px) {
-  .composer-sticker-pack-content {
-    width: calc(100% - 10px);
-  }
-  .composer-sticker-tabs {
-    gap: 6px;
-    padding-inline: 6px;
-  }
-}
-
-@media (max-width: 390px) {
-  .composer-sticker-tabs button { min-width: 120px; grid-template-columns: 30px minmax(0, 1fr); padding: 5px 7px; }
-  .composer-sticker-pack-thumb { width: 30px; height: 30px; border-radius: 9px; }
-  .composer-sticker-pack-thumb .danduli-sticker { width: 28px; height: 28px; }
-  .composer-sticker-pack-head { padding-inline: 9px; }
-  .composer-sticker-picker .composer-sticker-tray { gap: 4px; padding: 8px 5px 10px; }
-  .composer-sticker-picker .composer-sticker-tray > button { min-height: 84px; }
-  .composer-sticker-picker .composer-sticker-tray .danduli-sticker { width: 60px; height: 60px; }
-  .chat-sticker-art { width: 136px; height: 136px; }
-}
 
 
 /* Sticker messages are intentionally NOT chat bubbles.
@@ -322,3 +279,75 @@
   user-select: none;
   -webkit-user-drag: none;
 }
+
+/* Sticker pack chooser: all six packs are distinct on desktop, swipeable on smaller screens. */
+@media (min-width: 900px) {
+  .composer-sticker-tabs {
+    width: min(920px, calc(100% - 16px));
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    overflow: visible;
+  }
+  .composer-sticker-tabs button {
+    min-width: 0;
+    grid-template-columns: 30px minmax(0, 1fr);
+    gap: 6px;
+    padding: 7px;
+  }
+  .composer-sticker-pack-thumb {
+    width: 30px;
+    height: 30px;
+  }
+  .composer-sticker-pack-thumb .danduli-sticker {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+@media (max-width: 700px) {
+  .composer-sticker-pack-content {
+    width: calc(100% - 10px);
+  }
+  .composer-sticker-tabs {
+    gap: 6px;
+    padding-inline: 6px;
+  }
+}
+
+@media (max-width: 390px) {
+  .composer-sticker-tabs button {
+    min-width: 120px;
+    grid-template-columns: 30px minmax(0, 1fr);
+    padding: 5px 7px;
+  }
+  .composer-sticker-pack-thumb {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+  }
+  .composer-sticker-pack-thumb .danduli-sticker {
+    width: 28px;
+    height: 28px;
+  }
+  .composer-sticker-pack-head {
+    padding-inline: 9px;
+  }
+  .composer-sticker-picker .composer-sticker-tray {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    padding: 8px 5px 10px;
+  }
+  .composer-sticker-picker .composer-sticker-tray > button {
+    min-height: 84px;
+  }
+  .composer-sticker-picker .composer-sticker-tray .danduli-sticker {
+    width: 60px;
+    height: 60px;
+  }
+  .chat-sticker-art {
+    width: 136px;
+    height: 136px;
+  }
+}
+
