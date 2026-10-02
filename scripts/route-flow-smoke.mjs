@@ -127,14 +127,14 @@ check('More is a customization hub', more.includes('단둘이 꾸미기') && mor
 check('More removes duplicate quick-settings section', !more.includes('more-quick-settings'));
 check('More removes duplicated service navigation and settings', !more.includes("id: 'settings', label: '설정'") && !more.includes("id: 'date', label: '약속'") && !more.includes("id: 'footprint', label: '발자취'"));
 check('More exposes theme icon emoticon customization', more.includes("openSheet('theme')") && more.includes("openSheet('app-icon')") && more.includes("openSheet('emoticon')"));
-check('More does not search DOM for navigation', !more.includes('querySelectorAll'));
+check('More uses typed navigation for linked settings', !more.includes('querySelectorAll') && more.includes("toolsSection: 'settings'") && more.includes("toolsSection: 'stickers'"));
 
 check('chat screen title is 대화', chat.includes('<Header title="대화"'));
 check('chat realtime subscription is present', chat.includes('subscribeCoupleMessages'));
 check('chat header opens its own settings without a duplicate profile bar', chat.includes('onSettings={openChatMenu}') && !chat.includes('className="chat-profile"'));
 check('memories header opens tab and anniversary settings', memories.includes('onSettings={() => setOrderOpen(true)}'));
 check('map header opens search and display settings', read('src/components/location/DateMapPage.tsx').includes('settingsLabel="지도 설정"'));
-check('home and more headers open page settings', app.includes('settingsLabel="홈 설정"') && app.includes('settingsLabel="더보기 설정"') && more.includes('계정·프로필·상대방 연결'));
+check('home and more headers open page settings', app.includes('settingsLabel="홈 설정"') && app.includes('settingsLabel="더보기 설정"') && more.includes('내 프로필') && more.includes('상대방 프로필 및 연결'));
 check('chat media upload path is present', chat.includes('uploadChatMedia'));
 check('chat composer remains mounted', chat.includes('<ChatComposer'));
 check('chat uses collision-resistant message ids', chat.includes('createMessageId') && messageId.includes('cryptoApi?.getRandomValues'));
