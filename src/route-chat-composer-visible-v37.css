@@ -1,8 +1,14 @@
-/* Keep the chat composer visible above the persistent bottom navigation on mobile/web.
- * The app shell owns the bottom nav, so the chat page must reserve its height. */
+/* Chat viewport contract: the persistent app nav is 82px tall on mobile.
+ * main already reserves that space; keep the chat page inside the remaining viewport
+ * instead of sizing it to 100% of an unconstrained main element. */
 .chat-page.full-page{
-  height:100%!important;
-  max-height:100%!important;
+  height:calc(100dvh - 82px - env(safe-area-inset-bottom))!important;
+  max-height:calc(100dvh - 82px - env(safe-area-inset-bottom))!important;
+  min-height:0!important;
+  overflow:hidden!important;
+}
+.chat-page .messages{
+  flex:1 1 0!important;
   min-height:0!important;
 }
 .chat-page .composer-area{
@@ -10,14 +16,19 @@
   display:block!important;
   visibility:visible!important;
   opacity:1!important;
+  position:relative!important;
+  z-index:20!important;
 }
-.chat-page .composer-area .composer{
-  display:flex!important;
+.chat-page .composer-area .composer{display:flex!important}
+@media(min-width:768px) and (max-width:1023px){
+  .chat-page.full-page{
+    height:calc(100dvh - 76px)!important;
+    max-height:calc(100dvh - 76px)!important;
+  }
 }
-@media(max-width:700px){
-  .chat-page .composer-area{
-    position:relative!important;
-    z-index:20!important;
-    padding-bottom:max(7px,env(safe-area-inset-bottom))!important;
+@media(min-width:1024px){
+  .chat-page.full-page{
+    height:100dvh!important;
+    max-height:100dvh!important;
   }
 }
