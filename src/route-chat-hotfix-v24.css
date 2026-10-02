@@ -674,3 +674,26 @@
   margin: 0 !important;
   background: transparent !important;
 }
+
+/* Media attachments have their own surface, outside text bubble styling. */
+.chat-page .bubble-row .message-wrap .chat-standalone-media {
+  display: block !important;
+  position: relative;
+  width: fit-content !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 16px;
+  background: transparent !important;
+  box-shadow: none !important;
+  line-height: 0;
+  overflow: hidden;
+  cursor: pointer;
+}
+.chat-page .chat-standalone-media::before,
+.chat-page .chat-standalone-media::after {
+  content: none !important;
+}
+.chat-page .chat-standalone-media .reply-preview {
+  line-height: 1.4;
+}
