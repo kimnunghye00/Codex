@@ -1,9 +1,6 @@
 name: Build Android QA APK (test signing key)
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 concurrency:
