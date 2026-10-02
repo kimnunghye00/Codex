@@ -31,3 +31,11 @@
     margin: 0 !important;
   }
 }
+
+
+/* Compact contextual settings menu: anchored to the fixed header gear. */
+.header-settings-menu-wrap{position:relative;display:grid;place-items:center}
+.header-settings-menu{position:absolute;top:calc(100% + 8px);right:0;z-index:1350;width:220px;padding:8px;border:1px solid color-mix(in srgb,var(--border) 72%,transparent);border-radius:18px;background:color-mix(in srgb,var(--surface) 96%,transparent);box-shadow:0 14px 42px rgba(0,0,0,.22);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);overflow:hidden}
+.header-settings-menu>button{display:flex;align-items:center;width:100%;min-height:52px;padding:0 16px;border:0;border-radius:12px;background:transparent;color:var(--text);font:inherit;font-weight:650;text-align:left;cursor:pointer}
+.header-settings-menu>button:hover,.header-settings-menu>button:focus-visible{background:color-mix(in srgb,var(--text) 8%,transparent);outline:none}
+@media(max-width:600px){.header-settings-menu{right:0;width:min(240px,calc(100vw - 44px));border-radius:16px}.header-settings-menu>button{min-height:54px;font-size:15px}}
