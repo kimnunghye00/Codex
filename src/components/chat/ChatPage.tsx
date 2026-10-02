@@ -301,6 +301,8 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
     };
     const observer = new ResizeObserver(scheduleResize);
     if (nav) observer.observe(nav);
+    const keyboardObserver = new MutationObserver(scheduleResize);
+    keyboardObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     window.addEventListener('resize', scheduleResize);
     viewport?.addEventListener('resize', scheduleResize);
     viewport?.addEventListener('scroll', scheduleResize);
@@ -308,6 +310,7 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
     return () => {
       window.cancelAnimationFrame(frame);
       observer.disconnect();
+      keyboardObserver.disconnect();
       window.removeEventListener('resize', scheduleResize);
       viewport?.removeEventListener('resize', scheduleResize);
       viewport?.removeEventListener('scroll', scheduleResize);
