@@ -517,3 +517,56 @@
     box-shadow: none;
   }
 }
+
+
+/* True full-screen settings route */
+.more-settings-route {
+  position: fixed;
+  z-index: 2400;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--text-primary);
+  background: var(--surface);
+}
+
+.more-settings-route .more-settings-screen-header {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--surface);
+}
+
+.more-settings-route .more-settings-screen-body {
+  width: 100%;
+  flex: 1 1 auto;
+  background: var(--surface);
+}
+
+.more-settings-route .more-settings-group {
+  width: 100%;
+  max-width: none;
+}
+
+.more-settings-route .more-settings-group > button {
+  width: 100%;
+}
+
+.more-settings-route .more-settings-screen-header > button {
+  justify-self: start;
+}
+
+@media (min-width: 721px) {
+  .more-settings-route .more-settings-screen-header,
+  .more-settings-route .more-settings-screen-body {
+    padding-left: max(18px, env(safe-area-inset-left));
+    padding-right: max(18px, env(safe-area-inset-right));
+  }
+
+  .more-settings-route .more-settings-group + .more-settings-group {
+    margin-top: 0;
+  }
+}
