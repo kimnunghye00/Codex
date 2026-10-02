@@ -56,6 +56,7 @@ type Props = {
   onOpenAnniversary: () => void;
   showAnniversaries?: boolean;
   showSchedules?: boolean;
+  profileEditorRequest?: number;
 };
 
 const localKey = (uid: string) => `route-local-schedules:${uid}`;
@@ -278,7 +279,7 @@ async function renderProfileCrop(state: ProfileCropState) {
   return canvas.toDataURL('image/jpeg', target.quality);
 }
 
-export function CoupleHomeTools({ uid, profile, onProfileChange, connection, relationshipStartDate, coupleDay, onOpenConnect, onOpenAnniversary, showAnniversaries = true, showSchedules = true }: Props) {
+export function CoupleHomeTools({ uid, profile, onProfileChange, connection, relationshipStartDate, coupleDay, onOpenConnect, onOpenAnniversary, showAnniversaries = true, showSchedules = true, profileEditorRequest = 0 }: Props) {
   const [remoteSchedules, setRemoteSchedules] = useState<Schedule[]>([]);
   const [localSchedules, setLocalSchedules] = useState<Schedule[]>(() => loadLocal(uid));
   const [legacyPromises, setLegacyPromises] = useState<Schedule[]>(() => loadLegacyPromises(uid));
@@ -296,6 +297,7 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
   const profilePhotoRef = useRef<HTMLInputElement>(null);
   const profileBackgroundRef = useRef<HTMLInputElement>(null);
   const cropDragRef = useRef<{ pointerId: number; x: number; y: number; offsetX: number; offsetY: number; width: number; height: number } | null>(null);
+  const handledProfileEditorRequestRef = useRef(0);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [allOpen, setAllOpen] = useState(false);
   const [filter, setFilter] = useState<ScheduleFilter>('all');
@@ -381,6 +383,18 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
     setProfileFeedback('');
     setMyProfileOpen(true);
   };
+
+  useEffect(() => {
+    if (!profileEditorRequest || handledProfileEditorRequestRef.current === profileEditorRequest) return;
+    handledProfileEditorRequestRef.current = profileEditorRequest;
+    setProfileDraft({
+      photoDataUrl: profile.photoDataUrl ?? '',
+      backgroundPhotoDataUrl: profile.backgroundPhotoDataUrl ?? '',
+      statusMessage: profile.statusMessage ?? '',
+    });
+    setProfileFeedback('');
+    setMyProfileOpen(true);
+  }, [profileEditorRequest, profile.photoDataUrl, profile.backgroundPhotoDataUrl, profile.statusMessage]);
 
   const chooseProfileImage = async (file: File | undefined, kind: ProfileImageKind) => {
     if (!file) return;
