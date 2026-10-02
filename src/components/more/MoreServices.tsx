@@ -22,7 +22,7 @@ type ThemeId = 'default' | 'lavender' | 'dark';
 type MoreSheet = 'theme' | 'app-icon' | 'emoticon' | 'chat-style' | 'profile-style' | 'store';
 
 export type MoreNavigationTarget =
-  | { area: 'chat' }
+  | { area: 'chat'; toolsSection?: 'settings' | 'stickers' | 'store' }
   | { area: 'memories'; tab: HubTabId }
   | { area: 'location'; tab: LocationTabId };
 
@@ -245,14 +245,12 @@ export function MoreServices({
 
   const openChatDataSettings = () => {
     onCloseSettings();
-    onNavigate({ area: 'chat' });
-    window.setTimeout(() => {
-      document.querySelector<HTMLButtonElement>('.header-actions button[aria-label="대화 설정"]')?.click();
-      window.setTimeout(() => {
-        const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('.chat-tools-menu button'));
-        buttons.find((button) => button.textContent?.replace(/\s+/g, ' ').trim().includes('기능 / 옵션'))?.click();
-      }, 90);
-    }, 120);
+    onNavigate({ area: 'chat', toolsSection: 'settings' });
+  };
+
+  const openStickerSettings = () => {
+    onCloseSettings();
+    onNavigate({ area: 'chat', toolsSection: 'stickers' });
   };
 
   const openFootprintSettings = () => {
@@ -310,7 +308,7 @@ export function MoreServices({
           <button type="button" onClick={openChatDataSettings}>
             <Images /><span><b>사진 및 영상 화질</b><small>전송 화질과 데이터 사용량 설정</small></span><ChevronRight />
           </button>
-          <button type="button" onClick={() => openMoreSettingSheet('emoticon')}>
+          <button type="button" onClick={openStickerSettings}>
             <Sticker /><span><b>이모티콘</b><small>보유 이모티콘과 순서 관리</small></span><ChevronRight />
           </button>
         </div>
