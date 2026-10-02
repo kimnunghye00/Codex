@@ -10,7 +10,7 @@ export function AppHeader({ title, onSettings, settingsLabel = '설정', onNotif
   onNotifications: () => void;
   unreadCount: number;
 }) {
-  return <header className="topbar mx-auto !flex !h-auto !min-h-[calc(58px+max(10px,env(safe-area-inset-top)))] w-full min-w-0 !items-center !justify-between gap-3 !pt-[max(10px,env(safe-area-inset-top))] !pb-2 md:!h-[72px] md:!min-h-[72px] md:!py-0">
+  return <header className="app-global-header topbar mx-auto !flex !h-auto !min-h-[calc(58px+max(10px,env(safe-area-inset-top)))] w-full min-w-0 !items-center !justify-between gap-3 !pt-[max(10px,env(safe-area-inset-top))] !pb-2 md:!h-[72px] md:!min-h-[72px] md:!py-0">
     <div className="brand !flex min-w-0 !items-center gap-3 sm:gap-3.5">
       <button
         type="button"
