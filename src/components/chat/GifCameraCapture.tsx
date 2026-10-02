@@ -4,8 +4,8 @@ import { createPortal } from 'react-dom';
 import './GifCameraCapture.css';
 
 const MAX_DURATION_MS = 10_000;
-const FRAME_INTERVAL_MS = 200;
-const MAX_FRAME_EDGE = 288;
+const FRAME_INTERVAL_MS = 125;
+const MAX_FRAME_EDGE = 480;
 
 type CapturedFrame = { rgba: Uint8ClampedArray; width: number; height: number };
 
@@ -17,36 +17,32 @@ function cameraErrorMessage(cause: unknown) {
   return '카메라를 열지 못했어요. 잠시 후 다시 시도해 주세요.';
 }
 
-// Match object-fit: cover in the 3:4 viewfinder, including its center crop.
+// Preserve the complete camera frame; the viewfinder uses these same dimensions.
 function frameSize(video: HTMLVideoElement) {
-  const sourceWidth = video.videoWidth || 720;
-  const sourceHeight = video.videoHeight || 1280;
-  const ratio = 3 / 4;
-  const cropWidth = Math.min(sourceWidth, sourceHeight * ratio);
-  const cropHeight = cropWidth / ratio;
-  const height = Math.max(4, Math.floor(Math.min(MAX_FRAME_EDGE, cropHeight) / 4) * 4);
+  const sourceWidth = video.videoWidth || 640;
+  const sourceHeight = video.videoHeight || 480;
+  const scale = Math.min(1, MAX_FRAME_EDGE / Math.max(sourceWidth, sourceHeight));
   return {
-    width: height * ratio,
-    height,
-    sourceX: (sourceWidth - cropWidth) / 2,
-    sourceY: (sourceHeight - cropHeight) / 2,
-    sourceWidth: cropWidth,
-    sourceHeight: cropHeight,
+    width: Math.max(2, Math.round(sourceWidth * scale)),
+    height: Math.max(2, Math.round(sourceHeight * scale)),
   };
 }
 
 async function encodeGif(frames: CapturedFrame[]) {
   const { GIFEncoder, applyPalette, quantize } = await import('gifenc');
   const encoder = GIFEncoder();
-  frames.forEach((frame) => {
-    const palette = quantize(frame.rgba, 64, { format: 'rgb444' });
-    const indexed = applyPalette(frame.rgba, palette, 'rgb444');
+  for (const frame of frames) {
+    const palette = quantize(frame.rgba, 256, { format: 'rgb565' });
+    const indexed = applyPalette(frame.rgba, palette, 'rgb565');
     encoder.writeFrame(indexed, frame.width, frame.height, {
       palette,
       delay: FRAME_INTERVAL_MS,
       repeat: 0,
     });
-  });
+    // Let the progress overlay paint and release each raw frame as it is encoded.
+    frame.rgba = new Uint8ClampedArray(0);
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+  }
   encoder.finish();
   return new Blob([Uint8Array.from(encoder.bytes()).buffer], { type: 'image/gif' });
 }
@@ -66,6 +62,8 @@ export function GifCameraCapture({ onClose, onCaptured, onError }: {
   const recordingRef = useRef(false);
   const previewUrlRef = useRef('');
   const [ready, setReady] = useState(false);
+  const [captureSize, setCaptureSize] = useState({ width: 480, height: 360 });
+  const frameSizeRef = useRef<{ width: number; height: number } | null>(null);
   const [recording, setRecording] = useState(false);
   const [encoding, setEncoding] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -92,6 +90,7 @@ export function GifCameraCapture({ onClose, onCaptured, onError }: {
     clearCaptureTimers();
     recordingRef.current = false;
     framesRef.current = [];
+    frameSizeRef.current = null;
     setRecording(false);
     setEncoding(false);
     setProgress(0);
@@ -107,7 +106,7 @@ export function GifCameraCapture({ onClose, onCaptured, onError }: {
     let disposed = false;
     if (!navigator.mediaDevices?.getUserMedia) return;
     void navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 1280 } },
+      video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
       audio: false,
     }).then(async (stream) => {
       if (disposed) {
@@ -134,7 +133,7 @@ export function GifCameraCapture({ onClose, onCaptured, onError }: {
   const captureFrame = useCallback(() => {
     const video = videoRef.current;
     if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
-    const { width, height, sourceX, sourceY, sourceWidth, sourceHeight } = frameSize(video);
+    const { width, height } = frameSizeRef.current ?? frameSize(video);
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
@@ -142,7 +141,9 @@ export function GifCameraCapture({ onClose, onCaptured, onError }: {
     if (!context) return;
     context.translate(width, 0);
     context.scale(-1, 1);
-    context.drawImage(video, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, width, height);
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
+    context.drawImage(video, 0, 0, width, height);
     framesRef.current.push({ rgba: context.getImageData(0, 0, width, height).data, width, height });
   }, []);
 
@@ -178,6 +179,10 @@ export function GifCameraCapture({ onClose, onCaptured, onError }: {
     if (!ready || recordingRef.current || encoding || capturedFile) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     framesRef.current = [];
+    if (videoRef.current) {
+      frameSizeRef.current = frameSize(videoRef.current);
+      setCaptureSize(frameSizeRef.current);
+    }
     recordingRef.current = true;
     startedAtRef.current = Date.now();
     setProgress(0);
@@ -234,8 +239,8 @@ export function GifCameraCapture({ onClose, onCaptured, onError }: {
   return createPortal(<div className="gif-camera-backdrop" role="dialog" aria-modal="true" aria-label="카메라 움짤 촬영">
     <section className="gif-camera-sheet">
       <header><div><small>CAMERA GIF</small><h2>움짤 촬영</h2></div><button type="button" onClick={close} aria-label="촬영 닫기"><X /></button></header>
-      <div className="gif-camera-stage">
-        {previewUrl ? <img src={previewUrl} alt="촬영한 움짤 미리보기" /> : <video ref={videoRef} autoPlay muted playsInline />}
+      <div className="gif-camera-stage" style={{ aspectRatio: `${captureSize.width} / ${captureSize.height}`, width: `min(100%, ${42 * captureSize.width / captureSize.height}dvh)` }}>
+        {previewUrl ? <img src={previewUrl} alt="촬영한 움짤 미리보기" /> : <video ref={videoRef} autoPlay muted playsInline onLoadedMetadata={(event) => { if (event.currentTarget.videoWidth && !recordingRef.current) setCaptureSize(frameSize(event.currentTarget)); }} />}
         {!ready && !previewUrl && !error && <div className="gif-camera-status"><Camera /><span>카메라를 여는 중이에요…</span></div>}
         {error && !previewUrl && <div className="gif-camera-status error"><Camera /><span>{error}</span></div>}
         {recording && <span className="gif-camera-live">REC · {(progress * 10).toFixed(1)}초</span>}
