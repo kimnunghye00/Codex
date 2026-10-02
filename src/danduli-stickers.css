@@ -56,6 +56,10 @@
 }
 .emoticon-preview .danduli-sticker { width: 100%; max-width: 29px; height: 29px; }
 @media (max-width: 390px) {
+  .composer-sticker-tabs button { min-width: 120px; grid-template-columns: 30px minmax(0, 1fr); padding: 5px 7px; }
+  .composer-sticker-pack-thumb { width: 30px; height: 30px; border-radius: 9px; }
+  .composer-sticker-pack-thumb .danduli-sticker { width: 28px; height: 28px; }
+  .composer-sticker-pack-head { padding-inline: 9px; }
   .composer-sticker-tray { gap: 3px; padding-inline: 5px; }
   .composer-sticker-tray > button { min-height: 92px; }
   .composer-sticker-tray .danduli-sticker { width: 64px; height: 64px; }
@@ -119,15 +123,115 @@
 
 .composer-sticker-picker { background: var(--surface); border-top: 1px solid var(--border); }
 .composer-sticker-tabs {
-  display: flex; gap: 5px; overflow-x: auto; padding: 8px;
-  scrollbar-width: none; white-space: nowrap;
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding: 8px 8px 7px;
+  scrollbar-width: none;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--background) 48%, var(--surface) 52%);
 }
 .composer-sticker-tabs::-webkit-scrollbar { display: none; }
 .composer-sticker-tabs button {
-  flex: 0 0 auto; padding: 7px 11px; border: 0; border-radius: 999px;
-  color: var(--text-secondary); background: var(--primary-soft); font-size: 12px; font-weight: 700;
+  min-width: 132px;
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 6px 9px;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, var(--primary) 12%);
+  border-radius: 13px;
+  color: var(--text-primary);
+  background: var(--surface);
+  text-align: left;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--surface) 65%, transparent);
 }
-.composer-sticker-tabs button.active { color: white; background: var(--primary); }
+.composer-sticker-tabs button.active {
+  color: white;
+  border-color: var(--primary);
+  background: var(--primary);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 22%, transparent);
+}
+.composer-sticker-pack-thumb {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary-soft) 64%, var(--surface) 36%);
+}
+.composer-sticker-tabs button.active .composer-sticker-pack-thumb {
+  background: rgba(255,255,255,.17);
+}
+.composer-sticker-pack-thumb .danduli-sticker {
+  width: 31px;
+  height: 31px;
+}
+.composer-sticker-pack-thumb > span:not(.danduli-sticker) {
+  font-size: 21px;
+  line-height: 1;
+}
+.composer-sticker-pack-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.composer-sticker-pack-copy b {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.composer-sticker-pack-copy small {
+  color: var(--text-secondary);
+  font-size: 8px;
+  font-weight: 700;
+}
+.composer-sticker-tabs button.active .composer-sticker-pack-copy small {
+  color: rgba(255,255,255,.78);
+}
+.composer-sticker-pack-head {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 11px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  background: var(--surface);
+}
+.composer-sticker-pack-head > span {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 2px;
+}
+.composer-sticker-pack-head b {
+  font-size: 11px;
+  font-weight: 850;
+}
+.composer-sticker-pack-head small {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 8px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.composer-sticker-pack-head em {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border-radius: 999px;
+  color: var(--primary);
+  background: var(--primary-soft);
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 850;
+}
 .composer-sticker-picker .composer-sticker-tray { border-top: 0; max-height: min(37dvh, 340px); }
 .composer-emoji-sticker { font-size: 32px; }
 .danduli-sticker.danduli-sticker-asset {
