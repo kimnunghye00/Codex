@@ -163,13 +163,15 @@ function mediaErrorMessage(cause: unknown, kind: 'photo' | 'gif') {
   return kind === 'photo' ? '사진을 전송하지 못했어요. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.' : '움짤을 전송하지 못했어요. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.';
 }
 
-export function ChatPage({ Header, messages, setMessages, connection, initialMessageId, notificationRequest }: {
+export function ChatPage({ Header, messages, setMessages, connection, initialMessageId, notificationRequest, initialToolsSection, toolsRequest }: {
   Header: (props: PageHeaderProps) => React.ReactNode;
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   connection: RealCoupleConnection | null;
   initialMessageId?: number;
   notificationRequest?: number;
+  initialToolsSection?: 'settings' | 'stickers' | 'store';
+  toolsRequest?: number;
 }) {
   const currentUid = auth.currentUser?.uid ?? '';
   const [draft, setDraft] = useState('');
@@ -187,7 +189,7 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [savedMediaIds, setSavedMediaIds] = useState<Set<number>>(() => loadChatMemoryMessageIds());
   const [toolsOpen, setToolsOpen] = useState(false);
-  const [toolsInitialSection, setToolsInitialSection] = useState<'menu' | 'store'>('menu');
+  const [toolsInitialSection, setToolsInitialSection] = useState<'menu' | 'store' | 'settings' | 'stickers'>('menu');
   const [contactOpen, setContactOpen] = useState(false);
   const [contactForm, setContactForm] = useState({ name: '', phone: '' });
   const [preferences, setPreferences] = useState(() => loadChatPreferences(currentUid || 'guest'));
@@ -717,6 +719,12 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
     setToolsInitialSection('menu');
     setToolsOpen(true);
   };
+
+  useEffect(() => {
+    if (!initialToolsSection || !toolsRequest) return;
+    setToolsInitialSection(initialToolsSection);
+    setToolsOpen(true);
+  }, [initialToolsSection, toolsRequest]);
 
   const openScheduleMessage = () => {
     const defaults = currentScheduleDefaults();
