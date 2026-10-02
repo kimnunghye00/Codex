@@ -1,6 +1,7 @@
-import { Bell, ChevronLeft, ChevronRight, MessageCircle, Palette, Settings, ShoppingBag, Smartphone, Sparkles, Sticker, UserRound, X } from 'lucide-react';
+import { Bell, Cake, ChevronLeft, ChevronRight, CircleHelp, DatabaseBackup, Heart, Images, Info, KeyRound, LockKeyhole, MapPinned, MessageCircle, MessageSquareText, Moon, Palette, ShoppingBag, Smartphone, Sparkles, Sticker, UserRound, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { auth } from '../../lib/firebaseAuth';
+import { SYSTEM_DARK_KEY, isSystemDarkEnabled, setSystemDarkEnabled } from '../../system-dark';
 import { normalizeRouteAppIcon, updateRouteFavicon, type RouteAppIconId } from '../../utils/appIcon';
 import { getNativeRouteAppIcon, setNativeRouteAppIcon, supportsNativeRouteAppIcon } from '../../app-icon-native';
 import { applyRouteProfileStyle, normalizeRouteProfileStyle, type RouteProfileStyle } from '../../utils/profileStyle';
@@ -59,6 +60,12 @@ const PROFILE_STYLES: Array<{ id: RouteProfileStyle; label: string; description:
   { id: 'heart', label: '하트', description: '커플 느낌을 강조한 프로필' },
 ];
 
+
+function loadBooleanSetting(key: string, defaultValue: boolean) {
+  const saved = localStorage.getItem(key);
+  return saved == null ? defaultValue : saved === '1';
+}
+
 function AppIconGlyph({ id }: { id: AppIconId }) {
   if (id === 'couple-love' || id === 'couple-date') {
     return <span className={`danduli-app-icon-character ${id}`} aria-hidden="true" />;
@@ -76,7 +83,7 @@ export function MoreServices({
   settingsOpen = false,
   onCloseSettings = () => {},
   onOpenNotifications,
-  onNavigate: _onNavigate,
+  onNavigate,
 }: {
   onOpenSettings: () => void;
   settingsOpen?: boolean;
@@ -97,6 +104,10 @@ export function MoreServices({
   const chatUid = auth.currentUser?.uid ?? 'guest';
   const [chatPreferences, setChatPreferences] = useState<ChatPreferences>(() => loadChatPreferences(chatUid));
   const [notice, setNotice] = useState('');
+  const [anniversaryAlerts, setAnniversaryAlerts] = useState(() => loadBooleanSetting('route-setting-anniversary-alerts', true));
+  const [chatAlerts, setChatAlerts] = useState(() => loadBooleanSetting('route-setting-chat-alerts', true));
+  const [appLock, setAppLock] = useState(() => loadBooleanSetting('route-setting-app-lock', false));
+  const [systemDark, setSystemDark] = useState(() => isSystemDarkEnabled());
 
   const activeIcon = useMemo(() => APP_ICONS.find((item) => item.id === appIcon) ?? APP_ICONS[0], [appIcon]);
 
@@ -215,19 +226,40 @@ export function MoreServices({
     };
   }, [settingsOpen, onCloseSettings]);
 
-  const openFullSettings = () => {
-    onCloseSettings();
-    void import('../../settings-hub')
-      .then((module) => module.openSettingsHub(onOpenSettings))
-      .catch(() => setNotice('앱 전체 설정을 불러오지 못했어요. 다시 시도해 주세요.'));
-  };
-
   const openMoreSettingSheet = (next: MoreSheet) => {
     onCloseSettings();
     openSheet(next);
   };
 
-  const profileStyleLabel = PROFILE_STYLES.find((item) => item.id === profileStyle)?.label ?? '클린';
+  const updateBooleanSetting = (key: string, next: boolean, apply: (value: boolean) => void) => {
+    localStorage.setItem(key, next ? '1' : '0');
+    apply(next);
+  };
+
+  const openPasswordSettings = () => {
+    onCloseSettings();
+    void import('../../settings-hub')
+      .then((module) => module.openPasswordChange())
+      .catch(() => window.alert('비밀번호 변경 화면을 불러오지 못했어요. 다시 시도해 주세요.'));
+  };
+
+  const openChatDataSettings = () => {
+    onCloseSettings();
+    onNavigate({ area: 'chat' });
+    window.setTimeout(() => {
+      document.querySelector<HTMLButtonElement>('.header-actions button[aria-label="대화 설정"]')?.click();
+      window.setTimeout(() => {
+        const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('.chat-tools-menu button'));
+        buttons.find((button) => button.textContent?.replace(/\s+/g, ' ').trim().includes('기능 / 옵션'))?.click();
+      }, 90);
+    }, 120);
+  };
+
+  const openFootprintSettings = () => {
+    onCloseSettings();
+    onNavigate({ area: 'location', tab: 'footprints' });
+  };
+
   const themeLabel = theme === 'lavender' ? '라벤더' : theme === 'dark' ? '다크' : '기본';
 
   if (settingsOpen) return <div className="more-settings-route" role="region" aria-label="설정">
@@ -237,40 +269,97 @@ export function MoreServices({
       <span aria-hidden="true" />
     </header>
     <div className="more-settings-screen-body">
-      <section className="more-settings-group" aria-label="계정과 알림">
-        <button type="button" onClick={() => { onCloseSettings(); onOpenSettings(); }}>
-          <UserRound /><span><b>계정 · 프로필 · 상대방 연결</b></span><ChevronRight />
-        </button>
-        <button type="button" onClick={() => { onCloseSettings(); onOpenNotifications(); }}>
-          <Bell /><span><b>알림</b><small>최근 활동과 알림 확인</small></span><ChevronRight />
-        </button>
+      <section className="more-settings-section" aria-labelledby="more-settings-account">
+        <h2 id="more-settings-account">계정</h2>
+        <div className="more-settings-group">
+          <button type="button" onClick={() => { onCloseSettings(); onOpenSettings(); }}>
+            <UserRound /><span><b>내 프로필</b><small>이름 · 생년월일 · 사진 · 별명 수정</small></span><ChevronRight />
+          </button>
+          <button type="button" onClick={() => { onCloseSettings(); onOpenSettings(); }}>
+            <Heart /><span><b>상대방 프로필 및 연결</b><small>연결 상태 · 상대방 프로필 · 별명 관리</small></span><ChevronRight />
+          </button>
+          <button type="button" onClick={openPasswordSettings}>
+            <KeyRound /><span><b>비밀번호 변경</b><small>현재 비밀번호 확인 후 새 비밀번호 설정</small></span><ChevronRight />
+          </button>
+        </div>
       </section>
 
-      <section className="more-settings-group" aria-label="앱 설정">
-        <button type="button" onClick={openFullSettings}>
-          <Settings /><span><b>앱 전체 설정</b><small>보안 · 백업 · 앱 정보</small></span><ChevronRight />
-        </button>
-        <button type="button" onClick={() => openMoreSettingSheet('theme')}>
-          <Palette /><span><b>테마</b><small>{themeLabel}</small></span><ChevronRight />
-        </button>
-        <button type="button" onClick={() => openMoreSettingSheet('app-icon')}>
-          <Smartphone /><span><b>앱 아이콘</b><small>{activeIcon.label}</small></span><ChevronRight />
-        </button>
-        <button type="button" onClick={() => openMoreSettingSheet('profile-style')}>
-          <Sparkles /><span><b>프로필 꾸미기</b><small>{profileStyleLabel}</small></span><ChevronRight />
-        </button>
+      <section className="more-settings-section" aria-labelledby="more-settings-alerts">
+        <h2 id="more-settings-alerts">알림</h2>
+        <div className="more-settings-group">
+          <button type="button" onClick={() => { onCloseSettings(); onOpenNotifications(); }}>
+            <Bell /><span><b>알림 및 최근 활동</b><small>단둘이 알림 확인과 읽음 관리</small></span><ChevronRight />
+          </button>
+          <div className="more-settings-toggle-row">
+            <Cake /><span><b>기념일 알림</b><small>다가오는 기념일과 약속 알림 받기</small></span>
+            <button type="button" className={anniversaryAlerts ? 'more-settings-switch on' : 'more-settings-switch'} role="switch" aria-checked={anniversaryAlerts} aria-label="기념일 알림" onClick={() => updateBooleanSetting('route-setting-anniversary-alerts', !anniversaryAlerts, setAnniversaryAlerts)}><i /></button>
+          </div>
+          <div className="more-settings-toggle-row">
+            <MessageSquareText /><span><b>채팅 알림</b><small>새 메시지 알림 받기</small></span>
+            <button type="button" className={chatAlerts ? 'more-settings-switch on' : 'more-settings-switch'} role="switch" aria-checked={chatAlerts} aria-label="채팅 알림" onClick={() => updateBooleanSetting('route-setting-chat-alerts', !chatAlerts, setChatAlerts)}><i /></button>
+          </div>
+        </div>
       </section>
 
-      <section className="more-settings-group" aria-label="꾸미기와 대화">
-        <button type="button" onClick={() => openMoreSettingSheet('emoticon')}>
-          <Sticker /><span><b>이모티콘</b></span><ChevronRight />
-        </button>
-        <button type="button" onClick={() => openMoreSettingSheet('chat-style')}>
-          <MessageCircle /><span><b>채팅 꾸미기</b><small>배경 · 글자 크기</small></span><ChevronRight />
-        </button>
-        <button type="button" onClick={() => openMoreSettingSheet('store')}>
-          <ShoppingBag /><span><b>단둘이 스토어</b></span><ChevronRight />
-        </button>
+      <section className="more-settings-section" aria-labelledby="more-settings-chat-data">
+        <h2 id="more-settings-chat-data">채팅 및 데이터</h2>
+        <div className="more-settings-group">
+          <button type="button" onClick={openChatDataSettings}>
+            <DatabaseBackup /><span><b>대화내용 백업</b><small>대화내용 내보내기 및 불러오기</small></span><ChevronRight />
+          </button>
+          <button type="button" onClick={openChatDataSettings}>
+            <Images /><span><b>사진 및 영상 화질</b><small>전송 화질과 데이터 사용량 설정</small></span><ChevronRight />
+          </button>
+          <button type="button" onClick={() => openMoreSettingSheet('emoticon')}>
+            <Sticker /><span><b>이모티콘</b><small>보유 이모티콘과 순서 관리</small></span><ChevronRight />
+          </button>
+        </div>
+      </section>
+
+      <section className="more-settings-section" aria-labelledby="more-settings-display">
+        <h2 id="more-settings-display">화면 및 꾸미기</h2>
+        <div className="more-settings-group">
+          <button type="button" onClick={() => openMoreSettingSheet('theme')}>
+            <Palette /><span><b>테마</b><small>{themeLabel} · 앱 전체 색상 변경</small></span><ChevronRight />
+          </button>
+          <button type="button" onClick={() => openMoreSettingSheet('app-icon')}>
+            <Smartphone /><span><b>앱 아이콘</b><small>{activeIcon.label}</small></span><ChevronRight />
+          </button>
+          <div className="more-settings-toggle-row">
+            <Moon /><span><b>시스템 다크 모드 연동</b><small>기기의 다크 · 라이트 모드에 자동으로 맞춤</small></span>
+            <button type="button" className={systemDark ? 'more-settings-switch on' : 'more-settings-switch'} role="switch" aria-checked={systemDark} aria-label="시스템 다크 모드 연동" onClick={() => {
+              const next = !systemDark;
+              setSystemDark(next);
+              setSystemDarkEnabled(next);
+              localStorage.setItem(SYSTEM_DARK_KEY, next ? '1' : '0');
+            }}><i /></button>
+          </div>
+        </div>
+      </section>
+
+      <section className="more-settings-section" aria-labelledby="more-settings-security">
+        <h2 id="more-settings-security">개인 / 보안</h2>
+        <div className="more-settings-group">
+          <div className="more-settings-toggle-row">
+            <LockKeyhole /><span><b>앱 잠금</b><small>단둘이 실행 시 잠금 사용</small></span>
+            <button type="button" className={appLock ? 'more-settings-switch on' : 'more-settings-switch'} role="switch" aria-checked={appLock} aria-label="앱 잠금" onClick={() => updateBooleanSetting('route-setting-app-lock', !appLock, setAppLock)}><i /></button>
+          </div>
+          <button type="button" onClick={openFootprintSettings}>
+            <MapPinned /><span><b>위치 및 발자취</b><small>위치 공유와 발자취 설정 확인</small></span><ChevronRight />
+          </button>
+        </div>
+      </section>
+
+      <section className="more-settings-section" aria-labelledby="more-settings-info">
+        <h2 id="more-settings-info">앱 정보</h2>
+        <div className="more-settings-group">
+          <button type="button" onClick={() => window.alert('단둘이 멀티플랫폼 테스트 버전\nAndroid는 APK, iOS는 iOS 빌드, Windows는 EXE 설치 파일로 업데이트할 수 있어요.')}>
+            <Info /><span><b>단둘이 정보</b><small>지원 플랫폼과 앱 정보 확인</small></span><ChevronRight />
+          </button>
+          <button type="button" onClick={() => window.alert('문제가 생기면 오류 화면과 함께 알려주세요. 단둘이 기능별로 확인할 수 있어요.')}>
+            <CircleHelp /><span><b>도움말</b><small>자주 묻는 질문과 문제 해결</small></span><ChevronRight />
+          </button>
+        </div>
       </section>
     </div>
   </div>;
