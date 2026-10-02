@@ -1,0 +1,33 @@
+/* Shared mobile header alignment.
+ * The date-map header is the visual source of truth: all tabs keep the same
+ * left wordmark anchor and right notification/settings anchor while content
+ * changes underneath.
+ */
+@media (max-width: 899px) {
+  html body .app-shell .page > .app-global-header.topbar {
+    position: relative !important;
+    left: 50% !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    min-width: 100vw !important;
+    margin-left: -50vw !important;
+    margin-right: -50vw !important;
+    padding-left: 22px !important;
+    padding-right: 22px !important;
+    box-sizing: border-box !important;
+  }
+
+  html body .app-shell .page > .app-global-header.topbar > .brand {
+    min-width: 0 !important;
+    margin: 0 !important;
+  }
+
+  html body .app-shell .page > .app-global-header.topbar > .header-actions {
+    flex: 0 0 auto !important;
+    margin: 0 !important;
+  }
+
+  html body .app-shell .page > .app-global-header.topbar .route-home-logo {
+    margin: 0 !important;
+  }
+}
