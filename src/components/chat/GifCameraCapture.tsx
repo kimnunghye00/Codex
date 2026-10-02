@@ -6,6 +6,15 @@ import './GifCameraCapture.css';
 const MAX_DURATION_MS = 10_000;
 const FRAME_INTERVAL_MS = 125;
 const MAX_FRAME_EDGE = 480;
+const CAMERA_CONSTRAINTS: MediaStreamConstraints = {
+  video: {
+    facingMode: 'user',
+    width: { ideal: 1920 },
+    height: { ideal: 1080 },
+    frameRate: { ideal: 30, max: 30 },
+  },
+  audio: false,
+};
 
 type CapturedFrame = { rgba: Uint8ClampedArray; width: number; height: number };
 
@@ -53,6 +62,7 @@ export function GifCameraCapture({ onClose, onCaptured, onError }: {
   onError: (message: string) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const captureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const framesRef = useRef<CapturedFrame[]>([]);
   const intervalRef = useRef<number | null>(null);
@@ -105,10 +115,7 @@ export function GifCameraCapture({ onClose, onCaptured, onError }: {
   useEffect(() => {
     let disposed = false;
     if (!navigator.mediaDevices?.getUserMedia) return;
-    void navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: false,
-    }).then(async (stream) => {
+    void navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS).then(async (stream) => {
       if (disposed) {
         stream.getTracks().forEach((track) => track.stop());
         return;
@@ -134,13 +141,15 @@ export function GifCameraCapture({ onClose, onCaptured, onError }: {
     const video = videoRef.current;
     if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
     const { width, height } = frameSizeRef.current ?? frameSize(video);
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext('2d', { alpha: false });
+    const canvas = captureCanvasRef.current ?? document.createElement('canvas');
+    captureCanvasRef.current = canvas;
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+    const context = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
     if (!context) return;
-    context.translate(width, 0);
-    context.scale(-1, 1);
+    context.setTransform(-1, 0, 0, 1, width, 0);
     context.imageSmoothingEnabled = true;
     context.imageSmoothingQuality = 'high';
     context.drawImage(video, 0, 0, width, height);
@@ -191,9 +200,13 @@ export function GifCameraCapture({ onClose, onCaptured, onError }: {
     captureFrame();
     intervalRef.current = window.setInterval(captureFrame, FRAME_INTERVAL_MS);
     timeoutRef.current = window.setTimeout(() => void finishRecording(), MAX_DURATION_MS);
-    const updateProgress = () => {
+    let lastProgressUpdate = 0;
+    const updateProgress = (timestamp: number) => {
       if (!recordingRef.current) return;
-      setProgress(Math.min(1, (Date.now() - startedAtRef.current) / MAX_DURATION_MS));
+      if (timestamp - lastProgressUpdate >= 100) {
+        setProgress(Math.min(1, (Date.now() - startedAtRef.current) / MAX_DURATION_MS));
+        lastProgressUpdate = timestamp;
+      }
       animationRef.current = window.requestAnimationFrame(updateProgress);
     };
     animationRef.current = window.requestAnimationFrame(updateProgress);
@@ -221,7 +234,7 @@ export function GifCameraCapture({ onClose, onCaptured, onError }: {
     resetCapture();
     setReady(false);
     setError('카메라를 다시 여는 중이에요…');
-    void navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false }).then(async (stream) => {
+    void navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS).then(async (stream) => {
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -236,7 +249,7 @@ export function GifCameraCapture({ onClose, onCaptured, onError }: {
   const radius = 39;
   const circumference = 2 * Math.PI * radius;
 
-  return createPortal(<div className="gif-camera-backdrop" role="dialog" aria-modal="true" aria-label="카메라 움짤 촬영">
+  return createPortal(<div className={`gif-camera-backdrop ${recording ? 'is-recording' : ''}`} role="dialog" aria-modal="true" aria-label="카메라 움짤 촬영">
     <section className="gif-camera-sheet">
       <header><div><small>CAMERA GIF</small><h2>움짤 촬영</h2></div><button type="button" onClick={close} aria-label="촬영 닫기"><X /></button></header>
       <div className="gif-camera-stage" style={{ aspectRatio: `${captureSize.width} / ${captureSize.height}`, width: `min(100%, ${42 * captureSize.width / captureSize.height}dvh)` }}>
