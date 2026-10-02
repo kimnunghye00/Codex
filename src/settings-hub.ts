@@ -32,7 +32,7 @@ function passwordChangeMessage(error: unknown) {
   return code ? `비밀번호를 변경하지 못했어요. (${code})` : '비밀번호를 변경하지 못했어요. 잠시 후 다시 시도해 주세요.';
 }
 
-function openPasswordChange() {
+export function openPasswordChange() {
   closeHub();
   closePasswordChange();
   const user = auth.currentUser;
