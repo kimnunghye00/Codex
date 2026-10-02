@@ -123,11 +123,12 @@ check('CoupleConnect consumes realtime invite snapshots', coupleConnect.includes
 check('pending couple connection is restart-persisted', coupleConnect.includes('persistSession') && coupleConnect.includes('loadPersistedSession') && coupleSession.includes('route.coupleConnect.pending:'));
 
 check('More keeps typed navigation contract', more.includes('onNavigate: (target: MoreNavigationTarget) => void'));
-check('More is a customization hub', more.includes('단둘이 꾸미기') && more.includes("'chat-style'") && more.includes("'profile-style'") && more.includes("'store'"));
+check('More is a customization hub', more.includes('단둘이 꾸미기') && more.includes("'chat-style'") && more.includes("'store'") && more.includes("profileEditor: true") && more.includes('사진 · 배경 편집'));
 check('More removes duplicate quick-settings section', !more.includes('more-quick-settings'));
 check('More removes duplicated service navigation and settings', !more.includes("id: 'settings', label: '설정'") && !more.includes("id: 'date', label: '약속'") && !more.includes("id: 'footprint', label: '발자취'"));
 check('More exposes theme icon emoticon customization', more.includes("openSheet('theme')") && more.includes("openSheet('app-icon')") && more.includes("openSheet('emoticon')"));
 check('More uses typed navigation for linked settings', !more.includes('querySelectorAll') && more.includes("toolsSection: 'settings'") && more.includes("toolsSection: 'stickers'"));
+check('profile customization opens the real photo editor', app.includes('profileEditorRequest={profileEditorRequest}') && homeTools.includes('profileEditorRequest') && homeTools.includes('backgroundPhotoDataUrl'));
 
 check('chat screen title is 대화', chat.includes('<Header title="대화"'));
 check('chat realtime subscription is present', chat.includes('subscribeCoupleMessages'));
