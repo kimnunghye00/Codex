@@ -15,8 +15,8 @@ export function ResponsiveAppFrame({ children }: { children: ReactNode }) {
         [&_.app-shell]:!relative [&_.app-shell]:!mx-auto [&_.app-shell]:!min-h-dvh [&_.app-shell]:!w-full [&_.app-shell]:!max-w-none [&_.app-shell]:!overflow-x-clip [&_.app-shell]:!shadow-none
         lg:[&_.app-shell]:!max-w-[1320px] lg:[&_.app-shell]:!border-x lg:[&_.app-shell]:!border-[var(--border)]
         [&_.app-shell>main]:!min-w-0 lg:[&_.app-shell>main]:!pb-0
-        [&_.page]:!mx-auto [&_.page]:!w-full [&_.page]:!min-w-0 [&_.page]:!max-w-none [&_.page]:!px-4
-        sm:[&_.page]:!px-5 md:[&_.page]:!px-6 lg:[&_.page]:!px-8 lg:[&_.page]:!pl-28
+        [&_.page]:!mx-auto [&_.page]:!w-full [&_.page]:!min-w-0 [&_.page]:!max-w-none [&_.page:not(.chat-page)]:!px-4
+        sm:[&_.page:not(.chat-page)]:!px-5 md:[&_.page:not(.chat-page)]:!px-6 lg:[&_.page:not(.chat-page)]:!px-8 lg:[&_.page:not(.chat-page)]:!pl-28
         [&_.full-page]:!w-full [&_.full-page]:!min-w-0 lg:[&_.full-page]:!h-dvh
         [&_.home-page]:!max-w-none lg:[&_.home-page]:!h-dvh lg:[&_.home-page]:!max-h-dvh lg:[&_.home-page]:!min-h-0 lg:[&_.home-page]:!max-w-[1240px] lg:[&_.home-page]:!overflow-hidden
         lg:[&_.home-dashboard]:!grid-rows-[72px_clamp(54px,6.5dvh,62px)_clamp(108px,13dvh,122px)_clamp(116px,14dvh,130px)_minmax(96px,1fr)_clamp(78px,9dvh,88px)]
