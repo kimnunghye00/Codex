@@ -114,10 +114,11 @@ const DELETE_DATE_PLAN_URL = String(import.meta.env.VITE_DELETE_DATE_PLAN_URL
   || 'https://asia-northeast3-meluni-f4e00.cloudfunctions.net/deleteDatePlanDraftV2').trim();
 
 /**
- * Delete through the authenticated server endpoint. Firestore clients retain
+ * Request deletion or answer a pending request through the authenticated server.
+ * Only partner acceptance deletes the plan. Firestore clients retain
  * zero permission to delete a plan root or its timetable directly.
  */
-export async function deleteDatePlanDraft(coupleId: string, planId: string) {
+export async function deleteDatePlanDraft(coupleId: string, planId: string, action: 'request' | 'accept' | 'reject' | 'cancel' = 'request', requestId?: string) {
   const user = auth.currentUser;
   if (!user) throw new Error('authentication-required');
   const response = await fetch(DELETE_DATE_PLAN_URL, {
@@ -126,7 +127,7 @@ export async function deleteDatePlanDraft(coupleId: string, planId: string) {
       Authorization: `Bearer ${await user.getIdToken()}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ coupleId, planId }),
+    body: JSON.stringify({ coupleId, planId, action, requestId }),
   });
   let payload: { error?: string } = {};
   try { payload = await response.json() as { error?: string }; } catch { /* non-json server failure */ }

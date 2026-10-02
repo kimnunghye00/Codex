@@ -59,7 +59,9 @@ function errorText(error: unknown) {
   if (code.includes('permission-denied')) return '두 사람의 연결 상태 또는 장소 접근 권한을 확인해 주세요.';
   if (String((error as Error)?.message ?? '').includes('date-plan-candidate-not-visible')) return '저장 확인에 실패했어요. 다시 불러온 후보 목록을 확인해 주세요.';
   if (String((error as Error)?.message ?? '').includes('date-plan-candidate-scheduled')) return '이 장소가 시간표에 사용 중이에요. 시간표에서 해당 일정이나 예비 장소를 먼저 제거해 주세요.';
-  if (String((error as Error)?.message ?? '').includes('date-plan-delete-locked')) return '승인 요청을 보낸 초안은 바로 삭제할 수 없어요. 먼저 승인 요청을 취소해 주세요.';
+  if (String((error as Error)?.message ?? '').includes('date-plan-delete-locked')) return '삭제 요청 상태가 변경됐어요. 초안을 다시 확인해 주세요.';
+  if (String((error as Error)?.message ?? '').includes('date-plan-delete-request-changed')) return '삭제 요청이 취소되거나 변경됐어요. 최신 상태에서 다시 시도해 주세요.';
+  if (String((error as Error)?.message ?? '').includes('date-plan-deleting')) return '상대방이 수락한 초안을 삭제하는 중이에요.';
   if (String((error as Error)?.message ?? '').includes('date-plan-delete-too-large')) return '이 초안의 데이터가 너무 많아 한 번에 안전하게 삭제할 수 없어요.';
   return '작업을 완료하지 못했어요. 네트워크를 확인하고 다시 시도해 주세요.';
 }
@@ -94,7 +96,7 @@ function CoupleDateMapPage({ Header, connection, focusPlace, onClearFocus, initi
   const [planApproval, setPlanApproval] = useState<DatePlanApproval | null>(null);
   const [approvalLoading, setApprovalLoading] = useState(Boolean(coupleId && initialPlanId));
   const [scheduleReady, setScheduleReady] = useState(false);
-  const approvalLocked = approvalLoading || planApproval !== null;
+  const approvalLocked = approvalLoading || planApproval !== null || Boolean(datePlans.find((item) => item.id === activePlanId)?.deletionRequest);
   const [planCandidatesLoading, setPlanCandidatesLoading] = useState(Boolean(coupleId && initialPlanId));
   const [planCandidatesError, setPlanCandidatesError] = useState(false);
   const [planTitle, setPlanTitle] = useState('');
@@ -1106,38 +1108,42 @@ function CoupleDateMapPage({ Header, connection, focusPlace, onClearFocus, initi
               <button type="button" aria-pressed={activePlanId === item.id}
                 className={activePlanId === item.id ? 'date-map-course-choice active' : 'date-map-course-choice'}
                 onClick={() => { clearMapFocus(); setActivePlanId(item.id); setPlanCandidates([]); setMobilePlanView('list'); setMessage(''); }}>
-                <CalendarDays size={17}/><span><b>{(activePlanId === item.id && planApproval?.confirmedSnapshot.title) || item.title || '이름 없는 데이트'}</b><small>{(activePlanId === item.id && planApproval?.confirmedSnapshot.date) || item.date || '날짜 미정'} · {activePlanId === item.id && approvalLoading ? '승인 상태 확인 중' : activePlanId === item.id && planApproval?.status === 'confirmed' ? '공동 확정' : activePlanId === item.id && planApproval ? '승인 대기' : '공동 초안'}</small></span>
+                <CalendarDays size={17}/><span><b>{(activePlanId === item.id && planApproval?.confirmedSnapshot.title) || item.title || '이름 없는 데이트'}</b><small>{(activePlanId === item.id && planApproval?.confirmedSnapshot.date) || item.date || '날짜 미정'} · {item.deletionRequest ? '삭제 수락 대기' : activePlanId === item.id && approvalLoading ? '승인 상태 확인 중' : activePlanId === item.id && planApproval?.status === 'confirmed' ? '공동 확정' : activePlanId === item.id && planApproval ? '승인 대기' : '공동 초안'}</small></span>
               </button>
-              <button type="button" className="date-map-plan-choice-delete" disabled={pending}
+              <button type="button" className="date-map-plan-choice-delete" disabled={pending || Boolean(item.deletionRequest)}
                 aria-label={(item.title || '이름 없는 데이트') + ' 초안 삭제'} title="초안 삭제"
                 onClick={() => {
                   const label = item.title || '이름 없는 데이트';
-                  if (!window.confirm('“' + label + '” 초안을 삭제할까요?\n\n장소 후보·댓글·시간표도 함께 삭제되며, 가고 싶은 곳과 기존 코스는 그대로 유지돼요.')) return;
-                  void submit(async () => {
-                    await deleteDatePlanDraft(coupleId, item.id);
-                    if (activePlanIdRef.current === item.id) {
-                      setActivePlanId(''); setPlanCandidates([]); setSelectedPlanCandidateId('');
-                      setPlanApproval(null); setApprovalLoading(false); setScheduleReady(false);
-                      setPlanTitle(''); setPlanDate(''); clearMapFocus();
-                    }
-                  }, '공동 데이트 초안을 삭제했어요.');
+                  if (!window.confirm('“' + label + '” 초안의 삭제를 상대방에게 요청할까요?\n\n상대방이 수락하면 장소 후보·댓글·시간표도 함께 삭제돼요.')) return;
+                  void submit(() => deleteDatePlanDraft(coupleId, item.id), '상대방에게 초안 삭제 요청을 보냈어요.');
                 }}><Trash2 size={15}/></button>
             </div>)}
           </div>
           {!datePlans.length && <p className="date-map-empty">아직 공동 데이트 초안이 없어요. '새 데이트'를 눌러 시작해 보세요.</p>}
           {activePlan && <div className="date-map-plan-editor">
             <div className="date-map-panel-header"><strong>데이트 정보</strong><span>두 사람에게 공유됨</span>
-              <button type="button" className="date-map-plan-delete-draft" disabled={pending || approvalLocked} onClick={() => {
+              <button type="button" className="date-map-plan-delete-draft" disabled={pending || Boolean(activePlan.deletionRequest)} onClick={() => {
                 const label = planTitle.trim() || activePlan.title || '이름 없는 데이트';
-                if (!window.confirm('“' + label + '” 초안을 삭제할까요?\n\n장소 후보·댓글·시간표도 함께 삭제되며, 가고 싶은 곳과 기존 코스는 그대로 유지돼요.')) return;
-                void submit(async () => {
-                  await deleteDatePlanDraft(coupleId, activePlan.id);
-                  setActivePlanId(''); setPlanCandidates([]); setSelectedPlanCandidateId('');
-                  setPlanApproval(null); setApprovalLoading(false); setScheduleReady(false);
-                  setPlanTitle(''); setPlanDate(''); clearMapFocus();
-                }, '공동 데이트 초안을 삭제했어요.');
-              }}><Trash2 size={13}/> 초안 삭제</button>
+                if (!window.confirm('“' + label + '” 초안의 삭제를 상대방에게 요청할까요?\n\n상대방이 수락하면 장소 후보·댓글·시간표도 함께 삭제돼요.')) return;
+                void submit(() => deleteDatePlanDraft(coupleId, activePlan.id), '상대방에게 초안 삭제 요청을 보냈어요.');
+              }}><Trash2 size={13}/> 초안 삭제 요청</button>
             </div>
+            {activePlan.deletionRequest && <section className="date-map-deletion-request" aria-label="초안 삭제 요청" aria-live="polite">
+              <p>{activePlan.deletionRequest.status === 'deleting' ? '삭제 요청이 수락되어 삭제 중이에요.' : activePlan.deletionRequest.requestedBy === uid ? '상대방의 초안 삭제 수락을 기다리고 있어요.' : '상대방이 이 초안의 삭제를 요청했어요. 수락하면 장소 후보·댓글·시간표도 함께 삭제돼요.'}</p>
+              {activePlan.deletionRequest.recipientUid === uid && <>
+                <button type="button" disabled={pending} onClick={() => {
+                  if (!window.confirm('삭제 요청을 수락하고 이 초안을 삭제할까요?')) return;
+                  void submit(async () => {
+                    await deleteDatePlanDraft(coupleId, activePlan.id, 'accept', activePlan.deletionRequest!.id);
+                    setActivePlanId(''); setPlanCandidates([]); setSelectedPlanCandidateId('');
+                    setPlanApproval(null); setApprovalLoading(false); setScheduleReady(false);
+                    setPlanTitle(''); setPlanDate(''); clearMapFocus();
+                  }, '상대방의 요청을 수락하고 초안을 삭제했어요.');
+                }}>{activePlan.deletionRequest.status === 'deleting' ? '삭제 다시 시도' : '삭제 수락'}</button>
+                {activePlan.deletionRequest.status === 'pending' && <button type="button" disabled={pending} onClick={() => void submit(() => deleteDatePlanDraft(coupleId, activePlan.id, 'reject', activePlan.deletionRequest!.id), '삭제 요청을 거절했어요. 초안은 유지돼요.')}>거절</button>}
+              </>}
+              {activePlan.deletionRequest.requestedBy === uid && activePlan.deletionRequest.status === 'pending' && <button type="button" disabled={pending} onClick={() => void submit(() => deleteDatePlanDraft(coupleId, activePlan.id, 'cancel', activePlan.deletionRequest!.id), '삭제 요청을 취소했어요.')}>삭제 요청 취소</button>}
+            </section>}
             <label className="date-map-label">데이트 이름
               <input maxLength={100} value={planTitle} disabled={approvalLocked} onChange={(event) => setPlanTitle(event.target.value)} placeholder="예: 부산 맛집 데이트"/>
             </label>
@@ -1197,13 +1203,13 @@ function CoupleDateMapPage({ Header, connection, focusPlace, onClearFocus, initi
               }}><Trash2 size={13}/> 후보 제거</button>
             </article>)}
             <div className="date-map-plan-schedule-anchor" ref={planScheduleSection}>
-              {!approvalLoading && !planApproval && <DatePlanScheduleEditor key={activePlan.id} coupleId={coupleId} planId={activePlan.id}
+              {!activePlan.deletionRequest && !approvalLoading && !planApproval && <DatePlanScheduleEditor key={activePlan.id} coupleId={coupleId} planId={activePlan.id}
                 uid={uid} candidates={planCandidates} onReadyChange={setScheduleReady}/>}
-              <DatePlanApprovalPanel key={activePlan.id} coupleId={coupleId} planId={activePlan.id}
+              {!activePlan.deletionRequest && <DatePlanApprovalPanel key={activePlan.id} coupleId={coupleId} planId={activePlan.id}
                 uid={uid} candidates={planCandidates} approval={planApproval} loading={approvalLoading}
                 draftReady={scheduleReady}
                 detailsReady={Boolean(planTitle.trim()) && planTitle.trim() === activePlan.title && planDate === activePlan.date && !pending && !planCandidatesLoading}
-                onRefreshApproval={refreshPlanApproval}/>
+                onRefreshApproval={refreshPlanApproval}/>}
             </div>
             <details className="date-map-plan-saved">
               <summary>가고 싶은 곳에서 후보 담기 ({places.length}곳) <ChevronDown size={15}/></summary>

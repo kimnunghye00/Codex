@@ -454,7 +454,7 @@ service cloud.firestore {
         function canEditUnapproved() {
           return !exists(approvalPath())
             && (!exists(planPath())
-              || !get(planPath()).data.keys().hasAny(['deletionRequestedAt', 'deletionRequestedBy']));
+              || !get(planPath()).data.keys().hasAny(['deletionRequestedAt', 'deletionRequestedBy', 'deletionRequest']));
         }
         function approvalSnapshotValid(snapshot) {
           return snapshot is map
@@ -680,8 +680,10 @@ service cloud.firestore {
             && request.resource.data.createdAt == request.time
             && initialReview();
           allow update: if memberOf(coupleId) && validApproval()
+            && !get(planPath()).data.keys().hasAny(['deletionRequest', 'deletionRequestedAt'])
             && (partnerApproval() || proposeChange() || discardChange());
-          allow delete: if memberOf(coupleId) && approvalId == 'state' && resource.data.status == 'review';
+          allow delete: if memberOf(coupleId) && approvalId == 'state' && resource.data.status == 'review'
+            && !get(planPath()).data.keys().hasAny(['deletionRequest', 'deletionRequestedAt']);
         }
 
         // A versioned, couple-private unfinished timetable.

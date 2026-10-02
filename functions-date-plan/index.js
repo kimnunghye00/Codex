@@ -1,3 +1,4 @@
+const { randomUUID } = require('node:crypto');
 const { getApps, initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { FieldValue, getFirestore } = require('firebase-admin/firestore');
@@ -54,17 +55,19 @@ exports.deleteDatePlanDraftV2 = onRequest({
   const validId = (value) => /^[A-Za-z0-9_-]{1,160}$/.test(value);
   if (!validId(coupleId) || !validId(planId)) return json(req, res, 400, { error: 'invalid-date-plan' });
 
+  const action = req.body?.action || 'request';
+  if (!['request', 'accept', 'reject', 'cancel'].includes(action)) return json(req, res, 400, { error: 'invalid-delete-action' });
+  const requestId = typeof req.body?.requestId === 'string' ? req.body.requestId : '';
+  const newRequestId = randomUUID();
   const firestore = getFirestore();
   const coupleRef = firestore.doc('couples/' + coupleId);
   const planRef = firestore.doc('couples/' + coupleId + '/datePlans/' + planId);
-  const approvalRef = firestore.doc('couples/' + coupleId + '/datePlans/' + planId + '/approval/state');
 
   try {
-    await firestore.runTransaction(async (transaction) => {
-      const [couple, plan, approval] = await Promise.all([
+    const result = await firestore.runTransaction(async (transaction) => {
+      const [couple, plan] = await Promise.all([
         transaction.get(coupleRef),
         transaction.get(planRef),
-        transaction.get(approvalRef),
       ]);
       const members = couple.exists && Array.isArray(couple.data()?.memberUids) ? couple.data().memberUids : [];
       if (members.length !== 2 || !members.includes(decoded.uid)) {
@@ -73,17 +76,53 @@ exports.deleteDatePlanDraftV2 = onRequest({
       if (!plan.exists) {
         const error = new Error('date-plan-missing'); error.status = 404; throw error;
       }
-      if (approval.exists || plan.data()?.status !== 'draft') {
-        const error = new Error('date-plan-delete-locked'); error.status = 409; throw error;
-      }
-      transaction.update(planRef, {
-        deletionRequestedAt: FieldValue.serverTimestamp(),
-        deletionRequestedBy: decoded.uid,
+      const data = plan.data();
+      const pending = data.deletionRequest;
+      const partner = members.find((uid) => uid !== decoded.uid);
+      const fail = (message, status = 409) => { const error = new Error(message); error.status = status; throw error; };
+      const notify = (id, title, recipientUid) => transaction.set(firestore.doc('couples/' + coupleId + '/activity/' + id), {
+        id, authorUid: decoded.uid, recipientUid, kind: 'date-plan', sourceId: planId, revision: 1,
+        title, detail: (data.title || '이름 없는 데이트').slice(0, 100),
+        target: { screen: 'date-plan', itemId: planId }, createdAt: FieldValue.serverTimestamp(),
       });
+      if (action === 'request') {
+        if (pending) return { requested: true, requestId: pending.id };
+        if (data.deletionRequestedAt) fail('date-plan-deleting');
+        transaction.update(planRef, { deletionRequest: {
+          id: newRequestId, requestedBy: decoded.uid, recipientUid: partner,
+          status: 'pending', requestedAt: FieldValue.serverTimestamp(),
+        } });
+        notify('plan-delete-' + newRequestId, '데이트 초안 삭제 요청이 왔어요', partner);
+        return { requested: true, requestId: newRequestId };
+      }
+      if (!pending || pending.id !== requestId) fail('date-plan-delete-request-changed');
+      if (action === 'cancel') {
+        if (pending.requestedBy !== decoded.uid) fail('delete-request-author-required', 403);
+      } else if (pending.recipientUid !== decoded.uid || pending.requestedBy === decoded.uid) {
+        fail('delete-request-partner-required', 403);
+      }
+      if (action === 'accept') {
+        if (!['pending', 'deleting'].includes(pending.status)) fail('date-plan-delete-request-changed');
+        transaction.update(planRef, {
+          'deletionRequest.status': 'deleting',
+          deletionRequestedAt: FieldValue.serverTimestamp(), deletionRequestedBy: pending.requestedBy,
+        });
+        if (pending.status === 'pending') notify('plan-delete-accepted-' + pending.id, '상대방이 초안 삭제 요청을 수락했어요', pending.requestedBy);
+        return { deleteNow: true };
+      }
+      if (pending.status !== 'pending') fail('date-plan-deleting');
+      transaction.update(planRef, { deletionRequest: FieldValue.delete() });
+      transaction.delete(firestore.doc('couples/' + coupleId + '/activity/plan-delete-' + pending.id));
+      notify('plan-delete-' + action + '-' + pending.id,
+        action === 'cancel' ? '초안 삭제 요청이 취소됐어요' : '초안 삭제 요청이 거절됐어요', partner);
+      return { cancelled: action === 'cancel', rejected: action === 'reject' };
     });
 
-    await firestore.recursiveDelete(planRef);
-    return json(req, res, 200, { deleted: true });
+    if (result.deleteNow) {
+      await firestore.recursiveDelete(planRef);
+      return json(req, res, 200, { deleted: true });
+    }
+    return json(req, res, 200, result);
   } catch (error) {
     const status = Number(error?.status) || 500;
     if (status >= 500) console.error('[DANDULI delete date plan]', coupleId, planId, error);

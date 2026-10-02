@@ -62,7 +62,9 @@ jobs:
         run: npm install --prefix functions-date-plan --no-audit --no-fund
 
       - name: Verify date-plan delete Function syntax
-        run: node --check functions-date-plan/index.js
+        run: |
+          node --check functions-date-plan/index.js
+          node --test functions-date-plan/test/deletion.test.cjs
 
       - name: Install location upload Function dependencies
         run: npm install --prefix functions-location --no-audit --no-fund

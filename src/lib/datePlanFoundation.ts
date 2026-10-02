@@ -8,6 +8,7 @@ export type DatePlanDraft = {
   status: 'draft'; // Confirmations and proposals are introduced in a later phase.
   schemaVersion: 2;
   createdBy: string;
+  deletionRequest?: { id: string; requestedBy: string; recipientUid: string; status: 'pending' | 'deleting'; requestedAt?: unknown };
   createdAt?: unknown;
   updatedAt?: unknown;
 };

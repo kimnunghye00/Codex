@@ -815,3 +815,27 @@ test('raw GPS samples are readable by the couple but writable only by their owne
   }));
   await assertFails(getDocFromServer(doc(client.db, 'couples', coupleId, 'locationUploadTokens', 'alice')));
 });
+
+test('date plan deletion request blocks approval changes and cannot be forged by clients', async () => {
+  const { coupleId } = await pair();
+  as('alice');
+  const planId = await createDatePlanDraft(coupleId, 'alice', { title: '삭제 요청 테스트', date: '' });
+  const candidateId = await addDatePlanCandidate(coupleId, planId, 'alice', {
+    name: '카페', address: '서울', latitude: 37.5, longitude: 127, category: '카페', memo: '',
+  });
+  await saveDatePlanSchedule(coupleId, planId, 'alice', 0, '10:00', [{
+    id: 'visit', position: 0, kind: 'activity', title: '카페', primaryCandidateId: candidateId,
+    backupCandidateIds: [], activityMinutes: 60, travelMinutes: 0, fixedStart: null,
+  }], [candidateId]);
+  const planPath = `couples/${coupleId}/datePlans/${planId}`;
+  const before = (await getDocFromServer(doc(client.db, planPath))).data()!;
+  const deletionRequest = { id: 'request-test', requestedBy: 'alice', recipientUid: 'bob', status: 'pending', requestedAt: Timestamp.now() };
+  await assertFails(setDoc(doc(client.db, planPath), { deletionRequest }, { merge: true }));
+  const candidates = await readDatePlanCandidates(coupleId, planId);
+  await requestDatePlanApproval(coupleId, planId, 'alice', candidates);
+  await seed(planPath, { ...before, deletionRequest });
+  as('bob');
+  await assertFails(approveDatePlan(coupleId, planId, 'bob'));
+  await assertFails(deleteDoc(doc(client.db, planPath, 'approval', 'state')));
+  expect((await getDocFromServer(doc(client.db, planPath))).exists()).toBe(true);
+});

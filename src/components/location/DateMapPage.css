@@ -787,3 +787,15 @@
   color:var(--text-primary);
 }
 .date-map-plan-choice-delete:disabled { opacity:.45; cursor:not-allowed; }
+
+.date-map-deletion-request {
+  margin: 12px 0; padding: 12px; border: 1px solid var(--border);
+  border-radius: 14px; background: var(--surface); color: var(--text-primary);
+}
+.date-map-deletion-request p { margin: 0 0 10px; font-size: 13px; line-height: 1.5; }
+.date-map-deletion-request button {
+  margin: 0 8px 4px 0; padding: 9px 12px; border: 1px solid var(--border);
+  border-radius: 10px; background: var(--primary-soft); color: var(--text-primary);
+  font: inherit; font-size: 12px; cursor: pointer;
+}
+.date-map-deletion-request button:disabled { opacity: .5; cursor: default; }
