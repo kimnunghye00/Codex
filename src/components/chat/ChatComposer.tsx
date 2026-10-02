@@ -1,3 +1,4 @@
+import { preloadStickerPreviews } from './stickerPreviews';
 import { CalendarClock, ContactRound, FileUp, Gift, ImagePlus, Mic, Plus, Send, ShoppingBag, SmilePlus, Square, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -72,6 +73,11 @@ export function ChatComposer({
   const [gifCameraOpen, setGifCameraOpen] = useState(false);
   const availablePacks = STICKER_PACKS.filter((pack) => ownedStickerPacks.includes(pack.id));
   const activePack = availablePacks.find((pack) => pack.id === selectedStickerPack) ?? availablePacks[0];
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void preloadStickerPreviews(); }, 250);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     pendingRef.current = pendingPhotos;
@@ -218,7 +224,7 @@ export function ChatComposer({
           const preview = pack.stickers[0] ?? '';
           const previewId = stickerIdFromToken(preview);
           return <button key={pack.id} type="button" role="tab" aria-selected={pack.id === activePack.id} className={pack.id === activePack.id ? 'active' : ''} onClick={() => setSelectedStickerPack(pack.id)}>
-            <span className="composer-sticker-pack-thumb" aria-hidden="true">{previewId ? <DanduliSticker id={previewId} /> : <span>{preview}</span>}</span>
+            <span className="composer-sticker-pack-thumb" aria-hidden="true">{previewId ? <DanduliSticker id={previewId} preview /> : <span>{preview}</span>}</span>
             <span className="composer-sticker-pack-copy"><b>{pack.name}</b><small>{pack.stickers.length}개</small></span>
           </button>;
         })}</div>
@@ -227,7 +233,7 @@ export function ChatComposer({
             <span><b>{activePack.name}</b><small>{activePack.description}</small></span>
             <em>{activePack.stickers.length}개</em>
           </div>
-          <div className="composer-sticker-tray" role="tabpanel" aria-label={`${activePack.name} 이모티콘`}>{activePack.stickers.map((sticker, index) => { const id = stickerIdFromToken(sticker); return <button key={`${sticker}-${index}`} type="button" aria-label={`${id ? stickerLabel(id) : sticker} 이모티콘 보내기`} onClick={() => { onSticker(sticker); setStickerOpen(false); }}>{id ? <DanduliSticker id={id} /> : <span className="composer-emoji-sticker">{sticker}</span>}</button>; })}</div>
+          <div className="composer-sticker-tray" role="tabpanel" aria-label={`${activePack.name} 이모티콘`}>{activePack.stickers.map((sticker, index) => { const id = stickerIdFromToken(sticker); return <button key={`${sticker}-${index}`} type="button" aria-label={`${id ? stickerLabel(id) : sticker} 이모티콘 보내기`} onClick={() => { onSticker(sticker); setStickerOpen(false); }}>{id ? <DanduliSticker id={id} preview /> : <span className="composer-emoji-sticker">{sticker}</span>}</button>; })}</div>
         </div>
       </div>}
       {quickOpen && <div className="quick-contact-strip">{QUICK.map((item) => <button key={item} type="button" onClick={() => { onQuick(item); setQuickOpen(false); setStickerOpen(false); }}>{item}</button>)}</div>}
@@ -245,7 +251,7 @@ export function ChatComposer({
         <input ref={fileRef} className="file-input" type="file" accept="image/*" multiple aria-label={`사진 선택, 최대 ${MAX_CHAT_PHOTO_SELECTION}장`} onChange={(event) => { addPendingPhotos(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
         <input ref={attachmentRef} className="file-input" type="file" aria-label="파일 선택" onChange={(event) => { const file = event.target.files?.[0]; if (file) void Promise.resolve(onFile(file)); event.target.value = ''; setExtras(false); }} />
         <button type="button" onClick={() => { setExtras((value) => !value); setStickerOpen(false); }} aria-label="추가 기능"><Plus size={21} /></button>
-        <button type="button" className={`composer-sticker-toggle ${stickerOpen ? 'active' : ''}`} onClick={() => { setStickerOpen((value) => !value); setExtras(false); setQuickOpen(false); }} aria-label="이모티콘"><SmilePlus size={21} strokeWidth={2.1} /></button>
+        <button type="button" className={`composer-sticker-toggle ${stickerOpen ? 'active' : ''}`} onClick={() => { void preloadStickerPreviews(); setStickerOpen((value) => !value); setExtras(false); setQuickOpen(false); }} aria-label="이모티콘"><SmilePlus size={21} strokeWidth={2.1} /></button>
         <textarea
           rows={1}
           value={draft}
