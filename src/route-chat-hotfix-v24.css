@@ -651,3 +651,26 @@
   margin: 0 !important;
   background: transparent !important;
 }
+
+/* Explicit media class also covers older image messages and avoids :has timing. */
+.chat-page .bubble-row .message-wrap .bubble.media-bubble.media-frame-free {
+  display: block !important;
+  width: fit-content !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  line-height: 0 !important;
+}
+.chat-page .bubble-row .media-frame-free .chat-image {
+  display: block !important;
+  width: min(260px, 68vw) !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  aspect-ratio: auto !important;
+  object-fit: contain !important;
+  margin: 0 !important;
+  background: transparent !important;
+}
