@@ -91,7 +91,7 @@ jobs:
           grep -q "initializeRuntimeRecovery" src/main.tsx
           grep -q "await initializeRuntimeRecovery" src/main.tsx
           grep -q "initializeNativeApp" src/main.tsx
-          grep -q "meluni-f4e00.web.app" src/components/location/LocationPage.tsx
+          grep -q "meluni-f4e00.web.app" src/components/footprints/FootprintsPage.tsx
           grep -q "ncpKeyId" public/naver-map-host.html
           grep -q '"storage"' firebase.json
           grep -q "backups" firestore.rules
