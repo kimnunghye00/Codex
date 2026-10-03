@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import {
-  ArrowLeft,
   CalendarDays,
   ChevronRight,
   Download,
@@ -48,6 +47,7 @@ import {
   saveLocationSharing,
   type LocationVisit,
 } from '../../utils/location';
+import { PageSettingsSheet, PageSettingToggle } from '../navigation/PageSettingsSheet';
 import './FootprintsPage.css';
 
 const MAP_ORIGIN = typeof window !== 'undefined' && window.location.hostname === 'danduli.web.app'
@@ -140,8 +140,7 @@ type Props = {
   memories: Memory[];
   initialMemoryId?: number;
   onOpenMemory: (id: number) => void;
-  onBack: () => void;
-  Header: ({ title }: { title?: string }) => React.ReactNode;
+  Header: ({ title, onSettings, settingsLabel }: { title?: string; onSettings?: () => void; settingsLabel?: string }) => React.ReactNode;
 };
 
 /**
@@ -154,12 +153,12 @@ export function FootprintsPage({
   memories,
   initialMemoryId,
   onOpenMemory,
-  onBack,
   Header,
 }: Props) {
   const focusMemory = memories.find((memory) => memory.id === initialMemoryId);
   const [scope, setScope] = useState<FootprintScope>(focusMemory ? 'together' : 'partner');
   const [day, setDay] = useState(focusMemory?.date || todayKey());
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [sharing, setSharing] = useState(() => loadLocationSharing(uid).enabled);
   const [sharingBusy, setSharingBusy] = useState(false);
   const [trackingStatus, setTrackingStatus] = useState(
@@ -645,9 +644,12 @@ export function FootprintsPage({
   const selectedDate = DISPLAY_DATE.format(new Date(day + 'T12:00:00+09:00'));
 
   return <div className="page footprints-page">
-    <Header title="발자취" />
+    <Header title="지도" onSettings={() => setSettingsOpen(true)} settingsLabel="발자취 설정" />
+    {settingsOpen && <PageSettingsSheet title="발자취 설정" onClose={() => setSettingsOpen(false)}>
+      <PageSettingToggle label="내 GPS 공유" description="상대방 발자취는 상대방 GPS로, 함께한 발자취는 두 사람의 GPS를 교차 확인해요." checked={sharing} onChange={() => { if (connection && !sharingBusy) void setLocationSharing(!sharing); }} />
+      <p>위치 공유를 켠 동안의 기록으로 발자취를 만들어요. 공유할 영상에서는 민감한 위치를 숨길 수 있어요.</p>
+    </PageSettingsSheet>}
     <div className="footprints-heading">
-      <button type="button" onClick={onBack} aria-label="이전 화면으로"><ArrowLeft size={20} /></button>
       <div>
         <small>COUPLE FOOTPRINTS</small>
         <h1>우리의 발자취 ♡</h1>

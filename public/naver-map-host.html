@@ -16,7 +16,6 @@
     .danduli-map-pin{position:relative;width:36px;height:43px;filter:drop-shadow(0 3px 3px #0003)}
     .danduli-map-pin svg{display:block;width:36px;height:43px;overflow:visible}
     .danduli-map-pin .pin-body{fill:var(--pin-primary)}
-    .danduli-map-pin.planned .pin-body{fill:var(--pin-accent)}
     .danduli-map-pin.selected{transform:scale(1.17);transform-origin:center bottom;filter:drop-shadow(0 3px 6px #0004)}
     .danduli-map-pin .pin-order{position:absolute;top:-7px;right:-7px;z-index:1;background:#fff;border:1px solid var(--pin-primary);color:var(--pin-primary);border-radius:999px;min-width:16px;height:16px;padding:0 2px;box-sizing:border-box;display:grid;place-items:center;font:800 10px system-ui}
     .danduli-map-cluster{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;border:3px solid #fff;background:var(--pin-primary);color:#fff;box-shadow:0 3px 9px #0003;font:800 13px system-ui;box-sizing:border-box}
@@ -71,7 +70,6 @@
       let sdkWaitTimer;
       let sdkWaitStartedAt = 0;
       let lastRender = { visits: [], mode: 'map' };
-      let pickMode = false;
       let parentRenderReceived = false;
       let lastMarkersZoom = null;
       let restoredForMode = false;
@@ -155,12 +153,12 @@
       };
 
       // Single vector pin; no image downloaded per location.
-      const markerHtml = (current, index, palette, planned = false) => {
+      const markerHtml = (current, index, palette) => {
         const label = Number.isInteger(index) && index >= 0 ? `<span class="pin-order">${index + 1}</span>` : '';
-        return `<div class="danduli-map-pin${current ? ' selected' : ''}${planned ? ' planned' : ''}" style="--pin-primary:${palette.primary};--pin-accent:${palette.accent}"><svg viewBox="0 0 36 43" aria-hidden="true"><path class="pin-body" d="M18 42C15 36 3 25 3 16a15 15 0 0 1 30 0c0 9-12 20-15 26Z"/><circle cx="18" cy="16" r="5" fill="#fff"/></svg>${label}</div>`;
+        return `<div class="danduli-map-pin${current ? ' selected' : ''}" style="--pin-primary:${palette.primary};--pin-accent:${palette.accent}"><svg viewBox="0 0 36 43" aria-hidden="true"><path class="pin-body" d="M18 42C15 36 3 25 3 16a15 15 0 0 1 30 0c0 9-12 20-15 26Z"/><circle cx="18" cy="16" r="5" fill="#fff"/></svg>${label}</div>`;
       };
-      const markerIcon = (naver, current, index, palette = activePalette(), planned = false) => ({
-        content: markerHtml(current, index, palette, planned),
+      const markerIcon = (naver, current, index, palette = activePalette()) => ({
+        content: markerHtml(current, index, palette),
         anchor: new naver.maps.Point(18, 42),
       });
       const clusterIcon = (naver, count, palette) => ({
@@ -195,16 +193,14 @@
         catch { return ''; }
       };
       const placeCard = (visit, mode) => {
-        const name = escapeHtml(visit.placeName || (mode === 'date-plan' ? '데이트 장소' : '위치 기록'));
+        const name = escapeHtml(visit.placeName || '위치 기록');
         const photo = safePhoto(visit.photoUrl);
-        const subtitle = mode === 'date-plan'
-          ? '함께 가고 싶은 장소'
-          : `${escapeHtml(dayText(visit.arrivedAt))} · ${escapeHtml(timeText(visit.arrivedAt))}${visit.leftAt ? ` ~ ${escapeHtml(timeText(visit.leftAt))}` : ' · 현재'}`;
+        const subtitle = `${escapeHtml(dayText(visit.arrivedAt))} · ${escapeHtml(timeText(visit.arrivedAt))}${visit.leftAt ? ` ~ ${escapeHtml(timeText(visit.leftAt))}` : ' · 현재'}`;
         const address = visit.address ? `<small>${escapeHtml(visit.address)}</small>` : '';
         return `<div class="danduli-place-card">${photo ? `<img src="${photo}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}<strong>${name}</strong><small>${subtitle}</small>${address}</div>`;
       };
       const clustersFor = (visits, mode, zoom) => {
-        if (!['footprint-pins', 'date-plan'].includes(mode) || zoom > 14) return visits.map((visit) => [visit]);
+        if (mode !== 'footprint-pins' || zoom > 14) return visits.map((visit) => [visit]);
         const grid = new Map();
         const step = 0.008 * 2 ** (14 - Math.max(zoom, 3));
         for (const visit of visits) {
@@ -258,8 +254,7 @@
         const palette = activePalette();
         // Repaint overlays without resizing the map: a resize can emit zoom_changed.
         clearOverlays();
-        // Keep the selected date-plan marker and viewport through result/label re-renders.
-        // A new search or explicit dismissal sends clear-focus from the parent.
+        // Preserve the selected footprint and viewport during live updates.
 
         const validVisits = lastRender.visits
           .filter((visit) => Number.isFinite(Number(visit.latitude)) && Number.isFinite(Number(visit.longitude)))
@@ -280,7 +275,7 @@
         // The recent-places screen can contain visits from more than one day.
         // Connect every displayed visit chronologically so the route never
         // disappears simply because two visible points belong to different days.
-        if (points.length >= 2 && (connectStops || (mode !== 'footprint-pins' && mode !== 'date-plan'))) {
+        if (points.length >= 2 && (connectStops || mode !== 'footprint-pins')) {
           overlays.push(new naver.maps.Polyline({
             map,
             path: points,
@@ -316,32 +311,20 @@
           const current = !visit.leftAt && index === validVisits.length - 1;
           const marker = new naver.maps.Marker({
             map, position: points[index],
-            icon: markerIcon(naver, current, mode === 'footprints' || numbered ? index : undefined, palette, mode === 'date-plan'),
+            icon: markerIcon(naver, current, mode === 'footprints' || numbered ? index : undefined, palette),
             zIndex: 200,
           });
           const popup = new naver.maps.InfoWindow({
             content: placeCard(visit, mode), borderWidth: 0, backgroundColor: '#fff',
           });
           naver.maps.Event.addListener(marker, 'click', () => {
-            if (mode === 'date-plan' && typeof visit.id === 'string' && /^search-\d+$/.test(visit.id)) {
-              focus(visit, true);
-              send('search-marker-selected', { id: visit.id });
-            } else if (mode === 'date-plan' && typeof visit.id === 'string') {
-              focus(visit, true);
-              send('saved-marker-selected', { id: visit.id });
-            } else {
-              map.setCenter(points[index]);
-              popup.open(map, marker);
-            }
+            map.setCenter(points[index]);
+            popup.open(map, marker);
           });
           overlays.push(marker);
         });
 
-        // Reopening an existing plan should not override its remembered position.
-        // An explicit new search can still fit its returned branches into view.
-        const hasSearchResults = mode === 'date-plan'
-          && validVisits.some((visit) => typeof visit.id === 'string' && /^search-\d+$/.test(visit.id));
-        if (focusOverlay || keepViewport || preserveViewport || (restoredForMode && !hasSearchResults)) return;
+        if (focusOverlay || keepViewport || preserveViewport || restoredForMode) return;
         if (points.length === 1) {
           map.setCenter(points[0]);
           map.setZoom(17);
@@ -660,7 +643,7 @@
         focusOverlay = new naver.maps.Marker({
           map,
           position: point,
-          icon: markerIcon(naver, true, lastRender.numbered ? lastRender.visits.findIndex((item) => Number(item.latitude) === Number(visit.latitude) && Number(item.longitude) === Number(visit.longitude)) : undefined, activePalette(), lastRender.mode === 'date-plan'),
+          icon: markerIcon(naver, true, lastRender.numbered ? lastRender.visits.findIndex((item) => Number(item.latitude) === Number(visit.latitude) && Number(item.longitude) === Number(visit.longitude)) : undefined, activePalette()),
           zIndex: 2000,
         });
         focusPopup = new naver.maps.InfoWindow({
@@ -679,7 +662,6 @@
         if (data.type === 'render') { parentRenderReceived = true; render(data); }
         if (data.type === 'play-route') playRoute(data);
         if (data.type === 'stop-route-playback') stopPlayback(true);
-        if (data.type === 'set-pick-mode') pickMode = data.enabled === true && lastRender.mode === 'date-plan';
         if (data.type === 'fit-visits' && map && hasMapSdk()) {
           const points = lastRender.visits.filter((v) => Number.isFinite(Number(v.latitude)) && Number.isFinite(Number(v.longitude)))
             .map((v) => new naver.maps.LatLng(Number(v.latitude), Number(v.longitude)));
@@ -752,18 +734,8 @@
             const sw = map.getBounds().getSW(), ne = map.getBounds().getNE();
             send('viewport-changed', { bounds: { west: sw.lng(), south: sw.lat(), east: ne.lng(), north: ne.lat() } });
             if (lastRender.visits.length
-              && ['footprint-pins', 'date-plan'].includes(lastRender.mode)
+              && lastRender.mode === 'footprint-pins'
               && map.getZoom() !== lastMarkersZoom) render(lastRender, true);
-          });
-          naver.maps.Event.addListener(map, 'click', (event) => {
-            if (!pickMode || lastRender.mode !== 'date-plan') return;
-            // NAVER's base map exposes tap coordinates, not the printed POI
-            // name. The parent matches nearby search results or requests
-            // the user to confirm the location/name before saving.
-            const lat = Number(event.coord?.lat());
-            const lng = Number(event.coord?.lng());
-            if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-            send('map-point-selected', { latitude: lat, longitude: lng });
           });
           initialized = true;
           window.clearTimeout(initTimer);

@@ -282,13 +282,10 @@ test('CGV results from Seoul city center cannot appear inside a Gangbyeon live v
   assert.deepEqual(data.filter((item) => insideMapBounds(item, seoulCityHall)).map((item) => item.placeName), ['CGV 명동']);
 });
 
-test('map host and date map use a correlated live viewport protocol rather than cached bounds for a new search', () => {
-  // This is the critical cross-iframe contract: a matching reply has to be
-  // returned before any provider requests begin.
+test('map host preserves footprint clustering without retired planning interactions', () => {
   const host = readFileSync('public/naver-map-host.html', 'utf8');
-  const parent = readFileSync('src/components/location/DateMapPage.tsx', 'utf8');
-  assert.match(host, /type === 'request-viewport'[\s\S]*?send\('viewport-snapshot'/);
-  assert.match(parent, /await readLiveViewport\(\)/);
-  assert.match(parent, /pending\.id === event\.data\.requestId/);
-  assert.match(parent, /results\.filter\(\(item\) => insideMapBounds\(item, bounds\)\)/);
+  const parent = readFileSync('src/components/footprints/FootprintsPage.tsx', 'utf8');
+  assert.match(parent, /mode: 'footprints'/);
+  assert.match(host, /footprint-pins/);
+  assert.doesNotMatch(host, /date-plan|set-pick-mode|search-marker-selected|saved-marker-selected/);
 });

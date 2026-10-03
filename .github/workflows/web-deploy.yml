@@ -178,7 +178,7 @@ jobs:
           # The delete endpoint is isolated from TURN/search codebases so this
           # deployment never needs access to unrelated Secret Manager values.
           npx --yes firebase-tools@15.29.0 deploy \
-            --only functions:date-plan-delete:deleteDatePlanDraftV2 \
+            --only functions:date-plan-delete:deleteDatePlanDraftV2,functions:default:deleteDatePlanDraft \
             --project meluni-f4e00 \
             --non-interactive \
             --force

@@ -20,8 +20,7 @@ function warmPrimaryFeatures() {
     import('./components/memories/MemoriesPage'),
     import('./styles/features/chat'),
     import('./components/chat/ChatPage'),
-    import('./styles/features/location'),
-    import('./components/location/LocationPage'),
+    import('./components/footprints/FootprintsPage'),
     import('./styles/features/more'),
     import('./components/more/MoreServices'),
   ]).catch(() => undefined);

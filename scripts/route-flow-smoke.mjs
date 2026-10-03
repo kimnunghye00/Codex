@@ -47,7 +47,7 @@ const requiredFiles = [
   'src/lib/coupleCall.ts',
   'src/components/memories/MemoriesPage.tsx',
   'src/components/memories/MemoryMedia.tsx',
-  'src/components/location/LocationPage.tsx',
+  'src/components/footprints/FootprintsPage.tsx',
   'src/components/auth/AuthFlow.tsx',
   'src/components/auth/ProfileSetup.tsx',
   'src/components/auth/AccountSettings.tsx',
@@ -92,7 +92,7 @@ const danduliStickerStyles = read('src/danduli-stickers.css');
 const chatStyles = read('src/styles/features/chat.ts');
 const memories = read('src/components/memories/MemoriesPage.tsx');
 const memoryMedia = read('src/components/memories/MemoryMedia.tsx');
-const location = read('src/components/location/LocationPage.tsx');
+const location = read('src/components/footprints/FootprintsPage.tsx');
 const authFlow = read('src/components/auth/AuthFlow.tsx');
 const profileSetup = read('src/components/auth/ProfileSetup.tsx');
 const account = read('src/components/auth/AccountSettings.tsx');
@@ -101,13 +101,13 @@ const responsiveFrame = read('src/components/layout/ResponsiveAppFrame.tsx');
 
 check('primary navigation terminology', includesAll(bottomNav, ["'홈'", "'추억'", "'대화'", "'지도'", "'더보기'"]));
 check('shared header owns notifications', header.includes('notification-button') && header.includes('onNotifications'));
-check('shared header owns settings', header.includes('onSettings') && header.includes('aria-label={settingsLabel}'));
+check('shared header owns settings', header.includes('onSettings') && header.includes('onClick={openPageSettings}') && header.includes('{settingsLabel}</button>'));
 check('responsive frame owns desktop viewport', responsiveFrame.includes('lg:[&_.home-page]:!h-dvh') && responsiveFrame.includes('lg:[&_.home-page]:!min-h-0'));
 
 check('App routes home', app.includes("tab === 'home'"));
 check('App routes memories directly', app.includes("from './components/memories/MemoriesPage'") && /<MemoriesPage\b[^>]*\brequestedTab=\{requestedHubTab\}/.test(app));
 check('App routes chat directly into page', app.includes("tab === 'chat'") && app.includes('<ChatPage Header={AppHeader}') && !app.includes('chat-room-layer'));
-check('App routes date planning directly', app.includes("import('./components/location/DateMapPage')") && app.includes('<DateMapPage Header={AppHeader}') && !app.includes('<LocationPage requestedTab='));
+check('Map tab renders footprints and has no date planning', app.includes("tab === 'location' && <FootprintsPage") && !app.includes('DateMapPage'));
 check('App routes more', app.includes("tab === 'more'"));
 check('native back handler remains connected', app.includes('route-native-back'));
 check('App uses realtime couple subscription', app.includes('subscribeRealCoupleConnection'));
@@ -134,7 +134,7 @@ check('chat screen title is 대화', chat.includes('<Header title="대화"'));
 check('chat realtime subscription is present', chat.includes('subscribeCoupleMessages'));
 check('chat header opens its own settings without a duplicate profile bar', chat.includes('onSettings={openChatMenu}') && !chat.includes('className="chat-profile"'));
 check('memories header opens tab and anniversary settings', memories.includes('onSettings={() => setOrderOpen(true)}'));
-check('map header opens search and display settings', read('src/components/location/DateMapPage.tsx').includes('settingsLabel="지도 설정"'));
+check('map header opens footprint settings', location.includes('settingsLabel="발자취 설정"'));
 check('home and more headers open page settings', app.includes('settingsLabel="홈 설정"') && app.includes('settingsLabel="더보기 설정"') && more.includes('내 프로필') && more.includes('상대방 프로필 및 연결'));
 check('chat media upload path is present', chat.includes('uploadChatMedia'));
 check('chat composer remains mounted', chat.includes('<ChatComposer'));
@@ -161,7 +161,7 @@ check('portrait stickers render transparent full images without crop',
   && danduliStickerStyles.includes('overflow: visible')
   && !danduliStickerStyles.includes('clip-path: inset('));
 check('legacy square sticker pack keeps direct sprite rendering',
-  danduliSticker.includes("style={item.image ? undefined : { backgroundPosition:")
+  danduliSticker.includes("item.image ? undefined : { backgroundPosition:")
   && danduliStickerStyles.includes("background-image: url('/danduli-stickers-v3-clean.webp')"));
 
 check('memories exposes album tab', memories.includes("album: '앨범'"));
@@ -173,10 +173,10 @@ check('memories schedule form has no type selector', !memories.includes('<select
 check('memories promise form saves couple type', memories.includes("type: 'couple' as const") && memories.includes('약속 저장'));
 check('memory media attempts durable legacy recovery', memoryMedia.includes('backupMedia/memories-live') && memoryMedia.includes('persistRecoveredUrl'));
 
-check('location exposes requested tab state', location.includes('requestedTab?: LocationTabId') && location.includes('setActiveTab(requestedTab)'));
+check('map preserves memory-linked footprint focus', location.includes('initialMemoryId?: number'));
 check('location screen title is 지도', location.includes('<Header title="지도"'));
-check('location map tab is present', location.includes("activeTab === 'map'"));
-check('location footprints tab is present', location.includes("activeTab === 'footprints'"));
+check('map shows partner GPS', location.includes("'partner'"));
+check('map shows verified joint GPS', location.includes('buildJointFootprints'));
 check('Naver map host remains configured', location.includes('meluni-f4e00.web.app'));
 check('map route uses exact shared LatLng path', mapHost.includes('path: points') && mapHost.includes('position: points[index]'));
 check('map route follows active theme', mapHost.includes("--route-accent") && mapHost.includes('strokeColor: palette.accent'));

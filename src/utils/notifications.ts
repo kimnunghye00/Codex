@@ -21,7 +21,7 @@ export function loadNotifications(uid: string): AppNotification[] {
     const raw = localStorage.getItem(keyFor(uid));
     if (!raw) return [];
     const parsed = JSON.parse(raw) as AppNotification[];
-    return Array.isArray(parsed) ? parsed.filter((item) => item && typeof item.id === 'string').slice(0, MAX_ITEMS) : [];
+    return Array.isArray(parsed) ? parsed.filter((item) => item && typeof item.id === 'string' && item.kind !== 'date-plan').slice(0, MAX_ITEMS) : [];
   } catch {
     return [];
   }
@@ -47,8 +47,9 @@ export function markAllNotificationsRead(items: AppNotification[]) {
 
 /** Preserve local read state and de-duplicate remote activity by stable ID. */
 export function mergePartnerNotifications(local: AppNotification[], incoming: AppNotification[]): AppNotification[] {
-  const items = new Map(local.map((item) => [item.id, item]));
+  const items = new Map(local.filter((item) => item.kind !== 'date-plan').map((item) => [item.id, item]));
   for (const event of incoming) {
+    if (event.kind === 'date-plan') continue;
     const existing = items.get(event.id);
     if (existing) items.set(event.id, { ...event, read: existing.read });
     else items.set(event.id, event);
@@ -61,7 +62,7 @@ export function mergePartnerNotifications(local: AppNotification[], incoming: Ap
 export function notificationDestination(value: unknown): NotificationDestination | null {
   if (!value || typeof value !== 'object') return null;
   const input = value as { screen?: unknown; itemId?: unknown };
-  if (!['chat', 'album', 'date-plan'].includes(String(input.screen))) return null;
+  if (!['chat', 'album'].includes(String(input.screen))) return null;
   if (typeof input.itemId !== 'string' || !/^[a-zA-Z0-9_-]{1,160}$/.test(input.itemId)) return null;
   if ((input.screen === 'chat' || input.screen === 'album') && !/^\d{1,18}$/.test(input.itemId)) return null;
   return { screen: input.screen as NotificationDestination['screen'], itemId: input.itemId };

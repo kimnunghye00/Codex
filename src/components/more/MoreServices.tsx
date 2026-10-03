@@ -14,7 +14,6 @@ import {
 } from '../chat/ChatToolsPanel';
 import { DanduliSticker, stickerIdFromToken } from '../chat/DanduliSticker';
 import type { HubTabId } from '../memories/MemoriesPage';
-import type { LocationTabId } from '../location/LocationPage';
 
 type AppIconId = RouteAppIconId;
 type ThemeId = 'default' | 'lavender' | 'dark';
@@ -24,7 +23,7 @@ export type MoreNavigationTarget =
   | { area: 'home'; profileEditor?: boolean }
   | { area: 'chat'; toolsSection?: 'settings' | 'stickers' | 'store' }
   | { area: 'memories'; tab: HubTabId }
-  | { area: 'location'; tab: LocationTabId };
+  | { area: 'location'; tab: 'map' | 'footprints' };
 
 type AppIconOption = {
   id: AppIconId;
