@@ -58,6 +58,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install legacy Function dependencies for retirement
+        run: npm install --prefix functions --no-audit --no-fund
+
       - name: Install date-plan delete Function dependencies
         run: npm install --prefix functions-date-plan --no-audit --no-fund
 
