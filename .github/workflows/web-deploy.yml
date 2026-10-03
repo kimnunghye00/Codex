@@ -8,6 +8,8 @@ on:
       - 'src/**'
       - 'functions/**'
       - 'functions-date-plan/**'
+      - 'functions-retirement/**'
+      - 'firebase-retirement.json'
       - 'functions-location/**'
       - 'public/**'
       - 'index.html'
@@ -58,8 +60,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install legacy Function dependencies for retirement
-        run: npm install --prefix functions --no-audit --no-fund
+      - name: Install isolated legacy retirement Function dependencies
+        run: npm install --prefix functions-retirement --no-audit --no-fund
 
       - name: Install date-plan delete Function dependencies
         run: npm install --prefix functions-date-plan --no-audit --no-fund
@@ -181,7 +183,13 @@ jobs:
           # The delete endpoint is isolated from TURN/search codebases so this
           # deployment never needs access to unrelated Secret Manager values.
           npx --yes firebase-tools@15.29.0 deploy \
-            --only functions:date-plan-delete:deleteDatePlanDraftV2,functions:default:deleteDatePlanDraft \
+            --only functions:date-plan-delete:deleteDatePlanDraftV2 \
+            --project meluni-f4e00 \
+            --non-interactive \
+            --force
+          npx --yes firebase-tools@15.29.0 deploy \
+            --config firebase-retirement.json \
+            --only functions:default:deleteDatePlanDraft \
             --project meluni-f4e00 \
             --non-interactive \
             --force
