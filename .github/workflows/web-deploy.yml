@@ -106,7 +106,7 @@ jobs:
           test -f public/sw.js
           grep -q "AppCrashBoundary" src/main.tsx
           grep -q "preparePersistentBackup" src/main.tsx
-          grep -q "danduli.web.app" src/components/location/LocationPage.tsx
+          grep -q "danduli.web.app" src/components/footprints/FootprintsPage.tsx
           grep -q '"danduli"' .firebaserc
           grep -q '"legacy"' .firebaserc
           grep -q "ncpKeyId" public/naver-map-host.html
