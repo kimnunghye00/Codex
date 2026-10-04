@@ -38,11 +38,12 @@ pub fn render_page(
         .into());
     }
 
-    if let Err(error) = child.activate_ui_restrictions() {
+    if let Err(error) = child.activate_content_restrictions() {
         child.kill();
-        return Err(format!("renderer UI sandbox activation failed: {error}").into());
+        return Err(format!("renderer content sandbox activation failed: {error}").into());
     }
 
+    // The worker has only completed trusted runtime initialization at READY.
     // No document bytes are sent before Restricted Token + Low Integrity +
     // Job resource limits + Job UI restrictions are all active.
     if let Err(error) = ipc::write_load(

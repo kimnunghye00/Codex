@@ -62,9 +62,17 @@ impl RendererProcess {
         }
     }
 
-    pub fn activate_ui_restrictions(&mut self) -> io::Result<()> {
+    pub fn activate_content_restrictions(&mut self) -> io::Result<()> {
         use std::ffi::c_void;
         use std::mem::size_of;
+        use std::ptr::null_mut;
+
+        use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
+        use windows_sys::Win32::Security::{
+            CreateWellKnownSid, GetLengthSid, IsTokenRestricted, SetTokenInformation,
+            SID_AND_ATTRIBUTES, TOKEN_ADJUST_DEFAULT, TOKEN_MANDATORY_LABEL, TOKEN_QUERY,
+            SECURITY_MAX_SID_SIZE, TokenIntegrityLevel, WinLowLabelSid,
+        };
         use windows_sys::Win32::System::JobObjects::{
             JobObjectBasicUIRestrictions, SetInformationJobObject,
             JOBOBJECT_BASIC_UI_RESTRICTIONS, JOB_OBJECT_UILIMIT_DESKTOP,
@@ -73,32 +81,89 @@ impl RendererProcess {
             JOB_OBJECT_UILIMIT_READCLIPBOARD, JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS,
             JOB_OBJECT_UILIMIT_WRITECLIPBOARD,
         };
+            use windows_sys::Win32::System::Threading::OpenProcessToken;
 
-        let ui = JOBOBJECT_BASIC_UI_RESTRICTIONS {
-            UIRestrictionsClass:
-                JOB_OBJECT_UILIMIT_HANDLES
-                    | JOB_OBJECT_UILIMIT_READCLIPBOARD
-                    | JOB_OBJECT_UILIMIT_WRITECLIPBOARD
-                    | JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS
-                    | JOB_OBJECT_UILIMIT_DISPLAYSETTINGS
-                    | JOB_OBJECT_UILIMIT_GLOBALATOMS
-                    | JOB_OBJECT_UILIMIT_DESKTOP
-                    | JOB_OBJECT_UILIMIT_EXITWINDOWS,
-        };
+        unsafe {
+            let mut token: HANDLE = null_mut();
+            if OpenProcessToken(
+                self.process,
+                TOKEN_QUERY | TOKEN_ADJUST_DEFAULT,
+                &mut token,
+            ) == 0
+            {
+                return Err(io::Error::last_os_error());
+            }
 
-        if unsafe {
-            SetInformationJobObject(
-                self.job,
-                JobObjectBasicUIRestrictions,
-                &ui as *const _ as *const c_void,
-                size_of::<JOBOBJECT_BASIC_UI_RESTRICTIONS>() as u32,
-            )
-        } == 0
-        {
-            return Err(io::Error::last_os_error());
+            let result = (|| -> io::Result<()> {
+                if IsTokenRestricted(token) == 0 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::PermissionDenied,
+                        "running renderer token is not restricted",
+                    ));
+                }
+
+                let mut low_sid_storage = [0u8; SECURITY_MAX_SID_SIZE as usize];
+                let mut low_sid_size = low_sid_storage.len() as u32;
+                let low_sid = low_sid_storage.as_mut_ptr() as *mut c_void;
+
+                if CreateWellKnownSid(
+                    WinLowLabelSid,
+                    null_mut(),
+                    low_sid,
+                    &mut low_sid_size,
+                ) == 0
+                {
+                    return Err(io::Error::last_os_error());
+                }
+
+                let label = TOKEN_MANDATORY_LABEL {
+                    Label: SID_AND_ATTRIBUTES {
+                        Sid: low_sid,
+                        Attributes: SE_GROUP_INTEGRITY as u32,
+                    },
+                };
+
+                let label_size = size_of::<TOKEN_MANDATORY_LABEL>()
+                    .saturating_add(GetLengthSid(low_sid) as usize);
+
+                if SetTokenInformation(
+                    token,
+                    TokenIntegrityLevel,
+                    &label as *const _ as *mut c_void,
+                    label_size as u32,
+                ) == 0
+                {
+                    return Err(io::Error::last_os_error());
+                }
+
+                let ui = JOBOBJECT_BASIC_UI_RESTRICTIONS {
+                    UIRestrictionsClass:
+                        JOB_OBJECT_UILIMIT_HANDLES
+                            | JOB_OBJECT_UILIMIT_READCLIPBOARD
+                            | JOB_OBJECT_UILIMIT_WRITECLIPBOARD
+                            | JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS
+                            | JOB_OBJECT_UILIMIT_DISPLAYSETTINGS
+                            | JOB_OBJECT_UILIMIT_GLOBALATOMS
+                            | JOB_OBJECT_UILIMIT_DESKTOP
+                            | JOB_OBJECT_UILIMIT_EXITWINDOWS,
+                };
+
+                if SetInformationJobObject(
+                    self.job,
+                    JobObjectBasicUIRestrictions,
+                    &ui as *const _ as *const c_void,
+                    size_of::<JOBOBJECT_BASIC_UI_RESTRICTIONS>() as u32,
+                ) == 0
+                {
+                    return Err(io::Error::last_os_error());
+                }
+
+                Ok(())
+            })();
+
+            CloseHandle(token);
+            result
         }
-
-        Ok(())
     }
 
     pub fn wait_success(&mut self) -> io::Result<()> {
@@ -164,11 +229,9 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
         INVALID_HANDLE_VALUE,
     };
     use windows_sys::Win32::Security::{
-        CreateRestrictedToken, CreateWellKnownSid, GetLengthSid, GetTokenInformation,
-        IsTokenRestricted, SetTokenInformation, SID_AND_ATTRIBUTES, TOKEN_ADJUST_DEFAULT,
-        TOKEN_ASSIGN_PRIMARY, TOKEN_DUPLICATE, TOKEN_MANDATORY_LABEL, TOKEN_QUERY, TOKEN_USER,
-        DISABLE_MAX_PRIVILEGE, SECURITY_MAX_SID_SIZE, TokenIntegrityLevel,
-        TokenUser, WinLowLabelSid, WRITE_RESTRICTED,
+        CreateRestrictedToken, GetTokenInformation, IsTokenRestricted, SID_AND_ATTRIBUTES,
+        TOKEN_ASSIGN_PRIMARY, TOKEN_DUPLICATE, TOKEN_QUERY, TOKEN_USER,
+        DISABLE_MAX_PRIVILEGE, TokenUser, WRITE_RESTRICTED,
     };
     use windows_sys::Win32::Storage::FileSystem::{
         CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
@@ -305,10 +368,7 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
 
             if OpenProcessToken(
                 GetCurrentProcess(),
-                TOKEN_DUPLICATE
-                    | TOKEN_QUERY
-                    | TOKEN_ASSIGN_PRIMARY
-                    | TOKEN_ADJUST_DEFAULT,
+                TOKEN_DUPLICATE | TOKEN_QUERY | TOKEN_ASSIGN_PRIMARY,
                 &mut handles.source_token,
             ) == 0
             {
@@ -368,41 +428,6 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
                 ));
             }
 
-            // Apply Low Mandatory Integrity to prevent writes to normal
-            // medium-integrity user objects unless Windows explicitly permits them.
-            let mut low_sid_storage = [0u8; SECURITY_MAX_SID_SIZE as usize];
-            let mut low_sid_size = low_sid_storage.len() as u32;
-            let low_sid = low_sid_storage.as_mut_ptr() as *mut c_void;
-
-            if CreateWellKnownSid(
-                WinLowLabelSid,
-                null_mut(),
-                low_sid,
-                &mut low_sid_size,
-            ) == 0
-            {
-                return Err(io::Error::last_os_error());
-            }
-
-            let label = TOKEN_MANDATORY_LABEL {
-                Label: SID_AND_ATTRIBUTES {
-                    Sid: low_sid,
-                    Attributes: SE_GROUP_INTEGRITY as u32,
-                },
-            };
-
-            let label_size = size_of::<TOKEN_MANDATORY_LABEL>()
-                .saturating_add(GetLengthSid(low_sid) as usize);
-
-            if SetTokenInformation(
-                handles.restricted_token,
-                TokenIntegrityLevel,
-                &label as *const _ as *mut c_void,
-                label_size as u32,
-            ) == 0
-            {
-                return Err(io::Error::last_os_error());
-            }
 
             let mut startup: STARTUPINFOW = zeroed();
             startup.cb = size_of::<STARTUPINFOW>() as u32;
@@ -468,10 +493,10 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
                 return Err(io::Error::last_os_error());
             }
 
-            // The renderer was created suspended. Restricted Token, Low Integrity,
-            // and resource/process Job limits exist before its first instruction.
-            // UI restrictions are activated only after the trusted worker sends READY,
-            // and the broker sends no untrusted HTML before that handshake.
+            // The renderer was created suspended. Restricted Token and resource/process
+            // Job limits exist before its first instruction. The trusted worker sends READY
+            // after runtime initialization. Only then does the broker add Low Integrity
+            // plus UI restrictions, before sending any untrusted HTML.
             if ResumeThread(handles.thread) == u32::MAX {
                 return Err(io::Error::last_os_error());
             }
@@ -571,7 +596,7 @@ impl RendererProcess {
         let _ = self.child.kill();
     }
 
-    pub fn activate_ui_restrictions(&mut self) -> io::Result<()> {
+    pub fn activate_content_restrictions(&mut self) -> io::Result<()> {
         Ok(())
     }
 
