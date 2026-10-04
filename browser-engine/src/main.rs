@@ -1,3 +1,4 @@
+mod dom;
 mod html;
 mod net;
 mod render;
@@ -7,8 +8,8 @@ use std::error::Error;
 const DEFAULT_URL: &str = "https://example.com";
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // We deliberately use a maintained TLS implementation instead of inventing
-    // cryptography. The browser/network/HTML/rendering logic remains ours.
+    // Cryptography is intentionally delegated to a maintained TLS library.
+    // HTTP, HTML parsing, DOM construction, text layout, and rendering are ours.
     let _ = rustls::crypto::ring::default_provider().install_default();
 
     let target = std::env::args()
@@ -24,9 +25,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         response.body.len()
     );
 
-    let html = String::from_utf8_lossy(&response.body);
-    let text = html::html_to_text(&html);
+    let source = String::from_utf8_lossy(&response.body);
+    let document = html::parse(&source)?;
+    println!("[browser-core] DOM contains {} nodes", document.len());
 
+    let text = document.visible_text();
     render::show(&target, &text)?;
+
     Ok(())
 }
