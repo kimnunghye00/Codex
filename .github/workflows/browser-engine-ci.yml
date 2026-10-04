@@ -33,3 +33,6 @@ jobs:
 
       - name: Build browser and renderer
         run: cargo build --bins
+
+      - name: Restricted renderer smoke test
+        run: .\target\debug\browser-core.exe --sandbox-self-test
