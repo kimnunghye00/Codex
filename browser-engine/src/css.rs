@@ -93,6 +93,19 @@ impl fmt::Display for CssError {
 impl Error for CssError {}
 
 impl Stylesheet {
+    pub fn append(&mut self, mut other: Stylesheet) -> Result<(), CssError> {
+        if self.rules.len().saturating_add(other.rules.len()) > MAX_RULES {
+            return Err(CssError::new("CSS exceeded the combined rule safety limit"));
+        }
+
+        let base_order = self.rules.len() as u32;
+        for (offset, rule) in other.rules.iter_mut().enumerate() {
+            rule.source_order = base_order.saturating_add(offset as u32);
+        }
+        self.rules.extend(other.rules);
+        Ok(())
+    }
+
     pub fn from_document(document: &Document) -> Result<Self, CssError> {
         let mut combined = String::new();
 

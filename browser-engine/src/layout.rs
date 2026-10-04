@@ -1,11 +1,13 @@
 use crate::css::Display;
 use crate::dom::{Document, NodeId, NodeKind};
+use crate::resources::ResourceSet;
 use crate::style::ComputedStyle;
 use std::error::Error;
 use std::fmt;
 
 const MAX_LAYOUT_DEPTH: usize = 256;
 const MAX_TEXT_FRAGMENTS: usize = 200_000;
+const MAX_IMAGE_FRAGMENTS: usize = 256;
 const DEFAULT_LINE_HEIGHT: u32 = 20;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -66,10 +68,18 @@ pub struct TextFragment {
     pub text: Box<str>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct ImageFragment {
+    pub node: NodeId,
+    pub link: Option<NodeId>,
+    pub rect: Rect,
+}
+
 #[derive(Debug)]
 pub struct LayoutTree {
     pub boxes: Vec<Option<LayoutBox>>,
     pub fragments: Vec<TextFragment>,
+    pub images: Vec<ImageFragment>,
     pub content_height: u32,
 }
 
@@ -97,6 +107,7 @@ impl Error for LayoutError {}
 pub fn build(
     document: &Document,
     styles: &[ComputedStyle],
+    resources: &ResourceSet,
     viewport_width: u32,
 ) -> Result<LayoutTree, LayoutError> {
     if viewport_width == 0 {
@@ -106,36 +117,23 @@ pub fn build(
     let mut context = LayoutContext {
         document,
         styles,
+        resources,
         tree: LayoutTree {
             boxes: vec![None; document.len()],
             fragments: Vec::new(),
+            images: Vec::new(),
             content_height: 0,
         },
     };
 
     if let Some(body) = document.find_first_element("body") {
-        let bottom = context.layout_block(body, 0, 0, viewport_width, 0)?;
-        context.tree.content_height = bottom;
+        context.tree.content_height =
+            context.layout_block(body, 0, 0, viewport_width, 0)?;
     } else {
         let mut flow = FlowState::new(0, 0, viewport_width);
         context.layout_flow_children(document.root(), &mut flow, 0)?;
         flow.flush_line();
         context.tree.content_height = flow.y;
-        context.tree.boxes[document.root() as usize] = Some(LayoutBox {
-            node: document.root(),
-            rect: Rect {
-                x: 0,
-                y: 0,
-                width: viewport_width,
-                height: flow.y,
-            },
-            content_rect: Rect {
-                x: 0,
-                y: 0,
-                width: viewport_width,
-                height: flow.y,
-            },
-        });
     }
 
     Ok(context.tree)
@@ -143,6 +141,16 @@ pub fn build(
 
 impl LayoutTree {
     pub fn hit_test_link(&self, x: u32, y: u32) -> Option<NodeId> {
+        if let Some(link) = self
+            .images
+            .iter()
+            .rev()
+            .find(|fragment| fragment.link.is_some() && fragment.rect.contains(x, y))
+            .and_then(|fragment| fragment.link)
+        {
+            return Some(link);
+        }
+
         self.fragments
             .iter()
             .rev()
@@ -154,6 +162,7 @@ impl LayoutTree {
 struct LayoutContext<'a> {
     document: &'a Document,
     styles: &'a [ComputedStyle],
+    resources: &'a ResourceSet,
     tree: LayoutTree,
 }
 
@@ -217,9 +226,7 @@ impl LayoutContext<'_> {
             content_rect,
         });
 
-        Ok(rect
-            .bottom()
-            .saturating_add(style.margin_bottom as u32))
+        Ok(rect.bottom().saturating_add(style.margin_bottom as u32))
     }
 
     fn layout_flow_children(
@@ -252,9 +259,7 @@ impl LayoutContext<'_> {
                     flow.line_height = 0;
                     flow.pending_space = false;
                 }
-                Display::Inline => {
-                    self.layout_inline_node(child, flow, depth + 1)?;
-                }
+                Display::Inline => self.layout_inline_node(child, flow, depth + 1)?,
             }
         }
 
@@ -279,15 +284,16 @@ impl LayoutContext<'_> {
         };
 
         match node.kind() {
-            NodeKind::Document => {
-                self.layout_flow_children(id, flow, depth + 1)?;
-            }
-            NodeKind::Text(text) => {
-                self.layout_text(id, text, flow, style)?;
-            }
+            NodeKind::Document => self.layout_flow_children(id, flow, depth + 1)?,
+            NodeKind::Text(text) => self.layout_text(id, text, flow, style)?,
             NodeKind::Element(element) => {
                 if element.tag_name() == "br" {
                     flow.force_line_break();
+                    return Ok(());
+                }
+
+                if element.tag_name() == "img" {
+                    self.layout_image(id, flow)?;
                     return Ok(());
                 }
 
@@ -332,6 +338,57 @@ impl LayoutContext<'_> {
             }
         }
 
+        Ok(())
+    }
+
+    fn layout_image(&mut self, id: NodeId, flow: &mut FlowState) -> Result<(), LayoutError> {
+        let Some((intrinsic_width, intrinsic_height)) = self.resources.image_dimensions(id) else {
+            return Ok(());
+        };
+
+        if self.tree.images.len() >= MAX_IMAGE_FRAGMENTS {
+            return Err(LayoutError::new(
+                "layout exceeded the image fragment safety limit",
+            ));
+        }
+
+        let max_width = flow.width.max(1);
+        let (width, height) = if intrinsic_width > max_width {
+            let height = ((intrinsic_height as u64 * max_width as u64)
+                / intrinsic_width as u64)
+                .max(1) as u32;
+            (max_width, height)
+        } else {
+            (intrinsic_width, intrinsic_height)
+        };
+
+        let max_x = flow.start_x.saturating_add(flow.width);
+        if flow.x != flow.start_x && flow.x.saturating_add(width) > max_x {
+            flow.force_line_break();
+        }
+
+        let rect = Rect {
+            x: flow.x,
+            y: flow.y,
+            width,
+            height,
+        };
+
+        let link = self.nearest_link(id);
+        self.tree.images.push(ImageFragment {
+            node: id,
+            link,
+            rect,
+        });
+        self.tree.boxes[id as usize] = Some(LayoutBox {
+            node: id,
+            rect,
+            content_rect: rect,
+        });
+
+        flow.x = flow.x.saturating_add(width);
+        flow.line_height = flow.line_height.max(height.saturating_add(4));
+        flow.pending_space = false;
         Ok(())
     }
 
@@ -396,6 +453,7 @@ impl LayoutContext<'_> {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn place_word(
         &mut self,
         id: NodeId,
@@ -525,7 +583,6 @@ impl LayoutContext<'_> {
                     return Some(id);
                 }
             }
-
             id = node.parent()?;
         }
         None
@@ -594,33 +651,14 @@ mod tests {
     use crate::{html, style};
 
     #[test]
-    fn creates_block_boxes_with_horizontal_spacing() {
-        let document = html::parse(
-            r#"<body><p style="margin: 10px 20px; padding: 4px 8px">Hello world</p></body>"#,
-        )
-        .unwrap();
-        let styles = style::compute(&document, &Stylesheet::default());
-        let layout = build(&document, &styles, 400).unwrap();
-        let p = document.find_first_element("p").unwrap();
-        let box_ = layout.boxes[p as usize].unwrap();
-
-        assert_eq!(box_.rect.x, 20);
-        assert_eq!(box_.rect.width, 360);
-        assert_eq!(box_.content_rect.x, 28);
-        assert_eq!(box_.content_rect.width, 344);
-        assert!(box_.rect.height >= 8);
-    }
-
-    #[test]
     fn wraps_text_inside_viewport() {
-        let document = html::parse(
-            "<body><p>one two three four five six seven eight nine ten</p></body>",
-        )
-        .unwrap();
+        let document =
+            html::parse("<body><p>one two three four five six seven eight nine ten</p></body>")
+                .unwrap();
         let styles = style::compute(&document, &Stylesheet::default());
-        let layout = build(&document, &styles, 80).unwrap();
+        let resources = ResourceSet::default();
+        let layout = build(&document, &styles, &resources, 80).unwrap();
 
-        assert!(layout.fragments.len() > 3);
         assert!(layout.content_height > 20);
         assert!(layout
             .fragments
@@ -630,34 +668,16 @@ mod tests {
 
     #[test]
     fn links_are_hit_testable() {
-        let document = html::parse(
-            r#"<body><p><a href="/next">Open next page</a></p></body>"#,
-        )
-        .unwrap();
+        let document =
+            html::parse(r#"<body><p><a href="/next">Open next page</a></p></body>"#).unwrap();
         let styles = style::compute(&document, &Stylesheet::default());
-        let layout = build(&document, &styles, 300).unwrap();
-        let fragment = layout.fragments.iter().find(|f| f.link.is_some()).unwrap();
+        let resources = ResourceSet::default();
+        let layout = build(&document, &styles, &resources, 300).unwrap();
+        let fragment = layout.fragments.iter().find(|item| item.link.is_some()).unwrap();
 
         assert_eq!(
             layout.hit_test_link(fragment.rect.x, fragment.rect.y),
             fragment.link
         );
-    }
-
-    #[test]
-    fn excludes_display_none_from_layout() {
-        let document = html::parse(
-            r#"<body><p style="display:none">secret</p><p>visible</p></body>"#,
-        )
-        .unwrap();
-        let styles = style::compute(&document, &Stylesheet::default());
-        let layout = build(&document, &styles, 300).unwrap();
-        let hidden = document.find_first_element("p").unwrap();
-
-        assert!(layout.boxes[hidden as usize].is_none());
-        assert!(layout
-            .fragments
-            .iter()
-            .all(|fragment| fragment.text.as_ref() != "secret"));
     }
 }

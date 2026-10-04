@@ -6,6 +6,7 @@ mod html;
 mod layout;
 mod net;
 mod render;
+mod resources;
 mod style;
 
 use std::error::Error;
@@ -13,8 +14,8 @@ use std::error::Error;
 const DEFAULT_URL: &str = "https://example.com";
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // Cryptography is intentionally delegated to a maintained TLS library.
-    // HTTP, HTML, DOM, CSS, style, layout, navigation, history, and rendering are ours.
+    // TLS is delegated to rustls. Browser parsing, resource policy, layout,
+    // navigation, scrolling, and rendering remain inside browser-core.
     let _ = rustls::crypto::ring::default_provider().install_default();
 
     let target = std::env::args()

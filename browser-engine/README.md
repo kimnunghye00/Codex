@@ -1,112 +1,83 @@
-# browser-core 0.5
+# browser-core 0.6
 
 A browser-engine prototype built without Chromium, WebView2, or Firefox.
 
-## Milestone 0.5: navigation
+## Milestone 0.6: address bar, scrolling, external resources
 
-Version 0.5 turns the static renderer into an interactive browser prototype.
+Version 0.6 adds practical browsing controls while keeping hard resource ceilings.
 
-Current flow:
+### New user-visible features
 
-```text
-HTTPS URL
-   ↓
-HTTP + redirects
-   ↓
-HTML → DOM
-   ↓
-CSS → computed styles
-   ↓
-Layout Tree
-   ↓
-click hit-testing
-   ↓
-URL resolution
-   ↓
-next HTTPS document
-```
+- editable address bar
+- click the address bar or press Ctrl+L
+- bare domains such as example.com are normalized to HTTPS
+- Enter navigates
+- mouse-wheel scrolling
+- Up / Down, PageUp / PageDown, Home / End scrolling
+- external link rel="stylesheet" stylesheets
+- PNG and JPEG img resources
+- image layout and painting
+- linked images participate in hit testing
 
-## Navigation now supported
+### HTTPS-only navigation remains enforced
 
-- clickable `<a href="...">` text
-- relative URL resolution
-- absolute HTTPS links
-- HTTP 301 / 302 / 303 / 307 / 308 redirects
-- redirect loop detection
-- maximum 8 redirects
-- back history
-- forward history
-- F5 reload
-- Alt+Left back
-- Alt+Right forward
-- visible back/forward buttons
+The address bar, links, redirects, external CSS, and image resources all use the same HTTPS-only URL policy.
 
-Links are painted blue and underlined so supported interactive regions are visible.
+Blocked schemes include HTTP, javascript, data, file, and any other non-HTTPS scheme. URLs containing embedded usernames or passwords are also rejected.
 
-## Low-memory history design
+## Resource budgets
 
-History stores URLs only.
+External CSS:
 
-It deliberately does **not** retain old DOM trees, CSS rule sets, computed style arrays, or layout trees. When going back or forward, browser-core reloads the target URL and replaces the current page objects.
+- at most 8 external stylesheets per page
+- 128 KiB per stylesheet
+- 512 KiB total external CSS
+- combined CSS rule cap remains enforced
 
-This trades some network latency for a much smaller retained memory footprint.
+Images:
 
-History is capped at 256 URL entries.
+- PNG and JPEG only
+- at most 12 decoded images per page
+- 1 MiB encoded size per image
+- 6 MiB total encoded image budget
+- maximum dimension: 2048 px
+- maximum 2,000,000 pixels per image
+- maximum 12 MiB decoded image-pixel budget per page
 
-## Navigation security policy
+Image dimensions are inspected before full decoding. Decoder panics are contained so malformed image input does not terminate the whole browser process in this prototype.
 
-0.5 keeps the browser HTTPS-only.
+## Memory design
 
-The following are blocked:
+Only the current page retains its DOM, computed styles, Layout Tree, decoded images, and external CSS.
 
-- `http://` navigation
-- redirects from HTTPS to HTTP
-- `javascript:` links
-- `data:` links
-- `file:` links
-- any other non-HTTPS scheme
+Back/forward history still retains URLs only, so old page resources are dropped on navigation.
 
-Additional limits:
+The renderer only paints the visible scroll viewport even though layout coordinates cover the full document.
 
-- maximum URL length: 8 KiB
-- maximum redirects: 8
-- redirect loop detection
-- existing 2 MiB response limit
-- existing network timeout
-- existing DOM/CSS/layout limits
+## Controls
 
-## Interaction
+- Ctrl+L: focus/select address
+- Enter: navigate
+- Esc: leave address editing; Esc again closes
+- Alt+Left / Alt+Right: back / forward
+- F5: reload
+- mouse wheel: scroll
+- PageUp / PageDown
+- Home / End
+- Up / Down
 
-Mouse:
+## Still intentionally missing
 
-- click blue underlined link text to navigate
-- click **<** or **>** in the top bar for history
+- JavaScript
+- forms/input controls inside web pages
+- cookies
+- persistent storage
+- web fonts
+- SVG
+- GIF/WebP image decoding
+- CSS imports
+- complex CSS selectors
+- flexbox/grid
+- decoder process isolation
 
-Keyboard:
-
-- **Alt+Left**: back
-- **Alt+Right**: forward
-- **F5**: reload
-- **Esc**: close
-
-## Current limitations
-
-- no editable address bar yet
-- fragment scrolling (`#section`) is not implemented
-- forms are not interactive
-- external stylesheets are not downloaded
-- images are not downloaded
-- JavaScript is not executed
-- history reloads pages instead of keeping a back-forward cache
-- no cookies or persistent storage
-
-## Run on Windows
-
-```powershell
-cd browser-engine
-cargo run --release -- https://example.com
-```
-
-## Next milestone
-
-0.6 should add a real editable address bar, scrolling, external CSS loading, and image-resource fetching with strict per-page memory budgets.
+The next security-focused milestone should split risky content handling away from the privileged browser UI, beginning with a renderer/resource sandbox and a narrow IPC boundary.
