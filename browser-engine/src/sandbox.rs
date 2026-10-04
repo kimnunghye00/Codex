@@ -81,6 +81,7 @@ impl RendererProcess {
             JOB_OBJECT_UILIMIT_READCLIPBOARD, JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS,
             JOB_OBJECT_UILIMIT_WRITECLIPBOARD,
         };
+        use windows_sys::Win32::System::SystemServices::SE_GROUP_INTEGRITY;
             use windows_sys::Win32::System::Threading::OpenProcessToken;
 
         unsafe {
@@ -244,7 +245,6 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
         JOB_OBJECT_LIMIT_PROCESS_TIME,
     };
     use windows_sys::Win32::System::Pipes::CreatePipe;
-    use windows_sys::Win32::System::SystemServices::SE_GROUP_INTEGRITY;
     use windows_sys::Win32::System::Threading::{
         CreateProcessAsUserW, GetCurrentProcess, OpenProcessToken, ResumeThread,
         CREATE_NO_WINDOW, CREATE_SUSPENDED, PROCESS_INFORMATION, STARTF_USESTDHANDLES,
