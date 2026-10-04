@@ -25,6 +25,10 @@ impl Rect {
         self.y.saturating_add(self.height)
     }
 
+    pub fn contains(self, x: u32, y: u32) -> bool {
+        x >= self.x && x < self.right() && y >= self.y && y < self.bottom()
+    }
+
     fn union(self, other: Rect) -> Rect {
         if self.width == 0 || self.height == 0 {
             return other;
@@ -57,6 +61,7 @@ pub struct LayoutBox {
 #[derive(Debug)]
 pub struct TextFragment {
     pub node: NodeId,
+    pub link: Option<NodeId>,
     pub rect: Rect,
     pub text: Box<str>,
 }
@@ -134,6 +139,16 @@ pub fn build(
     }
 
     Ok(context.tree)
+}
+
+impl LayoutTree {
+    pub fn hit_test_link(&self, x: u32, y: u32) -> Option<NodeId> {
+        self.fragments
+            .iter()
+            .rev()
+            .find(|fragment| fragment.link.is_some() && fragment.rect.contains(x, y))
+            .and_then(|fragment| fragment.link)
+    }
 }
 
 struct LayoutContext<'a> {
@@ -331,6 +346,7 @@ impl LayoutContext<'_> {
         let glyph_width = 8_u32.saturating_mul(scale);
         let glyph_height = 8_u32.saturating_mul(scale);
         let line_height = glyph_height.saturating_add(6);
+        let link = self.nearest_link(id);
 
         let mut word = String::new();
         let mut bounds: Option<Rect> = None;
@@ -340,6 +356,7 @@ impl LayoutContext<'_> {
                 if !word.is_empty() {
                     self.place_word(
                         id,
+                        link,
                         &word,
                         flow,
                         glyph_width,
@@ -358,6 +375,7 @@ impl LayoutContext<'_> {
         if !word.is_empty() {
             self.place_word(
                 id,
+                link,
                 &word,
                 flow,
                 glyph_width,
@@ -381,6 +399,7 @@ impl LayoutContext<'_> {
     fn place_word(
         &mut self,
         id: NodeId,
+        link: Option<NodeId>,
         word: &str,
         flow: &mut FlowState,
         glyph_width: u32,
@@ -409,8 +428,6 @@ impl LayoutContext<'_> {
         if word_width <= flow.width && flow.x.saturating_add(word_width) > max_x {
             flow.force_line_break();
         } else if word_width > flow.width && flow.x != flow.start_x {
-            // Oversized words are split, but start them on a fresh line so the
-            // first fragment cannot inherit unusable space from the prior word.
             flow.force_line_break();
         }
 
@@ -421,7 +438,7 @@ impl LayoutContext<'_> {
                 width: word_width,
                 height: glyph_height,
             };
-            self.push_fragment(id, rect, word)?;
+            self.push_fragment(id, link, rect, word)?;
             *bounds = Some(match *bounds {
                 Some(current) => current.union(rect),
                 None => rect,
@@ -442,7 +459,7 @@ impl LayoutContext<'_> {
                     width: (chunk.chars().count() as u32).saturating_mul(glyph_width),
                     height: glyph_height,
                 };
-                self.push_fragment(id, rect, &chunk)?;
+                self.push_fragment(id, link, rect, &chunk)?;
                 *bounds = Some(match *bounds {
                     Some(current) => current.union(rect),
                     None => rect,
@@ -468,7 +485,7 @@ impl LayoutContext<'_> {
                 width: (chunk.chars().count() as u32).saturating_mul(glyph_width),
                 height: glyph_height,
             };
-            self.push_fragment(id, rect, &chunk)?;
+            self.push_fragment(id, link, rect, &chunk)?;
             *bounds = Some(match *bounds {
                 Some(current) => current.union(rect),
                 None => rect,
@@ -481,6 +498,7 @@ impl LayoutContext<'_> {
     fn push_fragment(
         &mut self,
         node: NodeId,
+        link: Option<NodeId>,
         rect: Rect,
         text: &str,
     ) -> Result<(), LayoutError> {
@@ -492,10 +510,25 @@ impl LayoutContext<'_> {
 
         self.tree.fragments.push(TextFragment {
             node,
+            link,
             rect,
             text: text.to_string().into_boxed_str(),
         });
         Ok(())
+    }
+
+    fn nearest_link(&self, mut id: NodeId) -> Option<NodeId> {
+        for _ in 0..MAX_LAYOUT_DEPTH {
+            let node = self.document.node(id)?;
+            if let NodeKind::Element(element) = node.kind() {
+                if element.tag_name() == "a" && element.attribute("href").is_some() {
+                    return Some(id);
+                }
+            }
+
+            id = node.parent()?;
+        }
+        None
     }
 
     fn check_depth(&self, depth: usize) -> Result<(), LayoutError> {
@@ -596,18 +629,19 @@ mod tests {
     }
 
     #[test]
-    fn keeps_long_word_fragments_inside_a_normal_viewport() {
+    fn links_are_hit_testable() {
         let document = html::parse(
-            "<body><p>short supercalifragilisticexpialidocious</p></body>",
+            r#"<body><p><a href="/next">Open next page</a></p></body>"#,
         )
         .unwrap();
         let styles = style::compute(&document, &Stylesheet::default());
-        let layout = build(&document, &styles, 96).unwrap();
+        let layout = build(&document, &styles, 300).unwrap();
+        let fragment = layout.fragments.iter().find(|f| f.link.is_some()).unwrap();
 
-        assert!(layout
-            .fragments
-            .iter()
-            .all(|fragment| fragment.rect.right() <= 96));
+        assert_eq!(
+            layout.hit_test_link(fragment.rect.x, fragment.rect.y),
+            fragment.link
+        );
     }
 
     #[test]

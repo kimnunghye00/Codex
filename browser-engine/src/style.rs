@@ -227,6 +227,9 @@ fn ua_style(tag: &str, parent: ComputedStyle) -> ComputedStyle {
             style.font_size = 16;
             style.background_color = Some(0xF7F7F7);
         }
+        "a" => {
+            style.color = 0x0000CC;
+        }
         "h1" => {
             style.font_size = 32;
             style.margin_top = 20;

@@ -1,104 +1,104 @@
-# browser-core 0.4
+# browser-core 0.5
 
 A browser-engine prototype built without Chromium, WebView2, or Firefox.
 
-## Milestone 0.4: our own layout engine
+## Milestone 0.5: navigation
 
-Version 0.4 separates page geometry from painting. The renderer no longer decides where text goes while drawing it. A dedicated layout pass first converts styled DOM nodes into boxes and text fragments with fixed coordinates.
+Version 0.5 turns the static renderer into an interactive browser prototype.
 
 Current flow:
 
 ```text
 HTTPS URL
    ↓
-our HTTP/1.1 parser
+HTTP + redirects
    ↓
-our HTML parser
+HTML → DOM
    ↓
-compact DOM arena
+CSS → computed styles
    ↓
-our CSS parser
+Layout Tree
    ↓
-computed-style array
+click hit-testing
    ↓
-our Layout Tree
+URL resolution
    ↓
-our pixel renderer
+next HTTPS document
 ```
 
-## Layout model in 0.4
+## Navigation now supported
 
-Each laid-out element can now have:
+- clickable `<a href="...">` text
+- relative URL resolution
+- absolute HTTPS links
+- HTTP 301 / 302 / 303 / 307 / 308 redirects
+- redirect loop detection
+- maximum 8 redirects
+- back history
+- forward history
+- F5 reload
+- Alt+Left back
+- Alt+Right forward
+- visible back/forward buttons
 
-- x / y
-- width / height
-- content rectangle
-- block or inline participation
-- vertical and horizontal margin
-- vertical and horizontal padding
-- background rectangle
+Links are painted blue and underlined so supported interactive regions are visible.
 
-Text is converted into bounded text fragments before rendering. Wrapping happens during layout rather than during painting.
+## Low-memory history design
 
-The renderer consumes those precomputed rectangles and does not walk the DOM to decide geometry.
+History stores URLs only.
 
-## CSS box improvements
+It deliberately does **not** retain old DOM trees, CSS rule sets, computed style arrays, or layout trees. When going back or forward, browser-core reloads the target URL and replaces the current page objects.
 
-0.4 adds:
+This trades some network latency for a much smaller retained memory footprint.
 
-- `margin-left`
-- `margin-right`
-- `padding-left`
-- `padding-right`
-- 1-4 value `margin` shorthand
-- 1-4 value `padding` shorthand
+History is capped at 256 URL entries.
 
-For example:
+## Navigation security policy
 
-```css
-.card {
-  margin: 10px 20px;
-  padding: 8px 16px;
-  background-color: #eeeeee;
-}
-```
+0.5 keeps the browser HTTPS-only.
 
-now changes the actual box and content width.
+The following are blocked:
 
-## Memory and security design
+- `http://` navigation
+- redirects from HTTPS to HTTP
+- `javascript:` links
+- `data:` links
+- `file:` links
+- any other non-HTTPS scheme
 
-The layout result is stored in compact arrays indexed by the same 32-bit DOM NodeId values.
+Additional limits:
 
-Safety limits now include:
+- maximum URL length: 8 KiB
+- maximum redirects: 8
+- redirect loop detection
+- existing 2 MiB response limit
+- existing network timeout
+- existing DOM/CSS/layout limits
 
-- maximum layout recursion depth: 256
-- maximum generated text fragments: 200,000
-- saturating coordinate arithmetic
-- zero-width viewport rejection
-- `display:none` subtrees excluded before fragment generation
+## Interaction
 
-Existing network, DOM, and CSS limits remain in place.
+Mouse:
+
+- click blue underlined link text to navigate
+- click **<** or **>** in the top bar for history
+
+Keyboard:
+
+- **Alt+Left**: back
+- **Alt+Right**: forward
+- **F5**: reload
+- **Esc**: close
 
 ## Current limitations
 
-This is intentionally a small block/inline formatting model, not the full CSS formatting specification.
-
-Not implemented yet:
-
-- margin collapsing
-- borders
-- explicit CSS width / height
-- floats
-- absolute / fixed positioning
-- flexbox
-- grid
-- tables as a special layout algorithm
-- scrolling
-- images
-- external stylesheets
-- JavaScript
-
-Inline backgrounds use the bounding rectangle of their current laid-out contents rather than the full CSS inline-fragment painting rules.
+- no editable address bar yet
+- fragment scrolling (`#section`) is not implemented
+- forms are not interactive
+- external stylesheets are not downloaded
+- images are not downloaded
+- JavaScript is not executed
+- history reloads pages instead of keeping a back-forward cache
+- no cookies or persistent storage
 
 ## Run on Windows
 
@@ -107,8 +107,6 @@ cd browser-engine
 cargo run --release -- https://example.com
 ```
 
-Press **Esc** to close.
-
 ## Next milestone
 
-0.5 should make pages interactive: links with hit-testing, URL resolution, navigation, redirect handling, and back/forward history.
+0.6 should add a real editable address bar, scrolling, external CSS loading, and image-resource fetching with strict per-page memory budgets.
