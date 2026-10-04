@@ -309,13 +309,17 @@ fn parse_declarations(input: &str) -> Result<Vec<Declaration>, CssError> {
 }
 
 fn parse_box_shorthand(input: &str, margin: bool) -> Vec<Declaration> {
-    let values: Vec<Length> = input
-        .split_ascii_whitespace()
-        .filter_map(parse_length)
-        .collect();
-
-    if values.is_empty() || values.len() > 4 {
+    let tokens: Vec<&str> = input.split_ascii_whitespace().collect();
+    if tokens.is_empty() || tokens.len() > 4 {
         return Vec::new();
+    }
+
+    let mut values = Vec::with_capacity(tokens.len());
+    for token in tokens {
+        let Some(length) = parse_length(token) else {
+            return Vec::new();
+        };
+        values.push(length);
     }
 
     let (top, right, bottom, left) = match values.as_slice() {

@@ -408,6 +408,10 @@ impl LayoutContext<'_> {
 
         if word_width <= flow.width && flow.x.saturating_add(word_width) > max_x {
             flow.force_line_break();
+        } else if word_width > flow.width && flow.x != flow.start_x {
+            // Oversized words are split, but start them on a fresh line so the
+            // first fragment cannot inherit unusable space from the prior word.
+            flow.force_line_break();
         }
 
         if word_width <= flow.width {
@@ -589,6 +593,21 @@ mod tests {
             .fragments
             .iter()
             .all(|fragment| fragment.rect.right() <= 80));
+    }
+
+    #[test]
+    fn keeps_long_word_fragments_inside_a_normal_viewport() {
+        let document = html::parse(
+            "<body><p>short supercalifragilisticexpialidocious</p></body>",
+        )
+        .unwrap();
+        let styles = style::compute(&document, &Stylesheet::default());
+        let layout = build(&document, &styles, 96).unwrap();
+
+        assert!(layout
+            .fragments
+            .iter()
+            .all(|fragment| fragment.rect.right() <= 96));
     }
 
     #[test]
