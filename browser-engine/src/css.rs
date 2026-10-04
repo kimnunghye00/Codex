@@ -35,9 +35,13 @@ pub enum Property {
     BackgroundColor,
     FontSize,
     MarginTop,
+    MarginRight,
     MarginBottom,
+    MarginLeft,
     PaddingTop,
+    PaddingRight,
     PaddingBottom,
+    PaddingLeft,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -281,21 +285,71 @@ fn parse_declarations(input: &str) -> Result<Vec<Declaration>, CssError> {
             continue;
         };
 
-        if declarations.len() >= MAX_DECLARATIONS_PER_RULE {
+        let name = name.trim().to_ascii_lowercase();
+        let value = value.trim();
+
+        let expanded = match name.as_str() {
+            "margin" => parse_box_shorthand(value, true),
+            "padding" => parse_box_shorthand(value, false),
+            _ => parse_declaration(&name, value)
+                .map(|declaration| vec![declaration])
+                .unwrap_or_default(),
+        };
+
+        if declarations.len().saturating_add(expanded.len()) > MAX_DECLARATIONS_PER_RULE {
             return Err(CssError::new(
                 "CSS rule exceeded the declaration safety limit",
             ));
         }
 
-        let name = name.trim().to_ascii_lowercase();
-        let value = value.trim();
-
-        if let Some(declaration) = parse_declaration(&name, value) {
-            declarations.push(declaration);
-        }
+        declarations.extend(expanded);
     }
 
     Ok(declarations)
+}
+
+fn parse_box_shorthand(input: &str, margin: bool) -> Vec<Declaration> {
+    let values: Vec<Length> = input
+        .split_ascii_whitespace()
+        .filter_map(parse_length)
+        .collect();
+
+    if values.is_empty() || values.len() > 4 {
+        return Vec::new();
+    }
+
+    let (top, right, bottom, left) = match values.as_slice() {
+        [all] => (*all, *all, *all, *all),
+        [vertical, horizontal] => (*vertical, *horizontal, *vertical, *horizontal),
+        [top, horizontal, bottom] => (*top, *horizontal, *bottom, *horizontal),
+        [top, right, bottom, left] => (*top, *right, *bottom, *left),
+        _ => return Vec::new(),
+    };
+
+    let properties = if margin {
+        [
+            Property::MarginTop,
+            Property::MarginRight,
+            Property::MarginBottom,
+            Property::MarginLeft,
+        ]
+    } else {
+        [
+            Property::PaddingTop,
+            Property::PaddingRight,
+            Property::PaddingBottom,
+            Property::PaddingLeft,
+        ]
+    };
+
+    [top, right, bottom, left]
+        .into_iter()
+        .zip(properties)
+        .map(|(length, property)| Declaration {
+            property,
+            value: Value::Length(length),
+        })
+        .collect()
 }
 
 fn parse_declaration(name: &str, value: &str) -> Option<Declaration> {
@@ -316,38 +370,23 @@ fn parse_declaration(name: &str, value: &str) -> Option<Declaration> {
             property: Property::FontSize,
             value: Value::Length(length),
         }),
-        "margin-top" => parse_length(value).map(|length| Declaration {
-            property: Property::MarginTop,
-            value: Value::Length(length),
-        }),
-        "margin-bottom" => parse_length(value).map(|length| Declaration {
-            property: Property::MarginBottom,
-            value: Value::Length(length),
-        }),
-        "padding-top" => parse_length(value).map(|length| Declaration {
-            property: Property::PaddingTop,
-            value: Value::Length(length),
-        }),
-        "padding-bottom" => parse_length(value).map(|length| Declaration {
-            property: Property::PaddingBottom,
-            value: Value::Length(length),
-        }),
-        "margin" => {
-            let first = value.split_ascii_whitespace().next()?;
-            parse_length(first).map(|length| Declaration {
-                property: Property::MarginTop,
-                value: Value::Length(length),
-            })
-        }
-        "padding" => {
-            let first = value.split_ascii_whitespace().next()?;
-            parse_length(first).map(|length| Declaration {
-                property: Property::PaddingTop,
-                value: Value::Length(length),
-            })
-        }
+        "margin-top" => length_declaration(Property::MarginTop, value),
+        "margin-right" => length_declaration(Property::MarginRight, value),
+        "margin-bottom" => length_declaration(Property::MarginBottom, value),
+        "margin-left" => length_declaration(Property::MarginLeft, value),
+        "padding-top" => length_declaration(Property::PaddingTop, value),
+        "padding-right" => length_declaration(Property::PaddingRight, value),
+        "padding-bottom" => length_declaration(Property::PaddingBottom, value),
+        "padding-left" => length_declaration(Property::PaddingLeft, value),
         _ => None,
     }
+}
+
+fn length_declaration(property: Property, value: &str) -> Option<Declaration> {
+    parse_length(value).map(|length| Declaration {
+        property,
+        value: Value::Length(length),
+    })
 }
 
 fn parse_display(input: &str) -> Option<Display> {
@@ -468,6 +507,16 @@ mod tests {
         assert_eq!(parse_length("18px"), Some(Length::Px(18.0)));
         assert_eq!(parse_color("#abc"), Some(0xAABBCC));
         assert_eq!(parse_color("red"), Some(0xFF0000));
+    }
+
+    #[test]
+    fn expands_box_shorthand() {
+        let declarations = parse_inline_style("margin: 10px 20px 30px 40px").unwrap();
+        assert_eq!(declarations.len(), 4);
+        assert_eq!(declarations[0].property, Property::MarginTop);
+        assert_eq!(declarations[1].property, Property::MarginRight);
+        assert_eq!(declarations[2].property, Property::MarginBottom);
+        assert_eq!(declarations[3].property, Property::MarginLeft);
     }
 
     #[test]

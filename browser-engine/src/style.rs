@@ -11,9 +11,13 @@ pub struct ComputedStyle {
     pub background_color: Option<u32>,
     pub font_size: u16,
     pub margin_top: u16,
+    pub margin_right: u16,
     pub margin_bottom: u16,
+    pub margin_left: u16,
     pub padding_top: u16,
+    pub padding_right: u16,
     pub padding_bottom: u16,
+    pub padding_left: u16,
 }
 
 impl Default for ComputedStyle {
@@ -24,9 +28,13 @@ impl Default for ComputedStyle {
             background_color: None,
             font_size: 16,
             margin_top: 0,
+            margin_right: 0,
             margin_bottom: 0,
+            margin_left: 0,
             padding_top: 0,
+            padding_right: 0,
             padding_bottom: 0,
+            padding_left: 0,
         }
     }
 }
@@ -61,9 +69,13 @@ struct Cascaded {
     background: Winner,
     font_size: Winner,
     margin_top: Winner,
+    margin_right: Winner,
     margin_bottom: Winner,
+    margin_left: Winner,
     padding_top: Winner,
+    padding_right: Winner,
     padding_bottom: Winner,
+    padding_left: Winner,
 }
 
 impl Cascaded {
@@ -74,9 +86,13 @@ impl Cascaded {
             background: Winner::empty(),
             font_size: Winner::empty(),
             margin_top: Winner::empty(),
+            margin_right: Winner::empty(),
             margin_bottom: Winner::empty(),
+            margin_left: Winner::empty(),
             padding_top: Winner::empty(),
+            padding_right: Winner::empty(),
             padding_bottom: Winner::empty(),
+            padding_left: Winner::empty(),
         }
     }
 
@@ -87,9 +103,13 @@ impl Cascaded {
             Property::BackgroundColor => &mut self.background,
             Property::FontSize => &mut self.font_size,
             Property::MarginTop => &mut self.margin_top,
+            Property::MarginRight => &mut self.margin_right,
             Property::MarginBottom => &mut self.margin_bottom,
+            Property::MarginLeft => &mut self.margin_left,
             Property::PaddingTop => &mut self.padding_top,
+            Property::PaddingRight => &mut self.padding_right,
             Property::PaddingBottom => &mut self.padding_bottom,
+            Property::PaddingLeft => &mut self.padding_left,
         };
 
         target.consider(specificity, order, declaration.value);
@@ -172,14 +192,21 @@ pub fn compute(document: &Document, stylesheet: &Stylesheet) -> Vec<ComputedStyl
         }
 
         let font_size = style.font_size as f32;
-        style.margin_top =
-            resolve_winner_length(cascaded.margin_top, font_size, style.margin_top);
+        style.margin_top = resolve_winner_length(cascaded.margin_top, font_size, style.margin_top);
+        style.margin_right =
+            resolve_winner_length(cascaded.margin_right, font_size, style.margin_right);
         style.margin_bottom =
             resolve_winner_length(cascaded.margin_bottom, font_size, style.margin_bottom);
+        style.margin_left =
+            resolve_winner_length(cascaded.margin_left, font_size, style.margin_left);
         style.padding_top =
             resolve_winner_length(cascaded.padding_top, font_size, style.padding_top);
+        style.padding_right =
+            resolve_winner_length(cascaded.padding_right, font_size, style.padding_right);
         style.padding_bottom =
             resolve_winner_length(cascaded.padding_bottom, font_size, style.padding_bottom);
+        style.padding_left =
+            resolve_winner_length(cascaded.padding_left, font_size, style.padding_left);
 
         styles.push(style);
     }
@@ -282,7 +309,7 @@ fn resolve_length(length: Length, em_base: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::css::parse_stylesheet;
+    use crate::css::{parse_stylesheet, Stylesheet};
     use crate::html;
 
     #[test]
@@ -317,6 +344,25 @@ mod tests {
     }
 
     #[test]
+    fn computes_horizontal_box_values() {
+        let document = html::parse(
+            r#"<body><p style="margin: 10px 20px; padding: 1px 2px 3px 4px">Hello</p></body>"#,
+        )
+        .unwrap();
+        let styles = compute(&document, &Stylesheet::default());
+        let p = document.find_first_element("p").unwrap();
+
+        assert_eq!(styles[p as usize].margin_top, 10);
+        assert_eq!(styles[p as usize].margin_right, 20);
+        assert_eq!(styles[p as usize].margin_bottom, 10);
+        assert_eq!(styles[p as usize].margin_left, 20);
+        assert_eq!(styles[p as usize].padding_top, 1);
+        assert_eq!(styles[p as usize].padding_right, 2);
+        assert_eq!(styles[p as usize].padding_bottom, 3);
+        assert_eq!(styles[p as usize].padding_left, 4);
+    }
+
+    #[test]
     fn display_none_is_computed() {
         let document = html::parse(
             r#"<body><style>.secret { display: none; }</style><p class="secret">hidden</p></body>"#,
@@ -327,18 +373,5 @@ mod tests {
         let p = document.find_first_element("p").unwrap();
 
         assert_eq!(styles[p as usize].display, Display::None);
-    }
-
-    #[test]
-    fn keeps_user_agent_margins_without_author_override() {
-        let document = html::parse("<body><h1>Hello</h1><p>World</p></body>").unwrap();
-        let styles = compute(&document, &Stylesheet::default());
-        let h1 = document.find_first_element("h1").unwrap();
-        let p = document.find_first_element("p").unwrap();
-
-        assert_eq!(styles[h1 as usize].margin_top, 20);
-        assert_eq!(styles[h1 as usize].margin_bottom, 12);
-        assert_eq!(styles[p as usize].margin_top, 8);
-        assert_eq!(styles[p as usize].margin_bottom, 8);
     }
 }

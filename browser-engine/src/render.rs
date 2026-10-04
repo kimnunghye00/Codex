@@ -1,5 +1,5 @@
-use crate::css::Display;
-use crate::dom::{Document, NodeId, NodeKind};
+use crate::dom::Document;
+use crate::layout::{LayoutTree, Rect};
 use crate::style::ComputedStyle;
 use font8x8::{UnicodeFonts, BASIC_FONTS};
 use minifb::{Key, Window, WindowOptions};
@@ -12,15 +12,18 @@ const FOREGROUND: u32 = 0x181818;
 const MUTED: u32 = 0x555555;
 const LEFT: usize = 24;
 const TOP: usize = 22;
-const CONTENT_WIDTH: usize = WIDTH - LEFT * 2;
+const PAGE_TOP: usize = 80;
+
+pub const PAGE_WIDTH: u32 = (WIDTH - LEFT * 2) as u32;
 
 pub fn show(
     url: &str,
     document: &Document,
     styles: &[ComputedStyle],
+    layout: &LayoutTree,
 ) -> Result<(), Box<dyn Error>> {
     let mut window = Window::new(
-        "browser-core 0.3 — CSS style engine",
+        "browser-core 0.4 — layout engine",
         WIDTH,
         HEIGHT,
         WindowOptions::default(),
@@ -38,7 +41,7 @@ pub fn show(
         &mut buffer,
         LEFT,
         TOP,
-        "browser-core 0.3",
+        "browser-core 0.4",
         FOREGROUND,
         2,
     );
@@ -51,14 +54,35 @@ pub fn show(
         1,
     );
 
-    let content_top = TOP + 58;
-    render_document(
-        &mut buffer,
-        document,
-        styles,
-        body.unwrap_or(document.root()),
-        content_top,
-    );
+    for layout_box in layout.boxes.iter().flatten() {
+        let Some(style) = styles.get(layout_box.node as usize) else {
+            continue;
+        };
+        let Some(color) = style.background_color else {
+            continue;
+        };
+
+        fill_rect(&mut buffer, offset_rect(layout_box.rect), color);
+    }
+
+    for fragment in &layout.fragments {
+        let style = styles
+            .get(fragment.node as usize)
+            .copied()
+            .unwrap_or_default();
+        let scale = font_scale(style.font_size);
+        let screen_x = LEFT.saturating_add(fragment.rect.x as usize);
+        let screen_y = PAGE_TOP.saturating_add(fragment.rect.y as usize);
+
+        draw_text_line(
+            &mut buffer,
+            screen_x,
+            screen_y,
+            &ascii_safe(&fragment.text),
+            style.color,
+            scale,
+        );
+    }
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
         window.update_with_buffer(&buffer, WIDTH, HEIGHT)?;
@@ -67,155 +91,31 @@ pub fn show(
     Ok(())
 }
 
-fn render_document(
-    buffer: &mut [u32],
-    document: &Document,
-    styles: &[ComputedStyle],
-    root: NodeId,
-    start_y: usize,
-) {
-    let mut cursor = Cursor {
-        x: LEFT,
-        y: start_y,
-        line_height: 20,
-    };
-    let mut stack: Vec<(NodeId, bool)> = Vec::with_capacity(64);
-
-    let mut children = Vec::new();
-    if let Some(child) = document.first_child(root) {
-        collect_siblings(document, child, &mut children);
-        for id in children.drain(..).rev() {
-            stack.push((id, false));
-        }
-    }
-
-    while let Some((id, leaving)) = stack.pop() {
-        if cursor.y >= HEIGHT.saturating_sub(16) {
-            break;
-        }
-
-        let Some(node) = document.node(id) else {
-            continue;
-        };
-        let style = styles.get(id as usize).copied().unwrap_or_default();
-
-        if style.display == Display::None {
-            continue;
-        }
-
-        if leaving {
-            if style.display == Display::Block {
-                finish_line(&mut cursor);
-                cursor.y = cursor
-                    .y
-                    .saturating_add(style.padding_bottom as usize)
-                    .saturating_add(style.margin_bottom as usize);
-            }
-            continue;
-        }
-
-        match node.kind() {
-            NodeKind::Document => {}
-            NodeKind::Text(text) => {
-                draw_flow_text(buffer, &mut cursor, &ascii_safe(text), style);
-            }
-            NodeKind::Element(_) => {
-                if style.display == Display::Block {
-                    finish_line(&mut cursor);
-                    cursor.y = cursor
-                        .y
-                        .saturating_add(style.margin_top as usize)
-                        .saturating_add(style.padding_top as usize);
-                }
-
-                stack.push((id, true));
-
-                if let Some(child) = document.first_child(id) {
-                    collect_siblings(document, child, &mut children);
-                    for child_id in children.drain(..).rev() {
-                        stack.push((child_id, false));
-                    }
-                }
-            }
-        }
+fn offset_rect(rect: Rect) -> Rect {
+    Rect {
+        x: rect.x.saturating_add(LEFT as u32),
+        y: rect.y.saturating_add(PAGE_TOP as u32),
+        width: rect.width,
+        height: rect.height,
     }
 }
 
-fn collect_siblings(document: &Document, first: NodeId, output: &mut Vec<NodeId>) {
-    output.clear();
-    let mut current = Some(first);
+fn fill_rect(buffer: &mut [u32], rect: Rect, color: u32) {
+    let left = (rect.x as usize).min(WIDTH);
+    let top = (rect.y as usize).min(HEIGHT);
+    let right = (rect.right() as usize).min(WIDTH);
+    let bottom = (rect.bottom() as usize).min(HEIGHT);
 
-    while let Some(id) = current {
-        output.push(id);
-        current = document.next_sibling(id);
+    for y in top..bottom {
+        let row = y * WIDTH;
+        for x in left..right {
+            buffer[row + x] = color;
+        }
     }
-}
-
-#[derive(Debug)]
-struct Cursor {
-    x: usize,
-    y: usize,
-    line_height: usize,
-}
-
-fn draw_flow_text(
-    buffer: &mut [u32],
-    cursor: &mut Cursor,
-    text: &str,
-    style: ComputedStyle,
-) {
-    let scale = font_scale(style.font_size);
-    let glyph_width = 8 * scale;
-    let glyph_height = 8 * scale;
-    cursor.line_height = cursor.line_height.max(glyph_height + 6);
-
-    let mut previous_space = cursor.x == LEFT;
-
-    for ch in text.chars() {
-        if ch.is_whitespace() {
-            previous_space = true;
-            continue;
-        }
-
-        if previous_space && cursor.x > LEFT {
-            if cursor.x + glyph_width > LEFT + CONTENT_WIDTH {
-                finish_line(cursor);
-            } else {
-                cursor.x += glyph_width;
-            }
-        }
-
-        if cursor.x + glyph_width > LEFT + CONTENT_WIDTH {
-            finish_line(cursor);
-        }
-
-        if cursor.y + glyph_height >= HEIGHT {
-            return;
-        }
-
-        draw_char(
-            buffer,
-            cursor.x,
-            cursor.y,
-            ch,
-            style.color,
-            scale,
-        );
-        cursor.x += glyph_width;
-        previous_space = false;
-    }
-}
-
-fn finish_line(cursor: &mut Cursor) {
-    if cursor.x != LEFT {
-        cursor.y = cursor.y.saturating_add(cursor.line_height);
-    }
-    cursor.x = LEFT;
-    cursor.line_height = 20;
 }
 
 fn font_scale(font_size: u16) -> usize {
-    ((font_size as usize + 7) / 8).clamp(1, 6)
+    (((font_size as usize) + 7) / 8).clamp(1, 6)
 }
 
 fn draw_text_line(

@@ -1,17 +1,15 @@
-# browser-core 0.3
+# browser-core 0.4
 
 A browser-engine prototype built without Chromium, WebView2, or Firefox.
 
-## Milestone 0.3: our own CSS + style engine
+## Milestone 0.4: our own layout engine
 
-Version 0.3 keeps the compact DOM from 0.2 and adds an author CSS parser plus computed-style pass.
+Version 0.4 separates page geometry from painting. The renderer no longer decides where text goes while drawing it. A dedicated layout pass first converts styled DOM nodes into boxes and text fragments with fixed coordinates.
 
 Current flow:
 
 ```text
 HTTPS URL
-   ↓
-TCP + TLS
    ↓
 our HTTP/1.1 parser
    ↓
@@ -23,91 +21,84 @@ our CSS parser
    ↓
 computed-style array
    ↓
-style-aware text renderer
+our Layout Tree
+   ↓
+our pixel renderer
 ```
 
-## Supported CSS in 0.3
+## Layout model in 0.4
 
-Selectors:
+Each laid-out element can now have:
 
-- element selectors such as `p` and `h1`
-- class selectors such as `.note`
-- id selectors such as `#hero`
-- compact combinations such as `p.note#hero`
-- comma-separated selector groups
+- x / y
+- width / height
+- content rectangle
+- block or inline participation
+- vertical and horizontal margin
+- vertical and horizontal padding
+- background rectangle
 
-Properties:
+Text is converted into bounded text fragments before rendering. Wrapping happens during layout rather than during painting.
 
-- `display: none | inline | block`
-- `color`
-- `background` / `background-color`
-- `font-size`
-- `margin-top`
-- `margin-bottom`
-- `padding-top`
-- `padding-bottom`
+The renderer consumes those precomputed rectangles and does not walk the DOM to decide geometry.
 
-Lengths:
+## CSS box improvements
 
-- `px`
-- `em`
-- `rem`
+0.4 adds:
 
-Colors:
+- `margin-left`
+- `margin-right`
+- `padding-left`
+- `padding-right`
+- 1-4 value `margin` shorthand
+- 1-4 value `padding` shorthand
 
-- `#rgb`
-- `#rrggbb`
-- a small built-in set of named colors
+For example:
 
-Inline `style="..."` declarations are also supported and win over stylesheet rules.
+```css
+.card {
+  margin: 10px 20px;
+  padding: 8px 16px;
+  background-color: #eeeeee;
+}
+```
 
-## Cascade implemented
+now changes the actual box and content width.
 
-The engine now handles:
+## Memory and security design
 
-- selector specificity
-- source order
-- inherited text color
-- inherited font size
-- browser default styles for headings, paragraphs, and block elements
-- `display:none` suppression
+The layout result is stored in compact arrays indexed by the same 32-bit DOM NodeId values.
 
-The style engine stores one fixed-size `ComputedStyle` entry per DOM node instead of copying the DOM.
+Safety limits now include:
 
-## Memory / security limits
+- maximum layout recursion depth: 256
+- maximum generated text fragments: 200,000
+- saturating coordinate arithmetic
+- zero-width viewport rejection
+- `display:none` subtrees excluded before fragment generation
 
-Existing protections remain:
+Existing network, DOM, and CSS limits remain in place.
 
-- HTTPS only
-- certificate verification enabled
-- 2 MiB HTTP response limit
-- 10-second socket timeout
-- maximum 100,000 DOM nodes
-- maximum DOM depth of 1,024
-- maximum 256 HTML attributes per element
+## Current limitations
 
-New CSS limits:
+This is intentionally a small block/inline formatting model, not the full CSS formatting specification.
 
-- maximum 256 KiB embedded CSS
-- maximum 4,096 CSS rules
-- maximum 64 selectors per rule
-- maximum 128 declarations per rule
-- maximum 4 KiB inline style attribute
+Not implemented yet:
 
-Unsupported complex selectors are ignored rather than partially interpreted.
+- margin collapsing
+- borders
+- explicit CSS width / height
+- floats
+- absolute / fixed positioning
+- flexbox
+- grid
+- tables as a special layout algorithm
+- scrolling
+- images
+- external stylesheets
+- JavaScript
 
-## Renderer status
-
-The renderer now reacts to computed styles:
-
-- text color
-- font size
-- body background color
-- block/inline flow
-- vertical margins and padding
-- `display:none`
-
-This is still deliberately not a full box-layout engine. Exact widths, horizontal margins/padding, borders, flexbox, grid, positioning, and external stylesheets come later.
+Inline backgrounds use the bounding rectangle of their current laid-out contents rather than the full CSS inline-fragment painting rules.
 
 ## Run on Windows
 
@@ -120,4 +111,4 @@ Press **Esc** to close.
 
 ## Next milestone
 
-0.4 should be the first real layout engine: block boxes, inline text boxes, width calculation, horizontal padding/margins, backgrounds tied to actual boxes, and viewport-aware layout.
+0.5 should make pages interactive: links with hit-testing, URL resolution, navigation, redirect handling, and back/forward history.

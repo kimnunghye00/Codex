@@ -1,6 +1,7 @@
 mod css;
 mod dom;
 mod html;
+mod layout;
 mod net;
 mod render;
 mod style;
@@ -11,7 +12,7 @@ const DEFAULT_URL: &str = "https://example.com";
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Cryptography is intentionally delegated to a maintained TLS library.
-    // HTTP, HTML parsing, DOM construction, CSS, styling, and rendering are ours.
+    // HTTP, HTML, DOM, CSS, style, layout, and rendering are ours.
     let _ = rustls::crypto::ring::default_provider().install_default();
 
     let target = std::env::args()
@@ -38,7 +39,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
 
     let styles = style::compute(&document, &stylesheet);
-    render::show(&target, &document, &styles)?;
+    let layout = layout::build(&document, &styles, render::PAGE_WIDTH)?;
+    println!(
+        "[browser-core] layout produced {} text fragments across {}px",
+        layout.fragments.len(),
+        layout.content_height
+    );
 
+    render::show(&target, &document, &styles, &layout)?;
     Ok(())
 }
