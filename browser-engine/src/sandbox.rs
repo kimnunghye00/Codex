@@ -353,7 +353,7 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
             let label = TOKEN_MANDATORY_LABEL {
                 Label: SID_AND_ATTRIBUTES {
                     Sid: low_sid,
-                    Attributes: SE_GROUP_INTEGRITY,
+                    Attributes: SE_GROUP_INTEGRITY as u32,
                 },
             };
 
