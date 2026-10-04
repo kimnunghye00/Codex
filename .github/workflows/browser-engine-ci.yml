@@ -1,0 +1,32 @@
+name: Browser Engine CI
+
+on:
+  push:
+    branches:
+      - browser-engine
+    paths:
+      - "browser-engine/**"
+      - ".github/workflows/browser-engine-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: browser-engine
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Check
+        run: cargo check
+
+      - name: Test
+        run: cargo test

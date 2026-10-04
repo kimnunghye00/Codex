@@ -1,0 +1,13 @@
+[package]
+name = "browser-core"
+version = "0.1.0"
+edition = "2021"
+description = "A tiny browser engine prototype focused on low memory use and a minimal attack surface."
+license = "MIT"
+
+[dependencies]
+font8x8 = "0.3.1"
+minifb = "0.28"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+url = "2.5"
+webpki-roots = "1"
