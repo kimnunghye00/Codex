@@ -44,8 +44,12 @@ pub fn render_page(
     let scan = match ipc::read_scan(&mut stdout) {
         Ok(scan) => scan,
         Err(error) => {
-            child.kill();
-            return Err(error.into());
+            drop(stdin);
+            let process_result = child.wait_success();
+            return Err(format!(
+                "renderer failed before SCAN: {error}; process result: {process_result:?}"
+            )
+            .into());
         }
     };
 
@@ -58,8 +62,12 @@ pub fn render_page(
     let packet = match ipc::read_render(&mut stdout) {
         Ok(packet) => packet,
         Err(error) => {
-            child.kill();
-            return Err(error.into());
+            drop(stdin);
+            let process_result = child.wait_success();
+            return Err(format!(
+                "renderer failed before RNDR: {error}; process result: {process_result:?}"
+            )
+            .into());
         }
     };
 
