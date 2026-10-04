@@ -97,11 +97,11 @@ impl Cascaded {
 }
 
 pub fn compute(document: &Document, stylesheet: &Stylesheet) -> Vec<ComputedStyle> {
-    let mut styles = Vec::with_capacity(document.len());
+    let mut styles: Vec<ComputedStyle> = Vec::with_capacity(document.len());
 
     for index in 0..document.len() {
         let id = index as NodeId;
-        let parent_style = document
+        let parent_style: ComputedStyle = document
             .node(id)
             .and_then(|node| node.parent())
             .and_then(|parent| styles.get(parent as usize))
@@ -146,7 +146,9 @@ pub fn compute(document: &Document, stylesheet: &Stylesheet) -> Vec<ComputedStyl
                     cascaded.apply(
                         declaration,
                         INLINE_SPECIFICITY,
-                        u32::MAX.saturating_sub(1024).saturating_add(offset as u32),
+                        u32::MAX
+                            .saturating_sub(1024)
+                            .saturating_add(offset as u32),
                     );
                 }
             }
@@ -170,10 +172,14 @@ pub fn compute(document: &Document, stylesheet: &Stylesheet) -> Vec<ComputedStyl
         }
 
         let font_size = style.font_size as f32;
-        style.margin_top = resolve_winner_length(cascaded.margin_top, font_size);
-        style.margin_bottom = resolve_winner_length(cascaded.margin_bottom, font_size);
-        style.padding_top = resolve_winner_length(cascaded.padding_top, font_size);
-        style.padding_bottom = resolve_winner_length(cascaded.padding_bottom, font_size);
+        style.margin_top =
+            resolve_winner_length(cascaded.margin_top, font_size, style.margin_top);
+        style.margin_bottom =
+            resolve_winner_length(cascaded.margin_bottom, font_size, style.margin_bottom);
+        style.padding_top =
+            resolve_winner_length(cascaded.padding_top, font_size, style.padding_top);
+        style.padding_bottom =
+            resolve_winner_length(cascaded.padding_bottom, font_size, style.padding_bottom);
 
         styles.push(style);
     }
@@ -256,10 +262,12 @@ fn default_display(tag: &str) -> Display {
     }
 }
 
-fn resolve_winner_length(winner: Winner, em_base: f32) -> u16 {
+fn resolve_winner_length(winner: Winner, em_base: f32, default: u16) -> u16 {
     match winner.value {
-        Some(Value::Length(length)) => resolve_length(length, em_base).round().clamp(0.0, 512.0) as u16,
-        _ => 0,
+        Some(Value::Length(length)) => {
+            resolve_length(length, em_base).round().clamp(0.0, 512.0) as u16
+        }
+        _ => default,
     }
 }
 
@@ -319,5 +327,18 @@ mod tests {
         let p = document.find_first_element("p").unwrap();
 
         assert_eq!(styles[p as usize].display, Display::None);
+    }
+
+    #[test]
+    fn keeps_user_agent_margins_without_author_override() {
+        let document = html::parse("<body><h1>Hello</h1><p>World</p></body>").unwrap();
+        let styles = compute(&document, &Stylesheet::default());
+        let h1 = document.find_first_element("h1").unwrap();
+        let p = document.find_first_element("p").unwrap();
+
+        assert_eq!(styles[h1 as usize].margin_top, 20);
+        assert_eq!(styles[h1 as usize].margin_bottom, 12);
+        assert_eq!(styles[p as usize].margin_top, 8);
+        assert_eq!(styles[p as usize].margin_bottom, 8);
     }
 }
