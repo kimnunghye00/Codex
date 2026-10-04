@@ -1,6 +1,6 @@
 [package]
 name = "browser-core"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2021"
 description = "A tiny browser engine prototype focused on low memory use and a minimal attack surface."
 license = "MIT"
@@ -12,3 +12,10 @@ minifb = "0.28"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 url = "2.5"
 webpki-roots = "1"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_JobObjects",
+] }

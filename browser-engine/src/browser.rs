@@ -1,16 +1,12 @@
-use crate::dom::{Document, NodeId, NodeKind};
 use crate::history::History;
-use crate::resources::ResourceSet;
-use crate::{html, layout, net, render, resources, style};
+use crate::ipc::RenderPacket;
+use crate::{net, render, renderer_process};
 use minifb::{Key, KeyRepeat, MouseButton, MouseMode};
 use std::error::Error;
 
 struct Page {
     url: String,
-    document: Document,
-    styles: Vec<style::ComputedStyle>,
-    layout: layout::LayoutTree,
-    resources: ResourceSet,
+    packet: RenderPacket,
 }
 
 pub fn run(start_url: &str) -> Result<(), Box<dyn Error>> {
@@ -91,7 +87,7 @@ pub fn run(start_url: &str) -> Result<(), Box<dyn Error>> {
                         mouse_x as u32,
                         mouse_y as u32,
                         scroll_y,
-                        &page.layout,
+                        &page.packet,
                     ) {
                         render::NavigationHit::Back => {
                             address_focused = false;
@@ -108,9 +104,15 @@ pub fn run(start_url: &str) -> Result<(), Box<dyn Error>> {
                             status = None;
                             needs_repaint = true;
                         }
-                        render::NavigationHit::Link(node) => {
+                        render::NavigationHit::Link(href) => {
                             address_focused = false;
-                            command = Command::Link(node);
+                            match net::resolve_https_url(&page.url, &href) {
+                                Ok(target) => command = Command::Address(target),
+                                Err(error) => {
+                                    status = Some(format!("Link blocked: {error}"));
+                                    needs_repaint = true;
+                                }
+                            }
                         }
                         render::NavigationHit::None => {
                             if address_focused {
@@ -168,7 +170,7 @@ pub fn run(start_url: &str) -> Result<(), Box<dyn Error>> {
             }
         } else {
             let max_scroll = page
-                .layout
+                .packet
                 .content_height
                 .saturating_sub(render::PAGE_VIEW_HEIGHT);
 
@@ -263,23 +265,6 @@ pub fn run(start_url: &str) -> Result<(), Box<dyn Error>> {
                     false
                 }
             }
-            Command::Link(node) => {
-                if let Some(target) = resolve_link(&page, node) {
-                    match load_page(&target) {
-                        Ok(next) => {
-                            history.push(next.url.clone());
-                            page = next;
-                            true
-                        }
-                        Err(error) => {
-                            status = Some(format!("Link blocked/failed: {error}"));
-                            false
-                        }
-                    }
-                } else {
-                    false
-                }
-            }
             Command::Address(target) => match load_page(&target) {
                 Ok(next) => {
                     history.push(next.url.clone());
@@ -299,7 +284,7 @@ pub fn run(start_url: &str) -> Result<(), Box<dyn Error>> {
             address_focused = false;
             replace_address_on_type = false;
             status = None;
-            window.set_title(&format!("browser-core 0.6 — {}", page.url));
+            window.set_title(&format!("browser-core 0.7 — {}", page.url));
             needs_repaint = true;
         }
 
@@ -332,22 +317,19 @@ fn repaint(
         address_focused,
         status,
         scroll_y,
-        &page.document,
-        &page.styles,
-        &page.layout,
-        &page.resources,
+        &page.packet,
         history.can_back(),
         history.can_forward(),
     )
 }
 
 fn load_page(target: &str) -> Result<Page, Box<dyn Error>> {
-    println!("[browser-core] GET {target}");
+    println!("[browser-core] broker GET {target}");
 
     let response = net::fetch_https(target)?;
 
     println!(
-        "[browser-core] HTTP {} | {} bytes | final {}",
+        "[browser-core] broker HTTP {} | {} bytes | final {}",
         response.status,
         response.body.len(),
         response.final_url
@@ -357,50 +339,24 @@ fn load_page(target: &str) -> Result<Page, Box<dyn Error>> {
         return Err(format!("HTTP status {}", response.status).into());
     }
 
-    let source = String::from_utf8_lossy(&response.body);
-    let document = html::parse(&source)?;
-    let stylesheet = resources::load_stylesheets(&document, &response.final_url)?;
-    let images = resources::load_images(&document, &response.final_url);
-    let styles = style::compute(&document, &stylesheet);
-    let layout = layout::build(&document, &styles, &images, render::PAGE_WIDTH)?;
+    let packet = renderer_process::render_page(
+        &response.final_url,
+        &response.body,
+        render::PAGE_WIDTH,
+    )?;
 
     println!(
-        "[browser-core] DOM {} nodes | CSS {} rules | images {} | text fragments {} | height {}px",
-        document.len(),
-        stylesheet.rules.len(),
-        images.image_count(),
-        layout.fragments.len(),
-        layout.content_height
+        "[browser-core] renderer packet: {} rects | {} texts | {} images | {}px",
+        packet.rects.len(),
+        packet.texts.len(),
+        packet.images.len(),
+        packet.content_height
     );
 
     Ok(Page {
         url: response.final_url,
-        document,
-        styles,
-        layout,
-        resources: images,
+        packet,
     })
-}
-
-fn resolve_link(page: &Page, node: NodeId) -> Option<String> {
-    let node = page.document.node(node)?;
-    let NodeKind::Element(element) = node.kind() else {
-        return None;
-    };
-
-    if element.tag_name() != "a" {
-        return None;
-    }
-
-    let href = element.attribute("href")?;
-
-    match net::resolve_https_url(&page.url, href) {
-        Ok(url) => Some(url),
-        Err(error) => {
-            eprintln!("[browser-core] blocked link {href:?}: {error}");
-            None
-        }
-    }
 }
 
 fn clamp_scroll(value: i64, max: u32) -> u32 {
@@ -492,6 +448,5 @@ enum Command {
     Reload,
     Back,
     Forward,
-    Link(NodeId),
     Address(String),
 }

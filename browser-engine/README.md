@@ -1,83 +1,109 @@
-# browser-core 0.6
+# browser-core 0.7
 
 A browser-engine prototype built without Chromium, WebView2, or Firefox.
 
-## Milestone 0.6: address bar, scrolling, external resources
+## Milestone 0.7: renderer process isolation
 
-Version 0.6 adds practical browsing controls while keeping hard resource ceilings.
+Version 0.7 moves untrusted document processing out of the long-lived browser UI/network process.
 
-### New user-visible features
+The browser now has two roles:
 
-- editable address bar
-- click the address bar or press Ctrl+L
-- bare domains such as example.com are normalized to HTTPS
-- Enter navigates
-- mouse-wheel scrolling
-- Up / Down, PageUp / PageDown, Home / End scrolling
-- external link rel="stylesheet" stylesheets
-- PNG and JPEG img resources
-- image layout and painting
-- linked images participate in hit testing
+\`\`\`text
+Privileged browser broker
+  - HTTPS / certificate validation
+  - redirects
+  - resource byte budgets
+  - address bar / history / window
+  - fetches main document and approved HTTPS subresources
+             |
+             | bounded binary IPC
+             v
+Ephemeral renderer worker
+  - HTML parser / DOM
+  - CSS parser / style engine
+  - PNG/JPEG decoding
+  - layout
+  - creates a flat RenderPacket
+             |
+             v
+worker exits
+\`\`\`
 
-### HTTPS-only navigation remains enforced
+The broker keeps only the final paint data needed for the current page: rectangles, text fragments, decoded image pixels, link targets, background, and content height. It no longer retains the page DOM, stylesheet, or layout tree after a load finishes.
 
-The address bar, links, redirects, external CSS, and image resources all use the same HTTPS-only URL policy.
+## Windows containment
 
-Blocked schemes include HTTP, javascript, data, file, and any other non-HTTPS scheme. URLs containing embedded usernames or passwords are also rejected.
+Before the broker sends any untrusted document bytes, the worker is assigned to a Windows Job Object.
 
-## Resource budgets
+Current enforced limits:
 
-External CSS:
+- one active process in the renderer job
+- 192 MiB process committed-memory cap
+- 10 seconds of user-mode CPU time per renderer process
+- kill the renderer when its Job Object closes
+- terminate on unhandled exceptions without crash-dialog interaction
+- block access to USER handles owned by other processes
+- block clipboard read/write
+- block display-settings changes
+- block system-parameter changes
+- isolate global atoms
+- block desktop creation/switching
+- block ExitWindows calls
 
-- at most 8 external stylesheets per page
-- 128 KiB per stylesheet
-- 512 KiB total external CSS
-- combined CSS rule cap remains enforced
+The worker starts by blocking on stdin. Job Object limits are attached before the broker writes HTML into the IPC channel.
 
-Images:
+## Narrow IPC protocol
 
-- PNG and JPEG only
-- at most 12 decoded images per page
-- 1 MiB encoded size per image
-- 6 MiB total encoded image budget
-- maximum dimension: 2048 px
-- maximum 2,000,000 pixels per image
-- maximum 12 MiB decoded image-pixel budget per page
+The renderer cannot request arbitrary broker operations.
 
-Image dimensions are inspected before full decoding. Decoder panics are contained so malformed image input does not terminate the whole browser process in this prototype.
+The protocol has four bounded stages:
 
-## Memory design
+1. LOAD: base URL, viewport width, and at most 2 MiB of HTML.
+2. SCAN: up to 8 stylesheet references and 12 image references.
+3. RSRC: broker-fetched HTTPS CSS/image bytes within the existing resource budgets.
+4. RNDR: bounded flat paint data.
 
-Only the current page retains its DOM, computed styles, Layout Tree, decoded images, and external CSS.
+Every IPC vector/string/byte field has count or size validation before allocation.
 
-Back/forward history still retains URLs only, so old page resources are dropped on navigation.
+Link clicks are returned as raw href strings. The privileged broker resolves and re-validates them with the HTTPS-only URL policy before navigation.
 
-The renderer only paints the visible scroll viewport even though layout coordinates cover the full document.
+## Memory behavior
 
-## Controls
+The renderer is intentionally ephemeral.
 
-- Ctrl+L: focus/select address
-- Enter: navigate
-- Esc: leave address editing; Esc again closes
-- Alt+Left / Alt+Right: back / forward
-- F5: reload
-- mouse wheel: scroll
-- PageUp / PageDown
-- Home / End
-- Up / Down
+During page loading there are two processes, but after layout/painting data is produced the renderer exits and releases its DOM, CSS parser, style engine, layout tree, encoded resources, and temporary decode buffers.
 
-## Still intentionally missing
+The long-lived browser process retains only:
 
-- JavaScript
-- forms/input controls inside web pages
-- cookies
-- persistent storage
-- web fonts
-- SVG
-- GIF/WebP image decoding
-- CSS imports
-- complex CSS selectors
-- flexbox/grid
-- decoder process isolation
+- current URL
+- URL-only back/forward history
+- flat render rectangles/text
+- current decoded image pixels
+- the fixed-size window framebuffer
 
-The next security-focused milestone should split risky content handling away from the privileged browser UI, beginning with a renderer/resource sandbox and a narrow IPC boundary.
+This is designed to keep inactive parser state out of steady-state memory.
+
+## Important security boundary
+
+0.7 is stronger process containment, but it is **not yet a complete browser sandbox**.
+
+Windows Job Objects provide resource/process/UI restrictions, but this milestone does not yet create a restricted security token or AppContainer. Therefore the renderer's operating-system filesystem and network rights are not yet fully removed at the token level.
+
+The intended renderer code path has no network operation: it asks the broker for bounded resources through IPC. OS-enforced denial of renderer network/filesystem access is the next security milestone.
+
+## Existing policies remain
+
+- HTTPS only
+- certificate validation enabled
+- HTTP downgrade redirects blocked
+- javascript/data/file URL schemes blocked
+- embedded-credential URLs blocked
+- no JavaScript execution
+- no cookies
+- no extensions
+- bounded DOM/CSS/layout/image resources
+- URL-only navigation history
+
+## Next milestone
+
+0.8 should harden the renderer identity itself with a restricted Windows token / AppContainer-style capability model, explicitly deny renderer network access, narrow filesystem access, and separate the renderer executable to reduce its linked attack surface.

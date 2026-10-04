@@ -1,14 +1,10 @@
-use crate::dom::Document;
-use crate::layout::{LayoutTree, Rect};
-use crate::resources::ResourceSet;
-use crate::style::ComputedStyle;
+use crate::ipc::{RenderPacket, WireRect};
 use font8x8::{UnicodeFonts, BASIC_FONTS};
 use minifb::{Window, WindowOptions};
 use std::error::Error;
 
 pub const WIDTH: usize = 900;
 pub const HEIGHT: usize = 640;
-const DEFAULT_BACKGROUND: u32 = 0xF7F7F7;
 const FOREGROUND: u32 = 0x181818;
 const LINK: u32 = 0x0000CC;
 const ERROR_TEXT: u32 = 0x9A1A1A;
@@ -18,19 +14,19 @@ pub const PAGE_TOP: usize = 96;
 pub const PAGE_WIDTH: u32 = (WIDTH - LEFT * 2) as u32;
 pub const PAGE_VIEW_HEIGHT: u32 = (HEIGHT - PAGE_TOP) as u32;
 
-const BACK_RECT: Rect = Rect {
+const BACK_RECT: WireRect = WireRect {
     x: 24,
     y: 46,
     width: 28,
     height: 26,
 };
-const FORWARD_RECT: Rect = Rect {
+const FORWARD_RECT: WireRect = WireRect {
     x: 58,
     y: 46,
     width: 28,
     height: 26,
 };
-pub const ADDRESS_RECT: Rect = Rect {
+pub const ADDRESS_RECT: WireRect = WireRect {
     x: 98,
     y: 44,
     width: 778,
@@ -39,7 +35,7 @@ pub const ADDRESS_RECT: Rect = Rect {
 
 pub fn create_window() -> Result<Window, Box<dyn Error>> {
     let mut window = Window::new(
-        "browser-core 0.6 — address bar, resources, scrolling",
+        "browser-core 0.7 — isolated renderer",
         WIDTH,
         HEIGHT,
         WindowOptions::default(),
@@ -55,24 +51,15 @@ pub fn paint(
     address_focused: bool,
     status: Option<&str>,
     scroll_y: u32,
-    document: &Document,
-    styles: &[ComputedStyle],
-    layout: &LayoutTree,
-    resources: &ResourceSet,
+    packet: &RenderPacket,
     can_back: bool,
     can_forward: bool,
 ) -> Vec<u32> {
-    let body = document.find_first_element("body");
-    let page_background = body
-        .and_then(|id| styles.get(id as usize))
-        .and_then(|style| style.background_color)
-        .unwrap_or(DEFAULT_BACKGROUND);
-
-    let mut buffer = vec![page_background; WIDTH * HEIGHT];
+    let mut buffer = vec![packet.page_background; WIDTH * HEIGHT];
 
     fill_rect(
         &mut buffer,
-        Rect {
+        WireRect {
             x: 0,
             y: 0,
             width: WIDTH as u32,
@@ -85,11 +72,10 @@ pub fn paint(
         &mut buffer,
         LEFT,
         TOP,
-        "browser-core 0.6",
+        "browser-core 0.7",
         FOREGROUND,
         2,
     );
-
     draw_nav_button(&mut buffer, BACK_RECT, "<", can_back);
     draw_nav_button(&mut buffer, FORWARD_RECT, ">", can_forward);
     draw_address_bar(
@@ -113,78 +99,55 @@ pub fn paint(
         );
     }
 
-    for layout_box in layout.boxes.iter().flatten() {
-        let Some(style) = styles.get(layout_box.node as usize) else {
-            continue;
-        };
-        let Some(color) = style.background_color else {
-            continue;
-        };
-
-        if let Some(rect) = page_rect_to_screen(layout_box.rect, scroll_y) {
-            fill_rect(&mut buffer, rect, color);
+    for item in &packet.rects {
+        if let Some(rect) = page_rect_to_screen(item.rect, scroll_y) {
+            fill_rect(&mut buffer, rect, item.color);
         }
     }
 
-    for image_fragment in &layout.images {
-        let Some(image) = resources.image(image_fragment.node) else {
-            continue;
-        };
-        let Some(rect) = page_rect_to_screen(image_fragment.rect, scroll_y) else {
-            continue;
-        };
-
-        draw_image(
-            &mut buffer,
-            rect,
-            image.width,
-            image.height,
-            &image.pixels,
-        );
+    for image in &packet.images {
+        draw_image_fragment(&mut buffer, image, scroll_y);
     }
 
-    for fragment in &layout.fragments {
-        let style = styles
-            .get(fragment.node as usize)
-            .copied()
-            .unwrap_or_default();
-        let scale = font_scale(style.font_size);
-        let top = PAGE_TOP as i64 + fragment.rect.y as i64 - scroll_y as i64;
-        let bottom = top.saturating_add(fragment.rect.height as i64);
+    for text in &packet.texts {
+        let top = PAGE_TOP as i64 + text.rect.y as i64 - scroll_y as i64;
+        let bottom = top.saturating_add(text.rect.height as i64);
 
         if bottom <= PAGE_TOP as i64 || top >= HEIGHT as i64 {
             continue;
         }
 
-        let screen_x = LEFT.saturating_add(fragment.rect.x as usize);
+        let screen_x = LEFT.saturating_add(text.rect.x as usize);
         let screen_y = top.max(PAGE_TOP as i64) as usize;
-        let color = if fragment.link.is_some() {
+        let scale = font_scale(text.font_size);
+        let color = if text.link_href.is_some() {
             LINK
         } else {
-            style.color
+            text.color
         };
 
         draw_text_line(
             &mut buffer,
             screen_x,
             screen_y,
-            &ascii_safe(&fragment.text),
+            &ascii_safe(&text.text),
             color,
             scale,
         );
 
-        if fragment.link.is_some() {
+        if text.link_href.is_some() {
             let underline_y = (PAGE_TOP as i64
-                + fragment.rect.y as i64
+                + text.rect.y as i64
                 - scroll_y as i64
-                + fragment.rect.height as i64)
+                + text.rect.height as i64)
                 .clamp(PAGE_TOP as i64, HEIGHT.saturating_sub(1) as i64)
                 as usize;
+
             draw_horizontal_line(
                 &mut buffer,
                 screen_x,
                 underline_y,
-                fragment.rect.width as usize,
+                text.rect.width as usize,
                 color,
             );
         }
@@ -197,7 +160,7 @@ pub fn hit_test_navigation(
     x: u32,
     y: u32,
     scroll_y: u32,
-    layout: &LayoutTree,
+    packet: &RenderPacket,
 ) -> NavigationHit {
     if BACK_RECT.contains(x, y) {
         return NavigationHit::Back;
@@ -217,19 +180,133 @@ pub fn hit_test_navigation(
         .saturating_sub(PAGE_TOP as u32)
         .saturating_add(scroll_y);
 
-    layout
-        .hit_test_link(page_x, page_y)
-        .map(NavigationHit::Link)
-        .unwrap_or(NavigationHit::None)
+    if let Some(href) = packet
+        .images
+        .iter()
+        .rev()
+        .find(|item| item.link_href.is_some() && item.rect.contains(page_x, page_y))
+        .and_then(|item| item.link_href.clone())
+    {
+        return NavigationHit::Link(href);
+    }
+
+    if let Some(href) = packet
+        .texts
+        .iter()
+        .rev()
+        .find(|item| item.link_href.is_some() && item.rect.contains(page_x, page_y))
+        .and_then(|item| item.link_href.clone())
+    {
+        return NavigationHit::Link(href);
+    }
+
+    NavigationHit::None
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NavigationHit {
     None,
     Back,
     Forward,
     AddressBar,
-    Link(crate::dom::NodeId),
+    Link(String),
+}
+
+fn draw_image_fragment(
+    buffer: &mut [u32],
+    image: &crate::ipc::PaintImage,
+    scroll_y: u32,
+) {
+    if image.source_width == 0
+        || image.source_height == 0
+        || image.rect.width == 0
+        || image.rect.height == 0
+    {
+        return;
+    }
+
+    let screen_left = LEFT as i64 + image.rect.x as i64;
+    let screen_top = PAGE_TOP as i64 + image.rect.y as i64 - scroll_y as i64;
+    let screen_right = screen_left.saturating_add(image.rect.width as i64);
+    let screen_bottom = screen_top.saturating_add(image.rect.height as i64);
+
+    let left = screen_left.max(0) as usize;
+    let top = screen_top.max(PAGE_TOP as i64) as usize;
+    let right = screen_right.min(WIDTH as i64).max(0) as usize;
+    let bottom = screen_bottom.min(HEIGHT as i64).max(0) as usize;
+
+    if left >= right || top >= bottom {
+        return;
+    }
+
+    for y in top..bottom {
+        let relative_y = (y as i64 - screen_top).max(0) as u64;
+        let src_y = ((relative_y * image.source_height as u64)
+            / image.rect.height as u64)
+            .min(image.source_height.saturating_sub(1) as u64)
+            as u32;
+
+        for x in left..right {
+            let relative_x = (x as i64 - screen_left).max(0) as u64;
+            let src_x = ((relative_x * image.source_width as u64)
+                / image.rect.width as u64)
+                .min(image.source_width.saturating_sub(1) as u64)
+                as u32;
+
+            let source_index =
+                src_y as usize * image.source_width as usize + src_x as usize;
+            let Some(&source) = image.pixels.get(source_index) else {
+                continue;
+            };
+
+            let alpha = (source >> 24) & 0xFF;
+            let rgb = source & 0x00FF_FFFF;
+            let dest_index = y * WIDTH + x;
+
+            if alpha >= 255 {
+                buffer[dest_index] = rgb;
+            } else if alpha > 0 {
+                buffer[dest_index] = blend(buffer[dest_index], rgb, alpha);
+            }
+        }
+    }
+}
+
+fn page_rect_to_screen(rect: WireRect, scroll_y: u32) -> Option<WireRect> {
+    let top = PAGE_TOP as i64 + rect.y as i64 - scroll_y as i64;
+    let bottom = top.saturating_add(rect.height as i64);
+
+    if bottom <= PAGE_TOP as i64 || top >= HEIGHT as i64 {
+        return None;
+    }
+
+    let clipped_top = top.max(PAGE_TOP as i64);
+    let clipped_bottom = bottom.min(HEIGHT as i64);
+
+    Some(WireRect {
+        x: rect.x.saturating_add(LEFT as u32),
+        y: clipped_top as u32,
+        width: rect.width,
+        height: clipped_bottom.saturating_sub(clipped_top) as u32,
+    })
+}
+
+fn blend(background: u32, foreground: u32, alpha: u32) -> u32 {
+    let inv = 255 - alpha;
+
+    let br = (background >> 16) & 0xFF;
+    let bg = (background >> 8) & 0xFF;
+    let bb = background & 0xFF;
+
+    let fr = (foreground >> 16) & 0xFF;
+    let fg = (foreground >> 8) & 0xFF;
+    let fb = foreground & 0xFF;
+
+    let r = (fr * alpha + br * inv) / 255;
+    let g = (fg * alpha + bg * inv) / 255;
+    let b = (fb * alpha + bb * inv) / 255;
+
+    (r << 16) | (g << 8) | b
 }
 
 fn draw_address_bar(buffer: &mut [u32], text: &str, focused: bool) {
@@ -269,87 +346,7 @@ fn draw_address_bar(buffer: &mut [u32], text: &str, focused: bool) {
     }
 }
 
-fn page_rect_to_screen(rect: Rect, scroll_y: u32) -> Option<Rect> {
-    let top = PAGE_TOP as i64 + rect.y as i64 - scroll_y as i64;
-    let bottom = top.saturating_add(rect.height as i64);
-
-    if bottom <= PAGE_TOP as i64 || top >= HEIGHT as i64 {
-        return None;
-    }
-
-    let clipped_top = top.max(PAGE_TOP as i64);
-    let clipped_bottom = bottom.min(HEIGHT as i64);
-
-    Some(Rect {
-        x: rect.x.saturating_add(LEFT as u32),
-        y: clipped_top as u32,
-        width: rect.width,
-        height: clipped_bottom.saturating_sub(clipped_top) as u32,
-    })
-}
-
-fn draw_image(
-    buffer: &mut [u32],
-    rect: Rect,
-    source_width: u32,
-    source_height: u32,
-    pixels: &[u32],
-) {
-    if source_width == 0 || source_height == 0 || rect.width == 0 || rect.height == 0 {
-        return;
-    }
-
-    let left = rect.x as usize;
-    let top = rect.y as usize;
-    let right = rect.right().min(WIDTH as u32) as usize;
-    let bottom = rect.bottom().min(HEIGHT as u32) as usize;
-
-    for y in top..bottom {
-        let relative_y = (y as u32).saturating_sub(rect.y);
-        let src_y = ((relative_y as u64 * source_height as u64) / rect.height as u64)
-            .min(source_height.saturating_sub(1) as u64) as u32;
-
-        for x in left..right {
-            let relative_x = (x as u32).saturating_sub(rect.x);
-            let src_x = ((relative_x as u64 * source_width as u64) / rect.width as u64)
-                .min(source_width.saturating_sub(1) as u64) as u32;
-            let index = src_y as usize * source_width as usize + src_x as usize;
-            let Some(&source) = pixels.get(index) else {
-                continue;
-            };
-
-            let alpha = (source >> 24) & 0xFF;
-            let rgb = source & 0x00FF_FFFF;
-            let dest_index = y * WIDTH + x;
-
-            if alpha >= 255 {
-                buffer[dest_index] = rgb;
-            } else if alpha > 0 {
-                buffer[dest_index] = blend(buffer[dest_index], rgb, alpha);
-            }
-        }
-    }
-}
-
-fn blend(background: u32, foreground: u32, alpha: u32) -> u32 {
-    let inv = 255 - alpha;
-
-    let br = (background >> 16) & 0xFF;
-    let bg = (background >> 8) & 0xFF;
-    let bb = background & 0xFF;
-
-    let fr = (foreground >> 16) & 0xFF;
-    let fg = (foreground >> 8) & 0xFF;
-    let fb = foreground & 0xFF;
-
-    let r = (fr * alpha + br * inv) / 255;
-    let g = (fg * alpha + bg * inv) / 255;
-    let b = (fb * alpha + bb * inv) / 255;
-
-    (r << 16) | (g << 8) | b
-}
-
-fn draw_nav_button(buffer: &mut [u32], rect: Rect, label: &str, enabled: bool) {
+fn draw_nav_button(buffer: &mut [u32], rect: WireRect, label: &str, enabled: bool) {
     let fill = if enabled { 0xE5E5E5 } else { 0xF2F2F2 };
     let text = if enabled { FOREGROUND } else { 0xAAAAAA };
 
@@ -365,7 +362,7 @@ fn draw_nav_button(buffer: &mut [u32], rect: Rect, label: &str, enabled: bool) {
     );
 }
 
-fn fill_rect(buffer: &mut [u32], rect: Rect, color: u32) {
+fn fill_rect(buffer: &mut [u32], rect: WireRect, color: u32) {
     let left = (rect.x as usize).min(WIDTH);
     let top = (rect.y as usize).min(HEIGHT);
     let right = (rect.right() as usize).min(WIDTH);
@@ -379,7 +376,7 @@ fn fill_rect(buffer: &mut [u32], rect: Rect, color: u32) {
     }
 }
 
-fn draw_rect_border(buffer: &mut [u32], rect: Rect, color: u32) {
+fn draw_rect_border(buffer: &mut [u32], rect: WireRect, color: u32) {
     draw_horizontal_line(
         buffer,
         rect.x as usize,
@@ -471,6 +468,7 @@ fn draw_text_line(
 
 fn visible_tail(input: &str, max_chars: usize) -> String {
     let count = input.chars().count();
+
     if count <= max_chars {
         return input.to_string();
     }
