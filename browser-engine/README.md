@@ -1,12 +1,12 @@
-# browser-core 0.2
+# browser-core 0.3
 
 A browser-engine prototype built without Chromium, WebView2, or Firefox.
 
-## Milestone 0.2: our own DOM
+## Milestone 0.3: our own CSS + style engine
 
-The first version only stripped tags. Version 0.2 now parses HTML into an in-memory DOM tree owned by this project.
+Version 0.3 keeps the compact DOM from 0.2 and adds an author CSS parser plus computed-style pass.
 
-Flow:
+Current flow:
 
 ```text
 HTTPS URL
@@ -15,55 +15,99 @@ TCP + TLS
    ↓
 our HTTP/1.1 parser
    ↓
-HTML tokenizer/parser
+our HTML parser
    ↓
 compact DOM arena
    ↓
-visible-text traversal
+our CSS parser
    ↓
-native pixel renderer
+computed-style array
+   ↓
+style-aware text renderer
 ```
 
-## Memory-oriented DOM design
+## Supported CSS in 0.3
 
-The DOM deliberately avoids a tree made from `Rc<RefCell<Node>>` or one heap allocation per node.
+Selectors:
 
-Instead it uses:
+- element selectors such as `p` and `h1`
+- class selectors such as `.note`
+- id selectors such as `#hero`
+- compact combinations such as `p.note#hero`
+- comma-separated selector groups
 
-- one contiguous `Vec<Node>` arena
-- 32-bit `NodeId` values
-- compact parent / first-child / last-child / next-sibling links
-- boxed strings only for actual tag, attribute, and text contents
-- iterative visible-text traversal instead of recursive tree walking
+Properties:
 
-This gives us a clean future path for dropping an entire inactive tab DOM at once.
+- `display: none | inline | block`
+- `color`
+- `background` / `background-color`
+- `font-size`
+- `margin-top`
+- `margin-bottom`
+- `padding-top`
+- `padding-bottom`
 
-## Parser features in 0.2
+Lengths:
 
-- nested element nodes
-- text nodes
-- parent/child/sibling relationships
-- quoted and unquoted attributes
-- HTML comments
-- void elements such as `br`, `img`, `meta`, and `input`
-- raw `script` and `style` contents
-- common named entities
-- decimal and hexadecimal numeric entities
-- basic malformed closing-tag recovery
+- `px`
+- `em`
+- `rem`
 
-## Security / memory limits
+Colors:
+
+- `#rgb`
+- `#rrggbb`
+- a small built-in set of named colors
+
+Inline `style="..."` declarations are also supported and win over stylesheet rules.
+
+## Cascade implemented
+
+The engine now handles:
+
+- selector specificity
+- source order
+- inherited text color
+- inherited font size
+- browser default styles for headings, paragraphs, and block elements
+- `display:none` suppression
+
+The style engine stores one fixed-size `ComputedStyle` entry per DOM node instead of copying the DOM.
+
+## Memory / security limits
+
+Existing protections remain:
 
 - HTTPS only
 - certificate verification enabled
 - 2 MiB HTTP response limit
-- 10-second socket read/write timeout
+- 10-second socket timeout
 - maximum 100,000 DOM nodes
 - maximum DOM depth of 1,024
-- maximum 256 attributes per element
-- no JavaScript execution
-- no cookies
-- no extension system
-- no page access to files, camera, microphone, location, USB, Bluetooth, or clipboard
+- maximum 256 HTML attributes per element
+
+New CSS limits:
+
+- maximum 256 KiB embedded CSS
+- maximum 4,096 CSS rules
+- maximum 64 selectors per rule
+- maximum 128 declarations per rule
+- maximum 4 KiB inline style attribute
+
+Unsupported complex selectors are ignored rather than partially interpreted.
+
+## Renderer status
+
+The renderer now reacts to computed styles:
+
+- text color
+- font size
+- body background color
+- block/inline flow
+- vertical margins and padding
+- `display:none`
+
+This is still deliberately not a full box-layout engine. Exact widths, horizontal margins/padding, borders, flexbox, grid, positioning, and external stylesheets come later.
 
 ## Run on Windows
 
@@ -74,8 +118,6 @@ cargo run --release -- https://example.com
 
 Press **Esc** to close.
 
-## What is intentionally still missing
+## Next milestone
 
-This is not yet a standards-complete HTML5 parser. In particular, HTML5 error-recovery rules, implicit element insertion, CSS layout, images, navigation, forms, JavaScript, and persistent storage are not implemented.
-
-The next milestone is a small CSS parser and style system that attaches computed style data to DOM nodes.
+0.4 should be the first real layout engine: block boxes, inline text boxes, width calculation, horizontal padding/margins, backgrounds tied to actual boxes, and viewport-aware layout.

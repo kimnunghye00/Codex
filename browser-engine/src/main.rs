@@ -1,7 +1,9 @@
+mod css;
 mod dom;
 mod html;
 mod net;
 mod render;
+mod style;
 
 use std::error::Error;
 
@@ -9,7 +11,7 @@ const DEFAULT_URL: &str = "https://example.com";
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Cryptography is intentionally delegated to a maintained TLS library.
-    // HTTP, HTML parsing, DOM construction, text layout, and rendering are ours.
+    // HTTP, HTML parsing, DOM construction, CSS, styling, and rendering are ours.
     let _ = rustls::crypto::ring::default_provider().install_default();
 
     let target = std::env::args()
@@ -29,8 +31,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let document = html::parse(&source)?;
     println!("[browser-core] DOM contains {} nodes", document.len());
 
-    let text = document.visible_text();
-    render::show(&target, &text)?;
+    let stylesheet = css::Stylesheet::from_document(&document)?;
+    println!(
+        "[browser-core] parsed {} supported CSS rules",
+        stylesheet.rules.len()
+    );
+
+    let styles = style::compute(&document, &stylesheet);
+    render::show(&target, &document, &styles)?;
 
     Ok(())
 }

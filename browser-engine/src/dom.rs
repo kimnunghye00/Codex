@@ -62,14 +62,21 @@ impl Document {
     }
 
     pub fn children(&self, id: NodeId) -> Children<'_> {
-        let next = self
-            .node(id)
-            .map(|node| node.first_child)
-            .unwrap_or(NONE);
+        let next = self.first_child(id).unwrap_or(NONE);
         Children {
             document: self,
             next,
         }
+    }
+
+    pub fn first_child(&self, id: NodeId) -> Option<NodeId> {
+        let child = self.node(id)?.first_child;
+        (child != NONE).then_some(child)
+    }
+
+    pub fn next_sibling(&self, id: NodeId) -> Option<NodeId> {
+        let sibling = self.node(id)?.next_sibling;
+        (sibling != NONE).then_some(sibling)
     }
 
     pub(crate) fn append(&mut self, parent: NodeId, kind: NodeKind) -> NodeId {
@@ -106,31 +113,56 @@ impl Document {
         })
     }
 
+    pub fn text_content(&self, start: NodeId) -> String {
+        let mut output = String::new();
+        let mut stack = Vec::with_capacity(16);
+
+        if let Some(child) = self.first_child(start) {
+            stack.push(child);
+        }
+
+        while let Some(id) = stack.pop() {
+            if let Some(node) = self.node(id) {
+                if let NodeKind::Text(text) = node.kind() {
+                    output.push_str(text);
+                }
+            }
+
+            if let Some(sibling) = self.next_sibling(id) {
+                stack.push(sibling);
+            }
+            if let Some(child) = self.first_child(id) {
+                stack.push(child);
+            }
+        }
+
+        output
+    }
+
     pub fn visible_text(&self) -> String {
         let start = self.find_first_element("body").unwrap_or(self.root());
         let mut output = String::new();
         let mut ancestors = Vec::with_capacity(32);
 
-        let mut current = self.nodes[start as usize].first_child;
-        if current == NONE {
+        let Some(mut current) = self.first_child(start) else {
             return output;
-        }
+        };
 
         loop {
             let skip_children = self.enter_visible_node(current, &mut output);
 
-            let child = self.nodes[current as usize].first_child;
-            if !skip_children && child != NONE {
-                ancestors.push(current);
-                current = child;
-                continue;
+            if !skip_children {
+                if let Some(child) = self.first_child(current) {
+                    ancestors.push(current);
+                    current = child;
+                    continue;
+                }
             }
 
             self.leave_visible_node(current, &mut output);
 
             loop {
-                let sibling = self.nodes[current as usize].next_sibling;
-                if sibling != NONE {
+                if let Some(sibling) = self.next_sibling(current) {
                     current = sibling;
                     break;
                 }
@@ -211,6 +243,12 @@ impl ElementData {
             .iter()
             .find(|attribute| attribute.name.eq_ignore_ascii_case(name))
             .map(|attribute| attribute.value.as_ref())
+    }
+
+    pub fn has_class(&self, class_name: &str) -> bool {
+        self.attribute("class")
+            .map(|classes| classes.split_ascii_whitespace().any(|value| value == class_name))
+            .unwrap_or(false)
     }
 }
 
