@@ -15,6 +15,8 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     let mut reader = BufReader::new(stdin.lock());
     let mut writer = BufWriter::new(stdout.lock());
 
+    ipc::write_ready(&mut writer)?;
+
     match run_inner(&mut reader, &mut writer) {
         Ok(()) => Ok(()),
         Err(error) => {

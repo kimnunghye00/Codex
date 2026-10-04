@@ -62,6 +62,45 @@ impl RendererProcess {
         }
     }
 
+    pub fn activate_ui_restrictions(&mut self) -> io::Result<()> {
+        use std::ffi::c_void;
+        use std::mem::size_of;
+        use windows_sys::Win32::System::JobObjects::{
+            JobObjectBasicUIRestrictions, SetInformationJobObject,
+            JOBOBJECT_BASIC_UI_RESTRICTIONS, JOB_OBJECT_UILIMIT_DESKTOP,
+            JOB_OBJECT_UILIMIT_DISPLAYSETTINGS, JOB_OBJECT_UILIMIT_EXITWINDOWS,
+            JOB_OBJECT_UILIMIT_GLOBALATOMS, JOB_OBJECT_UILIMIT_HANDLES,
+            JOB_OBJECT_UILIMIT_READCLIPBOARD, JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS,
+            JOB_OBJECT_UILIMIT_WRITECLIPBOARD,
+        };
+
+        let ui = JOBOBJECT_BASIC_UI_RESTRICTIONS {
+            UIRestrictionsClass:
+                JOB_OBJECT_UILIMIT_HANDLES
+                    | JOB_OBJECT_UILIMIT_READCLIPBOARD
+                    | JOB_OBJECT_UILIMIT_WRITECLIPBOARD
+                    | JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS
+                    | JOB_OBJECT_UILIMIT_DISPLAYSETTINGS
+                    | JOB_OBJECT_UILIMIT_GLOBALATOMS
+                    | JOB_OBJECT_UILIMIT_DESKTOP
+                    | JOB_OBJECT_UILIMIT_EXITWINDOWS,
+        };
+
+        if unsafe {
+            SetInformationJobObject(
+                self.job,
+                JobObjectBasicUIRestrictions,
+                &ui as *const _ as *const c_void,
+                size_of::<JOBOBJECT_BASIC_UI_RESTRICTIONS>() as u32,
+            )
+        } == 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+
+        Ok(())
+    }
+
     pub fn wait_success(&mut self) -> io::Result<()> {
         use windows_sys::Win32::Foundation::WAIT_FAILED;
         use windows_sys::Win32::System::Threading::{
@@ -135,16 +174,11 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
         CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
     };
     use windows_sys::Win32::System::JobObjects::{
-        AssignProcessToJobObject, CreateJobObjectW, JobObjectBasicUIRestrictions,
-        JobObjectExtendedLimitInformation, SetInformationJobObject,
-        JOBOBJECT_BASIC_UI_RESTRICTIONS, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
         JOB_OBJECT_LIMIT_ACTIVE_PROCESS, JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION,
         JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, JOB_OBJECT_LIMIT_PROCESS_MEMORY,
-        JOB_OBJECT_LIMIT_PROCESS_TIME, JOB_OBJECT_UILIMIT_DESKTOP,
-        JOB_OBJECT_UILIMIT_DISPLAYSETTINGS, JOB_OBJECT_UILIMIT_EXITWINDOWS,
-        JOB_OBJECT_UILIMIT_GLOBALATOMS, JOB_OBJECT_UILIMIT_HANDLES,
-        JOB_OBJECT_UILIMIT_READCLIPBOARD, JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS,
-        JOB_OBJECT_UILIMIT_WRITECLIPBOARD,
+        JOB_OBJECT_LIMIT_PROCESS_TIME,
     };
     use windows_sys::Win32::System::Pipes::CreatePipe;
     use windows_sys::Win32::System::SystemServices::SE_GROUP_INTEGRITY;
@@ -430,34 +464,14 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
                 return Err(io::Error::last_os_error());
             }
 
-            let ui = JOBOBJECT_BASIC_UI_RESTRICTIONS {
-                UIRestrictionsClass:
-                    JOB_OBJECT_UILIMIT_HANDLES
-                        | JOB_OBJECT_UILIMIT_READCLIPBOARD
-                        | JOB_OBJECT_UILIMIT_WRITECLIPBOARD
-                        | JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS
-                        | JOB_OBJECT_UILIMIT_DISPLAYSETTINGS
-                        | JOB_OBJECT_UILIMIT_GLOBALATOMS
-                        | JOB_OBJECT_UILIMIT_DESKTOP
-                        | JOB_OBJECT_UILIMIT_EXITWINDOWS,
-            };
-
-            if SetInformationJobObject(
-                handles.job,
-                JobObjectBasicUIRestrictions,
-                &ui as *const _ as *const c_void,
-                size_of::<JOBOBJECT_BASIC_UI_RESTRICTIONS>() as u32,
-            ) == 0
-            {
-                return Err(io::Error::last_os_error());
-            }
-
             if AssignProcessToJobObject(handles.job, handles.process) == 0 {
                 return Err(io::Error::last_os_error());
             }
 
-            // The renderer was created suspended. It cannot process any
-            // untrusted content until both token and Job Object restrictions exist.
+            // The renderer was created suspended. Restricted Token, Low Integrity,
+            // and resource/process Job limits exist before its first instruction.
+            // UI restrictions are activated only after the trusted worker sends READY,
+            // and the broker sends no untrusted HTML before that handshake.
             if ResumeThread(handles.thread) == u32::MAX {
                 return Err(io::Error::last_os_error());
             }
@@ -555,6 +569,10 @@ impl RendererProcess {
 
     pub fn kill(&mut self) {
         let _ = self.child.kill();
+    }
+
+    pub fn activate_ui_restrictions(&mut self) -> io::Result<()> {
+        Ok(())
     }
 
     pub fn wait_success(&mut self) -> io::Result<()> {

@@ -29,6 +29,22 @@ pub fn render_page(
         }
     };
 
+    if let Err(error) = ipc::read_ready(&mut stdout) {
+        drop(stdin);
+        let process_result = child.wait_success();
+        return Err(format!(
+            "renderer failed before READY: {error}; process result: {process_result:?}"
+        )
+        .into());
+    }
+
+    if let Err(error) = child.activate_ui_restrictions() {
+        child.kill();
+        return Err(format!("renderer UI sandbox activation failed: {error}").into());
+    }
+
+    // No document bytes are sent before Restricted Token + Low Integrity +
+    // Job resource limits + Job UI restrictions are all active.
     if let Err(error) = ipc::write_load(
         &mut stdin,
         &LoadRequest {

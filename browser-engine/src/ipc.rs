@@ -1,6 +1,7 @@
 type NodeId = u32;
 use std::io::{self, Read, Write};
 
+const TAG_READY: &[u8; 4] = b"RDY0";
 const TAG_LOAD: &[u8; 4] = b"LOAD";
 const TAG_SCAN: &[u8; 4] = b"SCAN";
 const TAG_RESOURCES: &[u8; 4] = b"RSRC";
@@ -102,6 +103,15 @@ pub struct RenderPacket {
     pub rects: Vec<PaintRect>,
     pub texts: Vec<PaintText>,
     pub images: Vec<PaintImage>,
+}
+
+pub fn write_ready<W: Write>(writer: &mut W) -> io::Result<()> {
+    writer.write_all(TAG_READY)?;
+    writer.flush()
+}
+
+pub fn read_ready<R: Read>(reader: &mut R) -> io::Result<()> {
+    expect_tag(reader, TAG_READY)
 }
 
 pub fn write_load<W: Write>(writer: &mut W, request: &LoadRequest) -> io::Result<()> {
