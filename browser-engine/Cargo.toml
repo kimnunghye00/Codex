@@ -1,9 +1,17 @@
 [package]
 name = "browser-core"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2021"
 description = "A tiny browser engine prototype focused on low memory use and a minimal attack surface."
 license = "MIT"
+
+[[bin]]
+name = "browser-core"
+path = "src/main.rs"
+
+[[bin]]
+name = "browser-renderer"
+path = "src/bin/browser-renderer.rs"
 
 [dependencies]
 font8x8 = "0.3.1"
@@ -17,6 +25,8 @@ webpki-roots = "1"
 windows-sys = { version = "0.61.2", features = [
     "Win32_Foundation",
     "Win32_Security",
+    "Win32_Storage_FileSystem",
     "Win32_System_JobObjects",
+    "Win32_System_Pipes",
     "Win32_System_Threading",
 ] }

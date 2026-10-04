@@ -1,66 +1,92 @@
 use crate::ipc::{
     self, ImageBlob, LoadRequest, RenderPacket, ResourceBundle, ScanResponse,
 };
-use crate::{net, resources, sandbox};
+use crate::{net, resource_limits, sandbox};
 use std::error::Error;
-use std::process::{Command, Stdio};
+use std::path::PathBuf;
 
 pub fn render_page(
     base_url: &str,
     html: &[u8],
     viewport_width: u32,
 ) -> Result<RenderPacket, Box<dyn Error>> {
-    let executable = std::env::current_exe()?;
+    let renderer = renderer_executable()?;
+    let mut child = sandbox::spawn_renderer(&renderer)?;
 
-    let mut child = Command::new(executable)
-        .arg("--renderer-worker")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()?;
-
-    // The worker starts by blocking on stdin. Apply OS limits before any
-    // untrusted document bytes are sent to it.
-    let _sandbox = match sandbox::confine_renderer(&child) {
-        Ok(sandbox) => sandbox,
+    let mut stdin = match child.take_stdin() {
+        Ok(stdin) => stdin,
         Err(error) => {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(format!("renderer sandbox setup failed: {error}").into());
+            child.kill();
+            return Err(error.into());
         }
     };
 
-    let mut stdin = child
-        .stdin
-        .take()
-        .ok_or("renderer worker stdin was not available")?;
-    let mut stdout = child
-        .stdout
-        .take()
-        .ok_or("renderer worker stdout was not available")?;
+    let mut stdout = match child.take_stdout() {
+        Ok(stdout) => stdout,
+        Err(error) => {
+            child.kill();
+            return Err(error.into());
+        }
+    };
 
-    ipc::write_load(
+    if let Err(error) = ipc::write_load(
         &mut stdin,
         &LoadRequest {
             base_url: base_url.to_string(),
             viewport_width,
             html: html.to_vec(),
         },
-    )?;
-
-    let scan = ipc::read_scan(&mut stdout)?;
-    let resources = fetch_resources(base_url, &scan)?;
-    ipc::write_resources(&mut stdin, &resources)?;
-
-    let packet = ipc::read_render(&mut stdout)?;
-    drop(stdin);
-
-    let status = child.wait()?;
-    if !status.success() {
-        return Err(format!("renderer worker exited with {status}").into());
+    ) {
+        child.kill();
+        return Err(error.into());
     }
 
+    let scan = match ipc::read_scan(&mut stdout) {
+        Ok(scan) => scan,
+        Err(error) => {
+            child.kill();
+            return Err(error.into());
+        }
+    };
+
+    let resources = fetch_resources(base_url, &scan)?;
+    if let Err(error) = ipc::write_resources(&mut stdin, &resources) {
+        child.kill();
+        return Err(error.into());
+    }
+
+    let packet = match ipc::read_render(&mut stdout) {
+        Ok(packet) => packet,
+        Err(error) => {
+            child.kill();
+            return Err(error.into());
+        }
+    };
+
+    drop(stdin);
+    child.wait_success()?;
+
     Ok(packet)
+}
+
+fn renderer_executable() -> Result<PathBuf, Box<dyn Error>> {
+    let current = std::env::current_exe()?;
+    let directory = current
+        .parent()
+        .ok_or("browser executable does not have a parent directory")?;
+
+    let filename = format!("browser-renderer{}", std::env::consts::EXE_SUFFIX);
+    let candidate = directory.join(filename);
+
+    if !candidate.is_file() {
+        return Err(format!(
+            "renderer executable was not found at {}. Build both binaries with cargo build --bins.",
+            candidate.display()
+        )
+        .into());
+    }
+
+    Ok(candidate)
 }
 
 fn fetch_resources(
@@ -73,10 +99,11 @@ fn fetch_resources(
     for source in scan
         .css_sources
         .iter()
-        .take(resources::MAX_EXTERNAL_STYLESHEETS)
+        .take(resource_limits::MAX_EXTERNAL_STYLESHEETS)
     {
-        let remaining = resources::MAX_TOTAL_EXTERNAL_CSS_BYTES.saturating_sub(total_css);
-        let limit = remaining.min(resources::MAX_EXTERNAL_CSS_BYTES);
+        let remaining =
+            resource_limits::MAX_TOTAL_EXTERNAL_CSS_BYTES.saturating_sub(total_css);
+        let limit = remaining.min(resource_limits::MAX_EXTERNAL_CSS_BYTES);
 
         if limit == 0 {
             css.push(Vec::new());
@@ -101,9 +128,14 @@ fn fetch_resources(
     let mut images = Vec::with_capacity(scan.images.len());
     let mut total_images = 0usize;
 
-    for image in scan.images.iter().take(resources::MAX_IMAGES) {
-        let remaining = resources::MAX_TOTAL_ENCODED_IMAGE_BYTES.saturating_sub(total_images);
-        let limit = remaining.min(resources::MAX_ENCODED_IMAGE_BYTES);
+    for image in scan
+        .images
+        .iter()
+        .take(resource_limits::MAX_IMAGES)
+    {
+        let remaining =
+            resource_limits::MAX_TOTAL_ENCODED_IMAGE_BYTES.saturating_sub(total_images);
+        let limit = remaining.min(resource_limits::MAX_ENCODED_IMAGE_BYTES);
 
         if limit == 0 {
             images.push(ImageBlob {

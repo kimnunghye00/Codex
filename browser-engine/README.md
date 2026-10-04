@@ -1,109 +1,80 @@
-# browser-core 0.7
+# browser-core 0.8
 
 A browser-engine prototype built without Chromium, WebView2, or Firefox.
 
-## Milestone 0.7: renderer process isolation
+## Milestone 0.8: restricted renderer identity
 
-Version 0.7 moves untrusted document processing out of the long-lived browser UI/network process.
+Version 0.8 strengthens the process boundary introduced in 0.7.
 
-The browser now has two roles:
+### Separate executable
 
-\`\`\`text
-Privileged browser broker
-  - HTTPS / certificate validation
-  - redirects
-  - resource byte budgets
-  - address bar / history / window
-  - fetches main document and approved HTTPS subresources
-             |
-             | bounded binary IPC
-             v
-Ephemeral renderer worker
-  - HTML parser / DOM
-  - CSS parser / style engine
-  - PNG/JPEG decoding
-  - layout
-  - creates a flat RenderPacket
-             |
-             v
-worker exits
-\`\`\`
+The project now builds two executables:
 
-The broker keeps only the final paint data needed for the current page: rectangles, text fragments, decoded image pixels, link targets, background, and content height. It no longer retains the page DOM, stylesheet, or layout tree after a load finishes.
+- browser-core: privileged UI, HTTPS broker, history, and final painting
+- browser-renderer: HTML/DOM/CSS/image decoding/style/layout and IPC only
 
-## Windows containment
+The renderer binary does not include browser networking or window/navigation modules. External CSS and image bytes are still fetched by the broker after HTTPS policy checks and sent through bounded IPC.
 
-Before the broker sends any untrusted document bytes, the worker is assigned to a Windows Job Object.
+Build both with:
 
-Current enforced limits:
+    cargo build --bins
 
-- one active process in the renderer job
-- 192 MiB process committed-memory cap
-- 10 seconds of user-mode CPU time per renderer process
-- kill the renderer when its Job Object closes
-- terminate on unhandled exceptions without crash-dialog interaction
-- block access to USER handles owned by other processes
-- block clipboard read/write
-- block display-settings changes
-- block system-parameter changes
-- isolate global atoms
-- block desktop creation/switching
-- block ExitWindows calls
+The executables must remain beside each other.
 
-The worker starts by blocking on stdin. Job Object limits are attached before the broker writes HTML into the IPC channel.
+### Windows restricted launch
 
-## Narrow IPC protocol
+On Windows the broker no longer launches the renderer with a normal inherited user token.
 
-The renderer cannot request arbitrary broker operations.
+The broker now:
 
-The protocol has four bounded stages:
+1. opens its own process token
+2. creates a restricted token with maximum privileges disabled
+3. adds a restricting SID for write access
+4. changes the token mandatory integrity level to Low
+5. creates browser-renderer suspended with CreateProcessAsUserW
+6. applies the existing Job Object limits and UI restrictions
+7. only then resumes the renderer thread
+8. sends untrusted HTML after the security boundary is active
 
-1. LOAD: base URL, viewport width, and at most 2 MiB of HTML.
-2. SCAN: up to 8 stylesheet references and 12 image references.
-3. RSRC: broker-fetched HTTPS CSS/image bytes within the existing resource budgets.
-4. RNDR: bounded flat paint data.
+The launch fails closed if token restriction, Low Integrity, Job Object setup, or process assignment fails.
 
-Every IPC vector/string/byte field has count or size validation before allocation.
+### Existing Job Object limits
 
-Link clicks are returned as raw href strings. The privileged broker resolves and re-validates them with the HTTPS-only URL policy before navigation.
+- one renderer process
+- 192 MiB process memory limit
+- 10 seconds user-mode CPU time
+- renderer terminated when the Job Object closes
+- unhandled-exception termination behavior
+- clipboard read/write blocked
+- cross-process USER handle access restricted
+- display/system parameter changes blocked
+- global atoms restricted
+- desktop creation/switching restricted
+- ExitWindows blocked
 
-## Memory behavior
+### IPC remains narrow
 
-The renderer is intentionally ephemeral.
+The protocol still permits only:
 
-During page loading there are two processes, but after layout/painting data is produced the renderer exits and releases its DOM, CSS parser, style engine, layout tree, encoded resources, and temporary decode buffers.
+- LOAD: document bytes and viewport
+- SCAN: bounded CSS/image references
+- RSRC: broker-approved resource bytes
+- RNDR: bounded flat paint output
 
-The long-lived browser process retains only:
+The renderer cannot ask the broker to execute arbitrary commands.
 
-- current URL
-- URL-only back/forward history
-- flat render rectangles/text
-- current decoded image pixels
-- the fixed-size window framebuffer
+### Memory behavior
 
-This is designed to keep inactive parser state out of steady-state memory.
+The renderer is ephemeral. DOM, parsed CSS, layout tree, encoded resources, and temporary decode state disappear when the renderer exits.
 
-## Important security boundary
+The main browser retains only current flat paint data, current decoded image pixels, URL state, and its framebuffer.
 
-0.7 is stronger process containment, but it is **not yet a complete browser sandbox**.
+### Important remaining limit
 
-Windows Job Objects provide resource/process/UI restrictions, but this milestone does not yet create a restricted security token or AppContainer. Therefore the renderer's operating-system filesystem and network rights are not yet fully removed at the token level.
+Restricted Token + Low Integrity + Job Object is materially stronger than 0.7, but it is still not AppContainer.
 
-The intended renderer code path has no network operation: it asks the broker for bounded resources through IPC. OS-enforced denial of renderer network/filesystem access is the next security milestone.
+The separate renderer binary contains no direct networking code, so normal renderer operation can only obtain web resources through broker IPC. However, Windows is not yet enforcing a kernel-level no-network capability on the renderer token itself.
 
-## Existing policies remain
+Likewise, Low Integrity strongly limits writes to normal user objects, but it is not a complete deny-all filesystem policy for reads.
 
-- HTTPS only
-- certificate validation enabled
-- HTTP downgrade redirects blocked
-- javascript/data/file URL schemes blocked
-- embedded-credential URLs blocked
-- no JavaScript execution
-- no cookies
-- no extensions
-- bounded DOM/CSS/layout/image resources
-- URL-only navigation history
-
-## Next milestone
-
-0.8 should harden the renderer identity itself with a restricted Windows token / AppContainer-style capability model, explicitly deny renderer network access, narrow filesystem access, and separate the renderer executable to reduce its linked attack surface.
+The next security milestone should use an AppContainer-capable launch path or the newer Windows sandbox process APIs where available, with OS-enforced network denial and explicit filesystem allowlists.

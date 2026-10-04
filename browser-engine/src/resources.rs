@@ -1,18 +1,15 @@
 use crate::css::{self, Stylesheet};
 use crate::dom::{Document, NodeId, NodeKind};
 use crate::ipc::{ImageBlob, ImageRequest, ScanResponse};
+use crate::resource_limits::{
+    MAX_ENCODED_IMAGE_BYTES, MAX_EXTERNAL_CSS_BYTES, MAX_EXTERNAL_STYLESHEETS,
+    MAX_IMAGES, MAX_TOTAL_ENCODED_IMAGE_BYTES, MAX_TOTAL_EXTERNAL_CSS_BYTES,
+};
 use image::ImageReader;
 use std::error::Error;
 use std::io::Cursor;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
-pub const MAX_EXTERNAL_STYLESHEETS: usize = 8;
-pub const MAX_EXTERNAL_CSS_BYTES: usize = 128 * 1024;
-pub const MAX_TOTAL_EXTERNAL_CSS_BYTES: usize = 512 * 1024;
-
-pub const MAX_IMAGES: usize = 12;
-pub const MAX_ENCODED_IMAGE_BYTES: usize = 1024 * 1024;
-pub const MAX_TOTAL_ENCODED_IMAGE_BYTES: usize = 6 * 1024 * 1024;
 const MAX_REFERENCE_BYTES: usize = 8 * 1024;
 const MAX_IMAGE_DIMENSION: u32 = 2048;
 const MAX_IMAGE_PIXELS: u64 = 2_000_000;
@@ -142,9 +139,7 @@ pub fn decode_images(blobs: &[ImageBlob]) -> ResourceSet {
                 resources.images.push(image);
             }
             Ok(None) => {}
-            Err(error) => {
-                eprintln!("[renderer-worker] image rejected: {error}");
-            }
+            Err(_) => {}
         }
     }
 
