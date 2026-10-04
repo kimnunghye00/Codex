@@ -63,8 +63,9 @@ impl RendererProcess {
     }
 
     pub fn wait_success(&mut self) -> io::Result<()> {
+        use windows_sys::Win32::Foundation::WAIT_FAILED;
         use windows_sys::Win32::System::Threading::{
-            GetExitCodeProcess, WaitForSingleObject, INFINITE, WAIT_FAILED,
+            GetExitCodeProcess, WaitForSingleObject, INFINITE,
         };
 
         let result = unsafe { WaitForSingleObject(self.process, INFINITE) };
@@ -127,7 +128,7 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
         CreateRestrictedToken, CreateWellKnownSid, GetLengthSid, GetTokenInformation,
         IsTokenRestricted, SetTokenInformation, SID_AND_ATTRIBUTES, TOKEN_ADJUST_DEFAULT,
         TOKEN_ASSIGN_PRIMARY, TOKEN_DUPLICATE, TOKEN_MANDATORY_LABEL, TOKEN_QUERY, TOKEN_USER,
-        DISABLE_MAX_PRIVILEGE, SECURITY_MAX_SID_SIZE, SE_GROUP_INTEGRITY, TokenIntegrityLevel,
+        DISABLE_MAX_PRIVILEGE, SECURITY_MAX_SID_SIZE, TokenIntegrityLevel,
         TokenUser, WinLowLabelSid, WRITE_RESTRICTED,
     };
     use windows_sys::Win32::Storage::FileSystem::{
@@ -146,6 +147,7 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
         JOB_OBJECT_UILIMIT_WRITECLIPBOARD,
     };
     use windows_sys::Win32::System::Pipes::CreatePipe;
+    use windows_sys::Win32::System::SystemServices::SE_GROUP_INTEGRITY;
     use windows_sys::Win32::System::Threading::{
         CreateProcessAsUserW, GetCurrentProcess, OpenProcessToken, ResumeThread,
         CREATE_NO_WINDOW, CREATE_SUSPENDED, PROCESS_INFORMATION, STARTF_USESTDHANDLES,
@@ -195,9 +197,9 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
                 &mut self.process,
                 &mut self.job,
             ] {
-                if !(*handle).is_null() && **handle != INVALID_HANDLE_VALUE {
-                    CloseHandle(**handle);
-                    **handle = null_mut();
+                if !(*handle).is_null() && *handle != INVALID_HANDLE_VALUE {
+                    CloseHandle(*handle);
+                    *handle = null_mut();
                 }
             }
         }

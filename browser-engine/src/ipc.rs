@@ -1,4 +1,4 @@
-use crate::dom::NodeId;
+type NodeId = u32;
 use std::io::{self, Read, Write};
 
 const TAG_LOAD: &[u8; 4] = b"LOAD";
