@@ -308,6 +308,7 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
         source_token: HANDLE,
         restricted_token: HANDLE,
         bootstrap_token: HANDLE,
+        bootstrap_primary: HANDLE,
         process: HANDLE,
         thread: HANDLE,
         job: HANDLE,
@@ -324,6 +325,7 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
                 source_token: null_mut(),
                 restricted_token: null_mut(),
                 bootstrap_token: null_mut(),
+                bootstrap_primary: null_mut(),
                 process: null_mut(),
                 thread: null_mut(),
                 job: null_mut(),
@@ -340,6 +342,7 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
                 &mut self.source_token,
                 &mut self.restricted_token,
                 &mut self.bootstrap_token,
+                &mut self.bootstrap_primary,
                 &mut self.thread,
                 &mut self.process,
                 &mut self.job,
@@ -577,8 +580,39 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
             // initial thread gets a loader/CRT bootstrap impersonation token.
             // The worker discards it before READY; the broker verifies that
             // removal before lowering integrity and sending document bytes.
-            if DuplicateTokenEx(
+            // Both tokens derive directly from the same source token. A plain
+            // unrestricted impersonation token is not a restricted-token sibling:
+            // Windows can downgrade it to Identification and the loader then fails.
+            // Include the original enabled SIDs to retain ordinary ACL access only
+            // for trusted startup, while removing unnecessary privileges.
+            let mut initial_sids = vec![user_sid];
+            let enabled = windows_sys::Win32::System::SystemServices::SE_GROUP_ENABLED as u32;
+            let deny_only =
+                windows_sys::Win32::System::SystemServices::SE_GROUP_USE_FOR_DENY_ONLY as u32;
+            for group in entries {
+                if group.Attributes & enabled != 0 && group.Attributes & deny_only == 0 {
+                    initial_sids.push(SID_AND_ATTRIBUTES {
+                        Sid: group.Sid,
+                        Attributes: 0,
+                    });
+                }
+            }
+            if CreateRestrictedToken(
                 handles.source_token,
+                DISABLE_MAX_PRIVILEGE,
+                0,
+                null(),
+                0,
+                null(),
+                initial_sids.len() as u32,
+                initial_sids.as_ptr(),
+                &mut handles.bootstrap_primary,
+            ) == 0
+            {
+                return Err(io::Error::last_os_error());
+            }
+            if DuplicateTokenEx(
+                handles.bootstrap_primary,
                 TOKEN_IMPERSONATE | TOKEN_QUERY,
                 null(),
                 SecurityImpersonation,
@@ -588,6 +622,8 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
             {
                 return Err(io::Error::last_os_error());
             }
+            CloseHandle(handles.bootstrap_primary);
+            handles.bootstrap_primary = null_mut();
             if SetThreadToken(&handles.thread, handles.bootstrap_token) == 0 {
                 return Err(io::Error::last_os_error());
             }
