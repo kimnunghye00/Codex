@@ -1,80 +1,90 @@
-# browser-core 0.8
+# browser-core 0.9 (실험 버전)
 
-A browser-engine prototype built without Chromium, WebView2, or Firefox.
+Chromium, Edge/WebView2, Firefox를 쓰지 않는 Rust 자체 HTML/CSS 엔진입니다.
+목표는 적은 메모리로 일상적인 웹사이트를 이용하고, 운영체제로 렌더러 권한을 제한하는 브라우저입니다.
+**현재는 정적 문서를 읽는 실험 버전이며, 크롬·엣지 대체품은 아닙니다.**
 
-## Milestone 0.8: restricted renderer identity
+## Windows에서 실행
 
-Version 0.8 strengthens the process boundary introduced in 0.7.
+1. `browser-core-windows-x64.zip`을 압축 해제합니다.
+2. `run-browser.cmd` 또는 `browser-core.exe`를 실행합니다.
+3. `browser-core.exe`와 `browser-renderer.exe`는 같은 폴더에 두세요.
 
-### Separate executable
+Windows 실행 파일은 `browser-engine` 브랜치의 **Browser Engine CI**가 테스트 후 생성합니다.
+Actions의 해당 실행에서 `browser-core-windows-x64` artifact를 받으면 ZIP과 SHA256을 확인할 수 있습니다.
+서명된 설치 프로그램이나 자동 업데이트는 아직 제공하지 않습니다.
 
-The project now builds two executables:
+## 사용법
 
-- browser-core: privileged UI, HTTPS broker, history, and final painting
-- browser-renderer: HTML/DOM/CSS/image decoding/style/layout and IPC only
+| 동작 | 단축키 / 버튼 |
+| --- | --- |
+| 주소 또는 검색어 입력 | Ctrl+L, 주소창 클릭 |
+| 주소 전체 교체 | Ctrl+A, 새 입력 |
+| 붙여넣기 | Ctrl+V (Windows) |
+| 새 탭 / 닫기 | Ctrl+T / Ctrl+W, + / X |
+| 다음 / 이전 탭 | Ctrl+Tab / Ctrl+Shift+Tab, 번호 클릭 |
+| 뒤로 / 앞으로 | Alt+← / Alt+→, < / > |
+| 다시 불러오기 | F5 또는 Ctrl+R, R |
+| 시작 페이지 | Alt+Home, H |
+| 북마크 추가·제거 / 목록 | Ctrl+D / Ctrl+B, 주소창 옆 + 또는 * |
+| 로딩 취소 / 주소 편집 취소 | Esc |
+| 스크롤 | 휠, ↑↓, PageUp/PageDown, Home/End |
 
-The renderer binary does not include browser networking or window/navigation modules. External CSS and image bytes are still fetched by the broker after HTTPS policy checks and sent through bounded IPC.
+검색어는 **Enter를 눌렀을 때만 Google 검색으로 전송**합니다. 주소창 자동완성·키 입력 전송은 없습니다.
+주소는 HTTPS만 허용하고, 내장 계정 정보·파일·스크립트 주소와 비 HTTPS 리디렉션을 차단합니다.
+현재 네트워크는 HTTP/1.1과 비압축 응답만 지원합니다.
 
-Build both with:
+## 0.9 구현
 
-    cargo build --bins
+- 로딩을 단일 백그라운드 작업으로 이동해 창과 탭 조작을 계속 처리합니다.
+- 로딩 세대와 탭 ID를 검사해 취소한 결과·다른 탭의 결과가 표시되지 않게 합니다.
+- 최대 16개 탭, 탭마다 최대 256개 URL 이력과 스크롤 위치를 유지합니다.
+- 비활성 탭은 DOM·이미지·렌더러를 저장하지 않습니다. 탭을 다시 선택하면 페이지를 다시 불러옵니다.
+- 프레임버퍼를 재사용하고 IPC에 HTML을 복제하지 않아 불필요한 메모리를 줄입니다.
+- OS 글꼴에서 필요한 글자만 그립니다. 글자 비트맵 캐시는 최대 256개입니다.
+- 한글 문자 입력과 Windows UTF-16 문자 쌍을 처리합니다. IME 조합 중 표시·후보 위치는 아직 실기기 검증이 필요합니다.
+- 빠르게 눌렀다 뗀 단축키도 이벤트로 처리합니다.
+- 북마크는 최대 128개로 제한해 로컬 파일에 저장합니다. 로그인 정보·쿠키·비밀번호·방문 기록은 디스크에 저장하지 않습니다.
+- 네트워크 작업에 취소·30초 예산을 적용하고, 멈춘 렌더러는 별도 감시 장치로 종료합니다.
+- HTTP 본문 중단·중복 길이·모호한 전송 형식을 거부합니다.
+- IPC 문자열의 전체 예산에 링크를 포함하고 이미지 크기·픽셀 수·글자 크기를 검증합니다.
 
-The executables must remain beside each other.
+## 보안 경계
 
-### Windows restricted launch
+브로커는 UI·HTTPS·북마크·최종 화면 그리기를 담당합니다. 별도 렌더러는 HTML/DOM/CSS·이미지 해석·레이아웃만 처리합니다.
+렌더러에는 네트워크, UI, 클립보드, 북마크 코드가 포함되지 않습니다.
 
-On Windows the broker no longer launches the renderer with a normal inherited user token.
+Windows에서는 Restricted Token, 콘텐츠 처리 전 Low Integrity, Job Object를 사용합니다.
+Job은 메모리 192 MiB, 사용자 CPU 10초, 자식 프로세스 금지, 클립보드/UI 제한, 브로커 종료 시 렌더러 종료를 적용합니다.
+보안 설정 실패 시 문서를 전달하지 않습니다. IPC에 일반 명령 실행 기능은 없습니다.
 
-The broker now:
+**AppContainer는 아직 아닙니다.** Windows가 렌더러의 모든 파일 읽기·네트워크 호출을 완전히 막고 있지는 않습니다.
+Linux 실행은 개발용이며 Windows 권한 격리를 제공하지 않습니다.
+OS 강제 네트워크 차단과 파일 접근 허용 목록이 적용되기 전까지 높은 보안의 일상용 브라우저라고 주장하지 않습니다.
 
-1. opens its own process token
-2. creates a restricted token with maximum privileges disabled
-3. adds a restricting SID for write access
-4. changes the token mandatory integrity level to Low
-5. creates browser-renderer suspended with CreateProcessAsUserW
-6. applies the existing Job Object limits and UI restrictions
-7. only then resumes the renderer thread
-8. sends untrusted HTML after the security boundary is active
+## 아직 지원하지 않는 기능
 
-The launch fails closed if token restriction, Low Integrity, Job Object setup, or process assignment fails.
+JavaScript·DOM 이벤트, 폼 입력/전송, 쿠키·로그인, Flex/Grid 등 일반 사이트의 CSS,
+웹폰트·복잡한 문자 shaping·선택/복사, 영상·음성·확장 기능, 일반 파일 다운로드,
+오프라인 캐시·전체 세션 복원, 창 크기 변경, 서명·설치 프로그램·업데이트.
+Google 검색 주소는 생성하지만 검색 결과 페이지 호환성은 별도 검증 대상입니다.
+메모리·보안이 크롬 또는 엣지보다 우수하다는 비교 결과는 아직 없습니다.
 
-### Existing Job Object limits
+## 개발·검증
 
-- one renderer process
-- 192 MiB process memory limit
-- 10 seconds user-mode CPU time
-- renderer terminated when the Job Object closes
-- unhandled-exception termination behavior
-- clipboard read/write blocked
-- cross-process USER handle access restricted
-- display/system parameter changes blocked
-- global atoms restricted
-- desktop creation/switching restricted
-- ExitWindows blocked
+```text
+cargo fmt --check
+cargo check --locked --all-targets
+cargo test --locked --all-targets
+cargo build --locked --bins
+./target/debug/browser-core --sandbox-self-test
+./target/debug/browser-core --watchdog-self-test
+./target/debug/browser-core --render-file tests/fixtures/reading.html target/reading.ppm
+```
 
-### IPC remains narrow
+Windows 명령은 `./target/debug/browser-core`를 `target\debug\browser-core.exe`로 바꾸세요.
+`--render-file`은 명시적으로 선택한 로컬 HTML 검증용 기능이며, 웹페이지가 파일 접근을 요청할 수 있는 기능이 아닙니다.
+글꼴은 Windows `malgun.ttf`, Linux Nanum/Noto/DejaVu 순으로 찾습니다.
+개발자는 `BROWSER_CORE_FONT` 환경 변수로 신뢰하는 로컬 글꼴을 지정할 수 있습니다. 웹폰트는 읽지 않습니다.
 
-The protocol still permits only:
-
-- LOAD: document bytes and viewport
-- SCAN: bounded CSS/image references
-- RSRC: broker-approved resource bytes
-- RNDR: bounded flat paint output
-
-The renderer cannot ask the broker to execute arbitrary commands.
-
-### Memory behavior
-
-The renderer is ephemeral. DOM, parsed CSS, layout tree, encoded resources, and temporary decode state disappear when the renderer exits.
-
-The main browser retains only current flat paint data, current decoded image pixels, URL state, and its framebuffer.
-
-### Important remaining limit
-
-Restricted Token + Low Integrity + Job Object is materially stronger than 0.7, but it is still not AppContainer.
-
-The separate renderer binary contains no direct networking code, so normal renderer operation can only obtain web resources through broker IPC. However, Windows is not yet enforcing a kernel-level no-network capability on the renderer token itself.
-
-Likewise, Low Integrity strongly limits writes to normal user objects, but it is not a complete deny-all filesystem policy for reads.
-
-The next security milestone should use an AppContainer-capable launch path or the newer Windows sandbox process APIs where available, with OS-enforced network denial and explicit filesystem allowlists.
+검증 결과와 실사용 완료 기준: [docs/STATUS.md](docs/STATUS.md).

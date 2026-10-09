@@ -166,9 +166,7 @@ pub fn compute(document: &Document, stylesheet: &Stylesheet) -> Vec<ComputedStyl
                     cascaded.apply(
                         declaration,
                         INLINE_SPECIFICITY,
-                        u32::MAX
-                            .saturating_sub(1024)
-                            .saturating_add(offset as u32),
+                        u32::MAX.saturating_sub(1024).saturating_add(offset as u32),
                     );
                 }
             }

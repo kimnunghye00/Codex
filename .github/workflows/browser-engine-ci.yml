@@ -2,8 +2,7 @@ name: Browser Engine CI
 
 on:
   push:
-    branches:
-      - browser-engine
+    branches: [browser-engine]
     paths:
       - "browser-engine/**"
       - ".github/workflows/browser-engine-ci.yml"
@@ -15,24 +14,45 @@ permissions:
 jobs:
   windows-build:
     runs-on: windows-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: browser-engine
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Install stable Rust
         uses: dtolnay/rust-toolchain@stable
-
+        with:
+          components: rustfmt
+      - name: Check formatting
+        run: cargo fmt --check
       - name: Check all targets
-        run: cargo check --all-targets
-
+        run: cargo check --locked --all-targets
       - name: Test all targets
-        run: cargo test --all-targets
-
+        run: cargo test --locked --all-targets
       - name: Build browser and renderer
-        run: cargo build --bins
-
+        run: cargo build --locked --release --bins
       - name: Restricted renderer smoke test
-        run: .\target\debug\browser-core.exe --sandbox-self-test
+        run: .\target\release\browser-core.exe --sandbox-self-test
+      - name: Cancel a blocked renderer
+        run: .\target\release\browser-core.exe --watchdog-self-test
+      - name: Render the offline reading fixture
+        run: .\target\release\browser-core.exe --render-file tests/fixtures/reading.html target/reading.ppm
+      - name: Package the portable browser
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force target/portable | Out-Null
+          Copy-Item target/release/browser-core.exe,target/release/browser-renderer.exe,README.md,run-browser.cmd target/portable/
+          Compress-Archive -Path target/portable/* -DestinationPath target/browser-core-windows-x64.zip -Force
+          Get-FileHash target/browser-core-windows-x64.zip -Algorithm SHA256 | Format-List | Out-File target/SHA256.txt
+      - name: Upload the portable browser
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-core-windows-x64
+          path: |
+            browser-engine/target/browser-core-windows-x64.zip
+            browser-engine/target/SHA256.txt
+            browser-engine/target/reading.ppm
+          retention-days: 30
+          if-no-files-found: error

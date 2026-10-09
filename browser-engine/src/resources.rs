@@ -2,8 +2,8 @@ use crate::css::{self, Stylesheet};
 use crate::dom::{Document, NodeId, NodeKind};
 use crate::ipc::{ImageBlob, ImageRequest, ScanResponse};
 use crate::resource_limits::{
-    MAX_ENCODED_IMAGE_BYTES, MAX_EXTERNAL_CSS_BYTES, MAX_EXTERNAL_STYLESHEETS,
-    MAX_IMAGES, MAX_TOTAL_ENCODED_IMAGE_BYTES, MAX_TOTAL_EXTERNAL_CSS_BYTES,
+    MAX_ENCODED_IMAGE_BYTES, MAX_EXTERNAL_CSS_BYTES, MAX_EXTERNAL_STYLESHEETS, MAX_IMAGES,
+    MAX_TOTAL_ENCODED_IMAGE_BYTES, MAX_TOTAL_EXTERNAL_CSS_BYTES,
 };
 use image::ImageReader;
 use std::error::Error;
@@ -50,9 +50,7 @@ pub fn scan_requests(document: &Document) -> ScanResponse {
             continue;
         };
 
-        if element.tag_name() == "link"
-            && response.css_sources.len() < MAX_EXTERNAL_STYLESHEETS
-        {
+        if element.tag_name() == "link" && response.css_sources.len() < MAX_EXTERNAL_STYLESHEETS {
             let is_stylesheet = element
                 .attribute("rel")
                 .map(|rel| {
@@ -134,8 +132,8 @@ pub fn decode_images(blobs: &[ImageBlob]) -> ResourceSet {
 
         match decode_image_safely(blob.node, &blob.bytes, total_decoded) {
             Ok(Some(image)) => {
-                total_decoded = total_decoded
-                    .saturating_add(image.width as u64 * image.height as u64 * 4);
+                total_decoded =
+                    total_decoded.saturating_add(image.width as u64 * image.height as u64 * 4);
                 resources.images.push(image);
             }
             Ok(None) => {}

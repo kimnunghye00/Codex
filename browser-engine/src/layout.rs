@@ -111,7 +111,9 @@ pub fn build(
     viewport_width: u32,
 ) -> Result<LayoutTree, LayoutError> {
     if viewport_width == 0 {
-        return Err(LayoutError::new("layout viewport width must be greater than zero"));
+        return Err(LayoutError::new(
+            "layout viewport width must be greater than zero",
+        ));
     }
 
     let mut context = LayoutContext {
@@ -127,8 +129,7 @@ pub fn build(
     };
 
     if let Some(body) = document.find_first_element("body") {
-        context.tree.content_height =
-            context.layout_block(body, 0, 0, viewport_width, 0)?;
+        context.tree.content_height = context.layout_block(body, 0, 0, viewport_width, 0)?;
     } else {
         let mut flow = FlowState::new(0, 0, viewport_width);
         context.layout_flow_children(document.root(), &mut flow, 0)?;
@@ -248,13 +249,8 @@ impl LayoutContext<'_> {
                 Display::None => {}
                 Display::Block => {
                     flow.flush_line();
-                    flow.y = self.layout_block(
-                        child,
-                        flow.start_x,
-                        flow.y,
-                        flow.width,
-                        depth + 1,
-                    )?;
+                    flow.y =
+                        self.layout_block(child, flow.start_x, flow.y, flow.width, depth + 1)?;
                     flow.x = flow.start_x;
                     flow.line_height = 0;
                     flow.pending_space = false;
@@ -308,13 +304,8 @@ impl LayoutContext<'_> {
 
                     if child_style.display == Display::Block {
                         flow.flush_line();
-                        flow.y = self.layout_block(
-                            child,
-                            flow.start_x,
-                            flow.y,
-                            flow.width,
-                            depth + 1,
-                        )?;
+                        flow.y =
+                            self.layout_block(child, flow.start_x, flow.y, flow.width, depth + 1)?;
                         flow.x = flow.start_x;
                     } else {
                         self.layout_inline_node(child, flow, depth + 1)?;
@@ -354,8 +345,7 @@ impl LayoutContext<'_> {
 
         let max_width = flow.width.max(1);
         let (width, height) = if intrinsic_width > max_width {
-            let height = ((intrinsic_height as u64 * max_width as u64)
-                / intrinsic_width as u64)
+            let height = ((intrinsic_height as u64 * max_width as u64) / intrinsic_width as u64)
                 .max(1) as u32;
             (max_width, height)
         } else {
@@ -400,7 +390,7 @@ impl LayoutContext<'_> {
         style: ComputedStyle,
     ) -> Result<(), LayoutError> {
         let scale = font_scale(style.font_size);
-        let glyph_width = 8_u32.saturating_mul(scale);
+        let glyph_width = 4_u32.saturating_mul(scale);
         let glyph_height = 8_u32.saturating_mul(scale);
         let line_height = glyph_height.saturating_add(6);
         let link = self.nearest_link(id);
@@ -480,12 +470,12 @@ impl LayoutContext<'_> {
         }
         flow.pending_space = false;
 
-        let char_count = word.chars().count() as u32;
+        let char_count = crate::text_metrics::width(word);
         let word_width = char_count.saturating_mul(glyph_width);
 
-        if word_width <= flow.width && flow.x.saturating_add(word_width) > max_x {
-            flow.force_line_break();
-        } else if word_width > flow.width && flow.x != flow.start_x {
+        if (word_width <= flow.width && flow.x.saturating_add(word_width) > max_x)
+            || (word_width > flow.width && flow.x != flow.start_x)
+        {
             flow.force_line_break();
         }
 
@@ -510,11 +500,16 @@ impl LayoutContext<'_> {
         let mut chunk_start_x = flow.x;
 
         for ch in word.chars() {
-            if flow.x.saturating_add(glyph_width) > max_x && !chunk.is_empty() {
+            if flow
+                .x
+                .saturating_add(glyph_width.saturating_mul(crate::text_metrics::columns(ch)))
+                > max_x
+                && !chunk.is_empty()
+            {
                 let rect = Rect {
                     x: chunk_start_x,
                     y: flow.y,
-                    width: (chunk.chars().count() as u32).saturating_mul(glyph_width),
+                    width: crate::text_metrics::width(&chunk).saturating_mul(glyph_width),
                     height: glyph_height,
                 };
                 self.push_fragment(id, link, rect, &chunk)?;
@@ -532,7 +527,9 @@ impl LayoutContext<'_> {
             }
 
             chunk.push(ch);
-            flow.x = flow.x.saturating_add(glyph_width);
+            flow.x = flow
+                .x
+                .saturating_add(glyph_width.saturating_mul(crate::text_metrics::columns(ch)));
             flow.line_height = flow.line_height.max(line_height);
         }
 
@@ -540,7 +537,7 @@ impl LayoutContext<'_> {
             let rect = Rect {
                 x: chunk_start_x,
                 y: flow.y,
-                width: (chunk.chars().count() as u32).saturating_mul(glyph_width),
+                width: crate::text_metrics::width(&chunk).saturating_mul(glyph_width),
                 height: glyph_height,
             };
             self.push_fragment(id, link, rect, &chunk)?;
@@ -641,7 +638,7 @@ impl FlowState {
 }
 
 fn font_scale(font_size: u16) -> u32 {
-    (((font_size as u32) + 7) / 8).clamp(1, 6)
+    (font_size as u32).div_ceil(8).clamp(1, 6)
 }
 
 #[cfg(test)]
@@ -673,7 +670,11 @@ mod tests {
         let styles = style::compute(&document, &Stylesheet::default());
         let resources = ResourceSet::default();
         let layout = build(&document, &styles, &resources, 300).unwrap();
-        let fragment = layout.fragments.iter().find(|item| item.link.is_some()).unwrap();
+        let fragment = layout
+            .fragments
+            .iter()
+            .find(|item| item.link.is_some())
+            .unwrap();
 
         assert_eq!(
             layout.hit_test_link(fragment.rect.x, fragment.rect.y),

@@ -180,10 +180,7 @@ fn parse_start_tag(raw: &str) -> Result<(String, Vec<Attribute>), ParseError> {
 
     skip_whitespace(bytes, &mut cursor);
     let name_start = cursor;
-    while cursor < bytes.len()
-        && !bytes[cursor].is_ascii_whitespace()
-        && bytes[cursor] != b'/'
-    {
+    while cursor < bytes.len() && !bytes[cursor].is_ascii_whitespace() && bytes[cursor] != b'/' {
         cursor += 1;
     }
 
@@ -367,10 +364,7 @@ fn decode_entity(entity: &str) -> Option<char> {
                 .ok()
                 .and_then(char::from_u32)
         }
-        _ if entity.starts_with('#') => entity[1..]
-            .parse::<u32>()
-            .ok()
-            .and_then(char::from_u32),
+        _ if entity.starts_with('#') => entity[1..].parse::<u32>().ok().and_then(char::from_u32),
         _ => None,
     }
 }
@@ -382,10 +376,9 @@ mod tests {
 
     #[test]
     fn builds_nested_dom_tree() {
-        let document = parse(
-            r#"<html lang="en"><body><h1 id="hero">Hello</h1><p>World</p></body></html>"#,
-        )
-        .unwrap();
+        let document =
+            parse(r#"<html lang="en"><body><h1 id="hero">Hello</h1><p>World</p></body></html>"#)
+                .unwrap();
 
         let html = document.find_first_element("html").unwrap();
         let body = document.find_first_element("body").unwrap();
@@ -421,8 +414,8 @@ mod tests {
 
     #[test]
     fn handles_void_elements_without_corrupting_parentage() {
-        let document = parse("<body><p>Hello<br>World<img src=\"a.png\"></p><div>Next</div></body>")
-            .unwrap();
+        let document =
+            parse("<body><p>Hello<br>World<img src=\"a.png\"></p><div>Next</div></body>").unwrap();
 
         assert_eq!(document.visible_text(), "Hello\nWorld\nNext");
         let div = document.find_first_element("div").unwrap();

@@ -115,10 +115,24 @@ pub fn read_ready<R: Read>(reader: &mut R) -> io::Result<()> {
 }
 
 pub fn write_load<W: Write>(writer: &mut W, request: &LoadRequest) -> io::Result<()> {
+    write_load_document(
+        writer,
+        &request.base_url,
+        request.viewport_width,
+        &request.html,
+    )
+}
+
+pub fn write_load_document<W: Write>(
+    writer: &mut W,
+    base_url: &str,
+    viewport_width: u32,
+    html: &[u8],
+) -> io::Result<()> {
     writer.write_all(TAG_LOAD)?;
-    write_string(writer, &request.base_url)?;
-    write_u32(writer, request.viewport_width)?;
-    write_bytes(writer, &request.html)?;
+    write_string(writer, base_url)?;
+    write_u32(writer, viewport_width)?;
+    write_bytes(writer, html)?;
     writer.flush()
 }
 
@@ -282,12 +296,20 @@ pub fn read_render<R: Read>(reader: &mut R) -> io::Result<RenderPacket> {
         let rect = read_rect(reader)?;
         let color = read_u32(reader)?;
         let font_size = read_u16(reader)?;
-        let text = read_string(reader, MAX_TEXT_BYTES)?;
+        let text = read_string(reader, MAX_TEXT_BYTES.saturating_sub(total_text_bytes))?;
         total_text_bytes = total_text_bytes.saturating_add(text.len());
         if total_text_bytes > MAX_TEXT_BYTES {
             return Err(invalid("renderer text output exceeded the IPC budget"));
         }
-        let link_href = read_optional_string(reader, MAX_URL_BYTES)?;
+        let link_href = read_optional_string(
+            reader,
+            MAX_URL_BYTES.min(MAX_TEXT_BYTES.saturating_sub(total_text_bytes)),
+        )?;
+        total_text_bytes =
+            total_text_bytes.saturating_add(link_href.as_ref().map_or(0, String::len));
+        if font_size == 0 || font_size > 96 {
+            return Err(invalid("invalid paint font size"));
+        }
         texts.push(PaintText {
             rect,
             text,
@@ -304,12 +326,30 @@ pub fn read_render<R: Read>(reader: &mut R) -> io::Result<RenderPacket> {
         let rect = read_rect(reader)?;
         let source_width = read_u32(reader)?;
         let source_height = read_u32(reader)?;
-        let pixels = read_u32_vector(reader, MAX_IMAGE_BYTES / 4)?;
+        let expected_pixels = (source_width as u64)
+            .checked_mul(source_height as u64)
+            .ok_or_else(|| invalid("image dimensions overflow"))?;
+        if source_width == 0 || source_height == 0 || expected_pixels > (MAX_IMAGE_BYTES / 4) as u64
+        {
+            return Err(invalid("invalid image dimensions"));
+        }
+        let pixels = read_u32_vector(
+            reader,
+            (MAX_IMAGE_BYTES.saturating_sub(total_image_bytes)) / 4,
+        )?;
+        if pixels.len() as u64 != expected_pixels {
+            return Err(invalid("image dimensions do not match pixels"));
+        }
         total_image_bytes = total_image_bytes.saturating_add(pixels.len().saturating_mul(4));
         if total_image_bytes > MAX_IMAGE_BYTES {
             return Err(invalid("renderer image output exceeded the IPC budget"));
         }
-        let link_href = read_optional_string(reader, MAX_URL_BYTES)?;
+        let link_href = read_optional_string(
+            reader,
+            MAX_URL_BYTES.min(MAX_TEXT_BYTES.saturating_sub(total_text_bytes)),
+        )?;
+        total_text_bytes =
+            total_text_bytes.saturating_add(link_href.as_ref().map_or(0, String::len));
         images.push(PaintImage {
             rect,
             source_width,
@@ -518,5 +558,47 @@ mod tests {
         assert_eq!(decoded.content_height, 900);
         assert_eq!(decoded.texts[0].text, "hello");
         assert_eq!(decoded.texts[0].link_href.as_deref(), Some("/next"));
+    }
+    #[test]
+    fn rejects_renderer_image_dimension_mismatch() {
+        let mut packet = RenderPacket::default();
+        packet.images.push(PaintImage {
+            rect: WireRect::default(),
+            source_width: 2,
+            source_height: 2,
+            pixels: vec![0],
+            link_href: None,
+        });
+        let mut bytes = Vec::new();
+        write_render(&mut bytes, &packet).unwrap();
+        assert!(read_render(&mut bytes.as_slice()).is_err());
+    }
+    #[test]
+    fn links_share_the_text_budget() {
+        let mut packet = RenderPacket::default();
+        packet.texts.push(PaintText {
+            rect: WireRect::default(),
+            text: "x".repeat(MAX_TEXT_BYTES),
+            color: 0,
+            font_size: 16,
+            link_href: Some("https://example.com/".into()),
+        });
+        let mut bytes = Vec::new();
+        write_render(&mut bytes, &packet).unwrap();
+        assert!(read_render(&mut bytes.as_slice()).is_err());
+    }
+    #[test]
+    fn rejects_oversized_font_from_renderer() {
+        let mut packet = RenderPacket::default();
+        packet.texts.push(PaintText {
+            rect: WireRect::default(),
+            text: "test".into(),
+            color: 0,
+            font_size: u16::MAX,
+            link_href: None,
+        });
+        let mut bytes = Vec::new();
+        write_render(&mut bytes, &packet).unwrap();
+        assert!(read_render(&mut bytes.as_slice()).is_err());
     }
 }

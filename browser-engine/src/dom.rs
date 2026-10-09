@@ -247,7 +247,11 @@ impl ElementData {
 
     pub fn has_class(&self, class_name: &str) -> bool {
         self.attribute("class")
-            .map(|classes| classes.split_ascii_whitespace().any(|value| value == class_name))
+            .map(|classes| {
+                classes
+                    .split_ascii_whitespace()
+                    .any(|value| value == class_name)
+            })
             .unwrap_or(false)
     }
 }
@@ -305,8 +309,7 @@ fn is_hidden_tag(tag: &str) -> bool {
 fn is_block_tag(tag: &str) -> bool {
     matches!(
         tag,
-        "br"
-            | "p"
+        "br" | "p"
             | "div"
             | "h1"
             | "h2"

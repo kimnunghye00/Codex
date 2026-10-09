@@ -1,7 +1,5 @@
 use crate::dom::{Document, NodeId, NodeKind};
-use crate::ipc::{
-    self, PaintImage, PaintRect, PaintText, RenderPacket, WireRect,
-};
+use crate::ipc::{self, PaintImage, PaintRect, PaintText, RenderPacket, WireRect};
 use crate::{html, layout, resources, style};
 use std::error::Error;
 use std::io::{self, BufReader, BufWriter};
@@ -41,12 +39,7 @@ fn run_inner<R: io::Read, W: io::Write>(
     let stylesheet = resources::build_stylesheet(&document, &bundle.css)?;
     let images = resources::decode_images(&bundle.images);
     let styles = style::compute(&document, &stylesheet);
-    let layout = layout::build(
-        &document,
-        &styles,
-        &images,
-        request.viewport_width,
-    )?;
+    let layout = layout::build(&document, &styles, &images, request.viewport_width)?;
 
     let packet = build_packet(&document, &styles, &layout, &images);
     ipc::write_render(writer, &packet)?;
@@ -70,9 +63,7 @@ fn build_packet(
         .iter()
         .flatten()
         .filter_map(|layout_box| {
-            let color = styles
-                .get(layout_box.node as usize)?
-                .background_color?;
+            let color = styles.get(layout_box.node as usize)?.background_color?;
             Some(PaintRect {
                 rect: to_wire_rect(layout_box.rect),
                 color,
@@ -94,9 +85,7 @@ fn build_packet(
                 text: fragment.text.to_string(),
                 color: computed.color,
                 font_size: computed.font_size,
-                link_href: fragment
-                    .link
-                    .and_then(|id| raw_link_href(document, id)),
+                link_href: fragment.link.and_then(|id| raw_link_href(document, id)),
             }
         })
         .collect();
@@ -111,9 +100,7 @@ fn build_packet(
                 source_width: resource.width,
                 source_height: resource.height,
                 pixels: resource.pixels.clone(),
-                link_href: fragment
-                    .link
-                    .and_then(|id| raw_link_href(document, id)),
+                link_href: fragment.link.and_then(|id| raw_link_href(document, id)),
             })
         })
         .collect();

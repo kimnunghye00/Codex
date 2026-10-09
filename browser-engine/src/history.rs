@@ -41,7 +41,9 @@ impl History {
 
     pub fn back_target(&self) -> Option<&str> {
         let index = self.index?;
-        index.checked_sub(1).and_then(|target| self.entries.get(target).map(String::as_str))
+        index
+            .checked_sub(1)
+            .and_then(|target| self.entries.get(target).map(String::as_str))
     }
 
     pub fn forward_target(&self) -> Option<&str> {

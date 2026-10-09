@@ -1,10 +1,16 @@
+use crate::navigation::Control;
 use rustls::pki_types::ServerName;
 use rustls::{ClientConfig, ClientConnection, RootCertStore, StreamOwned};
 use std::error::Error;
 use std::io::{Read, Write};
-use std::net::TcpStream;
-use std::sync::Arc;
+use std::net::SocketAddr;
+use std::net::{TcpStream, ToSocketAddrs};
+use std::sync::{
+    mpsc::{self, SyncSender},
+    Arc, OnceLock,
+};
 use std::time::Duration;
+use std::time::Instant;
 use url::Url;
 
 pub const MAX_URL_BYTES: usize = 8 * 1024;
@@ -29,19 +35,24 @@ struct RawResponse {
     content_type: Option<String>,
 }
 
-pub fn fetch_https(input: &str) -> Result<HttpResponse, Box<dyn Error>> {
-    fetch_resource_https(
+pub fn fetch_document(input: &str, control: &Control) -> Result<HttpResponse, Box<dyn Error>> {
+    fetch_controlled(
         input,
         MAX_DOCUMENT_BYTES,
-        "text/html,application/xhtml+xml;q=0.9,text/plain;q=0.5",
+        "text/html,application/xhtml+xml;q=0.9",
+        Some(control),
     )
 }
 
-pub fn fetch_resource_https(
+pub fn fetch_controlled(
     input: &str,
     max_body_bytes: usize,
     accept: &str,
+    control: Option<&Control>,
 ) -> Result<HttpResponse, Box<dyn Error>> {
+    if accept.contains(['\r', '\n']) {
+        return Err("invalid Accept header".into());
+    }
     if max_body_bytes == 0 {
         return Err("resource byte limit must be greater than zero".into());
     }
@@ -56,7 +67,10 @@ pub fn fetch_resource_https(
         }
         visited.push(normalized);
 
-        let response = fetch_once(&current, max_body_bytes, accept)?;
+        if let Some(control) = control {
+            control.check()?;
+        }
+        let response = fetch_once(&current, max_body_bytes, accept, control)?;
 
         if !is_redirect(response.status) {
             return Ok(HttpResponse {
@@ -77,9 +91,7 @@ pub fn fetch_resource_https(
             .ok_or("redirect response did not contain a Location header")?;
         let next = current.join(location)?;
 
-        if next.scheme() != "https" {
-            return Err("redirect to a non-HTTPS URL was blocked".into());
-        }
+        validate_secure_url(&next)?;
         if next.as_str().len() > MAX_URL_BYTES {
             return Err("redirect URL exceeded the safety limit".into());
         }
@@ -107,10 +119,37 @@ pub fn normalize_address_input(input: &str) -> Result<String, Box<dyn Error>> {
         return Err("address is empty".into());
     }
 
-    let candidate = if trimmed.contains("://") {
+    if trimmed.len() > MAX_URL_BYTES {
+        return Err("address exceeded the safety limit".into());
+    }
+    // A scheme must never be reinterpreted as a search, except a host:port pair.
+    let host_port = trimmed
+        .split_once(':')
+        .map(|(host, tail)| {
+            host.contains('.') && tail.split('/').next().unwrap_or("").parse::<u16>().is_ok()
+        })
+        .unwrap_or(false);
+    let explicit_scheme = trimmed.contains("://")
+        || (!host_port
+            && trimmed
+                .split_once(':')
+                .map(|(prefix, _)| {
+                    !prefix.is_empty()
+                        && prefix
+                            .chars()
+                            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+                })
+                .unwrap_or(false));
+    let candidate = if explicit_scheme {
         trimmed.to_string()
-    } else {
+    } else if !trimmed.chars().any(char::is_whitespace)
+        && (trimmed.contains('.') || trimmed.starts_with('[') || trimmed.starts_with("localhost"))
+    {
         format!("https://{trimmed}")
+    } else {
+        let mut search = Url::parse("https://www.google.com/search")?;
+        search.query_pairs_mut().append_pair("q", trimmed);
+        search.to_string()
     };
 
     let url = parse_secure_url(&candidate)?;
@@ -144,11 +183,13 @@ fn fetch_once(
     url: &Url,
     max_body_bytes: usize,
     accept: &str,
+    control: Option<&Control>,
 ) -> Result<RawResponse, Box<dyn Error>> {
-    let host = url
-        .host_str()
-        .ok_or("URL does not contain a valid host")?
-        .to_string();
+    let host = match url.host().ok_or("URL does not contain a valid host")? {
+        url::Host::Domain(name) => name.to_string(),
+        url::Host::Ipv4(ip) => ip.to_string(),
+        url::Host::Ipv6(ip) => ip.to_string(),
+    };
     let port = url.port_or_known_default().unwrap_or(443);
 
     let mut path = url.path().to_string();
@@ -160,8 +201,29 @@ fn fetch_once(
         path.push_str(query);
     }
 
-    let address = format!("{host}:{port}");
-    let tcp = TcpStream::connect(address)?;
+    // Tuple resolution handles IPv6 without constructing an ambiguous host:port string.
+    let addresses = resolve_host(&host, port, control)?;
+    let mut connected = None;
+    for address in addresses.into_iter().take(8) {
+        if let Some(control) = control {
+            control.check()?;
+        }
+        if let Ok(stream) = TcpStream::connect_timeout(
+            &address,
+            control
+                .map(|c| c.remaining())
+                .transpose()?
+                .unwrap_or(Duration::from_secs(3))
+                .min(Duration::from_secs(3)),
+        ) {
+            connected = Some(stream);
+            break;
+        }
+    }
+    let tcp = connected.ok_or("unable to connect to HTTPS host")?;
+    let _watchdog = control
+        .map(|control| SocketWatchdog::start(&tcp, control.clone()))
+        .transpose()?;
     tcp.set_read_timeout(Some(IO_TIMEOUT))?;
     tcp.set_write_timeout(Some(IO_TIMEOUT))?;
 
@@ -175,6 +237,11 @@ fn fetch_once(
     let connection = ClientConnection::new(Arc::new(config), server_name)?;
     let mut tls = StreamOwned::new(connection, tcp);
 
+    let host = if host.contains(':') {
+        format!("[{host}]")
+    } else {
+        host
+    };
     let host_header = if port == 443 {
         host.clone()
     } else {
@@ -184,7 +251,7 @@ fn fetch_once(
     let request = format!(
         "GET {path} HTTP/1.1\r\n\
          Host: {host_header}\r\n\
-         User-Agent: browser-core/0.6\r\n\
+         User-Agent: browser-core/0.9\r\n\
          Accept: {accept}\r\n\
          Accept-Encoding: identity\r\n\
          Connection: close\r\n\
@@ -199,6 +266,9 @@ fn fetch_once(
     let mut chunk = [0_u8; 8192];
 
     loop {
+        if let Some(control) = control {
+            control.check()?;
+        }
         let read = tls.read(&mut chunk)?;
         if read == 0 {
             break;
@@ -214,12 +284,96 @@ fn fetch_once(
     parse_http_response(&raw, max_body_bytes)
 }
 
-fn parse_http_response(
-    raw: &[u8],
-    max_body_bytes: usize,
-) -> Result<RawResponse, Box<dyn Error>> {
-    let header_end = find_bytes(raw, b"\r\n\r\n")
-        .ok_or("invalid HTTP response: header terminator not found")?;
+struct SocketWatchdog {
+    stop: Option<mpsc::Sender<()>>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+impl SocketWatchdog {
+    fn start(socket: &TcpStream, control: Control) -> std::io::Result<Self> {
+        let socket = socket.try_clone()?;
+        let (stop, rx) = mpsc::channel();
+        let thread = std::thread::spawn(move || loop {
+            match rx.recv_timeout(Duration::from_millis(50)) {
+                Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                Err(mpsc::RecvTimeoutError::Timeout) => (),
+            }
+            if control.check().is_err() {
+                let _ = socket.shutdown(std::net::Shutdown::Both);
+                break;
+            }
+        });
+        Ok(Self {
+            stop: Some(stop),
+            thread: Some(thread),
+        })
+    }
+}
+impl Drop for SocketWatchdog {
+    fn drop(&mut self) {
+        if let Some(stop) = self.stop.take() {
+            let _ = stop.send(());
+        }
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+
+struct ResolveRequest {
+    host: String,
+    port: u16,
+    reply: SyncSender<Result<Vec<SocketAddr>, String>>,
+}
+static RESOLVER: OnceLock<SyncSender<ResolveRequest>> = OnceLock::new();
+fn resolve_host(
+    host: &str,
+    port: u16,
+    control: Option<&Control>,
+) -> Result<Vec<SocketAddr>, Box<dyn Error>> {
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return Ok(vec![SocketAddr::new(ip, port)]);
+    }
+    // One OS resolver thread and one pending query, even if system DNS stalls.
+    let resolver = RESOLVER.get_or_init(|| {
+        let (tx, rx) = mpsc::sync_channel::<ResolveRequest>(1);
+        std::thread::spawn(move || {
+            while let Ok(request) = rx.recv() {
+                let result = (request.host.as_str(), request.port)
+                    .to_socket_addrs()
+                    .map(|addresses| addresses.take(8).collect())
+                    .map_err(|e| e.to_string());
+                let _ = request.reply.send(result);
+            }
+        });
+        tx
+    });
+    let (reply, rx) = mpsc::sync_channel(1);
+    resolver
+        .try_send(ResolveRequest {
+            host: host.into(),
+            port,
+            reply,
+        })
+        .map_err(|_| "DNS resolver busy")?;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        if let Some(control) = control {
+            control.check()?;
+        }
+        if Instant::now() >= deadline {
+            return Err("DNS lookup timed out".into());
+        }
+        match rx.recv_timeout(Duration::from_millis(50)) {
+            Ok(result) => return result.map_err(Into::into),
+            Err(mpsc::RecvTimeoutError::Timeout) => (),
+            Err(mpsc::RecvTimeoutError::Disconnected) => return Err("DNS resolver stopped".into()),
+        }
+    }
+}
+
+fn parse_http_response(raw: &[u8], max_body_bytes: usize) -> Result<RawResponse, Box<dyn Error>> {
+    let header_end =
+        find_bytes(raw, b"\r\n\r\n").ok_or("invalid HTTP response: header terminator not found")?;
 
     if header_end > MAX_HEADER_BYTES {
         return Err("HTTP headers exceeded the safety limit".into());
@@ -231,11 +385,17 @@ fn parse_http_response(
 
     let mut lines = headers.lines();
     let status_line = lines.next().ok_or("missing HTTP status line")?;
+    if !status_line.starts_with("HTTP/1.1 ") && !status_line.starts_with("HTTP/1.0 ") {
+        return Err("unsupported HTTP status line".into());
+    }
     let status = status_line
         .split_whitespace()
         .nth(1)
         .ok_or("missing HTTP status code")?
         .parse::<u16>()?;
+    if !(100..=599).contains(&status) {
+        return Err("invalid HTTP status code".into());
+    }
 
     let mut chunked = false;
     let mut content_length: Option<usize> = None;
@@ -243,20 +403,24 @@ fn parse_http_response(
     let mut content_type: Option<String> = None;
 
     for line in lines {
-        let Some((name, value)) = line.split_once(':') else {
-            continue;
-        };
-
-        if name.eq_ignore_ascii_case("transfer-encoding")
-            && value.to_ascii_lowercase().contains("chunked")
-        {
+        let (name, value) = line.split_once(':').ok_or("malformed HTTP header")?;
+        if name.eq_ignore_ascii_case("transfer-encoding") {
+            if chunked || !value.trim().eq_ignore_ascii_case("chunked") {
+                return Err("unsupported or duplicate Transfer-Encoding".into());
+            }
             chunked = true;
         }
-
         if name.eq_ignore_ascii_case("content-length") {
-            if let Ok(length) = value.trim().parse::<usize>() {
-                content_length = Some(length);
+            let length = value.trim().parse::<usize>()?;
+            if content_length.is_some_and(|previous| previous != length) {
+                return Err("conflicting Content-Length headers".into());
             }
+            content_length = Some(length);
+        }
+        if name.eq_ignore_ascii_case("content-encoding")
+            && !value.trim().eq_ignore_ascii_case("identity")
+        {
+            return Err("compressed HTTP responses are not supported yet".into());
         }
 
         if name.eq_ignore_ascii_case("location") {
@@ -274,10 +438,18 @@ fn parse_http_response(
         }
     }
 
+    if chunked && content_length.is_some() {
+        return Err("ambiguous HTTP body framing".into());
+    }
+
     if let Some(length) = content_length {
         if length > max_body_bytes {
             return Err("Content-Length exceeds the resource safety limit".into());
         }
+    }
+
+    if !chunked && content_length.is_some_and(|length| length > body_bytes.len()) {
+        return Err("truncated HTTP body".into());
     }
 
     let body = if chunked {
@@ -325,12 +497,17 @@ fn decode_chunked(input: &[u8], max_body_bytes: usize) -> Result<Vec<u8>, Box<dy
         cursor = line_end + 2;
 
         if size == 0 {
+            if input.get(cursor..cursor + 2) != Some(b"\r\n")
+                && find_bytes(&input[cursor..], b"\r\n\r\n").is_none()
+            {
+                return Err("truncated chunk trailers".into());
+            }
             break;
         }
 
         if size > max_body_bytes
             || output.len().saturating_add(size) > max_body_bytes
-            || cursor.saturating_add(size + 2) > input.len()
+            || cursor.saturating_add(size).saturating_add(2) > input.len()
         {
             return Err("invalid or oversized chunked body".into());
         }
@@ -348,7 +525,9 @@ fn decode_chunked(input: &[u8], max_body_bytes: usize) -> Result<Vec<u8>, Box<dy
 }
 
 fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    haystack.windows(needle.len()).position(|window| window == needle)
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
 }
 
 #[cfg(test)]
@@ -398,5 +577,35 @@ mod tests {
     fn blocks_insecure_and_credentialed_navigation() {
         assert!(normalize_address_input("http://example.com/").is_err());
         assert!(normalize_address_input("https://user:pass@example.com/").is_err());
+    }
+    #[test]
+    fn search_encodes_korean_and_query_delimiters() {
+        let address = normalize_address_input("한글 검색 & #").unwrap();
+        let url = Url::parse(&address).unwrap();
+        assert_eq!(url.host_str(), Some("www.google.com"));
+        assert_eq!(
+            url.query_pairs().collect::<Vec<_>>(),
+            vec![("q".into(), "한글 검색 & #".into())]
+        );
+        assert!(normalize_address_input("javascript:alert(1)").is_err());
+        assert!(normalize_address_input("file:///etc/passwd").is_err());
+    }
+    #[test]
+    fn rejects_ambiguous_and_truncated_framing() {
+        for raw in [
+            &b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nx"[..],
+            &b"HTTP/1.1 200 OK\r\nContent-Length: 1\r\nContent-Length: 2\r\n\r\nx"[..],
+            &b"HTTP/1.1 200 OK\r\nContent-Length: 1\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n"
+                [..],
+            &b"HTTP/1.1 200 OK\r\nTransfer-Encoding: gzip, chunked\r\n\r\n0\r\n\r\n"[..],
+        ] {
+            assert!(parse_http_response(raw, 100).is_err());
+        }
+    }
+    #[test]
+    fn oversized_chunk_is_rejected_without_overflow() {
+        let body = format!("{:x}\r\n", usize::MAX);
+        assert!(decode_chunked(body.as_bytes(), usize::MAX).is_err());
+        assert!(decode_chunked(b"0\r\n", 100).is_err());
     }
 }

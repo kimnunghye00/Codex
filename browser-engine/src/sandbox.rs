@@ -4,7 +4,9 @@ use std::path::Path;
 #[cfg(windows)]
 use std::fs::File;
 
+#[cfg(windows)]
 const RENDERER_MEMORY_LIMIT_BYTES: usize = 192 * 1024 * 1024;
+#[cfg(windows)]
 const RENDERER_CPU_TIME_100NS: i64 = 10 * 10_000_000;
 
 #[cfg(windows)]
@@ -38,10 +40,47 @@ pub struct RendererProcess {
     process: windows_sys::Win32::Foundation::HANDLE,
     job: windows_sys::Win32::Foundation::HANDLE,
     waited: bool,
+    watchdog: Option<Watchdog>,
 }
 
 #[cfg(windows)]
 impl RendererProcess {
+    pub fn start_watchdog(
+        &mut self,
+        control: Option<crate::navigation::Control>,
+    ) -> io::Result<()> {
+        use windows_sys::Win32::{
+            Foundation::{DuplicateHandle, DUPLICATE_SAME_ACCESS},
+            System::Threading::{GetCurrentProcess, TerminateProcess},
+        };
+        let mut duplicate = std::ptr::null_mut();
+        if unsafe {
+            DuplicateHandle(
+                GetCurrentProcess(),
+                self.process,
+                GetCurrentProcess(),
+                &mut duplicate,
+                0,
+                0,
+                DUPLICATE_SAME_ACCESS,
+            )
+        } == 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+        let handle = duplicate as usize;
+        self.watchdog = Some(Watchdog::start(
+            control,
+            move || unsafe {
+                TerminateProcess(handle as _, 1);
+            },
+            move || unsafe {
+                windows_sys::Win32::Foundation::CloseHandle(handle as _);
+            },
+        ));
+        Ok(())
+    }
+
     pub fn take_stdin(&mut self) -> io::Result<RendererInput> {
         self.stdin
             .take()
@@ -70,28 +109,22 @@ impl RendererProcess {
         use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
         use windows_sys::Win32::Security::{
             CreateWellKnownSid, GetLengthSid, IsTokenRestricted, SetTokenInformation,
-            SID_AND_ATTRIBUTES, TOKEN_ADJUST_DEFAULT, TOKEN_MANDATORY_LABEL, TOKEN_QUERY,
-            SECURITY_MAX_SID_SIZE, TokenIntegrityLevel, WinLowLabelSid,
+            TokenIntegrityLevel, WinLowLabelSid, SECURITY_MAX_SID_SIZE, SID_AND_ATTRIBUTES,
+            TOKEN_ADJUST_DEFAULT, TOKEN_MANDATORY_LABEL, TOKEN_QUERY,
         };
         use windows_sys::Win32::System::JobObjects::{
-            JobObjectBasicUIRestrictions, SetInformationJobObject,
-            JOBOBJECT_BASIC_UI_RESTRICTIONS, JOB_OBJECT_UILIMIT_DESKTOP,
-            JOB_OBJECT_UILIMIT_DISPLAYSETTINGS, JOB_OBJECT_UILIMIT_EXITWINDOWS,
-            JOB_OBJECT_UILIMIT_GLOBALATOMS, JOB_OBJECT_UILIMIT_HANDLES,
-            JOB_OBJECT_UILIMIT_READCLIPBOARD, JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS,
-            JOB_OBJECT_UILIMIT_WRITECLIPBOARD,
+            JobObjectBasicUIRestrictions, SetInformationJobObject, JOBOBJECT_BASIC_UI_RESTRICTIONS,
+            JOB_OBJECT_UILIMIT_DESKTOP, JOB_OBJECT_UILIMIT_DISPLAYSETTINGS,
+            JOB_OBJECT_UILIMIT_EXITWINDOWS, JOB_OBJECT_UILIMIT_GLOBALATOMS,
+            JOB_OBJECT_UILIMIT_HANDLES, JOB_OBJECT_UILIMIT_READCLIPBOARD,
+            JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS, JOB_OBJECT_UILIMIT_WRITECLIPBOARD,
         };
         use windows_sys::Win32::System::SystemServices::SE_GROUP_INTEGRITY;
-            use windows_sys::Win32::System::Threading::OpenProcessToken;
+        use windows_sys::Win32::System::Threading::OpenProcessToken;
 
         unsafe {
             let mut token: HANDLE = null_mut();
-            if OpenProcessToken(
-                self.process,
-                TOKEN_QUERY | TOKEN_ADJUST_DEFAULT,
-                &mut token,
-            ) == 0
-            {
+            if OpenProcessToken(self.process, TOKEN_QUERY | TOKEN_ADJUST_DEFAULT, &mut token) == 0 {
                 return Err(io::Error::last_os_error());
             }
 
@@ -107,13 +140,7 @@ impl RendererProcess {
                 let mut low_sid_size = low_sid_storage.len() as u32;
                 let low_sid = low_sid_storage.as_mut_ptr() as *mut c_void;
 
-                if CreateWellKnownSid(
-                    WinLowLabelSid,
-                    null_mut(),
-                    low_sid,
-                    &mut low_sid_size,
-                ) == 0
-                {
+                if CreateWellKnownSid(WinLowLabelSid, null_mut(), low_sid, &mut low_sid_size) == 0 {
                     return Err(io::Error::last_os_error());
                 }
 
@@ -138,15 +165,14 @@ impl RendererProcess {
                 }
 
                 let ui = JOBOBJECT_BASIC_UI_RESTRICTIONS {
-                    UIRestrictionsClass:
-                        JOB_OBJECT_UILIMIT_HANDLES
-                            | JOB_OBJECT_UILIMIT_READCLIPBOARD
-                            | JOB_OBJECT_UILIMIT_WRITECLIPBOARD
-                            | JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS
-                            | JOB_OBJECT_UILIMIT_DISPLAYSETTINGS
-                            | JOB_OBJECT_UILIMIT_GLOBALATOMS
-                            | JOB_OBJECT_UILIMIT_DESKTOP
-                            | JOB_OBJECT_UILIMIT_EXITWINDOWS,
+                    UIRestrictionsClass: JOB_OBJECT_UILIMIT_HANDLES
+                        | JOB_OBJECT_UILIMIT_READCLIPBOARD
+                        | JOB_OBJECT_UILIMIT_WRITECLIPBOARD
+                        | JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS
+                        | JOB_OBJECT_UILIMIT_DISPLAYSETTINGS
+                        | JOB_OBJECT_UILIMIT_GLOBALATOMS
+                        | JOB_OBJECT_UILIMIT_DESKTOP
+                        | JOB_OBJECT_UILIMIT_EXITWINDOWS,
                 };
 
                 if SetInformationJobObject(
@@ -199,6 +225,7 @@ impl RendererProcess {
 #[cfg(windows)]
 impl Drop for RendererProcess {
     fn drop(&mut self) {
+        self.watchdog.take();
         unsafe {
             use windows_sys::Win32::Foundation::CloseHandle;
 
@@ -229,10 +256,11 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
         CloseHandle, SetHandleInformation, GENERIC_WRITE, HANDLE, HANDLE_FLAG_INHERIT,
         INVALID_HANDLE_VALUE,
     };
+    use windows_sys::Win32::Security::SECURITY_ATTRIBUTES;
     use windows_sys::Win32::Security::{
-        CreateRestrictedToken, GetTokenInformation, IsTokenRestricted, SID_AND_ATTRIBUTES,
-        TOKEN_ASSIGN_PRIMARY, TOKEN_DUPLICATE, TOKEN_QUERY, TOKEN_USER,
-        DISABLE_MAX_PRIVILEGE, TokenUser, WRITE_RESTRICTED,
+        CreateRestrictedToken, GetTokenInformation, IsTokenRestricted, TokenGroups, TokenUser,
+        DISABLE_MAX_PRIVILEGE, SID_AND_ATTRIBUTES, TOKEN_ASSIGN_PRIMARY, TOKEN_DUPLICATE,
+        TOKEN_GROUPS, TOKEN_QUERY, TOKEN_USER, WRITE_RESTRICTED,
     };
     use windows_sys::Win32::Storage::FileSystem::{
         CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
@@ -246,11 +274,9 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
     };
     use windows_sys::Win32::System::Pipes::CreatePipe;
     use windows_sys::Win32::System::Threading::{
-        CreateProcessAsUserW, GetCurrentProcess, OpenProcessToken, ResumeThread,
-        CREATE_NO_WINDOW, CREATE_SUSPENDED, PROCESS_INFORMATION, STARTF_USESTDHANDLES,
-        STARTUPINFOW,
+        CreateProcessAsUserW, GetCurrentProcess, OpenProcessToken, ResumeThread, CREATE_NO_WINDOW,
+        CREATE_SUSPENDED, PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOW,
     };
-    use windows_sys::Win32::Security::SECURITY_ATTRIBUTES;
 
     struct Handles {
         stdin_read: HANDLE,
@@ -333,21 +359,11 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
             }
 
             // Parent-side ends must never be inherited by the renderer.
-            if SetHandleInformation(
-                handles.stdin_write,
-                HANDLE_FLAG_INHERIT,
-                0,
-            ) == 0
-            {
+            if SetHandleInformation(handles.stdin_write, HANDLE_FLAG_INHERIT, 0) == 0 {
                 return Err(io::Error::last_os_error());
             }
 
-            if SetHandleInformation(
-                handles.stdout_read,
-                HANDLE_FLAG_INHERIT,
-                0,
-            ) == 0
-            {
+            if SetHandleInformation(handles.stdout_read, HANDLE_FLAG_INHERIT, 0) == 0 {
                 return Err(io::Error::last_os_error());
             }
 
@@ -388,7 +404,8 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
                 return Err(io::Error::last_os_error());
             }
 
-            let mut user_buffer = vec![0u8; user_bytes_needed as usize];
+            let mut user_buffer =
+                vec![0usize; (user_bytes_needed as usize).div_ceil(size_of::<usize>())];
             if GetTokenInformation(
                 handles.source_token,
                 TokenUser,
@@ -401,10 +418,51 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
             }
 
             let token_user = &*(user_buffer.as_ptr() as *const TOKEN_USER);
-            let restricting_sid = SID_AND_ATTRIBUTES {
+            let user_sid = SID_AND_ATTRIBUTES {
                 Sid: token_user.User.Sid,
                 Attributes: 0,
             };
+
+            // Runtime DLL initialization may need the inherited desktop's logon SID.
+            // Keep it in the write-restricting list together with the user SID; this
+            // does not grant any access absent from the original token. Untrusted
+            // input remains blocked until Low Integrity and Job UI limits are set.
+            let mut groups_size = 0;
+            GetTokenInformation(
+                handles.source_token,
+                TokenGroups,
+                null_mut(),
+                0,
+                &mut groups_size,
+            );
+            if groups_size == 0 {
+                return Err(io::Error::last_os_error());
+            }
+            let mut groups_buffer =
+                vec![0usize; (groups_size as usize).div_ceil(size_of::<usize>())];
+            if GetTokenInformation(
+                handles.source_token,
+                TokenGroups,
+                groups_buffer.as_mut_ptr() as *mut c_void,
+                groups_size,
+                &mut groups_size,
+            ) == 0
+            {
+                return Err(io::Error::last_os_error());
+            }
+            let groups = &*(groups_buffer.as_ptr() as *const TOKEN_GROUPS);
+            let entries =
+                std::slice::from_raw_parts(groups.Groups.as_ptr(), groups.GroupCount as usize);
+            let mut restricting_sids = vec![user_sid];
+            let logon_mask = windows_sys::Win32::System::SystemServices::SE_GROUP_LOGON_ID as u32;
+            for group in entries {
+                if group.Attributes & logon_mask == logon_mask {
+                    restricting_sids.push(SID_AND_ATTRIBUTES {
+                        Sid: group.Sid,
+                        Attributes: 0,
+                    });
+                }
+            }
 
             if CreateRestrictedToken(
                 handles.source_token,
@@ -413,8 +471,8 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
                 null(),
                 0,
                 null(),
-                1,
-                &restricting_sid,
+                restricting_sids.len() as u32,
+                restricting_sids.as_ptr(),
                 &mut handles.restricted_token,
             ) == 0
             {
@@ -427,7 +485,6 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
                     "renderer token was not reported as restricted",
                 ));
             }
-
 
             let mut startup: STARTUPINFOW = zeroed();
             startup.cb = size_of::<STARTUPINFOW>() as u32;
@@ -469,12 +526,11 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
             }
 
             let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = zeroed();
-            limits.BasicLimitInformation.LimitFlags =
-                JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
-                    | JOB_OBJECT_LIMIT_ACTIVE_PROCESS
-                    | JOB_OBJECT_LIMIT_PROCESS_MEMORY
-                    | JOB_OBJECT_LIMIT_PROCESS_TIME
-                    | JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION;
+            limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+                | JOB_OBJECT_LIMIT_ACTIVE_PROCESS
+                | JOB_OBJECT_LIMIT_PROCESS_MEMORY
+                | JOB_OBJECT_LIMIT_PROCESS_TIME
+                | JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION;
             limits.BasicLimitInformation.ActiveProcessLimit = 1;
             limits.BasicLimitInformation.PerProcessUserTimeLimit = RENDERER_CPU_TIME_100NS;
             limits.ProcessMemoryLimit = RENDERER_MEMORY_LIMIT_BYTES;
@@ -533,6 +589,7 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
                 process,
                 job,
                 waited: false,
+                watchdog: None,
             })
         })();
 
@@ -573,13 +630,31 @@ impl Read for RendererOutput {
 
 #[cfg(not(windows))]
 pub struct RendererProcess {
-    child: std::process::Child,
+    child: std::sync::Arc<std::sync::Mutex<std::process::Child>>,
+    watchdog: Option<Watchdog>,
     stdin: Option<RendererInput>,
     stdout: Option<RendererOutput>,
 }
 
 #[cfg(not(windows))]
 impl RendererProcess {
+    pub fn start_watchdog(
+        &mut self,
+        control: Option<crate::navigation::Control>,
+    ) -> io::Result<()> {
+        let child = self.child.clone();
+        self.watchdog = Some(Watchdog::start(
+            control,
+            move || {
+                if let Ok(mut child) = child.lock() {
+                    let _ = child.kill();
+                }
+            },
+            || {},
+        ));
+        Ok(())
+    }
+
     pub fn take_stdin(&mut self) -> io::Result<RendererInput> {
         self.stdin
             .take()
@@ -593,7 +668,9 @@ impl RendererProcess {
     }
 
     pub fn kill(&mut self) {
-        let _ = self.child.kill();
+        if let Ok(mut child) = self.child.lock() {
+            let _ = child.kill();
+        }
     }
 
     pub fn activate_content_restrictions(&mut self) -> io::Result<()> {
@@ -601,7 +678,17 @@ impl RendererProcess {
     }
 
     pub fn wait_success(&mut self) -> io::Result<()> {
-        let status = self.child.wait()?;
+        let status = loop {
+            if let Some(status) = self
+                .child
+                .lock()
+                .map_err(|_| io::Error::other("renderer lock poisoned"))?
+                .try_wait()?
+            {
+                break status;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        };
         if status.success() {
             Ok(())
         } else {
@@ -627,20 +714,73 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
         .stderr(Stdio::null())
         .spawn()?;
 
-    let stdin = child
-        .stdin
-        .take()
-        .map(RendererInput)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::BrokenPipe, "renderer stdin unavailable"))?;
-    let stdout = child
-        .stdout
-        .take()
-        .map(RendererOutput)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::BrokenPipe, "renderer stdout unavailable"))?;
+    let stdin =
+        child.stdin.take().map(RendererInput).ok_or_else(|| {
+            io::Error::new(io::ErrorKind::BrokenPipe, "renderer stdin unavailable")
+        })?;
+    let stdout =
+        child.stdout.take().map(RendererOutput).ok_or_else(|| {
+            io::Error::new(io::ErrorKind::BrokenPipe, "renderer stdout unavailable")
+        })?;
 
     Ok(RendererProcess {
-        child,
+        child: std::sync::Arc::new(std::sync::Mutex::new(child)),
+        watchdog: None,
         stdin: Some(stdin),
         stdout: Some(stdout),
     })
+}
+
+struct Watchdog {
+    stop: Option<std::sync::mpsc::Sender<()>>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+impl Watchdog {
+    fn start(
+        control: Option<crate::navigation::Control>,
+        kill: impl FnOnce() + Send + 'static,
+        cleanup: impl FnOnce() + Send + 'static,
+    ) -> Self {
+        let (stop, rx) = std::sync::mpsc::channel();
+        let thread = std::thread::spawn(move || {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            loop {
+                match rx.recv_timeout(std::time::Duration::from_millis(50)) {
+                    Ok(()) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => (),
+                }
+                if std::time::Instant::now() >= deadline
+                    || control.as_ref().is_some_and(|c| c.check().is_err())
+                {
+                    kill();
+                    break;
+                }
+            }
+            cleanup();
+        });
+        Self {
+            stop: Some(stop),
+            thread: Some(thread),
+        }
+    }
+}
+impl Drop for Watchdog {
+    fn drop(&mut self) {
+        if let Some(stop) = self.stop.take() {
+            let _ = stop.send(());
+        }
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+#[cfg(not(windows))]
+impl Drop for RendererProcess {
+    fn drop(&mut self) {
+        self.watchdog.take();
+        if let Ok(mut child) = self.child.lock() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
 }

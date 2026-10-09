@@ -194,9 +194,7 @@ pub fn parse_stylesheet(input: &str) -> Result<Stylesheet, CssError> {
         let mut selectors = Vec::new();
         for raw_selector in selector_source.split(',') {
             if selectors.len() >= MAX_SELECTORS_PER_RULE {
-                return Err(CssError::new(
-                    "CSS rule exceeded the selector safety limit",
-                ));
+                return Err(CssError::new("CSS rule exceeded the selector safety limit"));
             }
 
             if let Some(selector) = parse_selector(raw_selector.trim()) {

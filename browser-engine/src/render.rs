@@ -9,7 +9,7 @@ const FOREGROUND: u32 = 0x181818;
 const LINK: u32 = 0x0000CC;
 const ERROR_TEXT: u32 = 0x9A1A1A;
 pub const LEFT: usize = 24;
-const TOP: usize = 14;
+
 pub const PAGE_TOP: usize = 96;
 pub const PAGE_WIDTH: u32 = (WIDTH - LEFT * 2) as u32;
 pub const PAGE_VIEW_HEIGHT: u32 = (HEIGHT - PAGE_TOP) as u32;
@@ -27,15 +27,15 @@ const FORWARD_RECT: WireRect = WireRect {
     height: 26,
 };
 pub const ADDRESS_RECT: WireRect = WireRect {
-    x: 98,
+    x: 166,
     y: 44,
-    width: 778,
+    width: 650,
     height: 30,
 };
 
 pub fn create_window() -> Result<Window, Box<dyn Error>> {
     let mut window = Window::new(
-        "browser-core 0.7 — isolated renderer",
+        "browser-core 0.9 — independent engine",
         WIDTH,
         HEIGHT,
         WindowOptions::default(),
@@ -55,10 +55,37 @@ pub fn paint(
     can_back: bool,
     can_forward: bool,
 ) -> Vec<u32> {
-    let mut buffer = vec![packet.page_background; WIDTH * HEIGHT];
+    let mut buffer = vec![0; WIDTH * HEIGHT];
+    paint_into(
+        &mut buffer,
+        page_url,
+        address_text,
+        address_focused,
+        status,
+        scroll_y,
+        packet,
+        can_back,
+        can_forward,
+    );
+    buffer
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn paint_into(
+    buffer: &mut [u32],
+    page_url: &str,
+    address_text: &str,
+    address_focused: bool,
+    status: Option<&str>,
+    scroll_y: u32,
+    packet: &RenderPacket,
+    can_back: bool,
+    can_forward: bool,
+) {
+    buffer.fill(packet.page_background);
 
     fill_rect(
-        &mut buffer,
+        buffer,
         WireRect {
             x: 0,
             y: 0,
@@ -68,18 +95,12 @@ pub fn paint(
         0xFFFFFF,
     );
 
-    draw_text_line(
-        &mut buffer,
-        LEFT,
-        TOP,
-        "browser-core 0.7",
-        FOREGROUND,
-        2,
-    );
-    draw_nav_button(&mut buffer, BACK_RECT, "<", can_back);
-    draw_nav_button(&mut buffer, FORWARD_RECT, ">", can_forward);
+    draw_nav_button(buffer, BACK_RECT, "<", can_back);
+    draw_nav_button(buffer, FORWARD_RECT, ">", can_forward);
+    draw_nav_button(buffer, RELOAD_RECT, "R", true);
+    draw_nav_button(buffer, HOME_RECT, "H", true);
     draw_address_bar(
-        &mut buffer,
+        buffer,
         if address_focused {
             address_text
         } else {
@@ -89,24 +110,17 @@ pub fn paint(
     );
 
     if let Some(message) = status {
-        draw_text_line(
-            &mut buffer,
-            100,
-            78,
-            &visible_tail(&ascii_safe(message), 94),
-            ERROR_TEXT,
-            1,
-        );
+        draw_text_line(buffer, 100, 78, &visible_tail(message, 94), ERROR_TEXT, 1);
     }
 
     for item in &packet.rects {
         if let Some(rect) = page_rect_to_screen(item.rect, scroll_y) {
-            fill_rect(&mut buffer, rect, item.color);
+            fill_rect(buffer, rect, item.color);
         }
     }
 
     for image in &packet.images {
-        draw_image_fragment(&mut buffer, image, scroll_y);
+        draw_image_fragment(buffer, image, scroll_y);
     }
 
     for text in &packet.texts {
@@ -118,7 +132,7 @@ pub fn paint(
         }
 
         let screen_x = LEFT.saturating_add(text.rect.x as usize);
-        let screen_y = top.max(PAGE_TOP as i64) as usize;
+
         let scale = font_scale(text.font_size);
         let color = if text.link_href.is_some() {
             LINK
@@ -126,25 +140,16 @@ pub fn paint(
             text.color
         };
 
-        draw_text_line(
-            &mut buffer,
-            screen_x,
-            screen_y,
-            &ascii_safe(&text.text),
-            color,
-            scale,
-        );
+        draw_page_text_line(buffer, screen_x, top, &text.text, color, scale);
 
         if text.link_href.is_some() {
-            let underline_y = (PAGE_TOP as i64
-                + text.rect.y as i64
-                - scroll_y as i64
+            let underline_y = (PAGE_TOP as i64 + text.rect.y as i64 - scroll_y as i64
                 + text.rect.height as i64)
                 .clamp(PAGE_TOP as i64, HEIGHT.saturating_sub(1) as i64)
                 as usize;
 
             draw_horizontal_line(
-                &mut buffer,
+                buffer,
                 screen_x,
                 underline_y,
                 text.rect.width as usize,
@@ -152,16 +157,27 @@ pub fn paint(
             );
         }
     }
-
-    buffer
 }
 
-pub fn hit_test_navigation(
-    x: u32,
-    y: u32,
-    scroll_y: u32,
-    packet: &RenderPacket,
-) -> NavigationHit {
+pub fn hit_test_navigation(x: u32, y: u32, scroll_y: u32, packet: &RenderPacket) -> NavigationHit {
+    if (24..792).contains(&x) && (8..34).contains(&y) {
+        return NavigationHit::Tab(((x - 24) / 48) as usize);
+    }
+    if NEW_TAB_RECT.contains(x, y) {
+        return NavigationHit::NewTab;
+    }
+    if CLOSE_TAB_RECT.contains(x, y) {
+        return NavigationHit::CloseTab;
+    }
+    if BOOKMARK_RECT.contains(x, y) {
+        return NavigationHit::Bookmark;
+    }
+    if RELOAD_RECT.contains(x, y) {
+        return NavigationHit::Reload;
+    }
+    if HOME_RECT.contains(x, y) {
+        return NavigationHit::Home;
+    }
     if BACK_RECT.contains(x, y) {
         return NavigationHit::Back;
     }
@@ -176,9 +192,7 @@ pub fn hit_test_navigation(
     }
 
     let page_x = x.saturating_sub(LEFT as u32);
-    let page_y = y
-        .saturating_sub(PAGE_TOP as u32)
-        .saturating_add(scroll_y);
+    let page_y = y.saturating_sub(PAGE_TOP as u32).saturating_add(scroll_y);
 
     if let Some(href) = packet
         .images
@@ -209,14 +223,16 @@ pub enum NavigationHit {
     Back,
     Forward,
     AddressBar,
+    Reload,
+    Home,
+    Bookmark,
+    NewTab,
+    CloseTab,
+    Tab(usize),
     Link(String),
 }
 
-fn draw_image_fragment(
-    buffer: &mut [u32],
-    image: &crate::ipc::PaintImage,
-    scroll_y: u32,
-) {
+fn draw_image_fragment(buffer: &mut [u32], image: &crate::ipc::PaintImage, scroll_y: u32) {
     if image.source_width == 0
         || image.source_height == 0
         || image.rect.width == 0
@@ -241,20 +257,15 @@ fn draw_image_fragment(
 
     for y in top..bottom {
         let relative_y = (y as i64 - screen_top).max(0) as u64;
-        let src_y = ((relative_y * image.source_height as u64)
-            / image.rect.height as u64)
-            .min(image.source_height.saturating_sub(1) as u64)
-            as u32;
+        let src_y = ((relative_y * image.source_height as u64) / image.rect.height as u64)
+            .min(image.source_height.saturating_sub(1) as u64) as u32;
 
         for x in left..right {
             let relative_x = (x as i64 - screen_left).max(0) as u64;
-            let src_x = ((relative_x * image.source_width as u64)
-                / image.rect.width as u64)
-                .min(image.source_width.saturating_sub(1) as u64)
-                as u32;
+            let src_x = ((relative_x * image.source_width as u64) / image.rect.width as u64)
+                .min(image.source_width.saturating_sub(1) as u64) as u32;
 
-            let source_index =
-                src_y as usize * image.source_width as usize + src_x as usize;
+            let source_index = src_y as usize * image.source_width as usize + src_x as usize;
             let Some(&source) = image.pixels.get(source_index) else {
                 continue;
             };
@@ -322,7 +333,7 @@ fn draw_address_bar(buffer: &mut [u32], text: &str, focused: bool) {
     );
 
     let max_chars = ((ADDRESS_RECT.width as usize).saturating_sub(16)) / 8;
-    let visible = visible_tail(&ascii_safe(text), max_chars);
+    let visible = visible_tail(text, max_chars);
 
     draw_text_line(
         buffer,
@@ -334,15 +345,10 @@ fn draw_address_bar(buffer: &mut [u32], text: &str, focused: bool) {
     );
 
     if focused {
-        let cursor_x = (ADDRESS_RECT.x as usize + 8 + visible.chars().count() * 8)
-            .min((ADDRESS_RECT.right() as usize).saturating_sub(5));
-        draw_vertical_line(
-            buffer,
-            cursor_x,
-            ADDRESS_RECT.y as usize + 7,
-            16,
-            0x2458A6,
-        );
+        let cursor_x =
+            (ADDRESS_RECT.x as usize + 8 + crate::text_metrics::width(&visible) as usize * 8)
+                .min((ADDRESS_RECT.right() as usize).saturating_sub(5));
+        draw_vertical_line(buffer, cursor_x, ADDRESS_RECT.y as usize + 7, 16, 0x2458A6);
     }
 }
 
@@ -407,13 +413,7 @@ fn draw_rect_border(buffer: &mut [u32], rect: WireRect, color: u32) {
     );
 }
 
-fn draw_horizontal_line(
-    buffer: &mut [u32],
-    x: usize,
-    y: usize,
-    width: usize,
-    color: u32,
-) {
+fn draw_horizontal_line(buffer: &mut [u32], x: usize, y: usize, width: usize, color: u32) {
     if y >= HEIGHT {
         return;
     }
@@ -425,13 +425,7 @@ fn draw_horizontal_line(
     }
 }
 
-fn draw_vertical_line(
-    buffer: &mut [u32],
-    x: usize,
-    y: usize,
-    height: usize,
-    color: u32,
-) {
+fn draw_vertical_line(buffer: &mut [u32], x: usize, y: usize, height: usize, color: u32) {
     if x >= WIDTH {
         return;
     }
@@ -443,22 +437,15 @@ fn draw_vertical_line(
 }
 
 fn font_scale(font_size: u16) -> usize {
-    (((font_size as usize) + 7) / 8).clamp(1, 6)
+    (font_size as usize).div_ceil(8).clamp(1, 6)
 }
 
-fn draw_text_line(
-    buffer: &mut [u32],
-    x: usize,
-    y: usize,
-    text: &str,
-    color: u32,
-    scale: usize,
-) {
+fn draw_text_line(buffer: &mut [u32], x: usize, y: usize, text: &str, color: u32, scale: usize) {
     let mut cursor_x = x;
 
     for ch in text.chars() {
         draw_char(buffer, cursor_x, y, ch, color, scale);
-        cursor_x += 8 * scale;
+        cursor_x += crate::text_metrics::columns(ch) as usize * 8 * scale;
 
         if cursor_x >= WIDTH.saturating_sub(8 * scale) {
             break;
@@ -476,22 +463,11 @@ fn visible_tail(input: &str, max_chars: usize) -> String {
     input.chars().skip(count - max_chars).collect()
 }
 
-fn ascii_safe(input: &str) -> String {
-    input
-        .chars()
-        .map(|ch| if ch.is_ascii() { ch } else { '?' })
-        .collect()
-}
-
-fn draw_char(
-    buffer: &mut [u32],
-    x: usize,
-    y: usize,
-    ch: char,
-    color: u32,
-    scale: usize,
-) {
-    let Some(glyph) = BASIC_FONTS.get(ch) else {
+fn draw_char(buffer: &mut [u32], x: usize, y: usize, ch: char, color: u32, scale: usize) {
+    if !ch.is_ascii() && crate::font::draw(buffer, x, y as i64, ch, color, scale, 0, 8 * scale) {
+        return;
+    }
+    let Some(glyph) = BASIC_FONTS.get(if ch.is_ascii() { ch } else { '?' }) else {
         return;
     };
 
@@ -508,6 +484,107 @@ fn draw_char(
 
                     if px < WIDTH && py < HEIGHT {
                         buffer[py * WIDTH + px] = color;
+                    }
+                }
+            }
+        }
+    }
+}
+
+const RELOAD_RECT: WireRect = WireRect {
+    x: 92,
+    y: 46,
+    width: 28,
+    height: 26,
+};
+const HOME_RECT: WireRect = WireRect {
+    x: 126,
+    y: 46,
+    width: 28,
+    height: 26,
+};
+const BOOKMARK_RECT: WireRect = WireRect {
+    x: 834,
+    y: 46,
+    width: 40,
+    height: 26,
+};
+const NEW_TAB_RECT: WireRect = WireRect {
+    x: 800,
+    y: 8,
+    width: 28,
+    height: 26,
+};
+const CLOSE_TAB_RECT: WireRect = WireRect {
+    x: 834,
+    y: 8,
+    width: 40,
+    height: 26,
+};
+
+pub fn paint_tabs(
+    buffer: &mut [u32],
+    urls: &[&str],
+    active: usize,
+    bookmarked: bool,
+    loading: bool,
+) {
+    for (n, _) in urls.iter().enumerate() {
+        let rect = WireRect {
+            x: 24 + n as u32 * 48,
+            y: 8,
+            width: 44,
+            height: 26,
+        };
+        fill_rect(buffer, rect, if active == n { 0xDCEBFF } else { 0xF0F2F6 });
+        draw_rect_border(buffer, rect, if active == n { 0x366CC2 } else { 0xCDD3DC });
+        draw_text_line(
+            buffer,
+            rect.x as usize + 8,
+            16,
+            &format!("{}{}", n + 1, if active == n && loading { "*" } else { "" }),
+            FOREGROUND,
+            1,
+        );
+    }
+    draw_nav_button(buffer, NEW_TAB_RECT, "+", true);
+    draw_nav_button(buffer, CLOSE_TAB_RECT, "X", true);
+    draw_nav_button(
+        buffer,
+        BOOKMARK_RECT,
+        if bookmarked { "*" } else { "+" },
+        true,
+    );
+}
+
+fn draw_page_text_line(buffer: &mut [u32], x: usize, y: i64, text: &str, color: u32, scale: usize) {
+    let mut cursor = x;
+    for ch in text.chars() {
+        let advance = 4 * scale * crate::text_metrics::columns(ch) as usize;
+        if !crate::font::draw(buffer, cursor, y, ch, color, scale, PAGE_TOP, 4 * scale) {
+            draw_compact_fallback(buffer, cursor, y, ch, color, scale);
+        }
+        cursor = cursor.saturating_add(advance);
+        if cursor >= WIDTH {
+            break;
+        }
+    }
+}
+fn draw_compact_fallback(buffer: &mut [u32], x: usize, y: i64, ch: char, color: u32, scale: usize) {
+    let Some(glyph) = BASIC_FONTS.get(if ch.is_ascii() { ch } else { '?' }) else {
+        return;
+    };
+    for (gy, bits) in glyph.iter().enumerate() {
+        for gx in 0..8 {
+            if bits & (1 << gx) == 0 {
+                continue;
+            }
+            for sy in 0..scale {
+                for sx in 0..scale {
+                    let px = x + (gx * scale + sx) / 2;
+                    let py = y + (gy * scale + sy) as i64;
+                    if px < WIDTH && py >= PAGE_TOP as i64 && py < HEIGHT as i64 {
+                        buffer[py as usize * WIDTH + px] = color;
                     }
                 }
             }

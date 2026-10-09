@@ -22,3 +22,6 @@ use std::error::Error;
 fn main() -> Result<(), Box<dyn Error>> {
     renderer_worker::run()
 }
+
+#[path = "../text_metrics.rs"]
+mod text_metrics;
