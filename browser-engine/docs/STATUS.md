@@ -20,14 +20,23 @@
 | 배포·업데이트 | 일부 | portable EXE 생성. 코드 서명·설치·업데이트 필요 |
 | 크롬·엣지 비교 | 미실시 | 같은 사이트·탭·기능을 갖춘 상태로 측정해야 함 |
 
-## 이번 작업에서 수행한 검증
+## 0.10 재개 작업
+
+- gzip·zlib deflate 및 chunked+압축 조합, 압축 폭탄·체크섬 오류·모호한 헤더 거부 테스트를 추가했다.
+- HTML의 따옴표 없는 URL·중복 속성·일부 선택적 종료 태그·정확한 raw-text 종료와 반복 엔티티 처리를 보완했다.
+- CSS 하위/자식 선택자·!important·구체성 순서와 미지원 at-rule 격리를 추가했다. Unicode 색상 panic을 수정했다.
+- 62개 테스트와 Linux 양쪽 바이너리 빌드, 분리 렌더러·취소 smoke test를 확인했다.
+- compatibility.html을 실제 IPC worker 경로로 처리해 색상·링크·script 미노출을 자동 검증한다.
+- Windows CI에 같은 호환성 fixture 렌더링을 추가했다. 주요 사이트·로그인·JavaScript 호환성 완료를 의미하지 않는다.
+
+## 기존 작업에서 수행한 검증
 
 - Rust 양쪽 바이너리의 자동 테스트: 48개 통과.
 - Linux에서 분리 렌더러 문서 처리, 한글 유지, script 텍스트 미표시 smoke test 통과.
 - 막힌 렌더러를 취소 신호로 종료하는 watchdog smoke test 통과.
 - 한글 읽기 HTML을 PPM으로 렌더링하고 글자·링크·줄 배치를 눈으로 확인.
 - 가상 X11 화면에서 16개 탭 열기·전환·닫기, 주소 편집과 차단, 내장 북마크 화면 조작 확인.
-- Windows GNU 타깃 타입/컴파일 검사 수행. Windows native CI에서 MSVC release 빌드와 48개 테스트 통과. 기존 DLL 초기화 오류(0xC0000142)가 재현되어, 최초 스레드의 임시 시작 토큰 폐기/브로커 검증 방식으로 수정 후 권한 제한 smoke test를 다시 수행한다.
+- Windows GNU 타깃 타입/컴파일 검사 수행. Windows native CI에서 기존 DLL 초기화 오류(0xC0000142)를 수정한 커밋 26d9841의 MSVC release 빌드·48개 테스트·권한 제한/취소·실제 HTTPS 렌더링 검사가 모두 통과했다. 0.10 변경은 별도 CI 실행에서 다시 확인한다.
 
 ### 메모리 측정 범위
 

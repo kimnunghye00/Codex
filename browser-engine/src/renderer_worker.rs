@@ -145,3 +145,32 @@ fn to_wire_rect(rect: layout::Rect) -> WireRect {
         height: rect.height,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn compatibility_fixture_survives_the_actual_ipc_worker_path() {
+        use std::io::Cursor;
+        let fixture = include_bytes!("../tests/fixtures/compatibility.html");
+        let mut input = Vec::new();
+        ipc::write_load_document(&mut input, "https://example.com/", 852, fixture).unwrap();
+        ipc::write_resources(&mut input, &Default::default()).unwrap();
+        let mut output = Vec::new();
+        run_inner(&mut Cursor::new(input), &mut output).unwrap();
+        let mut output = Cursor::new(output);
+        ipc::read_scan(&mut output).unwrap();
+        let packet = ipc::read_render(&mut output).unwrap();
+        assert!(!packet.texts.is_empty());
+        assert!(packet.texts.iter().any(|t| t.color == 0x008080));
+        assert!(packet.texts.iter().any(|t| t.color == 0x000080));
+        assert!(!packet
+            .texts
+            .iter()
+            .any(|t| t.text.contains("must-not-paint")));
+        assert!(packet
+            .texts
+            .iter()
+            .any(|t| t.link_href.as_deref() == Some("https://example.com/path/to/page")));
+    }
+}

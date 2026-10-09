@@ -1,4 +1,4 @@
-use crate::dom::{Document, ElementData, NodeKind};
+use crate::dom::{Document, ElementData, NodeId, NodeKind};
 use std::error::Error;
 use std::fmt;
 
@@ -22,10 +22,22 @@ pub struct Rule {
 
 #[derive(Debug)]
 pub struct Selector {
+    parts: Vec<CompoundSelector>,
+    specificity: u32,
+}
+
+#[derive(Debug)]
+struct CompoundSelector {
+    relation: Relation,
     tag: Option<Box<str>>,
     id: Option<Box<str>>,
     classes: Vec<Box<str>>,
-    specificity: u32,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Relation {
+    Descendant,
+    Child,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -67,6 +79,7 @@ pub enum Length {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Declaration {
+    pub important: bool,
     pub property: Property,
     pub value: Value,
 }
@@ -137,25 +150,65 @@ impl Stylesheet {
     }
 }
 
-impl Selector {
-    pub fn matches(&self, element: &ElementData) -> bool {
-        if let Some(tag) = &self.tag {
-            if !element.tag_name().eq_ignore_ascii_case(tag) {
-                return false;
-            }
-        }
-
-        if let Some(id) = &self.id {
-            if element.attribute("id") != Some(id.as_ref()) {
-                return false;
-            }
-        }
-
-        self.classes
-            .iter()
-            .all(|class_name| element.has_class(class_name))
+impl CompoundSelector {
+    fn matches(&self, element: &ElementData) -> bool {
+        self.tag
+            .as_ref()
+            .is_none_or(|tag| element.tag_name().eq_ignore_ascii_case(tag))
+            && self
+                .id
+                .as_ref()
+                .is_none_or(|id| element.attribute("id") == Some(id.as_ref()))
+            && self.classes.iter().all(|class| element.has_class(class))
     }
+}
 
+impl Selector {
+    pub fn matches(&self, document: &Document, node: NodeId) -> bool {
+        let last = self.parts.len() - 1;
+        let Some(NodeKind::Element(element)) = document.node(node).map(|n| n.kind()) else {
+            return false;
+        };
+        if !self.parts[last].matches(element) {
+            return false;
+        }
+        if last == 0 {
+            return true;
+        }
+        // Each bit is a matched suffix waiting for its left-hand ancestor.
+        // Keep all alternatives: a greedy match fails on repeated ancestors.
+        // At most 16 states, one bounded walk, no recursion/backtracking tree.
+        let mut active = 1u32 << last;
+        let mut parent = document.node(node).and_then(|n| n.parent());
+        while let Some(id) = parent {
+            let Some(ancestor) = document.node(id) else {
+                return false;
+            };
+            let mut next = 0;
+            for j in 1..=last {
+                if active & (1 << j) == 0 {
+                    continue;
+                }
+                if matches!(self.parts[j].relation, Relation::Descendant) {
+                    next |= 1 << j;
+                }
+                if let NodeKind::Element(element) = ancestor.kind() {
+                    if self.parts[j - 1].matches(element) {
+                        next |= 1 << (j - 1);
+                    }
+                }
+            }
+            if next & 1 != 0 {
+                return true;
+            }
+            if next == 0 {
+                return false;
+            }
+            active = next;
+            parent = ancestor.parent();
+        }
+        false
+    }
     pub fn specificity(&self) -> u32 {
         self.specificity
     }
@@ -174,6 +227,13 @@ pub fn parse_stylesheet(input: &str) -> Result<Stylesheet, CssError> {
         skip_ascii_whitespace(source.as_bytes(), &mut cursor);
         if cursor >= source.len() {
             break;
+        }
+
+        if source.as_bytes()[cursor] == b'@' {
+            // Unsupported at-rules must be skipped as a complete unit. Their
+            // nested rules cannot become unconditional styles on the page.
+            cursor = skip_at_rule(&source, cursor)?;
+            continue;
         }
 
         let Some(open_rel) = source[cursor..].find('{') else {
@@ -217,6 +277,46 @@ pub fn parse_stylesheet(input: &str) -> Result<Stylesheet, CssError> {
     Ok(Stylesheet { rules })
 }
 
+fn skip_at_rule(source: &str, start: usize) -> Result<usize, CssError> {
+    let bytes = source.as_bytes();
+    let mut depth = 0usize;
+    let mut quote = None;
+    let mut cursor = start;
+    while cursor < bytes.len() {
+        let byte = bytes[cursor];
+        if quote.is_some() && byte == b'\\' {
+            cursor = (cursor + 2).min(bytes.len());
+            continue;
+        }
+        if let Some(active) = quote {
+            if byte == active {
+                quote = None;
+            }
+        } else {
+            match byte {
+                b'\'' | b'"' => quote = Some(byte),
+                b';' if depth == 0 => return Ok(cursor + 1),
+                b'{' => depth += 1,
+                b'}' => {
+                    if depth == 0 {
+                        return Err(CssError::new("unexpected CSS closing brace"));
+                    }
+                    depth -= 1;
+                    if depth == 0 {
+                        return Ok(cursor + 1);
+                    }
+                }
+                _ => (),
+            }
+        }
+        cursor += 1;
+    }
+    if depth > 0 || quote.is_some() {
+        return Err(CssError::new("unterminated CSS at-rule"));
+    }
+    Ok(cursor)
+}
+
 pub fn parse_inline_style(input: &str) -> Result<Vec<Declaration>, CssError> {
     if input.len() > MAX_INLINE_STYLE_BYTES {
         return Err(CssError::new("inline CSS exceeded the safety limit"));
@@ -225,15 +325,46 @@ pub fn parse_inline_style(input: &str) -> Result<Vec<Declaration>, CssError> {
 }
 
 fn parse_selector(input: &str) -> Option<Selector> {
-    if input.is_empty()
-        || input.bytes().any(|byte| {
-            byte.is_ascii_whitespace()
-                || matches!(byte, b'>' | b'+' | b'~' | b'[' | b']' | b':' | b'(' | b')')
-        })
-    {
+    if input.is_empty() || !input.is_ascii() {
         return None;
     }
+    let bytes = input.as_bytes();
+    let mut cursor = 0;
+    let mut relation = Relation::Descendant;
+    let mut parts = Vec::new();
+    while cursor < bytes.len() {
+        skip_ascii_whitespace(bytes, &mut cursor);
+        let start = cursor;
+        while cursor < bytes.len() && !bytes[cursor].is_ascii_whitespace() && bytes[cursor] != b'>'
+        {
+            cursor += 1;
+        }
+        if start == cursor || parts.len() >= 16 {
+            return None;
+        }
+        parts.push(parse_compound(&input[start..cursor], relation)?);
+        skip_ascii_whitespace(bytes, &mut cursor);
+        relation = Relation::Descendant;
+        if bytes.get(cursor) == Some(&b'>') {
+            relation = Relation::Child;
+            cursor += 1;
+            skip_ascii_whitespace(bytes, &mut cursor);
+            if cursor == bytes.len() {
+                return None;
+            }
+        }
+    }
+    // Encode the specificity tuple without class counts overflowing into IDs.
+    let ids = parts.iter().filter(|p| p.id.is_some()).count() as u32;
+    let classes = parts.iter().map(|p| p.classes.len() as u32).sum::<u32>();
+    let tags = parts.iter().filter(|p| p.tag.is_some()).count() as u32;
+    Some(Selector {
+        parts,
+        specificity: (ids << 20) | (classes << 10) | tags,
+    })
+}
 
+fn parse_compound(input: &str, relation: Relation) -> Option<CompoundSelector> {
     let bytes = input.as_bytes();
     let mut cursor = 0;
     let mut tag: Option<Box<str>> = None;
@@ -271,20 +402,23 @@ fn parse_selector(input: &str) -> Option<Selector> {
 
         let value: Box<str> = input[start..cursor].to_string().into_boxed_str();
         if marker == b'#' {
+            if id.is_some() {
+                return None;
+            }
             id = Some(value);
         } else {
+            if classes.len() >= 32 {
+                return None;
+            }
             classes.push(value);
         }
     }
 
-    let specificity =
-        (id.is_some() as u32) * 100 + (classes.len() as u32) * 10 + (tag.is_some() as u32);
-
-    Some(Selector {
+    Some(CompoundSelector {
+        relation,
         tag,
         id,
         classes,
-        specificity,
     })
 }
 
@@ -298,8 +432,14 @@ fn parse_declarations(input: &str) -> Result<Vec<Declaration>, CssError> {
 
         let name = name.trim().to_ascii_lowercase();
         let value = value.trim();
+        let (value, important) = match value.rsplit_once('!') {
+            Some((value, marker)) if marker.trim().eq_ignore_ascii_case("important") => {
+                (value.trim(), true)
+            }
+            _ => (value, false),
+        };
 
-        let expanded = match name.as_str() {
+        let mut expanded = match name.as_str() {
             "margin" => parse_box_shorthand(value, true),
             "padding" => parse_box_shorthand(value, false),
             _ => parse_declaration(&name, value)
@@ -313,6 +453,9 @@ fn parse_declarations(input: &str) -> Result<Vec<Declaration>, CssError> {
             ));
         }
 
+        for declaration in &mut expanded {
+            declaration.important = important;
+        }
         declarations.extend(expanded);
     }
 
@@ -361,6 +504,7 @@ fn parse_box_shorthand(input: &str, margin: bool) -> Vec<Declaration> {
         .into_iter()
         .zip(properties)
         .map(|(length, property)| Declaration {
+            important: false,
             property,
             value: Value::Length(length),
         })
@@ -370,18 +514,22 @@ fn parse_box_shorthand(input: &str, margin: bool) -> Vec<Declaration> {
 fn parse_declaration(name: &str, value: &str) -> Option<Declaration> {
     match name {
         "display" => parse_display(value).map(|display| Declaration {
+            important: false,
             property: Property::Display,
             value: Value::Display(display),
         }),
         "color" => parse_color(value).map(|color| Declaration {
+            important: false,
             property: Property::Color,
             value: Value::Color(color),
         }),
         "background" | "background-color" => parse_color(value).map(|color| Declaration {
+            important: false,
             property: Property::BackgroundColor,
             value: Value::Color(color),
         }),
         "font-size" => parse_length(value).map(|length| Declaration {
+            important: false,
             property: Property::FontSize,
             value: Value::Length(length),
         }),
@@ -399,6 +547,7 @@ fn parse_declaration(name: &str, value: &str) -> Option<Declaration> {
 
 fn length_declaration(property: Property, value: &str) -> Option<Declaration> {
     parse_length(value).map(|length| Declaration {
+        important: false,
         property,
         value: Value::Length(length),
     })
@@ -441,6 +590,9 @@ fn parse_color(input: &str) -> Option<u32> {
     let value = input.trim().to_ascii_lowercase();
 
     if let Some(hex) = value.strip_prefix('#') {
+        if !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return None;
+        }
         return match hex.len() {
             3 => {
                 let r = u32::from_str_radix(&hex[0..1], 16).ok()?;
@@ -535,8 +687,36 @@ mod tests {
     }
 
     #[test]
-    fn ignores_complex_selectors_for_now() {
-        let sheet = parse_stylesheet("main p { color: red; } p.note { color: blue; }").unwrap();
+    fn ignores_unsupported_pseudo_selectors() {
+        let sheet =
+            parse_stylesheet("main p:hover { color: red; } p.note { color: blue; }").unwrap();
         assert_eq!(sheet.rules.len(), 1);
+    }
+
+    #[test]
+    fn rejects_unicode_hex_colors_without_panicking() {
+        for color in ["#가", "#éa", "#한글", "#12g"] {
+            assert_eq!(parse_color(color), None);
+        }
+    }
+
+    #[test]
+    fn bounded_selector_chains_reject_invalid_combinators() {
+        for selector in ["> p", "main >", "main >> p", "main + p", "p#one#two"] {
+            assert!(parse_selector(selector).is_none(), "{selector}");
+        }
+        assert!(parse_selector(&vec!["div"; 17].join(" ")).is_none());
+        assert!(parse_selector(&vec!["div"; 16].join(" ")).is_some());
+    }
+
+    #[test]
+    fn unsupported_nested_at_rules_never_leak_into_global_styles() {
+        let sheet = parse_stylesheet(
+            "@import url('a.css'); @media print {p {color:red} div {color:green}} p {color:blue}",
+        )
+        .unwrap();
+        assert_eq!(sheet.rules.len(), 1);
+        assert_eq!(sheet.rules[0].declarations[0].value, Value::Color(0x0000FF));
+        assert!(parse_stylesheet("@media print {p {color:red}").is_err());
     }
 }

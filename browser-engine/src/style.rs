@@ -2,7 +2,7 @@ use crate::css::{self, Declaration, Display, Length, Property, Stylesheet, Value
 use crate::dom::{Document, NodeId, NodeKind};
 
 const ROOT_FONT_SIZE: f32 = 16.0;
-const INLINE_SPECIFICITY: u32 = 1_000_000;
+const INLINE_SPECIFICITY: u32 = 1 << 28;
 
 #[derive(Debug, Clone, Copy)]
 pub struct ComputedStyle {
@@ -53,8 +53,8 @@ impl Winner {
         }
     }
 
-    fn consider(&mut self, specificity: u32, order: u32, value: Value) {
-        let rank = ((specificity as u64) << 32) | (order as u64 + 1);
+    fn consider(&mut self, specificity: u32, order: u32, important: bool, value: Value) {
+        let rank = ((important as u64) << 63) | ((specificity as u64) << 32) | (order as u64 + 1);
         if rank >= self.rank {
             self.rank = rank;
             self.value = Some(value);
@@ -112,7 +112,7 @@ impl Cascaded {
             Property::PaddingLeft => &mut self.padding_left,
         };
 
-        target.consider(specificity, order, declaration.value);
+        target.consider(specificity, order, declaration.important, declaration.value);
     }
 }
 
@@ -149,7 +149,7 @@ pub fn compute(document: &Document, stylesheet: &Stylesheet) -> Vec<ComputedStyl
             let specificity = rule
                 .selectors
                 .iter()
-                .filter(|selector| selector.matches(element))
+                .filter(|selector| selector.matches(document, id))
                 .map(|selector| selector.specificity())
                 .max();
 
@@ -374,5 +374,34 @@ mod tests {
         let p = document.find_first_element("p").unwrap();
 
         assert_eq!(styles[p as usize].display, Display::None);
+    }
+
+    #[test]
+    fn descendant_matching_keeps_alternative_ancestors() {
+        let document = html::parse(
+            "<main><section><div><section><p>text</p></section></div></section></main>",
+        )
+        .unwrap();
+        let sheet = parse_stylesheet("main > section p {color:red} main > p {color:blue}").unwrap();
+        let styles = compute(&document, &sheet);
+        let p = document.find_first_element("p").unwrap();
+        assert_eq!(styles[p as usize].color, 0xFF0000);
+    }
+
+    #[test]
+    fn important_priority_is_above_inline_but_inline_important_wins() {
+        let document = html::parse("<p style='color:blue'>text</p>").unwrap();
+        let sheet = parse_stylesheet("p {color:red !IMPORTANT} p {color:green}").unwrap();
+        assert_eq!(compute(&document, &sheet)[1].color, 0xFF0000);
+        let document = html::parse("<p style='color:blue !important'>text</p>").unwrap();
+        assert_eq!(compute(&document, &sheet)[1].color, 0x0000FF);
+    }
+
+    #[test]
+    fn id_specificity_exceeds_many_classes() {
+        let document = html::parse("<p id='hero' class='a b c d e f g h i j k'>text</p>").unwrap();
+        let sheet =
+            parse_stylesheet("#hero {color:red} .a.b.c.d.e.f.g.h.i.j.k {color:blue}").unwrap();
+        assert_eq!(compute(&document, &sheet)[1].color, 0xFF0000);
     }
 }

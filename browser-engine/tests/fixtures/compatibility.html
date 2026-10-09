@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>호환성 검사</title>
+<style>
+body { background: #fafcff; color: #25374d; padding: 16px }
+main > section p { color: #008080 }
+main > p { color: red }
+#priority { color: #000080 !important }
+@media print { #priority { color: red } p { display: none } }
+</style></head><body><main><h1>자체 브라우저 호환성 검사</h1>
+<section><div><section><p>하위 선택자와 한글 표시를 확인합니다.</p></section></div></section>
+<p id=priority style="color:red">중요 스타일이 우선 적용됩니다.
+<p>닫기 태그를 생략해도 다음 문단을 유지합니다.
+<ul><li>첫 번째 항목<li>두 번째 항목<ul><li>중첩 항목</ul><li>세 번째 항목</ul>
+<a href=https://example.com/path/to/page>따옴표 없는 HTTPS 링크</a>
+<script/>must-not-paint </scriptx><p>must-not-paint</p></script>
+<p>1 &lt; 3 &amp; 정상 문서</p></main></body></html>

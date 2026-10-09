@@ -110,6 +110,9 @@ pub fn resolve_https_url(base: &str, href: &str) -> Result<String, Box<dyn Error
     let base = parse_secure_url(base)?;
     let resolved = base.join(href.trim())?;
     validate_secure_url(&resolved)?;
+    if resolved.as_str().len() > MAX_URL_BYTES {
+        return Err("resolved URL exceeded the safety limit".into());
+    }
     Ok(resolved.to_string())
 }
 
@@ -227,14 +230,20 @@ fn fetch_once(
     tcp.set_read_timeout(Some(IO_TIMEOUT))?;
     tcp.set_write_timeout(Some(IO_TIMEOUT))?;
 
-    let roots = RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-    let config = ClientConfig::builder()
-        .with_root_certificates(roots)
-        .with_no_client_auth();
+    // Reuse immutable trust/configuration data, not connections or page data.
+    static TLS_CONFIG: OnceLock<Arc<ClientConfig>> = OnceLock::new();
+    let config = TLS_CONFIG.get_or_init(|| {
+        let roots = RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        Arc::new(
+            ClientConfig::builder()
+                .with_root_certificates(roots)
+                .with_no_client_auth(),
+        )
+    });
 
     let server_name = ServerName::try_from(host.clone())
         .map_err(|_| "host name cannot be used for TLS verification")?;
-    let connection = ClientConnection::new(Arc::new(config), server_name)?;
+    let connection = ClientConnection::new(config.clone(), server_name)?;
     let mut tls = StreamOwned::new(connection, tcp);
 
     let host = if host.contains(':') {
@@ -251,9 +260,9 @@ fn fetch_once(
     let request = format!(
         "GET {path} HTTP/1.1\r\n\
          Host: {host_header}\r\n\
-         User-Agent: browser-core/0.9\r\n\
+         User-Agent: browser-core/0.10\r\n\
          Accept: {accept}\r\n\
-         Accept-Encoding: identity\r\n\
+         Accept-Encoding: gzip, deflate\r\n\
          Connection: close\r\n\
          \r\n"
     );
@@ -383,7 +392,7 @@ fn parse_http_response(raw: &[u8], max_body_bytes: usize) -> Result<RawResponse,
     let body_bytes = &raw[header_end + 4..];
     let headers = std::str::from_utf8(header_bytes)?;
 
-    let mut lines = headers.lines();
+    let mut lines = headers.split("\r\n");
     let status_line = lines.next().ok_or("missing HTTP status line")?;
     if !status_line.starts_with("HTTP/1.1 ") && !status_line.starts_with("HTTP/1.0 ") {
         return Err("unsupported HTTP status line".into());
@@ -401,9 +410,16 @@ fn parse_http_response(raw: &[u8], max_body_bytes: usize) -> Result<RawResponse,
     let mut content_length: Option<usize> = None;
     let mut location: Option<String> = None;
     let mut content_type: Option<String> = None;
+    let mut content_encoding: Option<String> = None;
 
     for line in lines {
         let (name, value) = line.split_once(':').ok_or("malformed HTTP header")?;
+        if name.is_empty()
+            || !name.bytes().all(is_header_token)
+            || value.bytes().any(|b| (b < 32 && b != b'\t') || b == 127)
+        {
+            return Err("invalid HTTP header characters".into());
+        }
         if name.eq_ignore_ascii_case("transfer-encoding") {
             if chunked || !value.trim().eq_ignore_ascii_case("chunked") {
                 return Err("unsupported or duplicate Transfer-Encoding".into());
@@ -411,16 +427,21 @@ fn parse_http_response(raw: &[u8], max_body_bytes: usize) -> Result<RawResponse,
             chunked = true;
         }
         if name.eq_ignore_ascii_case("content-length") {
-            let length = value.trim().parse::<usize>()?;
+            let value = value.trim();
+            if value.is_empty() || !value.bytes().all(|b| b.is_ascii_digit()) {
+                return Err("invalid Content-Length".into());
+            }
+            let length = value.parse::<usize>()?;
             if content_length.is_some_and(|previous| previous != length) {
                 return Err("conflicting Content-Length headers".into());
             }
             content_length = Some(length);
         }
-        if name.eq_ignore_ascii_case("content-encoding")
-            && !value.trim().eq_ignore_ascii_case("identity")
-        {
-            return Err("compressed HTTP responses are not supported yet".into());
+        if name.eq_ignore_ascii_case("content-encoding") {
+            if content_encoding.is_some() {
+                return Err("duplicate Content-Encoding".into());
+            }
+            content_encoding = Some(value.trim().to_ascii_lowercase());
         }
 
         if name.eq_ignore_ascii_case("location") {
@@ -466,12 +487,46 @@ fn parse_http_response(raw: &[u8], max_body_bytes: usize) -> Result<RawResponse,
         body_bytes[..end].to_vec()
     };
 
+    let body = decode_content(body, content_encoding.as_deref(), max_body_bytes)?;
     Ok(RawResponse {
         status,
         body,
         location,
         content_type,
     })
+}
+
+fn is_header_token(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&b)
+}
+
+fn decode_content(
+    body: Vec<u8>,
+    encoding: Option<&str>,
+    limit: usize,
+) -> Result<Vec<u8>, Box<dyn Error>> {
+    use flate2::read::{MultiGzDecoder, ZlibDecoder};
+    let mut reader: Box<dyn Read + '_> = match encoding {
+        None | Some("identity") => return Ok(body),
+        Some("gzip") => Box::new(MultiGzDecoder::new(body.as_slice())),
+        Some("deflate") => Box::new(ZlibDecoder::new(body.as_slice())),
+        _ => return Err("unsupported Content-Encoding".into()),
+    };
+    // Both wire bytes and expanded bytes have the same resource budget. Never
+    // read_to_end a compressed response: a tiny gzip can expand to gigabytes.
+    let mut decoded = Vec::new();
+    let mut block = [0u8; 8192];
+    loop {
+        let n = reader.read(&mut block)?;
+        if n == 0 {
+            break;
+        }
+        if decoded.len().saturating_add(n) > limit {
+            return Err("decompressed resource exceeds the safety limit".into());
+        }
+        decoded.extend_from_slice(&block[..n]);
+    }
+    Ok(decoded)
 }
 
 fn is_redirect(status: u16) -> bool {
@@ -607,5 +662,82 @@ mod tests {
         let body = format!("{:x}\r\n", usize::MAX);
         assert!(decode_chunked(body.as_bytes(), usize::MAX).is_err());
         assert!(decode_chunked(b"0\r\n", 100).is_err());
+    }
+
+    fn compressed_response(content: &[u8], gzip: bool, chunked: bool) -> Vec<u8> {
+        use flate2::{
+            write::{GzEncoder, ZlibEncoder},
+            Compression,
+        };
+        let encoded = if gzip {
+            let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+            encoder.write_all(content).unwrap();
+            encoder.finish().unwrap()
+        } else {
+            let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+            encoder.write_all(content).unwrap();
+            encoder.finish().unwrap()
+        };
+        let framing = if chunked {
+            "Transfer-Encoding: chunked".to_string()
+        } else {
+            format!("Content-Length: {}", encoded.len())
+        };
+        let mut raw = format!(
+            "HTTP/1.1 200 OK\r\nContent-Encoding: {}\r\n{framing}\r\n\r\n",
+            if gzip { "gzip" } else { "deflate" }
+        )
+        .into_bytes();
+        if chunked {
+            raw.extend_from_slice(format!("{:x}\r\n", encoded.len()).as_bytes());
+            raw.extend_from_slice(&encoded);
+            raw.extend_from_slice(b"\r\n0\r\n\r\n");
+        } else {
+            raw.extend_from_slice(&encoded);
+        }
+        raw
+    }
+
+    #[test]
+    fn decompresses_gzip_and_zlib_after_http_framing() {
+        for gzip in [true, false] {
+            for chunked in [true, false] {
+                let raw = compressed_response("<p>한글 문서</p>".as_bytes(), gzip, chunked);
+                assert_eq!(
+                    parse_http_response(&raw, 1024).unwrap().body,
+                    "<p>한글 문서</p>".as_bytes()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn rejects_compression_bombs_corruption_and_encoding_stacks() {
+        for gzip in [true, false] {
+            let raw = compressed_response(&vec![b'x'; 100_000], gzip, false);
+            assert!(parse_http_response(&raw, 1024).is_err());
+            let mut raw = compressed_response(b"hello", gzip, false);
+            *raw.last_mut().unwrap() ^= 0xff;
+            assert!(parse_http_response(&raw, 1024).is_err());
+        }
+        for raw in [
+            &b"HTTP/1.1 200 OK\r\nContent-Encoding: gzip, deflate\r\n\r\nx"[..],
+            &b"HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Encoding: gzip\r\n\r\nx"[..],
+            &b"HTTP/1.1 200 OK\r\nContent-Encoding: br\r\n\r\nx"[..],
+        ] {
+            assert!(parse_http_response(raw, 1024).is_err());
+        }
+    }
+
+    #[test]
+    fn rejects_bad_header_names_controls_and_signed_lengths() {
+        for raw in [
+            &b"HTTP/1.1 200 OK\r\nContent-Length : 1\r\n\r\nx"[..],
+            &b"HTTP/1.1 200 OK\r\nContent-Length: +1\r\n\r\nx"[..],
+            &b"HTTP/1.1 200 OK\r\nX-Test: a\x00b\r\n\r\nx"[..],
+            &b"HTTP/1.1 200 OK\r\nX-Test: a\nb\r\n\r\nx"[..],
+        ] {
+            assert!(parse_http_response(raw, 100).is_err());
+        }
     }
 }

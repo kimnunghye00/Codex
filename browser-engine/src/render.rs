@@ -35,7 +35,7 @@ pub const ADDRESS_RECT: WireRect = WireRect {
 
 pub fn create_window() -> Result<Window, Box<dyn Error>> {
     let mut window = Window::new(
-        "browser-core 0.9 — independent engine",
+        "browser-core 0.10 — independent engine",
         WIDTH,
         HEIGHT,
         WindowOptions::default(),

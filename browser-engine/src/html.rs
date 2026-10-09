@@ -40,7 +40,7 @@ pub fn parse(input: &str) -> Result<Document, ParseError> {
         if let Some(raw_tag) = current_raw_text_tag(&document, &stack) {
             let closing = format!("</{raw_tag}");
             if let Some(relative) =
-                find_ascii_case_insensitive(input[cursor..].as_bytes(), closing.as_bytes())
+                find_raw_text_end(input[cursor..].as_bytes(), closing.as_bytes())
             {
                 if relative > 0 {
                     append_text(
@@ -73,6 +73,16 @@ pub fn parse(input: &str) -> Result<Document, ParseError> {
             continue;
         }
 
+        // A less-than sign followed by ordinary text is not a start tag.
+        if bytes
+            .get(cursor + 1)
+            .is_none_or(|b| !b.is_ascii_alphabetic() && !matches!(b, b'/' | b'!' | b'?'))
+        {
+            append_text(&mut document, *stack.last().unwrap(), "<");
+            cursor += 1;
+            continue;
+        }
+
         if input[cursor..].starts_with("<!--") {
             if let Some(relative_end) = input[cursor + 4..].find("-->") {
                 cursor += 4 + relative_end + 3;
@@ -102,7 +112,6 @@ pub fn parse(input: &str) -> Result<Document, ParseError> {
             continue;
         }
 
-        let self_closing = raw.trim_end().ends_with('/');
         let (tag_name, attributes) = parse_start_tag(raw)?;
 
         if tag_name.is_empty() {
@@ -110,13 +119,15 @@ pub fn parse(input: &str) -> Result<Document, ParseError> {
             continue;
         }
 
+        close_optional_elements(&document, &mut stack, &tag_name);
         let parent = *stack.last().unwrap();
         let element = document.append(
             parent,
             NodeKind::Element(ElementData::new(tag_name.clone(), attributes)),
         );
 
-        if !self_closing && !is_void_element(&tag_name) {
+        // In HTML a trailing slash cannot self-close non-void elements.
+        if !is_void_element(&tag_name) {
             if stack.len() >= MAX_DOM_DEPTH {
                 return Err(ParseError::new("HTML exceeded the DOM depth safety limit"));
             }
@@ -149,6 +160,63 @@ fn current_raw_text_tag<'a>(document: &'a Document, stack: &[NodeId]) -> Option<
     };
 
     matches!(element.tag_name(), "script" | "style").then_some(element.tag_name())
+}
+
+fn close_optional_elements(document: &Document, stack: &mut Vec<NodeId>, incoming: &str) {
+    let closes_p = matches!(
+        incoming,
+        "address"
+            | "article"
+            | "aside"
+            | "blockquote"
+            | "div"
+            | "dl"
+            | "fieldset"
+            | "footer"
+            | "form"
+            | "h1"
+            | "h2"
+            | "h3"
+            | "h4"
+            | "h5"
+            | "h6"
+            | "header"
+            | "hr"
+            | "main"
+            | "nav"
+            | "ol"
+            | "p"
+            | "pre"
+            | "section"
+            | "table"
+            | "ul"
+    );
+    if closes_p {
+        close_element(document, stack, "p");
+    }
+    let peers: &[&str] = match incoming {
+        "li" => &["li"],
+        "dt" | "dd" => &["dt", "dd"],
+        "td" | "th" => &["td", "th"],
+        "tr" => &["tr"],
+        "option" => &["option"],
+        _ => &[],
+    };
+    // Do not close an outer list item when starting a nested list.
+    for position in (1..stack.len()).rev() {
+        let Some(NodeKind::Element(element)) = document.node(stack[position]).map(|n| n.kind())
+        else {
+            continue;
+        };
+        let tag = element.tag_name();
+        if peers.contains(&tag) {
+            stack.truncate(position);
+            break;
+        }
+        if matches!(tag, "ul" | "ol" | "dl" | "table" | "select") {
+            break;
+        }
+    }
 }
 
 fn close_element(document: &Document, stack: &mut Vec<NodeId>, closing_tag: &str) {
@@ -189,8 +257,12 @@ fn parse_start_tag(raw: &str) -> Result<(String, Vec<Attribute>), ParseError> {
 
     while cursor < bytes.len() {
         skip_whitespace(bytes, &mut cursor);
-        if cursor >= bytes.len() || bytes[cursor] == b'/' {
+        if cursor >= bytes.len() {
             break;
+        }
+        if bytes[cursor] == b'/' {
+            cursor += 1;
+            continue;
         }
 
         if attributes.len() >= MAX_ATTRIBUTES_PER_ELEMENT {
@@ -229,17 +301,19 @@ fn parse_start_tag(raw: &str) -> Result<(String, Vec<Attribute>), ParseError> {
                 }
             } else {
                 let value_start = cursor;
-                while cursor < bytes.len()
-                    && !bytes[cursor].is_ascii_whitespace()
-                    && bytes[cursor] != b'/'
-                {
+                while cursor < bytes.len() && !bytes[cursor].is_ascii_whitespace() {
                     cursor += 1;
                 }
                 value = decode_entities(&raw[value_start..cursor]);
             }
         }
 
-        if !name.is_empty() {
+        // The first duplicate attribute wins, as in HTML tokenization.
+        if !name.is_empty()
+            && !attributes
+                .iter()
+                .any(|a: &Attribute| a.name().eq_ignore_ascii_case(&name))
+        {
             attributes.push(Attribute::new(name, value));
         }
     }
@@ -300,17 +374,24 @@ fn is_void_element(tag: &str) -> bool {
     )
 }
 
-fn find_ascii_case_insensitive(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+fn find_raw_text_end(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() || needle.len() > haystack.len() {
         return None;
     }
 
-    haystack.windows(needle.len()).position(|window| {
-        window
-            .iter()
-            .zip(needle)
-            .all(|(left, right)| left.eq_ignore_ascii_case(right))
-    })
+    haystack
+        .windows(needle.len())
+        .enumerate()
+        .find_map(|(index, window)| {
+            (window
+                .iter()
+                .zip(needle)
+                .all(|(left, right)| left.eq_ignore_ascii_case(right))
+                && haystack
+                    .get(index + needle.len())
+                    .is_some_and(|b| b.is_ascii_whitespace() || matches!(b, b'>' | b'/')))
+            .then_some(index)
+        })
 }
 
 fn decode_entities(input: &str) -> String {
@@ -326,9 +407,15 @@ fn decode_entities(input: &str) -> String {
         let amp = cursor + relative_amp;
         output.push_str(&input[cursor..amp]);
 
-        let Some(relative_semi) = input[amp + 1..].find(';') else {
-            output.push_str(&input[amp..]);
-            break;
+        // Bounded lookahead avoids quadratic scanning on many bare ampersands.
+        let Some(relative_semi) = input.as_bytes()[amp + 1..]
+            .iter()
+            .take(16)
+            .position(|b| *b == b';')
+        else {
+            output.push('&');
+            cursor = amp + 1;
+            continue;
         };
 
         let semi = amp + 1 + relative_semi;
@@ -433,5 +520,63 @@ mod tests {
     fn tolerates_mismatched_closing_tags() {
         let document = parse("<body><div><p>Hello</div><p>World</p></body>").unwrap();
         assert_eq!(document.visible_text(), "Hello\nWorld");
+    }
+
+    #[test]
+    fn unquoted_urls_and_duplicate_attributes_preserve_first_value() {
+        let document = parse("<body><a href=https://example.com/a/b href=/wrong>link</a><img src=/images/pic.png/></body>").unwrap();
+        let NodeKind::Element(link) = document
+            .node(document.find_first_element("a").unwrap())
+            .unwrap()
+            .kind()
+        else {
+            panic!()
+        };
+        assert_eq!(link.attribute("href"), Some("https://example.com/a/b"));
+        let NodeKind::Element(image) = document
+            .node(document.find_first_element("img").unwrap())
+            .unwrap()
+            .kind()
+        else {
+            panic!()
+        };
+        // Slash is part of an unquoted value until whitespace or tag end.
+        assert_eq!(image.attribute("src"), Some("/images/pic.png/"));
+    }
+
+    #[test]
+    fn omitted_list_and_paragraph_closures_keep_siblings() {
+        let document =
+            parse("<body><p>One<p>Two<ul><li>A<li>B<ul><li>C</ul><li>D</ul><div>End</div>")
+                .unwrap();
+        let body = document.find_first_element("body").unwrap();
+        let tags: Vec<_> = document
+            .children(body)
+            .filter_map(|id| match document.node(id)?.kind() {
+                NodeKind::Element(e) => Some(e.tag_name()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(tags, ["p", "p", "ul", "div"]);
+        let list = document.find_first_element("ul").unwrap();
+        assert_eq!(document.children(list).count(), 3);
+        assert_eq!(document.visible_text(), "One\nTwo\nA\nB\nC\nD\nEnd");
+    }
+
+    #[test]
+    fn raw_text_requires_exact_end_tag_and_slash_does_not_close_script() {
+        let document =
+            parse("<body><script/>bad </scriptx><p>hidden</p></SCRIPT><p>shown</p>").unwrap();
+        assert_eq!(document.visible_text(), "shown");
+    }
+
+    #[test]
+    fn bare_less_than_and_many_ampersands_remain_text() {
+        assert_eq!(
+            parse("<p>1 < 3 & 한글 &amp;</p>").unwrap().visible_text(),
+            "1 < 3 & 한글 &"
+        );
+        let text = "&".repeat(100_000);
+        assert_eq!(decode_entities(&text), text);
     }
 }
