@@ -34,6 +34,58 @@ struct RawResponse {
     body: Vec<u8>,
     location: Option<String>,
     content_type: Option<String>,
+    cookies: Vec<String>,
+}
+
+#[derive(Default)]
+pub struct Session {
+    jar: crate::cookies::Jar,
+}
+impl Session {
+    pub fn document(
+        &mut self,
+        input: &str,
+        body: Option<&[u8]>,
+        initiator: Option<&str>,
+        control: &Control,
+    ) -> Result<HttpResponse, Box<dyn Error>> {
+        let initiator = initiator.and_then(|u| Url::parse(u).ok());
+        fetch_request_with_session(
+            input,
+            MAX_DOCUMENT_BYTES,
+            "text/html,application/xhtml+xml;q=0.9",
+            Some(control),
+            body,
+            Some(&mut self.jar),
+            initiator.as_ref(),
+            true,
+            tls_config(),
+        )
+    }
+    pub fn resource(
+        &mut self,
+        input: &str,
+        max: usize,
+        accept: &str,
+        base: &str,
+        control: Option<&Control>,
+    ) -> Result<HttpResponse, Box<dyn Error>> {
+        let initiator = Url::parse(base).ok();
+        fetch_request_with_session(
+            input,
+            max,
+            accept,
+            control,
+            None,
+            Some(&mut self.jar),
+            initiator.as_ref(),
+            false,
+            tls_config(),
+        )
+    }
+    pub fn clear(&mut self) {
+        self.jar.clear();
+    }
 }
 
 pub fn fetch_document(input: &str, control: &Control) -> Result<HttpResponse, Box<dyn Error>> {
@@ -76,8 +128,36 @@ fn fetch_request(
     max_body_bytes: usize,
     accept: &str,
     control: Option<&Control>,
-    mut post_body: Option<&[u8]>,
+    post_body: Option<&[u8]>,
 ) -> Result<HttpResponse, Box<dyn Error>> {
+    fetch_request_with_session(
+        input,
+        max_body_bytes,
+        accept,
+        control,
+        post_body,
+        None,
+        None,
+        true,
+        tls_config(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn fetch_request_with_session(
+    input: &str,
+    max_body_bytes: usize,
+    accept: &str,
+    control: Option<&Control>,
+    mut post_body: Option<&[u8]>,
+    mut jar: Option<&mut crate::cookies::Jar>,
+    initiator: Option<&Url>,
+    top_level: bool,
+    config: Arc<ClientConfig>,
+) -> Result<HttpResponse, Box<dyn Error>> {
+    if post_body.is_some_and(|b| b.len() > 64 * 1024) {
+        return Err("POST body exceeds the limit".into());
+    }
     if accept.contains(['\r', '\n']) {
         return Err("invalid Accept header".into());
     }
@@ -99,7 +179,22 @@ fn fetch_request(
         if let Some(control) = control {
             control.check()?;
         }
-        let response = fetch_once(&current, max_body_bytes, accept, control, post_body)?;
+        let cookie = jar
+            .as_deref_mut()
+            .map(|j| j.header(&current, initiator, top_level, post_body.is_some()))
+            .unwrap_or_default();
+        let response = fetch_once_with_config(
+            &current,
+            max_body_bytes,
+            accept,
+            control,
+            post_body,
+            config.clone(),
+            &cookie,
+        )?;
+        if let Some(jar) = jar.as_deref_mut() {
+            jar.store(&current, &response.cookies, initiator, top_level);
+        }
 
         if !is_redirect(response.status) {
             return Ok(HttpResponse {
@@ -232,6 +327,7 @@ fn fetch_once(
         control,
         post_body,
         tls_config(),
+        "",
     )
 }
 
@@ -256,6 +352,7 @@ fn fetch_once_with_config(
     control: Option<&Control>,
     post_body: Option<&[u8]>,
     config: Arc<ClientConfig>,
+    cookie: &str,
 ) -> Result<RawResponse, Box<dyn Error>> {
     let host = match url.host().ok_or("URL does not contain a valid host")? {
         url::Host::Domain(name) => name.to_string(),
@@ -317,14 +414,19 @@ fn fetch_once_with_config(
 
     let method = if post_body.is_some() { "POST" } else { "GET" };
     let entity_headers = post_body.map(|body| format!("Content-Type: application/x-www-form-urlencoded; charset=UTF-8\r\nContent-Length: {}\r\n", body.len())).unwrap_or_default();
+    let cookie_header = if cookie.is_empty() {
+        String::new()
+    } else {
+        format!("Cookie: {cookie}\r\n")
+    };
     let request = format!(
         "{method} {path} HTTP/1.1\r\n\
          Host: {host_header}\r\n\
-         User-Agent: browser-core/0.11\r\n\
+         User-Agent: browser-core/0.12\r\n\
          Accept: {accept}\r\n\
          Accept-Encoding: gzip, deflate\r\n\
          Connection: close\r\n\
-         {entity_headers}\r\n"
+         {cookie_header}{entity_headers}\r\n"
     );
 
     tls.write_all(request.as_bytes())?;
@@ -474,6 +576,7 @@ fn parse_http_response(raw: &[u8], max_body_bytes: usize) -> Result<RawResponse,
     let mut location: Option<String> = None;
     let mut content_type: Option<String> = None;
     let mut content_encoding: Option<String> = None;
+    let mut cookies = Vec::new();
 
     for line in lines {
         let (name, value) = line.split_once(':').ok_or("malformed HTTP header")?;
@@ -482,6 +585,12 @@ fn parse_http_response(raw: &[u8], max_body_bytes: usize) -> Result<RawResponse,
             || value.bytes().any(|b| (b < 32 && b != b'\t') || b == 127)
         {
             return Err("invalid HTTP header characters".into());
+        }
+        if name.eq_ignore_ascii_case("set-cookie")
+            && cookies.len() < 32
+            && value.trim().len() <= 4096
+        {
+            cookies.push(value.trim().to_string());
         }
         if name.eq_ignore_ascii_case("transfer-encoding") {
             if chunked || !value.trim().eq_ignore_ascii_case("chunked") {
@@ -556,6 +665,7 @@ fn parse_http_response(raw: &[u8], max_body_bytes: usize) -> Result<RawResponse,
         body,
         location,
         content_type,
+        cookies,
     })
 }
 
@@ -827,7 +937,7 @@ mod tls_post_tests {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         let worker = std::thread::spawn(move || {
-            let (socket, _) = listener.accept().unwrap();
+            let (socket, _) = (test_accept(&listener), ());
             socket
                 .set_read_timeout(Some(Duration::from_secs(5)))
                 .unwrap();
@@ -879,6 +989,7 @@ mod tls_post_tests {
             None,
             Some(b"q=%ED%95%9C%EA%B8%80&password=fake"),
             config,
+            "",
         )
         .unwrap();
         assert_eq!(response.body, b"<p>ok</p>");
@@ -888,5 +999,159 @@ mod tls_post_tests {
             request.contains("Content-Type: application/x-www-form-urlencoded; charset=UTF-8\r\n")
         );
         assert!(request.ends_with("q=%ED%95%9C%EA%B8%80&password=fake"));
+    }
+}
+
+#[cfg(test)]
+mod session_integration_tests {
+    use super::*;
+    use rustls::{
+        pki_types::{CertificateDer, PrivatePkcs8KeyDer},
+        ServerConfig, ServerConnection,
+    };
+    use std::net::TcpListener;
+    fn config() -> (Arc<ServerConfig>, Arc<ClientConfig>) {
+        let cert =
+            CertificateDer::from(include_bytes!("../tests/fixtures/tls/localhost.der").to_vec());
+        let key = PrivatePkcs8KeyDer::from(
+            include_bytes!("../tests/fixtures/tls/localhost-key.der").to_vec(),
+        );
+        let server = ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(vec![cert.clone()], key.into())
+            .unwrap();
+        let mut roots = RootCertStore::empty();
+        roots.add(cert).unwrap();
+        (
+            Arc::new(server),
+            Arc::new(
+                ClientConfig::builder()
+                    .with_root_certificates(roots)
+                    .with_no_client_auth(),
+            ),
+        )
+    }
+    #[test]
+    fn post_login_redirect_sends_session_cookie_and_clear_removes_it() {
+        let (server, client) = config();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let worker = std::thread::spawn(move || {
+            let mut seen = Vec::new();
+            for index in 0..3 {
+                let (socket, _) = (test_accept(&listener), ());
+                socket
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                socket
+                    .set_write_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                let mut tls =
+                    StreamOwned::new(ServerConnection::new(server.clone()).unwrap(), socket);
+                let mut bytes = Vec::new();
+                loop {
+                    let mut block = [0; 2048];
+                    let n = tls.read(&mut block).unwrap();
+                    assert!(n > 0);
+                    bytes.extend_from_slice(&block[..n]);
+                    assert!(bytes.len() < 8192);
+                    if let Some(end) = find_bytes(&bytes, b"\r\n\r\n") {
+                        let headers = std::str::from_utf8(&bytes[..end]).unwrap();
+                        let length = headers
+                            .lines()
+                            .find_map(|l| l.strip_prefix("Content-Length: "))
+                            .map(|s| s.parse::<usize>().unwrap())
+                            .unwrap_or(0);
+                        if bytes.len() == end + 4 + length {
+                            break;
+                        }
+                    }
+                }
+                seen.push(String::from_utf8(bytes).unwrap());
+                let response: &[u8]=match index {
+                    0=>b"HTTP/1.1 303 See Other\r\nLocation: /private\r\nSet-Cookie: session=ok; Secure; HttpOnly; SameSite=Lax; Path=/\r\nContent-Length: 0\r\n\r\n",
+                    1=>b"HTTP/1.1 200 OK\r\nContent-Length: 9\r\nContent-Type: text/html\r\n\r\n<p>ok</p>",
+                    _=>b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 9\r\n\r\n<p>no</p>",
+                };
+                tls.write_all(response).unwrap();
+                tls.conn.send_close_notify();
+                tls.flush().unwrap();
+            }
+            seen
+        });
+        let url = Url::parse(&format!("https://localhost:{port}/login")).unwrap();
+        let mut jar = crate::cookies::Jar::default();
+        let response = fetch_request_with_session(
+            url.as_str(),
+            1024,
+            "text/html",
+            None,
+            Some(b"user=a&password=fake"),
+            Some(&mut jar),
+            Some(&url),
+            true,
+            client.clone(),
+        )
+        .unwrap();
+        assert_eq!(response.status, 200);
+        assert!(!response.was_post);
+        assert!(response.final_url.ends_with("/private"));
+        jar.clear();
+        let response = fetch_request_with_session(
+            &format!("https://localhost:{port}/private"),
+            1024,
+            "text/html",
+            None,
+            None,
+            Some(&mut jar),
+            Some(&url),
+            true,
+            client,
+        )
+        .unwrap();
+        assert_eq!(response.status, 401);
+        let seen = worker.join().unwrap();
+        assert!(seen[0].starts_with("POST /login "));
+        assert!(seen[1].starts_with("GET /private "));
+        assert!(seen[1].contains("Cookie: session=ok\r\n"));
+        assert!(!seen[2].contains("Cookie:"));
+    }
+    #[test]
+    fn production_trust_store_rejects_the_private_test_certificate() {
+        let (server, _) = config();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let worker = std::thread::spawn(move || {
+            let (socket, _) = (test_accept(&listener), ());
+            socket
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut tls = StreamOwned::new(ServerConnection::new(server).unwrap(), socket);
+            let _ = tls.read(&mut [0; 1024]);
+        });
+        let url = Url::parse(&format!("https://127.0.0.1:{port}/")).unwrap();
+        let error = fetch_once(&url, 1024, "text/html", None, None).unwrap_err();
+        assert!(error.to_string().contains("UnknownIssuer"), "{error}");
+        worker.join().unwrap();
+    }
+}
+
+#[cfg(test)]
+fn test_accept(listener: &std::net::TcpListener) -> TcpStream {
+    listener.set_nonblocking(true).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        match listener.accept() {
+            Ok((socket, _)) => {
+                socket.set_nonblocking(false).unwrap();
+                return socket;
+            }
+            Err(error)
+                if error.kind() == std::io::ErrorKind::WouldBlock && Instant::now() < deadline =>
+            {
+                std::thread::sleep(Duration::from_millis(10))
+            }
+            Err(error) => panic!("test listener did not receive a connection: {error}"),
+        }
     }
 }

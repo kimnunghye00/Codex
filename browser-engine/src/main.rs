@@ -1,5 +1,6 @@
 mod browser;
 mod clipboard;
+mod cookies;
 mod font;
 mod forms;
 mod history;

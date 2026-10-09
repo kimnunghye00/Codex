@@ -17,6 +17,16 @@ pub fn render_page_controlled(
     viewport_width: u32,
     control: Option<&Control>,
 ) -> Result<RenderPacket, Box<dyn Error>> {
+    render_page_session(base_url, html, viewport_width, control, None)
+}
+
+pub fn render_page_session(
+    base_url: &str,
+    html: &[u8],
+    viewport_width: u32,
+    control: Option<&Control>,
+    session: Option<&mut net::Session>,
+) -> Result<RenderPacket, Box<dyn Error>> {
     if let Some(control) = control {
         control.check()?;
     }
@@ -74,7 +84,7 @@ pub fn render_page_controlled(
         }
     };
 
-    let resources = fetch_resources(base_url, &scan, control)?;
+    let resources = fetch_resources(base_url, &scan, control, session)?;
     if let Err(error) = ipc::write_resources(&mut stdin, &resources) {
         child.kill();
         return Err(error.into());
@@ -122,6 +132,7 @@ fn fetch_resources(
     base_url: &str,
     scan: &ScanResponse,
     control: Option<&Control>,
+    mut session: Option<&mut net::Session>,
 ) -> Result<ResourceBundle, Box<dyn Error>> {
     let mut css = Vec::with_capacity(scan.css_sources.len());
     let mut total_css = 0usize;
@@ -142,13 +153,20 @@ fn fetch_resources(
             continue;
         }
 
-        let bytes = match net::resolve_https_url(base_url, source)
-            .and_then(|url| net::fetch_controlled(&url, limit, "text/css,*/*;q=0.1", control))
-        {
+        let bytes = match net::resolve_https_url(base_url, source).and_then(|url| {
+            fetch_resource(
+                &mut session,
+                &url,
+                limit,
+                "text/css,*/*;q=0.1",
+                base_url,
+                control,
+            )
+        }) {
             Ok(response) if (200..300).contains(&response.status) => response.body,
             Ok(_) => Vec::new(),
             Err(error) => {
-                eprintln!("[browser-core] stylesheet blocked/failed {source:?}: {error}");
+                eprintln!("[browser-core] stylesheet blocked/failed: {error}");
                 Vec::new()
             }
         };
@@ -176,15 +194,19 @@ fn fetch_resources(
         }
 
         let bytes = match net::resolve_https_url(base_url, &image.source).and_then(|url| {
-            net::fetch_controlled(&url, limit, "image/png,image/jpeg;q=0.9,*/*;q=0.1", control)
+            fetch_resource(
+                &mut session,
+                &url,
+                limit,
+                "image/png,image/jpeg;q=0.9,*/*;q=0.1",
+                base_url,
+                control,
+            )
         }) {
             Ok(response) if (200..300).contains(&response.status) => response.body,
             Ok(_) => Vec::new(),
             Err(error) => {
-                eprintln!(
-                    "[browser-core] image blocked/failed {:?}: {error}",
-                    image.source
-                );
+                eprintln!("[browser-core] image blocked/failed: {error}");
                 Vec::new()
             }
         };
@@ -225,4 +247,19 @@ pub fn watchdog_self_test() -> Result<(), Box<dyn Error>> {
     }
     println!("renderer watchdog self-test ok");
     Ok(())
+}
+
+fn fetch_resource(
+    session: &mut Option<&mut net::Session>,
+    url: &str,
+    limit: usize,
+    accept: &str,
+    base: &str,
+    control: Option<&Control>,
+) -> Result<net::HttpResponse, Box<dyn Error>> {
+    if let Some(session) = session.as_deref_mut() {
+        session.resource(url, limit, accept, base, control)
+    } else {
+        net::fetch_controlled(url, limit, accept, control)
+    }
 }

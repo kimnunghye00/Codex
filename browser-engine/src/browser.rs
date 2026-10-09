@@ -37,6 +37,7 @@ struct Request {
     url: String,
     intent: Intent,
     body: Option<Vec<u8>>,
+    initiator: Option<String>,
 }
 struct Completed {
     request: Request,
@@ -45,6 +46,7 @@ struct Completed {
 
 // One worker + one queued URL + one result. No thread/packet per tab or per click.
 struct Loader {
+    clear_tx: SyncSender<()>,
     tx: SyncSender<Request>,
     rx: Receiver<Completed>,
     pending: Option<Request>,
@@ -55,16 +57,35 @@ impl Loader {
     fn new() -> Self {
         let (tx, requests) = mpsc::sync_channel::<Request>(1);
         let (results, rx) = mpsc::sync_channel(1);
+        let (clear_tx, clear_rx) = mpsc::sync_channel::<()>(1);
         let shared = Arc::new(AtomicU64::new(0));
         let worker_generation = shared.clone();
         thread::spawn(move || {
-            while let Ok(request) = requests.recv() {
+            let mut session = net::Session::default();
+            loop {
+                while clear_rx.try_recv().is_ok() {
+                    session.clear();
+                }
+                let request = match requests.recv_timeout(std::time::Duration::from_millis(50)) {
+                    Ok(request) => request,
+                    Err(mpsc::RecvTimeoutError::Timeout) => continue,
+                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                };
+                while clear_rx.try_recv().is_ok() {
+                    session.clear();
+                }
                 let control = Control::new(worker_generation.clone(), request.generation);
                 if control.check().is_err() {
                     continue;
                 }
-                let result = load_page(&request.url, request.body.as_deref(), &control)
-                    .map_err(|e| e.to_string());
+                let result = load_page(
+                    &request.url,
+                    request.body.as_deref(),
+                    request.initiator.as_deref(),
+                    &control,
+                    &mut session,
+                )
+                .map_err(|e| e.to_string());
                 if control.check().is_err()
                     && worker_generation.load(Ordering::Relaxed) != request.generation
                 {
@@ -76,6 +97,7 @@ impl Loader {
             }
         });
         Self {
+            clear_tx,
             tx,
             rx,
             pending: None,
@@ -92,7 +114,12 @@ impl Loader {
             url,
             intent,
             body: None,
+            initiator: None,
         });
+    }
+    fn clear_session(&mut self) {
+        self.cancel();
+        let _ = self.clear_tx.try_send(());
     }
     fn cancel(&mut self) {
         self.generation += 1;
@@ -215,6 +242,14 @@ pub fn run(start_url: &str) -> Result<(), Box<dyn Error>> {
             |k| window.is_key_pressed(k, KeyRepeat::No) || shortcuts.iter().any(|s| s.key == k);
         let mut target: Option<(String, Intent)> = None;
         let mut post_body: Option<Vec<u8>> = None;
+        let clear_session = (ctrl && shift && press(Key::Delete))
+            || shortcuts
+                .iter()
+                .any(|s| s.ctrl && s.shift && s.key == Key::Delete);
+        if clear_session {
+            loader.clear_session();
+            target = Some((HOME.into(), Intent::Navigate));
+        }
         let mut switch: Option<usize> = None;
         let mut create = (ctrl && press(Key::T)) || ctrl_press(Key::T);
         let mut close = (ctrl && press(Key::W)) || ctrl_press(Key::W);
@@ -623,6 +658,12 @@ pub fn run(start_url: &str) -> Result<(), Box<dyn Error>> {
                 loader.schedule(tabs.current().id, url.clone(), intent);
                 if let Some(request) = loader.pending.as_mut() {
                     request.body = post_body;
+                    request.initiator =
+                        Some(if matches!(intent, Intent::Reload | Intent::Restore) {
+                            url.clone()
+                        } else {
+                            page.url.clone()
+                        });
                 }
                 page = empty_page(&url);
                 scroll = 0;
@@ -630,6 +671,10 @@ pub fn run(start_url: &str) -> Result<(), Box<dyn Error>> {
                 status = Some("Loading securely... Esc stops; tabs remain responsive".into());
             }
             address = url;
+            dirty = true;
+        }
+        if clear_session {
+            status = Some("Session cookies cleared; returned to the start page".into());
             dirty = true;
         }
         if dirty {
@@ -745,7 +790,7 @@ fn internal_page(url: &str, profile: &Profile) -> Page {
                 None,
             ),
             (
-                "JavaScript, cookies, login sessions, media and extensions are not supported yet."
+                "Basic session cookies work. JavaScript, media and extensions are not supported."
                     .into(),
                 None,
             ),
@@ -768,12 +813,14 @@ fn internal_page(url: &str, profile: &Profile) -> Page {
     page.packet.content_height = page.packet.texts.len() as u32 * 32 + 60;
     page
 }
-fn load_page(target: &str, body: Option<&[u8]>, control: &Control) -> Result<Page, Box<dyn Error>> {
-    let response = if let Some(body) = body {
-        net::fetch_post(target, body, control)?
-    } else {
-        net::fetch_document(target, control)?
-    };
+fn load_page(
+    target: &str,
+    body: Option<&[u8]>,
+    initiator: Option<&str>,
+    control: &Control,
+    session: &mut net::Session,
+) -> Result<Page, Box<dyn Error>> {
+    let response = session.document(target, body, initiator, control)?;
     if !(200..300).contains(&response.status) {
         return Err(format!("HTTP status {}", response.status).into());
     }
@@ -785,11 +832,12 @@ fn load_page(target: &str, body: Option<&[u8]>, control: &Control) -> Result<Pag
             return Err("Unsupported document type; only HTML pages are rendered".into());
         }
     }
-    let packet = renderer_process::render_page_controlled(
+    let packet = renderer_process::render_page_session(
         &response.final_url,
         &response.body,
         render::PAGE_WIDTH,
         Some(control),
+        Some(session),
     )?;
     Ok(Page {
         url: response.final_url,
@@ -816,6 +864,7 @@ mod tests {
         let (result, rx) = mpsc::sync_channel(4);
         (
             Loader {
+                clear_tx: mpsc::sync_channel(1).0,
                 tx,
                 rx,
                 pending: None,
@@ -833,6 +882,7 @@ mod tests {
                 url: "https://example.com/".into(),
                 intent: Intent::Navigate,
                 body: None,
+                initiator: None,
             },
             result: Ok(empty_page("https://example.com/")),
         }
