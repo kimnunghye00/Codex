@@ -38,6 +38,7 @@ pub struct RendererProcess {
     stdin: Option<RendererInput>,
     stdout: Option<RendererOutput>,
     process: windows_sys::Win32::Foundation::HANDLE,
+    thread: windows_sys::Win32::Foundation::HANDLE,
     job: windows_sys::Win32::Foundation::HANDLE,
     waited: bool,
     watchdog: Option<Watchdog>,
@@ -120,9 +121,23 @@ impl RendererProcess {
             JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS, JOB_OBJECT_UILIMIT_WRITECLIPBOARD,
         };
         use windows_sys::Win32::System::SystemServices::SE_GROUP_INTEGRITY;
-        use windows_sys::Win32::System::Threading::OpenProcessToken;
+        use windows_sys::Win32::System::Threading::{OpenProcessToken, OpenThreadToken};
 
         unsafe {
+            // READY is accepted only after the initial thread discarded its
+            // loader-only impersonation token. Verify this in the broker too.
+            let mut bootstrap: HANDLE = null_mut();
+            if OpenThreadToken(self.thread, TOKEN_QUERY, 1, &mut bootstrap) != 0 {
+                CloseHandle(bootstrap);
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "renderer retained its bootstrap token",
+                ));
+            }
+            let error = io::Error::last_os_error();
+            if error.raw_os_error() != Some(windows_sys::Win32::Foundation::ERROR_NO_TOKEN as i32) {
+                return Err(error);
+            }
             let mut token: HANDLE = null_mut();
             if OpenProcessToken(self.process, TOKEN_QUERY | TOKEN_ADJUST_DEFAULT, &mut token) == 0 {
                 return Err(io::Error::last_os_error());
@@ -236,6 +251,10 @@ impl Drop for RendererProcess {
                 self.job = std::ptr::null_mut();
             }
 
+            if !self.thread.is_null() {
+                CloseHandle(self.thread);
+                self.thread = std::ptr::null_mut();
+            }
             if !self.process.is_null() {
                 CloseHandle(self.process);
                 self.process = std::ptr::null_mut();
@@ -258,9 +277,10 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
     };
     use windows_sys::Win32::Security::SECURITY_ATTRIBUTES;
     use windows_sys::Win32::Security::{
-        CreateRestrictedToken, GetTokenInformation, IsTokenRestricted, TokenGroups, TokenUser,
-        DISABLE_MAX_PRIVILEGE, SID_AND_ATTRIBUTES, TOKEN_ASSIGN_PRIMARY, TOKEN_DUPLICATE,
-        TOKEN_GROUPS, TOKEN_QUERY, TOKEN_USER, WRITE_RESTRICTED,
+        CreateRestrictedToken, DuplicateTokenEx, GetTokenInformation, IsTokenRestricted,
+        SecurityImpersonation, TokenGroups, TokenImpersonation, TokenUser, DISABLE_MAX_PRIVILEGE,
+        SID_AND_ATTRIBUTES, TOKEN_ASSIGN_PRIMARY, TOKEN_DUPLICATE, TOKEN_GROUPS, TOKEN_IMPERSONATE,
+        TOKEN_QUERY, TOKEN_USER, WRITE_RESTRICTED,
     };
     use windows_sys::Win32::Storage::FileSystem::{
         CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
@@ -274,8 +294,9 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
     };
     use windows_sys::Win32::System::Pipes::CreatePipe;
     use windows_sys::Win32::System::Threading::{
-        CreateProcessAsUserW, GetCurrentProcess, OpenProcessToken, ResumeThread, CREATE_NO_WINDOW,
-        CREATE_SUSPENDED, PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOW,
+        CreateProcessAsUserW, GetCurrentProcess, OpenProcessToken, ResumeThread, SetThreadToken,
+        CREATE_NO_WINDOW, CREATE_SUSPENDED, PROCESS_INFORMATION, STARTF_USESTDHANDLES,
+        STARTUPINFOW,
     };
 
     struct Handles {
@@ -286,6 +307,7 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
         stderr_handle: HANDLE,
         source_token: HANDLE,
         restricted_token: HANDLE,
+        bootstrap_token: HANDLE,
         process: HANDLE,
         thread: HANDLE,
         job: HANDLE,
@@ -301,6 +323,7 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
                 stderr_handle: null_mut(),
                 source_token: null_mut(),
                 restricted_token: null_mut(),
+                bootstrap_token: null_mut(),
                 process: null_mut(),
                 thread: null_mut(),
                 job: null_mut(),
@@ -316,6 +339,7 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
                 &mut self.stderr_handle,
                 &mut self.source_token,
                 &mut self.restricted_token,
+                &mut self.bootstrap_token,
                 &mut self.thread,
                 &mut self.process,
                 &mut self.job,
@@ -549,16 +573,29 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
                 return Err(io::Error::last_os_error());
             }
 
-            // The renderer was created suspended. Restricted Token and resource/process
-            // Job limits exist before its first instruction. The trusted worker sends READY
-            // after runtime initialization. Only then does the broker add Low Integrity
-            // plus UI restrictions, before sending any untrusted HTML.
+            // The primary token and Job are restricted from creation. Only the
+            // initial thread gets a loader/CRT bootstrap impersonation token.
+            // The worker discards it before READY; the broker verifies that
+            // removal before lowering integrity and sending document bytes.
+            if DuplicateTokenEx(
+                handles.source_token,
+                TOKEN_IMPERSONATE | TOKEN_QUERY,
+                null(),
+                SecurityImpersonation,
+                TokenImpersonation,
+                &mut handles.bootstrap_token,
+            ) == 0
+            {
+                return Err(io::Error::last_os_error());
+            }
+            if SetThreadToken(&handles.thread, handles.bootstrap_token) == 0 {
+                return Err(io::Error::last_os_error());
+            }
+            CloseHandle(handles.bootstrap_token);
+            handles.bootstrap_token = null_mut();
             if ResumeThread(handles.thread) == u32::MAX {
                 return Err(io::Error::last_os_error());
             }
-
-            CloseHandle(handles.thread);
-            handles.thread = null_mut();
 
             CloseHandle(handles.stdin_read);
             handles.stdin_read = null_mut();
@@ -580,6 +617,8 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
 
             let process = handles.process;
             handles.process = null_mut();
+            let thread = handles.thread;
+            handles.thread = null_mut();
             let job = handles.job;
             handles.job = null_mut();
 
@@ -587,6 +626,7 @@ pub fn spawn_renderer(executable: &Path) -> io::Result<RendererProcess> {
                 stdin: Some(RendererInput(stdin_file)),
                 stdout: Some(RendererOutput(stdout_file)),
                 process,
+                thread,
                 job,
                 waited: false,
                 watchdog: None,

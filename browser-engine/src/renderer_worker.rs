@@ -8,6 +8,11 @@ const DEFAULT_BACKGROUND: u32 = 0xF7F7F7;
 const MAX_LINK_BYTES: usize = 8 * 1024;
 
 pub fn run() -> Result<(), Box<dyn Error>> {
+    #[cfg(windows)]
+    if unsafe { windows_sys::Win32::Security::RevertToSelf() } == 0 {
+        // Never read IPC or emit READY while running with the bootstrap token.
+        return Err(io::Error::last_os_error().into());
+    }
     let stdin = io::stdin();
     let stdout = io::stdout();
     let mut reader = BufReader::new(stdin.lock());

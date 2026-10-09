@@ -54,7 +54,8 @@ Actions의 해당 실행에서 `browser-core-windows-x64` artifact를 받으면 
 브로커는 UI·HTTPS·북마크·최종 화면 그리기를 담당합니다. 별도 렌더러는 HTML/DOM/CSS·이미지 해석·레이아웃만 처리합니다.
 렌더러에는 네트워크, UI, 클립보드, 북마크 코드가 포함되지 않습니다.
 
-Windows에서는 Restricted Token, 콘텐츠 처리 전 Low Integrity, Job Object를 사용합니다.
+Windows에서는 제한된 프로세스 토큰, 콘텐츠 처리 전 Low Integrity, Job Object를 사용합니다.
+DLL/CRT 초기화 동안 최초 스레드만 임시 시작 토큰으로 실행합니다. 렌더러는 READY 전에 `RevertToSelf`로 이를 폐기하며, 브로커도 해당 스레드의 토큰이 제거됐는지 확인합니다. 이 확인과 Low Integrity/UI 제한 적용이 모두 성공한 뒤에만 문서 바이트를 전송합니다. 실패하면 렌더러를 종료하며 일반 권한 실행으로 우회하지 않습니다.
 Job은 메모리 192 MiB, 사용자 CPU 10초, 자식 프로세스 금지, 클립보드/UI 제한, 브로커 종료 시 렌더러 종료를 적용합니다.
 보안 설정 실패 시 문서를 전달하지 않습니다. IPC에 일반 명령 실행 기능은 없습니다.
 

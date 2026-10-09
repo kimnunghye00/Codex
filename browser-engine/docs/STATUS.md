@@ -27,7 +27,7 @@
 - 막힌 렌더러를 취소 신호로 종료하는 watchdog smoke test 통과.
 - 한글 읽기 HTML을 PPM으로 렌더링하고 글자·링크·줄 배치를 눈으로 확인.
 - 가상 X11 화면에서 16개 탭 열기·전환·닫기, 주소 편집과 차단, 내장 북마크 화면 조작 확인.
-- Windows GNU 타깃 타입/컴파일 검사 수행. Windows native CI가 MSVC release 빌드와 권한 제한 smoke test를 다시 수행한다.
+- Windows GNU 타깃 타입/컴파일 검사 수행. Windows native CI에서 MSVC release 빌드와 48개 테스트 통과. 기존 DLL 초기화 오류(0xC0000142)가 재현되어, 최초 스레드의 임시 시작 토큰 폐기/브로커 검증 방식으로 수정 후 권한 제한 smoke test를 다시 수행한다.
 
 ### 메모리 측정 범위
 
