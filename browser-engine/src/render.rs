@@ -35,7 +35,7 @@ pub const ADDRESS_RECT: WireRect = WireRect {
 
 pub fn create_window() -> Result<Window, Box<dyn Error>> {
     let mut window = Window::new(
-        "browser-core 0.10 — independent engine",
+        "browser-core 0.11 — independent engine",
         WIDTH,
         HEIGHT,
         WindowOptions::default(),
@@ -157,6 +157,7 @@ pub fn paint_into(
             );
         }
     }
+    paint_controls(buffer, packet, scroll_y, None);
 }
 
 pub fn hit_test_navigation(x: u32, y: u32, scroll_y: u32, packet: &RenderPacket) -> NavigationHit {
@@ -194,6 +195,16 @@ pub fn hit_test_navigation(x: u32, y: u32, scroll_y: u32, packet: &RenderPacket)
     let page_x = x.saturating_sub(LEFT as u32);
     let page_y = y.saturating_sub(PAGE_TOP as u32).saturating_add(scroll_y);
 
+    if let Some(index) = packet
+        .controls
+        .iter()
+        .enumerate()
+        .rev()
+        .find(|(_, c)| c.kind != crate::ipc::FIELD_HIDDEN && c.rect.contains(page_x, page_y))
+        .map(|(i, _)| i)
+    {
+        return NavigationHit::Control(index);
+    }
     if let Some(href) = packet
         .images
         .iter()
@@ -230,6 +241,7 @@ pub enum NavigationHit {
     CloseTab,
     Tab(usize),
     Link(String),
+    Control(usize),
 }
 
 fn draw_image_fragment(buffer: &mut [u32], image: &crate::ipc::PaintImage, scroll_y: u32) {
@@ -589,5 +601,149 @@ fn draw_compact_fallback(buffer: &mut [u32], x: usize, y: i64, ch: char, color: 
                 }
             }
         }
+    }
+}
+
+pub fn paint_controls(
+    buffer: &mut [u32],
+    packet: &RenderPacket,
+    scroll_y: u32,
+    focused: Option<usize>,
+) {
+    use crate::ipc::*;
+    for (index, control) in packet.controls.iter().enumerate() {
+        if control.kind == FIELD_HIDDEN || control.rect.width == 0 {
+            continue;
+        }
+        let Some(rect) = page_rect_to_screen(control.rect, scroll_y) else {
+            continue;
+        };
+        let disabled = control.flags & DISABLED != 0;
+        fill_rect(
+            buffer,
+            rect,
+            if disabled || control.kind == FIELD_UNSUPPORTED {
+                0xEEEEEE
+            } else if control.kind == FIELD_SUBMIT {
+                0xDCEBFF
+            } else {
+                0xFFFFFF
+            },
+        );
+        draw_rect_border(
+            buffer,
+            rect,
+            if focused == Some(index) {
+                0x1976D2
+            } else {
+                0x8794A4
+            },
+        );
+        let text = match control.kind {
+            FIELD_PASSWORD => "*".repeat(control.value.chars().count().min(128)),
+            FIELD_SUBMIT => control.label.clone(),
+            FIELD_CHECKBOX => {
+                if control.flags & CHECKED != 0 {
+                    "X".into()
+                } else {
+                    "".into()
+                }
+            }
+            FIELD_UNSUPPORTED => "Unsupported control".into(),
+            _ => {
+                if control.value.is_empty() {
+                    control.label.clone()
+                } else {
+                    control.value.clone()
+                }
+            }
+        };
+        let text = visible_tail(&text, rect.width.saturating_sub(12) as usize / 8);
+        let top = PAGE_TOP as i64 + control.rect.y as i64 - scroll_y as i64 + 7;
+        draw_page_text_line(
+            buffer,
+            LEFT + control.rect.x as usize + 6,
+            top,
+            &text,
+            if disabled { 0x777777 } else { 0x25374D },
+            2,
+        );
+    }
+}
+
+#[cfg(test)]
+mod control_tests {
+    use super::*;
+    use crate::ipc::*;
+    fn packet(kind: u8, value: &str) -> RenderPacket {
+        RenderPacket {
+            controls: vec![PaintControl {
+                rect: WireRect {
+                    x: 10,
+                    y: 20,
+                    width: 240,
+                    height: 30,
+                },
+                form: 1,
+                kind,
+                flags: 0,
+                max_length: 4096,
+                action: String::new(),
+                method: "post".into(),
+                name: "field".into(),
+                value: value.into(),
+                label: String::new(),
+            }],
+            page_background: 0xffffff,
+            ..Default::default()
+        }
+    }
+    #[test]
+    fn clicked_control_uses_page_coordinates_and_hidden_controls_cannot_be_clicked() {
+        let mut page = packet(FIELD_TEXT, "q");
+        assert_eq!(
+            hit_test_navigation(LEFT as u32 + 20, PAGE_TOP as u32 + 22, 0, &page),
+            NavigationHit::Control(0)
+        );
+        page.controls[0].kind = FIELD_HIDDEN;
+        assert_eq!(
+            hit_test_navigation(LEFT as u32 + 20, PAGE_TOP as u32 + 22, 0, &page),
+            NavigationHit::None
+        );
+    }
+    #[test]
+    fn password_paint_depends_on_length_and_never_displays_the_value() {
+        let a = paint(
+            "https://example.com/",
+            "",
+            false,
+            None,
+            0,
+            &packet(FIELD_PASSWORD, "abcd"),
+            false,
+            false,
+        );
+        let b = paint(
+            "https://example.com/",
+            "",
+            false,
+            None,
+            0,
+            &packet(FIELD_PASSWORD, "wxyz"),
+            false,
+            false,
+        );
+        assert_eq!(a, b);
+        let plaintext = paint(
+            "https://example.com/",
+            "",
+            false,
+            None,
+            0,
+            &packet(FIELD_TEXT, "abcd"),
+            false,
+            false,
+        );
+        assert_ne!(a, plaintext);
     }
 }

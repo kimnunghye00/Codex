@@ -2,8 +2,14 @@ const MAX_HISTORY_ENTRIES: usize = 256;
 
 #[derive(Debug, Default)]
 pub struct History {
-    entries: Vec<String>,
+    entries: Vec<Entry>,
     index: Option<usize>,
+}
+
+#[derive(Debug)]
+struct Entry {
+    url: String,
+    post: bool,
 }
 
 impl History {
@@ -12,16 +18,24 @@ impl History {
     }
 
     pub fn push(&mut self, url: String) {
+        self.push_method(url, false);
+    }
+
+    pub fn push_method(&mut self, url: String, post: bool) {
         if let Some(index) = self.index {
             self.entries.truncate(index + 1);
         }
 
-        if self.entries.last().map(String::as_str) == Some(url.as_str()) {
+        if self
+            .entries
+            .last()
+            .is_some_and(|e| e.url == url && e.post == post)
+        {
             self.index = self.entries.len().checked_sub(1);
             return;
         }
 
-        self.entries.push(url);
+        self.entries.push(Entry { url, post });
 
         if self.entries.len() > MAX_HISTORY_ENTRIES {
             let overflow = self.entries.len() - MAX_HISTORY_ENTRIES;
@@ -43,12 +57,29 @@ impl History {
         let index = self.index?;
         index
             .checked_sub(1)
-            .and_then(|target| self.entries.get(target).map(String::as_str))
+            .and_then(|target| self.entries.get(target).map(|e| e.url.as_str()))
     }
 
     pub fn forward_target(&self) -> Option<&str> {
         let index = self.index?;
-        self.entries.get(index + 1).map(String::as_str)
+        self.entries.get(index + 1).map(|e| e.url.as_str())
+    }
+
+    pub fn current_requires_submission(&self) -> bool {
+        self.index
+            .and_then(|i| self.entries.get(i))
+            .is_some_and(|e| e.post)
+    }
+    pub fn back_requires_submission(&self) -> bool {
+        self.index
+            .and_then(|i| i.checked_sub(1))
+            .and_then(|i| self.entries.get(i))
+            .is_some_and(|e| e.post)
+    }
+    pub fn forward_requires_submission(&self) -> bool {
+        self.index
+            .and_then(|i| self.entries.get(i + 1))
+            .is_some_and(|e| e.post)
     }
 
     pub fn commit_back(&mut self) {
@@ -67,6 +98,21 @@ impl History {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn post_entries_preserve_method_without_retaining_submission_data() {
+        let mut history = History::new();
+        history.push("https://example.com/form".into());
+        history.push_method("https://example.com/result".into(), true);
+        assert!(history.current_requires_submission());
+        history.push("https://example.com/next".into());
+        assert!(history.back_requires_submission());
+        history.commit_back();
+        assert!(history.current_requires_submission());
+        history.commit_back();
+        assert!(history.forward_requires_submission());
+        assert!(!history.current_requires_submission());
+    }
 
     #[test]
     fn drops_forward_history_after_new_navigation() {
@@ -88,6 +134,6 @@ mod tests {
         let mut history = History::new();
         history.push("https://example.com/".into());
         assert_eq!(history.entries.len(), 1);
-        assert_eq!(history.entries[0], "https://example.com/");
+        assert_eq!(history.entries[0].url, "https://example.com/");
     }
 }

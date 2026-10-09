@@ -1,6 +1,6 @@
 [package]
 name = "browser-core"
-version = "0.10.0"
+version = "0.11.0"
 edition = "2021"
 description = "A tiny browser engine prototype focused on low memory use and a minimal attack surface."
 license = "MIT"

@@ -245,6 +245,9 @@ impl LayoutContext<'_> {
                 continue;
             }
 
+            if self.layout_control(child, flow)? {
+                continue;
+            }
             match style.display {
                 Display::None => {}
                 Display::Block => {
@@ -275,6 +278,9 @@ impl LayoutContext<'_> {
             return Ok(());
         }
 
+        if self.layout_control(id, flow)? {
+            return Ok(());
+        }
         let Some(node) = self.document.node(id) else {
             return Ok(());
         };
@@ -330,6 +336,51 @@ impl LayoutContext<'_> {
         }
 
         Ok(())
+    }
+
+    fn layout_control(&mut self, id: NodeId, flow: &mut FlowState) -> Result<bool, LayoutError> {
+        let Some(NodeKind::Element(element)) = self.document.node(id).map(|n| n.kind()) else {
+            return Ok(false);
+        };
+        if !matches!(
+            element.tag_name(),
+            "input" | "button" | "textarea" | "select"
+        ) {
+            return Ok(false);
+        }
+        let kind = element.attribute("type").unwrap_or("text");
+        if element.tag_name() == "input" && kind.eq_ignore_ascii_case("hidden") {
+            return Ok(true);
+        }
+        let width = if kind.eq_ignore_ascii_case("checkbox") {
+            24
+        } else if element.tag_name() == "button" || kind.eq_ignore_ascii_case("submit") {
+            120
+        } else {
+            240
+        };
+        let width = width.min(flow.width.max(1));
+        if flow.x > flow.start_x {
+            flow.x = flow.x.saturating_add(8);
+        }
+        if flow.x.saturating_add(width) > flow.start_x.saturating_add(flow.width) {
+            flow.force_line_break();
+        }
+        let rect = Rect {
+            x: flow.x,
+            y: flow.y,
+            width,
+            height: 30,
+        };
+        self.tree.boxes[id as usize] = Some(LayoutBox {
+            node: id,
+            rect,
+            content_rect: rect,
+        });
+        flow.x = flow.x.saturating_add(width);
+        flow.line_height = flow.line_height.max(38);
+        flow.pending_space = true;
+        Ok(true)
     }
 
     fn layout_image(&mut self, id: NodeId, flow: &mut FlowState) -> Result<(), LayoutError> {

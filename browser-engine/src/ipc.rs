@@ -5,7 +5,7 @@ const TAG_READY: &[u8; 4] = b"RDY0";
 const TAG_LOAD: &[u8; 4] = b"LOAD";
 const TAG_SCAN: &[u8; 4] = b"SCAN";
 const TAG_RESOURCES: &[u8; 4] = b"RSRC";
-const TAG_RENDER: &[u8; 4] = b"RNDR";
+const TAG_RENDER: &[u8; 4] = b"RND2";
 const TAG_ERROR: &[u8; 4] = b"ERRO";
 
 const MAX_HTML_BYTES: usize = 2 * 1024 * 1024;
@@ -96,6 +96,34 @@ pub struct PaintImage {
     pub link_href: Option<String>,
 }
 
+pub const MAX_CONTROLS: usize = 256;
+pub const MAX_CONTROL_BYTES: usize = 256 * 1024;
+pub const MAX_FIELD_BYTES: usize = 4096;
+pub const FIELD_TEXT: u8 = 0;
+pub const FIELD_PASSWORD: u8 = 1;
+pub const FIELD_HIDDEN: u8 = 2;
+pub const FIELD_SUBMIT: u8 = 3;
+pub const FIELD_CHECKBOX: u8 = 4;
+pub const FIELD_UNSUPPORTED: u8 = 5;
+pub const DISABLED: u8 = 1;
+pub const READ_ONLY: u8 = 2;
+pub const REQUIRED: u8 = 4;
+pub const CHECKED: u8 = 8;
+
+#[derive(Debug, Clone)]
+pub struct PaintControl {
+    pub rect: WireRect,
+    pub form: u32,
+    pub kind: u8,
+    pub flags: u8,
+    pub max_length: u32,
+    pub action: String,
+    pub method: String,
+    pub name: String,
+    pub value: String,
+    pub label: String,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct RenderPacket {
     pub page_background: u32,
@@ -103,6 +131,7 @@ pub struct RenderPacket {
     pub rects: Vec<PaintRect>,
     pub texts: Vec<PaintText>,
     pub images: Vec<PaintImage>,
+    pub controls: Vec<PaintControl>,
 }
 
 pub fn write_ready<W: Write>(writer: &mut W) -> io::Result<()> {
@@ -265,6 +294,22 @@ pub fn write_render<W: Write>(writer: &mut W, packet: &RenderPacket) -> io::Resu
         write_optional_string(writer, item.link_href.as_deref())?;
     }
 
+    write_count(writer, packet.controls.len(), MAX_CONTROLS)?;
+    for control in &packet.controls {
+        write_rect(writer, control.rect)?;
+        write_u32(writer, control.form)?;
+        writer.write_all(&[control.kind, control.flags])?;
+        write_u32(writer, control.max_length)?;
+        for value in [
+            &control.action,
+            &control.method,
+            &control.name,
+            &control.value,
+            &control.label,
+        ] {
+            write_string(writer, value)?;
+        }
+    }
     writer.flush()
 }
 
@@ -359,12 +404,49 @@ pub fn read_render<R: Read>(reader: &mut R) -> io::Result<RenderPacket> {
         });
     }
 
+    let count = read_count(reader, MAX_CONTROLS)?;
+    let mut controls = Vec::with_capacity(count);
+    let mut budget = MAX_CONTROL_BYTES;
+    for _ in 0..count {
+        let rect = read_rect(reader)?;
+        let form = read_u32(reader)?;
+        let mut tags = [0u8; 2];
+        reader.read_exact(&mut tags)?;
+        let max_length = read_u32(reader)?;
+        if tags[0] > FIELD_UNSUPPORTED || tags[1] & !15 != 0 || max_length > MAX_FIELD_BYTES as u32
+        {
+            return Err(invalid("invalid renderer form control"));
+        }
+        let mut strings = Vec::with_capacity(5);
+        for limit in [MAX_URL_BYTES, 16, 256, MAX_FIELD_BYTES, 1024] {
+            let value = read_string(reader, limit.min(budget))?;
+            budget = budget
+                .checked_sub(value.len())
+                .ok_or_else(|| invalid("form IPC budget exceeded"))?;
+            strings.push(value);
+        }
+        let mut strings = strings.into_iter();
+        controls.push(PaintControl {
+            rect,
+            form,
+            kind: tags[0],
+            flags: tags[1],
+            max_length,
+            action: strings.next().unwrap(),
+            method: strings.next().unwrap(),
+            name: strings.next().unwrap(),
+            value: strings.next().unwrap(),
+            label: strings.next().unwrap(),
+        });
+    }
+
     Ok(RenderPacket {
         page_background,
         content_height,
         rects,
         texts,
         images,
+        controls,
     })
 }
 
@@ -523,8 +605,45 @@ mod tests {
     use super::*;
 
     #[test]
+    fn rejects_invalid_form_tags_lengths_and_aggregate_budget() {
+        let mut packet = RenderPacket::default();
+        let field = PaintControl {
+            rect: WireRect::default(),
+            form: 1,
+            kind: FIELD_TEXT,
+            flags: 0,
+            max_length: 4096,
+            action: String::new(),
+            method: "get".into(),
+            name: "q".into(),
+            value: "한글".into(),
+            label: "검색".into(),
+        };
+        packet.controls.push(field.clone());
+        let mut data = Vec::new();
+        write_render(&mut data, &packet).unwrap();
+        let decoded = read_render(&mut data.as_slice()).unwrap();
+        assert_eq!(decoded.controls[0].value, "한글");
+        for (kind, flags, length) in [(99, 0, 4096), (0, 128, 4096), (0, 0, 4097)] {
+            packet.controls[0].kind = kind;
+            packet.controls[0].flags = flags;
+            packet.controls[0].max_length = length;
+            let mut data = Vec::new();
+            write_render(&mut data, &packet).unwrap();
+            assert!(read_render(&mut data.as_slice()).is_err());
+        }
+        let mut field = field;
+        field.action = "a".repeat(8192);
+        packet.controls = vec![field; 40];
+        let mut data = Vec::new();
+        write_render(&mut data, &packet).unwrap();
+        assert!(read_render(&mut data.as_slice()).is_err());
+    }
+
+    #[test]
     fn render_packet_round_trip() {
         let packet = RenderPacket {
+            controls: Vec::new(),
             page_background: 0xFFFFFF,
             content_height: 900,
             rects: vec![PaintRect {

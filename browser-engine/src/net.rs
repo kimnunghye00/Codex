@@ -21,6 +21,7 @@ const IO_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug)]
 pub struct HttpResponse {
+    pub was_post: bool,
     pub status: u16,
     pub body: Vec<u8>,
     pub final_url: String,
@@ -50,6 +51,33 @@ pub fn fetch_controlled(
     accept: &str,
     control: Option<&Control>,
 ) -> Result<HttpResponse, Box<dyn Error>> {
+    fetch_request(input, max_body_bytes, accept, control, None)
+}
+
+pub fn fetch_post(
+    input: &str,
+    body: &[u8],
+    control: &Control,
+) -> Result<HttpResponse, Box<dyn Error>> {
+    if body.len() > 64 * 1024 {
+        return Err("POST body exceeds the limit".into());
+    }
+    fetch_request(
+        input,
+        MAX_DOCUMENT_BYTES,
+        "text/html,application/xhtml+xml;q=0.9",
+        Some(control),
+        Some(body),
+    )
+}
+
+fn fetch_request(
+    input: &str,
+    max_body_bytes: usize,
+    accept: &str,
+    control: Option<&Control>,
+    mut post_body: Option<&[u8]>,
+) -> Result<HttpResponse, Box<dyn Error>> {
     if accept.contains(['\r', '\n']) {
         return Err("invalid Accept header".into());
     }
@@ -62,18 +90,20 @@ pub fn fetch_controlled(
 
     for redirect_count in 0..=MAX_REDIRECTS {
         let normalized = current.as_str().to_string();
-        if visited.iter().any(|item| item == &normalized) {
+        let visit = (normalized, post_body.is_some());
+        if visited.iter().any(|item| item == &visit) {
             return Err("redirect loop detected".into());
         }
-        visited.push(normalized);
+        visited.push(visit);
 
         if let Some(control) = control {
             control.check()?;
         }
-        let response = fetch_once(&current, max_body_bytes, accept, control)?;
+        let response = fetch_once(&current, max_body_bytes, accept, control, post_body)?;
 
         if !is_redirect(response.status) {
             return Ok(HttpResponse {
+                was_post: post_body.is_some(),
                 status: response.status,
                 body: response.body,
                 final_url: current.to_string(),
@@ -96,6 +126,12 @@ pub fn fetch_controlled(
             return Err("redirect URL exceeded the safety limit".into());
         }
 
+        if matches!(response.status, 301 | 302 | 303) {
+            post_body = None;
+        }
+        if post_body.is_some() && current.origin() != next.origin() {
+            return Err("cross-origin POST redirect blocked".into());
+        }
         current = next;
     }
 
@@ -187,6 +223,39 @@ fn fetch_once(
     max_body_bytes: usize,
     accept: &str,
     control: Option<&Control>,
+    post_body: Option<&[u8]>,
+) -> Result<RawResponse, Box<dyn Error>> {
+    fetch_once_with_config(
+        url,
+        max_body_bytes,
+        accept,
+        control,
+        post_body,
+        tls_config(),
+    )
+}
+
+fn tls_config() -> Arc<ClientConfig> {
+    static TLS_CONFIG: OnceLock<Arc<ClientConfig>> = OnceLock::new();
+    TLS_CONFIG
+        .get_or_init(|| {
+            let roots = RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+            Arc::new(
+                ClientConfig::builder()
+                    .with_root_certificates(roots)
+                    .with_no_client_auth(),
+            )
+        })
+        .clone()
+}
+
+fn fetch_once_with_config(
+    url: &Url,
+    max_body_bytes: usize,
+    accept: &str,
+    control: Option<&Control>,
+    post_body: Option<&[u8]>,
+    config: Arc<ClientConfig>,
 ) -> Result<RawResponse, Box<dyn Error>> {
     let host = match url.host().ok_or("URL does not contain a valid host")? {
         url::Host::Domain(name) => name.to_string(),
@@ -230,20 +299,9 @@ fn fetch_once(
     tcp.set_read_timeout(Some(IO_TIMEOUT))?;
     tcp.set_write_timeout(Some(IO_TIMEOUT))?;
 
-    // Reuse immutable trust/configuration data, not connections or page data.
-    static TLS_CONFIG: OnceLock<Arc<ClientConfig>> = OnceLock::new();
-    let config = TLS_CONFIG.get_or_init(|| {
-        let roots = RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-        Arc::new(
-            ClientConfig::builder()
-                .with_root_certificates(roots)
-                .with_no_client_auth(),
-        )
-    });
-
     let server_name = ServerName::try_from(host.clone())
         .map_err(|_| "host name cannot be used for TLS verification")?;
-    let connection = ClientConnection::new(config.clone(), server_name)?;
+    let connection = ClientConnection::new(config, server_name)?;
     let mut tls = StreamOwned::new(connection, tcp);
 
     let host = if host.contains(':') {
@@ -257,17 +315,22 @@ fn fetch_once(
         format!("{host}:{port}")
     };
 
+    let method = if post_body.is_some() { "POST" } else { "GET" };
+    let entity_headers = post_body.map(|body| format!("Content-Type: application/x-www-form-urlencoded; charset=UTF-8\r\nContent-Length: {}\r\n", body.len())).unwrap_or_default();
     let request = format!(
-        "GET {path} HTTP/1.1\r\n\
+        "{method} {path} HTTP/1.1\r\n\
          Host: {host_header}\r\n\
-         User-Agent: browser-core/0.10\r\n\
+         User-Agent: browser-core/0.11\r\n\
          Accept: {accept}\r\n\
          Accept-Encoding: gzip, deflate\r\n\
          Connection: close\r\n\
-         \r\n"
+         {entity_headers}\r\n"
     );
 
     tls.write_all(request.as_bytes())?;
+    if let Some(body) = post_body {
+        tls.write_all(body)?;
+    }
     tls.flush()?;
 
     let raw_limit = max_body_bytes.saturating_add(MAX_HEADER_BYTES);
@@ -739,5 +802,91 @@ mod tests {
         ] {
             assert!(parse_http_response(raw, 100).is_err());
         }
+    }
+}
+
+#[cfg(test)]
+mod tls_post_tests {
+    use super::*;
+    #[test]
+    fn posts_encoded_form_through_real_tls_and_validates_http_response() {
+        use rustls::{
+            pki_types::{CertificateDer, PrivatePkcs8KeyDer},
+            ServerConfig, ServerConnection,
+        };
+        use std::net::TcpListener;
+        let cert =
+            CertificateDer::from(include_bytes!("../tests/fixtures/tls/localhost.der").to_vec());
+        let key = PrivatePkcs8KeyDer::from(
+            include_bytes!("../tests/fixtures/tls/localhost-key.der").to_vec(),
+        );
+        let server = ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(vec![cert.clone()], key.into())
+            .unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let worker = std::thread::spawn(move || {
+            let (socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            socket
+                .set_write_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut tls =
+                StreamOwned::new(ServerConnection::new(Arc::new(server)).unwrap(), socket);
+            let mut request = Vec::new();
+            loop {
+                let mut block = [0; 2048];
+                let n = tls.read(&mut block).unwrap();
+                assert!(n > 0);
+                request.extend_from_slice(&block[..n]);
+                assert!(request.len() < 8192);
+                if let Some(end) = find_bytes(&request, b"\r\n\r\n") {
+                    let headers = std::str::from_utf8(&request[..end]).unwrap();
+                    let length: usize = headers
+                        .lines()
+                        .find_map(|l| l.strip_prefix("Content-Length: "))
+                        .unwrap()
+                        .parse()
+                        .unwrap();
+                    if request.len() == end + 4 + length {
+                        break;
+                    }
+                }
+            }
+            tls.write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: 9\r\n\r\n<p>ok</p>",
+            )
+            .unwrap();
+            tls.conn.send_close_notify();
+            tls.flush().unwrap();
+            request
+        });
+        let mut roots = RootCertStore::empty();
+        roots.add(cert).unwrap();
+        let config = Arc::new(
+            ClientConfig::builder()
+                .with_root_certificates(roots)
+                .with_no_client_auth(),
+        );
+        let url = Url::parse(&format!("https://localhost:{port}/submit?keep=1")).unwrap();
+        let response = fetch_once_with_config(
+            &url,
+            1024,
+            "text/html",
+            None,
+            Some(b"q=%ED%95%9C%EA%B8%80&password=fake"),
+            config,
+        )
+        .unwrap();
+        assert_eq!(response.body, b"<p>ok</p>");
+        let request = String::from_utf8(worker.join().unwrap()).unwrap();
+        assert!(request.starts_with("POST /submit?keep=1 HTTP/1.1\r\n"));
+        assert!(
+            request.contains("Content-Type: application/x-www-form-urlencoded; charset=UTF-8\r\n")
+        );
+        assert!(request.ends_with("q=%ED%95%9C%EA%B8%80&password=fake"));
     }
 }

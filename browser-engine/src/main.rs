@@ -1,6 +1,7 @@
 mod browser;
 mod clipboard;
 mod font;
+mod forms;
 mod history;
 mod ipc;
 mod navigation;
@@ -48,6 +49,51 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         println!("sandbox self-test ok");
+        return Ok(());
+    }
+
+    if first.as_deref() == Some("--forms-self-test") {
+        let mut packet = renderer_process::render_page(
+            "https://example.com/",
+            include_bytes!("../tests/fixtures/forms.html"),
+            render::PAGE_WIDTH,
+        )?;
+        let field = packet
+            .controls
+            .iter()
+            .position(|c| c.name == "q")
+            .ok_or("search field missing")?;
+        if !forms::append(&mut packet.controls[field], "한글 & test", true) {
+            return Err("form editing failed".into());
+        }
+        let submit = packet
+            .controls
+            .iter()
+            .position(|c| c.name == "go")
+            .ok_or("submit missing")?;
+        let result = forms::submit(
+            "https://example.com/",
+            &packet.controls,
+            field,
+            Some(submit),
+        )?;
+        let url = url::Url::parse(&result.url)?;
+        if !url
+            .query_pairs()
+            .any(|(name, value)| name == "q" && value == "한글 & test")
+        {
+            return Err("form encoding failed".into());
+        }
+        let password = packet
+            .controls
+            .iter()
+            .position(|c| c.name == "password")
+            .ok_or("password missing")?;
+        let result = forms::submit("https://example.com/", &packet.controls, password, None)?;
+        if result.body.is_none() || result.url.contains("fixture-secret") {
+            return Err("password leaked into URL".into());
+        }
+        println!("form IPC, input, GET and POST self-test ok");
         return Ok(());
     }
 

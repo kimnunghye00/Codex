@@ -1,4 +1,4 @@
-# browser-core 0.10 (실험 버전)
+# browser-core 0.11 (실험 버전)
 
 Chromium, Edge/WebView2, Firefox를 쓰지 않는 Rust 자체 HTML/CSS 엔진입니다.
 목표는 적은 메모리로 일상적인 웹사이트를 이용하고, 운영체제로 렌더러 권한을 제한하는 브라우저입니다.
@@ -33,6 +33,19 @@ Actions의 해당 실행에서 `browser-core-windows-x64` artifact를 받으면 
 검색어는 **Enter를 눌렀을 때만 Google 검색으로 전송**합니다. 주소창 자동완성·키 입력 전송은 없습니다.
 주소는 HTTPS만 허용하고, 내장 계정 정보·파일·스크립트 주소와 비 HTTPS 리디렉션을 차단합니다.
 현재 네트워크는 HTTP/1.1과 identity·gzip·zlib deflate 응답을 지원합니다. Brotli와 HTTP/2는 아직 지원하지 않습니다. 압축 전·후 각각 리소스 바이트 한도를 검사합니다.
+
+## 0.11 추가 구현
+
+- 텍스트·검색·비밀번호 입력창, hidden 값, 체크박스, 제출 버튼, textarea의 기본 값을 표시하고 처리합니다.
+- 입력창 클릭·Tab/Shift+Tab 이동·Ctrl+A·Backspace·Ctrl+V·한글 입력·Enter/버튼 제출을 연결했습니다.
+- GET 검색과 URL-encoded POST를 지원합니다. 반복된 필드 이름과 한글·특수문자·줄바꿈을 인코딩합니다.
+- required·disabled·readonly·maxlength와 입력 바이트 한도를 검사합니다. 전체 HTML5 입력 검증은 아닙니다.
+- 비밀번호는 화면에서 가리고 GET URL 또는 다른 출처로의 비밀번호 전송을 차단합니다. 출처가 바뀌는 POST 유지 리디렉션도 차단합니다.
+- POST 본문은 탭·이력·디스크에 저장하지 않습니다. POST 결과의 새로고침·이력/탭 복원은 안내 화면으로 처리하며 자동 재전송하지 않습니다.
+- 렌더러가 전달한 폼 정보는 별도 IPC 개수·문자열·태그 한도로 검증합니다. 폼 256개/문자열 합계 256 KiB, 입력 4096바이트/필드, POST 본문 64 KiB입니다.
+- 라디오·select·파일 첨부·number/date 등 미지원 컨트롤이 있는 폼과 multipart 등의 인코딩은 제출하지 않고 이유를 표시합니다.
+- 입력창은 끝에 입력/삭제하는 기본 편집입니다. 커서 이동·범위 선택·여러 줄 textarea 편집은 아직 지원하지 않습니다.
+- **쿠키·JavaScript가 없으므로 일반 사이트의 로그인 유지나 동적 검색을 지원한다는 의미는 아닙니다.**
 
 ## 0.10 추가 구현
 
@@ -79,7 +92,7 @@ OS 강제 네트워크 차단과 파일 접근 허용 목록이 적용되기 전
 
 ## 아직 지원하지 않는 기능
 
-JavaScript·DOM 이벤트, 폼 입력/전송, 쿠키·로그인, Flex/Grid 등 일반 사이트의 CSS,
+JavaScript·DOM 이벤트, 전체 HTML5 폼·라디오·select·파일 첨부, 쿠키·로그인 유지, Flex/Grid 등 일반 사이트의 CSS,
 웹폰트·복잡한 문자 shaping·선택/복사, 영상·음성·확장 기능, 일반 파일 다운로드,
 오프라인 캐시·전체 세션 복원, 창 크기 변경, 서명·설치 프로그램·업데이트.
 Google 검색 주소는 생성하지만 검색 결과 페이지 호환성은 별도 검증 대상입니다.
@@ -94,6 +107,7 @@ cargo test --locked --all-targets
 cargo build --locked --bins
 ./target/debug/browser-core --sandbox-self-test
 ./target/debug/browser-core --watchdog-self-test
+./target/debug/browser-core --forms-self-test
 ./target/debug/browser-core --render-file tests/fixtures/reading.html target/reading.ppm
 ```
 

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>폼 입력 검사</title>
+<style>body {background:#fafcff;color:#25374d;padding:16px} form {display:block;margin:16px} label {color:teal}</style>
+</head><body><h1>검색과 폼 입력</h1>
+<p>입력창 클릭 또는 Tab으로 이동하고, Enter나 제출 버튼으로 전송합니다.</p>
+<form id=search action=/search method=get>
+<label>검색어 <input name=q required placeholder="한글 검색어"></label>
+<input type=hidden name=source value=browser-core>
+<label><input type=checkbox name=details value=yes checked> 상세 검색</label>
+<button name=go value=search>검색</button>
+</form>
+<h2>비밀번호 전송 검사</h2>
+<form id=login action=/login method=post>
+<p>사용자 <input name=user placeholder="사용자 이름"></p>
+<p>비밀번호 <input name=password type=password value=fixture-secret required></p>
+<button>POST 제출</button>
+</form>
+<p>비밀번호는 화면에 노출하지 않으며 GET 주소나 다른 출처로 전송하지 않습니다.</p>
+<input disabled value="편집 불가">
+<input readonly value="읽기 전용">
+</body></html>

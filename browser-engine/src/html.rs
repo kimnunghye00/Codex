@@ -159,7 +159,11 @@ fn current_raw_text_tag<'a>(document: &'a Document, stack: &[NodeId]) -> Option<
         return None;
     };
 
-    matches!(element.tag_name(), "script" | "style").then_some(element.tag_name())
+    matches!(
+        element.tag_name(),
+        "script" | "style" | "textarea" | "title"
+    )
+    .then_some(element.tag_name())
 }
 
 fn close_optional_elements(document: &Document, stack: &mut Vec<NodeId>, incoming: &str) {

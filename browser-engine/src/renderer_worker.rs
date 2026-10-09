@@ -46,7 +46,8 @@ fn run_inner<R: io::Read, W: io::Write>(
     let styles = style::compute(&document, &stylesheet);
     let layout = layout::build(&document, &styles, &images, request.viewport_width)?;
 
-    let packet = build_packet(&document, &styles, &layout, &images);
+    let mut packet = build_packet(&document, &styles, &layout, &images);
+    packet.controls = crate::renderer_forms::collect(&document, &layout)?;
     ipc::write_render(writer, &packet)?;
     Ok(())
 }
@@ -116,6 +117,7 @@ fn build_packet(
         rects,
         texts,
         images,
+        controls: Vec::new(),
     }
 }
 

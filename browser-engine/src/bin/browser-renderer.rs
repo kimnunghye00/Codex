@@ -25,3 +25,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 #[path = "../text_metrics.rs"]
 mod text_metrics;
+
+#[path = "../renderer_forms.rs"]
+mod renderer_forms;

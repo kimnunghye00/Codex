@@ -37,10 +37,14 @@ jobs:
         run: .\target\release\browser-core.exe --sandbox-self-test
       - name: Cancel a blocked renderer
         run: .\target\release\browser-core.exe --watchdog-self-test
+      - name: Verify form IPC editing and submission
+        run: .\target\release\browser-core.exe --forms-self-test
       - name: Render the offline reading fixture
         run: .\target\release\browser-core.exe --render-file tests/fixtures/reading.html target/reading.ppm
       - name: Render HTML and CSS compatibility fixture
         run: .\target\release\browser-core.exe --render-file tests/fixtures/compatibility.html target/compatibility.ppm
+      - name: Render form controls and password masking
+        run: .\target\release\browser-core.exe --render-file tests/fixtures/forms.html target/forms.ppm
       - name: Fetch and render a live HTTPS page
         run: .\target\release\browser-core.exe --render-url https://example.com/ target/example.ppm
       - name: Package the portable browser
@@ -59,6 +63,7 @@ jobs:
             browser-engine/target/SHA256.txt
             browser-engine/target/reading.ppm
             browser-engine/target/compatibility.ppm
+            browser-engine/target/forms.ppm
             browser-engine/target/example.ppm
           retention-days: 30
           if-no-files-found: error

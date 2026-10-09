@@ -19,6 +19,7 @@ use std::{
 };
 
 struct Page {
+    post_response: bool,
     url: String,
     packet: RenderPacket,
 }
@@ -35,6 +36,7 @@ struct Request {
     tab: u64,
     url: String,
     intent: Intent,
+    body: Option<Vec<u8>>,
 }
 struct Completed {
     request: Request,
@@ -61,7 +63,8 @@ impl Loader {
                 if control.check().is_err() {
                     continue;
                 }
-                let result = load_page(&request.url, &control).map_err(|e| e.to_string());
+                let result = load_page(&request.url, request.body.as_deref(), &control)
+                    .map_err(|e| e.to_string());
                 if control.check().is_err()
                     && worker_generation.load(Ordering::Relaxed) != request.generation
                 {
@@ -88,6 +91,7 @@ impl Loader {
             tab,
             url,
             intent,
+            body: None,
         });
     }
     fn cancel(&mut self) {
@@ -128,6 +132,8 @@ pub fn run(start_url: &str) -> Result<(), Box<dyn Error>> {
     window.set_input_callback(Box::new(crate::text_input::Callback(input.clone())));
     let mut address = String::new();
     let mut focused = false;
+    let mut field_focus: Option<usize> = None;
+    let mut field_replace = false;
     let mut replace = false;
     let mut status =
         Some("Prototype: static HTML/CSS only; no JavaScript or login yet".to_string());
@@ -155,18 +161,22 @@ pub fn run(start_url: &str) -> Result<(), Box<dyn Error>> {
         scroll,
         &profile,
         loading,
+        field_focus,
     );
     while window.is_open() {
         window.update_with_buffer(&buffer, render::WIDTH, render::HEIGHT)?;
         loader.pump();
         let mut dirty = false;
         while let Some(done) = loader.completed(tabs.current().id) {
+            field_focus = None;
             loading = false;
             match done.result {
                 Ok(next) => {
                     let tab = tabs.current_mut();
                     match done.request.intent {
-                        Intent::Navigate => tab.history.push(next.url.clone()),
+                        Intent::Navigate => tab
+                            .history
+                            .push_method(next.url.clone(), next.post_response),
                         Intent::Back => tab.history.commit_back(),
                         Intent::Forward => tab.history.commit_forward(),
                         Intent::Restore | Intent::Reload => (),
@@ -204,12 +214,14 @@ pub fn run(start_url: &str) -> Result<(), Box<dyn Error>> {
         let press =
             |k| window.is_key_pressed(k, KeyRepeat::No) || shortcuts.iter().any(|s| s.key == k);
         let mut target: Option<(String, Intent)> = None;
+        let mut post_body: Option<Vec<u8>> = None;
         let mut switch: Option<usize> = None;
         let mut create = (ctrl && press(Key::T)) || ctrl_press(Key::T);
         let mut close = (ctrl && press(Key::W)) || ctrl_press(Key::W);
         let mut bookmark = (ctrl && press(Key::D)) || ctrl_press(Key::D);
         if (ctrl && press(Key::L)) || ctrl_press(Key::L) {
             focused = true;
+            field_focus = None;
             replace = true;
             address = page.url.clone();
             dirty = true;
@@ -237,8 +249,12 @@ pub fn run(start_url: &str) -> Result<(), Box<dyn Error>> {
             loader.cancel();
             loading = false;
             focused = false;
+            field_focus = None;
             replace = false;
-            if page.packet.texts.is_empty() && page.packet.images.is_empty() {
+            if page.packet.texts.is_empty()
+                && page.packet.images.is_empty()
+                && page.packet.controls.is_empty()
+            {
                 target = Some((tabs.current().url.clone(), Intent::Restore));
             }
             status = Some("Navigation stopped".into());
@@ -295,9 +311,37 @@ pub fn run(start_url: &str) -> Result<(), Box<dyn Error>> {
                         target = Some((page.url.clone(), Intent::Reload))
                     }
                     render::NavigationHit::AddressBar => {
+                        field_focus = None;
                         address = page.url.clone();
                         focused = true;
                         replace = true;
+                        dirty = true;
+                    }
+                    render::NavigationHit::Control(index) => {
+                        focused = false;
+                        field_focus = None;
+                        let control = &mut page.packet.controls[index];
+                        if crate::forms::focusable(control) {
+                            field_focus = Some(index);
+                            field_replace = false;
+                            if control.kind == crate::ipc::FIELD_CHECKBOX {
+                                control.flags ^= crate::ipc::CHECKED;
+                            }
+                            if control.kind == crate::ipc::FIELD_SUBMIT {
+                                match crate::forms::submit(
+                                    &page.url,
+                                    &page.packet.controls,
+                                    index,
+                                    Some(index),
+                                ) {
+                                    Ok(submission) => {
+                                        post_body = submission.body;
+                                        target = Some((submission.url, Intent::Navigate));
+                                    }
+                                    Err(error) => status = Some(error),
+                                }
+                            }
+                        }
                         dirty = true;
                     }
                     render::NavigationHit::Link(href) => {
@@ -317,6 +361,9 @@ pub fn run(start_url: &str) -> Result<(), Box<dyn Error>> {
                         }
                     }
                     render::NavigationHit::None => {
+                        if field_focus.take().is_some() {
+                            dirty = true;
+                        }
                         if focused {
                             focused = false;
                             dirty = true;
@@ -358,6 +405,86 @@ pub fn run(start_url: &str) -> Result<(), Box<dyn Error>> {
                 target = Some((tabs.current().url.clone(), Intent::Restore));
             } else if create {
                 status = Some("Tab limit reached (16)".into());
+                dirty = true;
+            }
+        }
+        if !focused && !ctrl && !ctrl_press(Key::Tab) && press(Key::Tab) {
+            field_focus = crate::forms::next_focus(
+                &page.packet.controls,
+                field_focus,
+                shift || shortcuts.iter().any(|s| s.key == Key::Tab && s.shift),
+            );
+            field_replace = false;
+            if let Some(index) = field_focus {
+                scroll = page.packet.controls[index].rect.y.saturating_sub(40).min(
+                    page.packet
+                        .content_height
+                        .saturating_sub(render::PAGE_VIEW_HEIGHT),
+                );
+            }
+            dirty = true;
+        }
+        if let Some(index) = field_focus {
+            if let Some(field) = page.packet.controls.get_mut(index) {
+                if (ctrl && press(Key::A)) || ctrl_press(Key::A) {
+                    field_replace = true;
+                    dirty = true;
+                }
+                if (ctrl && press(Key::V)) || ctrl_press(Key::V) {
+                    match crate::clipboard::read_text() {
+                        Ok(text) => {
+                            if crate::forms::append(field, &text, field_replace) {
+                                field_replace = false;
+                            } else {
+                                status = Some(
+                                    "Pasted field exceeds its limit or cannot be edited".into(),
+                                );
+                            }
+                        }
+                        Err(error) => status = Some(error),
+                    }
+                    dirty = true;
+                }
+                for ch in input.borrow_mut().chars.drain(..) {
+                    if ctrl || alt {
+                        continue;
+                    }
+                    if crate::forms::append(field, &ch.to_string(), field_replace) {
+                        field_replace = false;
+                        dirty = true;
+                    }
+                }
+                if crate::forms::editable(field)
+                    && (window.is_key_pressed(Key::Backspace, KeyRepeat::Yes)
+                        || press(Key::Backspace))
+                {
+                    if field_replace {
+                        field.value.clear();
+                        field_replace = false;
+                    } else {
+                        field.value.pop();
+                    }
+                    dirty = true;
+                }
+                if field.kind == crate::ipc::FIELD_CHECKBOX && press(Key::Space) {
+                    field.flags ^= crate::ipc::CHECKED;
+                    dirty = true;
+                }
+            }
+            if press(Key::Enter) {
+                let owner = page.packet.controls[index].form;
+                let submitter = page.packet.controls.iter().position(|c| {
+                    c.form == owner
+                        && c.kind == crate::ipc::FIELD_SUBMIT
+                        && c.flags & crate::ipc::DISABLED == 0
+                });
+                match crate::forms::submit(&page.url, &page.packet.controls, index, submitter) {
+                    Ok(submission) => {
+                        post_body = submission.body;
+                        target = Some((submission.url, Intent::Navigate));
+                    }
+                    Err(error) => status = Some(error),
+                }
                 dirty = true;
             }
         }
@@ -420,7 +547,7 @@ pub fn run(start_url: &str) -> Result<(), Box<dyn Error>> {
                 }
                 dirty = true;
             }
-        } else {
+        } else if field_focus.is_none() {
             let max = page
                 .packet
                 .content_height
@@ -455,9 +582,30 @@ pub fn run(start_url: &str) -> Result<(), Box<dyn Error>> {
         }
         input.borrow_mut().chars.clear();
         if let Some((url, intent)) = target {
+            field_focus = None;
             focused = false;
             replace = false;
-            if matches!(url.as_str(), HOME | "browser:bookmarks") {
+            let history = &tabs.current().history;
+            let requires_submission = match intent {
+                Intent::Restore | Intent::Reload => history.current_requires_submission(),
+                Intent::Back => history.back_requires_submission(),
+                Intent::Forward => history.forward_requires_submission(),
+                Intent::Navigate => false,
+            };
+            if requires_submission && post_body.is_none() {
+                loader.cancel();
+                loading = false;
+                let tab = tabs.current_mut();
+                match intent {
+                    Intent::Back => tab.history.commit_back(),
+                    Intent::Forward => tab.history.commit_forward(),
+                    _ => (),
+                }
+                tab.url = url.clone();
+                page = empty_page(&url);
+                scroll = 0;
+                status = Some("POST result expired. Return to the form and submit again; data was not retained or resent.".into());
+            } else if matches!(url.as_str(), HOME | "browser:bookmarks") {
                 loader.cancel();
                 loading = false;
                 let tab = tabs.current_mut();
@@ -473,6 +621,9 @@ pub fn run(start_url: &str) -> Result<(), Box<dyn Error>> {
                 status = None;
             } else {
                 loader.schedule(tabs.current().id, url.clone(), intent);
+                if let Some(request) = loader.pending.as_mut() {
+                    request.body = post_body;
+                }
                 page = empty_page(&url);
                 scroll = 0;
                 loading = true;
@@ -492,6 +643,7 @@ pub fn run(start_url: &str) -> Result<(), Box<dyn Error>> {
                 scroll,
                 &profile,
                 loading,
+                field_focus,
             );
         }
     }
@@ -520,6 +672,7 @@ fn repaint(
     scroll: u32,
     profile: &Profile,
     loading: bool,
+    field_focus: Option<usize>,
 ) {
     let history: &History = &tabs.current().history;
     render::paint_into(
@@ -544,10 +697,12 @@ fn repaint(
         profile.bookmarks.contains(&page.url),
         loading,
     );
+    render::paint_controls(buffer, &page.packet, scroll, field_focus);
 }
 fn empty_page(url: &str) -> Page {
     Page {
         url: url.into(),
+        post_response: false,
         packet: RenderPacket {
             page_background: 0xFAFCFF,
             ..Default::default()
@@ -586,11 +741,12 @@ fn internal_page(url: &str, profile: &Profile) -> Page {
             ("Bookmarks".into(), Some("browser:bookmarks".into())),
             ("Example page".into(), Some("https://example.com/".into())),
             (
-                "Compatibility: basic HTML/CSS and PNG/JPEG only.".into(),
+                "Compatibility: basic HTML/CSS, forms and PNG/JPEG.".into(),
                 None,
             ),
             (
-                "JavaScript, forms, cookies, media and extensions are not supported yet.".into(),
+                "JavaScript, cookies, login sessions, media and extensions are not supported yet."
+                    .into(),
                 None,
             ),
         ]
@@ -612,8 +768,12 @@ fn internal_page(url: &str, profile: &Profile) -> Page {
     page.packet.content_height = page.packet.texts.len() as u32 * 32 + 60;
     page
 }
-fn load_page(target: &str, control: &Control) -> Result<Page, Box<dyn Error>> {
-    let response = net::fetch_document(target, control)?;
+fn load_page(target: &str, body: Option<&[u8]>, control: &Control) -> Result<Page, Box<dyn Error>> {
+    let response = if let Some(body) = body {
+        net::fetch_post(target, body, control)?
+    } else {
+        net::fetch_document(target, control)?
+    };
     if !(200..300).contains(&response.status) {
         return Err(format!("HTTP status {}", response.status).into());
     }
@@ -633,6 +793,7 @@ fn load_page(target: &str, control: &Control) -> Result<Page, Box<dyn Error>> {
     )?;
     Ok(Page {
         url: response.final_url,
+        post_response: response.was_post,
         packet,
     })
 }
@@ -671,6 +832,7 @@ mod tests {
                 tab,
                 url: "https://example.com/".into(),
                 intent: Intent::Navigate,
+                body: None,
             },
             result: Ok(empty_page("https://example.com/")),
         }
