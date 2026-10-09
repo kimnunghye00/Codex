@@ -14,6 +14,9 @@ Windows 실행 파일은 `browser-engine` 브랜치의 **Browser Engine CI**가 
 Actions의 해당 실행에서 `browser-core-windows-x64` artifact를 받으면 ZIP과 SHA256을 확인할 수 있습니다.
 서명된 설치 프로그램이나 자동 업데이트는 아직 제공하지 않습니다.
 
+Windows x64 배포본은 C 런타임을 실행 파일에 정적으로 연결하며 별도의 Visual C++ 런타임 설치를 요구하지 않습니다. CI는 두 EXE의 DLL 의존성을 검사한 뒤 ZIP에서 다시 압축 해제한 파일로 렌더러 실행을 검증합니다.
+직접 Windows에서 빌드할 때는 `cargo build --locked --release --bins --target x86_64-pc-windows-msvc`를 사용하세요. 결과는 `target/x86_64-pc-windows-msvc/release/`에 생성됩니다.
+
 ## 사용법
 
 | 동작 | 단축키 / 버튼 |
@@ -123,7 +126,7 @@ cargo build --locked --bins
 ./target/debug/browser-core --render-file tests/fixtures/reading.html target/reading.ppm
 ```
 
-Windows 명령은 `./target/debug/browser-core`를 `target\debug\browser-core.exe`로 바꾸세요.
+Windows에서 위 Cargo 검사·빌드 명령에는 `--target x86_64-pc-windows-msvc`를 추가하고, 실행 경로는 `target\x86_64-pc-windows-msvc\debug\browser-core.exe`로 바꾸세요.
 `--render-file`은 명시적으로 선택한 로컬 HTML 검증용 기능이며, 웹페이지가 파일 접근을 요청할 수 있는 기능이 아닙니다.
 글꼴은 Windows `malgun.ttf`, Linux Nanum/Noto/DejaVu 순으로 찾습니다.
 개발자는 `BROWSER_CORE_FONT` 환경 변수로 신뢰하는 로컬 글꼴을 지정할 수 있습니다. 웹폰트는 읽지 않습니다.

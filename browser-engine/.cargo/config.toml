@@ -1,0 +1,5 @@
+# Keep the portable Windows binaries independent of the VC++ redistributable.
+# Use an explicit --target when building so host build scripts/proc macros are
+# not compiled with the target's static CRT setting.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

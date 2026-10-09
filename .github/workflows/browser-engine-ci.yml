@@ -28,32 +28,54 @@ jobs:
       - name: Check formatting
         run: cargo fmt --check
       - name: Check all targets
-        run: cargo check --locked --all-targets
+        run: cargo check --locked --all-targets --target x86_64-pc-windows-msvc
       - name: Test all targets
-        run: cargo test --locked --all-targets
+        run: cargo test --locked --all-targets --target x86_64-pc-windows-msvc
       - name: Build browser and renderer
-        run: cargo build --locked --release --bins
+        run: cargo build --locked --release --bins --target x86_64-pc-windows-msvc
+      - name: Verify portable binaries have no dynamic C runtime imports
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
+          $dumpbin = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -find 'VC/Tools/MSVC/**/bin/Hostx64/x64/dumpbin.exe' | Select-Object -First 1
+          if (-not $dumpbin) { throw 'dumpbin.exe was not found' }
+          foreach ($binary in @('browser-core', 'browser-renderer')) {
+            $imports = & $dumpbin /dependents "target/x86_64-pc-windows-msvc/release/$binary.exe"
+            if ($LASTEXITCODE -ne 0) { throw "Could not inspect $binary" }
+            $imports | Write-Output
+            if (($imports -join "`n") -match '(?i)(VCRUNTIME\S*\.dll|MSVCP\S*\.dll|ucrtbase\.dll|api-ms-win-crt-\S*\.dll)') {
+              throw "$binary requires a dynamically installed C runtime"
+            }
+          }
       - name: Restricted renderer smoke test
-        run: .\target\release\browser-core.exe --sandbox-self-test
+        run: .\target\x86_64-pc-windows-msvc\release\browser-core.exe --sandbox-self-test
       - name: Cancel a blocked renderer
-        run: .\target\release\browser-core.exe --watchdog-self-test
+        run: .\target\x86_64-pc-windows-msvc\release\browser-core.exe --watchdog-self-test
       - name: Verify form IPC editing and submission
-        run: .\target\release\browser-core.exe --forms-self-test
+        run: .\target\x86_64-pc-windows-msvc\release\browser-core.exe --forms-self-test
       - name: Render the offline reading fixture
-        run: .\target\release\browser-core.exe --render-file tests/fixtures/reading.html target/reading.ppm
+        run: .\target\x86_64-pc-windows-msvc\release\browser-core.exe --render-file tests/fixtures/reading.html target/reading.ppm
       - name: Render HTML and CSS compatibility fixture
-        run: .\target\release\browser-core.exe --render-file tests/fixtures/compatibility.html target/compatibility.ppm
+        run: .\target\x86_64-pc-windows-msvc\release\browser-core.exe --render-file tests/fixtures/compatibility.html target/compatibility.ppm
       - name: Render form controls and password masking
-        run: .\target\release\browser-core.exe --render-file tests/fixtures/forms.html target/forms.ppm
+        run: .\target\x86_64-pc-windows-msvc\release\browser-core.exe --render-file tests/fixtures/forms.html target/forms.ppm
       - name: Fetch and render a live HTTPS page
-        run: .\target\release\browser-core.exe --render-url https://example.com/ target/example.ppm
+        run: .\target\x86_64-pc-windows-msvc\release\browser-core.exe --render-url https://example.com/ target/example.ppm
       - name: Package the portable browser
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force target/portable | Out-Null
-          Copy-Item target/release/browser-core.exe,target/release/browser-renderer.exe,README.md,run-browser.cmd target/portable/
+          Copy-Item target/x86_64-pc-windows-msvc/release/browser-core.exe,target/x86_64-pc-windows-msvc/release/browser-renderer.exe,README.md,run-browser.cmd target/portable/
           Compress-Archive -Path target/portable/* -DestinationPath target/browser-core-windows-x64.zip -Force
           Get-FileHash target/browser-core-windows-x64.zip -Algorithm SHA256 | Format-List | Out-File target/SHA256.txt
+      - name: Test the extracted portable package
+        shell: pwsh
+        run: |
+          Expand-Archive target/browser-core-windows-x64.zip -DestinationPath target/portable-check -Force
+          & ./target/portable-check/browser-core.exe --sandbox-self-test
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged renderer sandbox test failed' }
+          & ./target/portable-check/browser-core.exe --forms-self-test
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged form IPC test failed' }
       - name: Upload the portable browser
         uses: actions/upload-artifact@v4
         with:
