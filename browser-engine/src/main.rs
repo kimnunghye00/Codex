@@ -55,33 +55,47 @@ fn main() -> Result<(), Box<dyn Error>> {
         return renderer_process::watchdog_self_test();
     }
 
-    if first.as_deref() == Some("--render-file") {
-        let source = std::env::args()
-            .nth(2)
-            .ok_or("--render-file requires an HTML file")?;
+    if matches!(first.as_deref(), Some("--render-file" | "--render-url")) {
+        let remote = first.as_deref() == Some("--render-url");
+        let source = std::env::args().nth(2).ok_or("render requires a source")?;
         let output = std::env::args()
             .nth(3)
-            .ok_or("--render-file requires a PPM output file")?;
+            .ok_or("render requires a PPM output file")?;
         use std::io::{Read, Write};
-        let mut bytes = Vec::new();
-        std::fs::File::open(source)?
-            .take(2 * 1024 * 1024 + 1)
-            .read_to_end(&mut bytes)?;
-        if bytes.len() > 2 * 1024 * 1024 {
-            return Err("fixture is too large".into());
-        }
-        let packet =
-            renderer_process::render_page("https://example.com/", &bytes, render::PAGE_WIDTH)?;
-        let pixels = render::paint(
-            "https://example.com/",
-            "",
-            false,
-            None,
-            0,
-            &packet,
-            false,
-            false,
-        );
+        let control =
+            navigation::Control::new(std::sync::Arc::new(std::sync::atomic::AtomicU64::new(1)), 1);
+        let (base_url, bytes) = if remote {
+            let response = net::fetch_document(&source, &control)?;
+            if !(200..300).contains(&response.status) {
+                return Err(format!("HTTP status {}", response.status).into());
+            }
+            if let Some(mime) = response.content_type.as_deref() {
+                if !matches!(
+                    mime.split(';').next().unwrap_or("").trim(),
+                    "text/html" | "application/xhtml+xml"
+                ) {
+                    return Err("Unsupported document type".into());
+                }
+            }
+            println!("HTTPS document received: {} bytes", response.body.len());
+            (response.final_url, response.body)
+        } else {
+            let mut bytes = Vec::new();
+            std::fs::File::open(source)?
+                .take(2 * 1024 * 1024 + 1)
+                .read_to_end(&mut bytes)?;
+            if bytes.len() > 2 * 1024 * 1024 {
+                return Err("fixture is too large".into());
+            }
+            ("https://example.com/".to_string(), bytes)
+        };
+        let packet = renderer_process::render_page_controlled(
+            &base_url,
+            &bytes,
+            render::PAGE_WIDTH,
+            Some(&control),
+        )?;
+        let pixels = render::paint(&base_url, "", false, None, 0, &packet, false, false);
         let mut file = std::io::BufWriter::new(std::fs::File::create(output)?);
         writeln!(file, "P6\n{} {}\n255", render::WIDTH, render::HEIGHT)?;
         for pixel in pixels {
@@ -93,6 +107,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             packet.images.len(),
             packet.content_height
         );
+        if remote && packet.texts.is_empty() {
+            return Err("remote document returned no paint text".into());
+        }
         return Ok(());
     }
 

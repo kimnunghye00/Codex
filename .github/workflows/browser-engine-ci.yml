@@ -39,6 +39,8 @@ jobs:
         run: .\target\release\browser-core.exe --watchdog-self-test
       - name: Render the offline reading fixture
         run: .\target\release\browser-core.exe --render-file tests/fixtures/reading.html target/reading.ppm
+      - name: Fetch and render a live HTTPS page
+        run: .\target\release\browser-core.exe --render-url https://example.com/ target/example.ppm
       - name: Package the portable browser
         shell: pwsh
         run: |
@@ -54,5 +56,6 @@ jobs:
             browser-engine/target/browser-core-windows-x64.zip
             browser-engine/target/SHA256.txt
             browser-engine/target/reading.ppm
+            browser-engine/target/example.ppm
           retention-days: 30
           if-no-files-found: error

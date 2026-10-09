@@ -89,3 +89,11 @@ Windows 명령은 `./target/debug/browser-core`를 `target\debug\browser-core.ex
 개발자는 `BROWSER_CORE_FONT` 환경 변수로 신뢰하는 로컬 글꼴을 지정할 수 있습니다. 웹폰트는 읽지 않습니다.
 
 검증 결과와 실사용 완료 기준: [docs/STATUS.md](docs/STATUS.md).
+
+### 실제 HTTPS 경로 진단
+
+```powershell
+.\browser-core.exe --render-url https://example.com/ example.ppm
+```
+
+주소 해석·TLS 인증서 검증·HTTP 수신·제한 렌더러 처리·그리기 결과 생성까지 같은 코드 경로로 실행합니다. 네트워크 접근이 가능한 환경에서 사용하며, GUI 조작·로그인·JavaScript 호환성을 검증하는 명령은 아닙니다.
