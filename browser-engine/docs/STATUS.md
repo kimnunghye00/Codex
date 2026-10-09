@@ -25,8 +25,10 @@
 - gzip·zlib deflate 및 chunked+압축 조합, 압축 폭탄·체크섬 오류·모호한 헤더 거부 테스트를 추가했다.
 - HTML의 따옴표 없는 URL·중복 속성·일부 선택적 종료 태그·정확한 raw-text 종료와 반복 엔티티 처리를 보완했다.
 - CSS 하위/자식 선택자·!important·구체성 순서와 미지원 at-rule 격리를 추가했다. Unicode 색상 panic을 수정했다.
-- 62개 테스트와 Linux 양쪽 바이너리 빌드, 분리 렌더러·취소 smoke test를 확인했다.
+- 63개 테스트와 Linux 양쪽 바이너리 빌드, 분리 렌더러·취소 smoke test를 확인했다.
 - compatibility.html을 실제 IPC worker 경로로 처리해 색상·링크·script 미노출을 자동 검증한다.
+- 스크롤 위치를 매 프레임 0으로 초기화하던 조건 오류를 수정하고 이동·정지·Home/End·경계 테스트를 추가했다.
+- NanumGothic으로 호환성 fixture의 한글·색상·문단 출력과 script 미노출을 눈으로 확인했다.
 - Windows CI에 같은 호환성 fixture 렌더링을 추가했다. 주요 사이트·로그인·JavaScript 호환성 완료를 의미하지 않는다.
 
 ## 기존 작업에서 수행한 검증

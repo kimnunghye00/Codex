@@ -441,13 +441,13 @@ pub fn run(start_url: &str) -> Result<(), Box<dyn Error>> {
             if !alt && window.is_key_pressed(Key::Up, KeyRepeat::Yes) {
                 delta -= 40;
             }
-            let next = if press(Key::End) {
-                max
-            } else if !(alt && press(Key::Home)) || alt_press(Key::Home) {
-                0
-            } else {
-                (scroll as i64 + delta).clamp(0, max as i64) as u32
-            };
+            let next = scroll_target(
+                scroll,
+                max,
+                delta,
+                press(Key::Home) && !alt && !alt_press(Key::Home),
+                press(Key::End),
+            );
             if next != scroll {
                 scroll = next;
                 dirty = true;
@@ -497,6 +497,16 @@ pub fn run(start_url: &str) -> Result<(), Box<dyn Error>> {
     }
     loader.cancel();
     Ok(())
+}
+
+fn scroll_target(current: u32, max: u32, delta: i64, home: bool, end: bool) -> u32 {
+    if end {
+        max
+    } else if home {
+        0
+    } else {
+        (current as i64 + delta).clamp(0, max as i64) as u32
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -630,6 +640,16 @@ fn load_page(target: &str, control: &Control) -> Result<Page, Box<dyn Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn scroll_moves_and_stays_in_place_without_a_home_press() {
+        assert_eq!(scroll_target(100, 1000, 52, false, false), 152);
+        assert_eq!(scroll_target(152, 1000, 0, false, false), 152);
+        assert_eq!(scroll_target(152, 1000, -52, false, false), 100);
+        assert_eq!(scroll_target(152, 1000, 0, true, false), 0);
+        assert_eq!(scroll_target(152, 1000, 0, false, true), 1000);
+        assert_eq!(scroll_target(900, 1000, 500, false, false), 1000);
+        assert_eq!(scroll_target(100, 1000, -500, false, false), 0);
+    }
     fn mock_loader() -> (Loader, SyncSender<Completed>) {
         let (tx, _rx) = mpsc::sync_channel(1);
         let (result, rx) = mpsc::sync_channel(4);
