@@ -285,7 +285,7 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
       const visibleBottom = Math.min(window.innerHeight, (viewport?.height ?? window.innerHeight) + (viewport?.offsetTop ?? 0));
       const navBounds = nav?.getBoundingClientRect();
       const navStyle = nav ? getComputedStyle(nav) : null;
-      const bottomNavVisible = window.innerWidth < 1024
+      const bottomNavVisible = navBounds && navBounds.width > navBounds.height * 2
         && !document.documentElement.classList.contains('route-keyboard-open')
         && navStyle?.display !== 'none'
         && navStyle?.visibility !== 'hidden'
@@ -311,6 +311,9 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
         composer.style.setProperty('z-index', '60', 'important');
       }
       page.style.setProperty('padding-bottom', `${composer?.getBoundingClientRect().height ?? 0}px`, 'important');
+      // A window resize must not pull readers away from older messages.
+      const messages = messagesRef.current;
+      if (messages && nearBottomRef.current) messages.scrollTop = messages.scrollHeight;
     };
     const scheduleResize = () => {
       if (!frame) frame = window.requestAnimationFrame(resize);
@@ -318,6 +321,8 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
     const observer = new ResizeObserver(scheduleResize);
     if (nav) observer.observe(nav);
     if (composer) observer.observe(composer);
+    // Fold transitions and multi-window can change the page before a window event.
+    observer.observe(page);
     const keyboardObserver = new MutationObserver(scheduleResize);
     keyboardObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     window.addEventListener('resize', scheduleResize);

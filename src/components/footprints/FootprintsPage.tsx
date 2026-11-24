@@ -358,6 +358,34 @@ export function FootprintsPage({
     };
   }, []);
 
+  // Resize the existing iframe rather than remounting or rendering new visits.
+  // The host handles the resize message without fitting the route again.
+  useEffect(() => {
+    const element = frame.current;
+    if (!mapReady || !element) return;
+    let pending = 0;
+    let lastWidth = 0;
+    let lastHeight = 0;
+    const notify = () => {
+      pending = 0;
+      const { clientWidth: width, clientHeight: height } = element;
+      if (!width || !height || (width === lastWidth && height === lastHeight)) return;
+      lastWidth = width;
+      lastHeight = height;
+      element.contentWindow?.postMessage({ source: 'route-map-parent', type: 'resize' }, MAP_ORIGIN);
+    };
+    const schedule = () => { if (!pending) pending = window.requestAnimationFrame(notify); };
+    const observer = new ResizeObserver(schedule);
+    observer.observe(element);
+    window.addEventListener('resize', schedule);
+    schedule();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', schedule);
+      window.cancelAnimationFrame(pending);
+    };
+  }, [mapReady]);
+
   useEffect(() => {
     if (!mapReady || playbackState === 'playing') return;
     frame.current?.contentWindow?.postMessage({

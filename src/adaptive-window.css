@@ -1,0 +1,76 @@
+/* One medium-window geometry for unfolded phones and small tablets.
+ * Keep existing compact and desktop styles; never key UI to a device model.
+ * Geometry changes are CSS-only so React state and focused inputs stay mounted.
+ */
+@media (min-width:600px) and (max-width:1023px) {
+  :root { --route-adaptive-nav: calc(72px + env(safe-area-inset-bottom, 0px)); }
+  html body { padding:0 !important; }
+  html body #root .app-shell {
+    width:100% !important; max-width:100% !important;
+    min-height:100dvh !important; margin:0 !important; border-radius:0 !important;
+  }
+  html body .app-shell > main {
+    width:100% !important; max-width:100% !important;
+    margin:0 !important; min-width:0; padding-bottom:var(--route-adaptive-nav) !important;
+  }
+  html body .app-shell > .bottom-nav[data-route-nav] {
+    position:fixed !important; inset:auto 0 0 !important;
+    width:100% !important; max-width:none !important;
+    height:var(--route-adaptive-nav) !important;
+    transform:none !important; margin:0 !important; border-radius:0 !important;
+    padding:6px max(12px,env(safe-area-inset-right,0px)) max(6px,env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px)) !important;
+    flex-direction:row !important; box-sizing:border-box !important;
+  }
+  html body .app-shell > .bottom-nav[data-route-nav] > button {
+    min-width:0; min-height:44px !important; flex:1 1 0 !important; max-width:160px !important;
+  }
+  html.route-keyboard-open body .app-shell > .bottom-nav[data-route-nav] { visibility:hidden !important; pointer-events:none !important; }
+  html.route-keyboard-open body .app-shell > main { padding-bottom:0 !important; }
+  html body .app-shell .page {
+    width:100% !important; max-width:100% !important; margin-inline:auto !important; min-width:0;
+    box-sizing:border-box;
+  }
+  html body .app-shell .page > .app-global-header.topbar {
+    position:relative !important; left:auto !important; width:100% !important;
+    min-width:0 !important; max-width:100% !important; margin-inline:0 !important;
+    padding-inline:0 !important; box-sizing:border-box !important;
+  }
+  html body .app-shell .chat-page > .app-global-header.topbar {
+    padding-inline:var(--route-page-gutter,22px) !important;
+  }
+  html body .app-shell .home-dashboard.page,
+  html body .app-shell .more-page {
+    height:calc(100dvh - var(--route-adaptive-nav)) !important;
+    max-height:calc(100dvh - var(--route-adaptive-nav)) !important;
+    min-height:0 !important;
+  }
+  html body .app-shell .home-dashboard .home-dashboard-grid {
+    width:100% !important; max-width:100% !important; margin-inline:0 !important;
+    grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) !important;
+    gap:12px !important; min-height:0; flex:1 1 auto;
+  }
+  html body .app-shell .home-dashboard .home-dashboard-side {
+    min-width:0; min-height:0;
+    grid-template-rows:minmax(0,1.05fr) minmax(0,.9fr) minmax(0,.65fr) minmax(0,1.4fr) !important;
+    gap:9px !important;
+  }
+  html body .app-shell .home-dashboard .home-dashboard-side > :is(section, article) { min-width:0; min-height:0; }
+  html body .app-shell .route-hub .memory-list {
+    display:grid !important; grid-template-columns:repeat(3,minmax(0,1fr)) !important; gap:12px !important;
+  }
+  html body .app-shell .route-hub .memory-empty { grid-column:1/-1; }
+  html body .app-shell .route-hub .hub-tabs { min-width:0; max-width:100%; overflow-x:auto; }
+  html body .app-shell .more-page .more-scroll { min-height:0; max-width:100%; }
+  html body .app-shell .more-page .route-more-services { width:min(100%,900px); max-width:100%; }
+}
+@media (min-width:840px) and (max-width:1023px) {
+  html body .app-shell .route-hub .memory-list { grid-template-columns:repeat(4,minmax(0,1fr)) !important; }
+}
+/* A shallow multi-window must allow access to controls instead of clipping them.
+ * Normal portrait Home/More retain their existing fixed-screen behavior. */
+@media (max-height:520px) {
+  html body .app-shell .home-dashboard.page,
+  html body .app-shell .more-page { overflow-y:auto !important; overscroll-behavior:contain; }
+  html body .app-shell .home-dashboard .home-dashboard-grid { min-height:430px !important; flex:none; }
+  html body .app-shell .more-page .more-scroll { overflow-y:auto !important; }
+}
