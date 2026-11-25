@@ -51,7 +51,6 @@
   }
   html body .app-shell .home-dashboard .home-dashboard-side {
     min-width:0; min-height:0;
-    grid-template-rows:minmax(0,1.05fr) minmax(0,.9fr) minmax(0,.65fr) minmax(0,1.4fr) !important;
     gap:9px !important;
   }
   html body .app-shell .home-dashboard .home-dashboard-side > :is(section, article) { min-width:0; min-height:0; }
@@ -73,4 +72,79 @@
   html body .app-shell .more-page { overflow-y:auto !important; overscroll-behavior:contain; }
   html body .app-shell .home-dashboard .home-dashboard-grid { min-height:430px !important; flex:none; }
   html body .app-shell .more-page .more-scroll { overflow-y:auto !important; }
+}
+
+/* Home summary: content owns the minimum height, not a viewport ratio.
+ * display:contents on the tools wrapper exposes its cards as flex items.
+ * A disabled card consumes no space; spare height goes to the memories preview.
+ * On an unusually short window the summary alone may scroll, never crop a row.
+ */
+html body .app-shell .home-dashboard .home-dashboard-side {
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:stretch !important;
+  justify-content:flex-start !important;
+  gap:clamp(6px,1.15dvh,12px) !important;
+  height:100% !important;
+  min-height:0 !important;
+  min-width:0 !important;
+  overflow-x:hidden !important;
+  overflow-y:auto !important;
+  overscroll-behavior-y:contain;
+  scrollbar-width:none;
+}
+html body .app-shell .home-dashboard .home-dashboard-side::-webkit-scrollbar { display:none; }
+html body .app-shell .home-dashboard .home-dashboard-side > .home-couple-tools { display:contents !important; }
+html body .app-shell .home-dashboard .home-dashboard-side :is(.home-couple-time-card,.home-romantic-anniversary-card,.home-schedule-card,.home-memory-card,.home-profile-card) {
+  flex:0 0 auto !important;
+  height:auto !important;
+  min-height:max-content !important;
+  max-height:none !important;
+  box-sizing:border-box !important;
+}
+html body .app-shell .home-dashboard .home-dashboard-side .home-couple-time-card {
+  grid-template-rows:auto auto !important;
+  row-gap:clamp(3px,.7dvh,8px);
+  padding-block:clamp(6px,1.1dvh,13px) !important;
+}
+html body .app-shell .home-dashboard .home-dashboard-side .home-couple-time-center { align-self:start; }
+html body .app-shell .home-dashboard .home-dashboard-side :is(.home-romantic-anniversary-card,.home-schedule-card,.home-memory-card) {
+  padding-block:clamp(6px,1dvh,12px) !important;
+}
+html body .app-shell .home-dashboard .home-dashboard-side :is(.home-romantic-anniversary-head,.home-schedule-head,.home-memory-head) {
+  padding-bottom:clamp(4px,.75dvh,9px) !important;
+}
+html body .app-shell .home-dashboard .home-dashboard-side :is(.home-romantic-anniversary-list,.home-schedule-list,.home-memory-grid,.home-memory-empty) {
+  margin-top:clamp(4px,.85dvh,10px) !important;
+}
+html body .app-shell .home-dashboard .home-dashboard-side :is(.home-romantic-anniversary-row,.home-schedule-row,.home-romantic-anniversary-empty,.home-schedule-empty) {
+  height:auto !important;
+  min-height:max-content !important;
+  max-height:none !important;
+  padding-block:clamp(4px,.65dvh,8px) !important;
+}
+html body .app-shell .home-dashboard .home-dashboard-side .home-schedule-row:nth-child(n+2) { display:grid !important; }
+html body .app-shell .home-dashboard .home-dashboard-side .home-memory-card {
+  flex:1 0 auto !important;
+  min-height:max-content !important;
+  transform:none !important;
+}
+html body .app-shell .home-dashboard .home-dashboard-side .home-memory-empty { min-height:44px !important; padding-block:5px; }
+html body .app-shell .home-dashboard .home-dashboard-side .home-memory-grid { grid-auto-rows:minmax(54px,1fr); }
+html body .app-shell .home-dashboard .home-dashboard-side .home-memory-tile { min-height:54px; }
+/* Keep narrow cover screens readable without letting fixed-width badges
+ * consume the entire card; wrap descriptive text rather than clipping it. */
+html body .app-shell .home-dashboard .home-dashboard-side :is(.home-romantic-anniversary-copy,.home-schedule-row-copy,.home-schedule-empty-copy,.home-memory-empty > span) {
+  min-width:0;
+  overflow-wrap:anywhere;
+}
+html body .app-shell .home-dashboard .home-dashboard-side :is(.home-romantic-anniversary-copy strong,.home-romantic-anniversary-copy small,.home-schedule-row-copy strong,.home-schedule-row-copy small,.home-schedule-empty-copy small,.home-romantic-anniversary-empty small) {
+  white-space:normal !important;
+  overflow:visible !important;
+}
+@media (max-width:599px) {
+  html body .app-shell .home-dashboard .home-dashboard-side :is(.home-romantic-anniversary-row,.home-schedule-row) {
+    grid-template-columns:minmax(0,35%) minmax(0,1fr) auto !important;
+    gap:4px !important;
+  }
 }
