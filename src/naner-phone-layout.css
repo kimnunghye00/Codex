@@ -84,3 +84,7 @@ html body #root .app-shell .more-page .more-customize-grid > button > small{font
 html body #root .app-shell .footprints-page .footprints-scope-tabs > button{gap:4px;padding:7px 4px !important}
 html body #root .app-shell .footprints-page .footprints-scope-tabs > button b{font-size:12px;white-space:normal}
 @media(max-width:399px){html body #root .app-shell .footprints-page .footprints-scope-tabs > button svg{display:none}}
+
+/* Keep this shell rule eagerly loaded even while the lazy chat chunk loads. */
+html body #root .app-shell.naner-room-open > main.naner-base-screen[hidden]{display:none !important}
+html body #root .app-shell.naner-room-open > main.naner-room-screen,html body #root .route-responsive-root[data-route-desktop='true'] .app-shell.naner-room-open > main.naner-room-screen{width:100% !important;max-width:none !important;margin:0 !important;padding:0 !important;min-height:0 !important;height:100dvh !important;box-sizing:border-box !important}

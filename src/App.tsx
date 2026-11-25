@@ -11,6 +11,8 @@ import { BottomNav, type AppTab } from './components/navigation/BottomNav';
 import type { RealCoupleConnection } from './lib/coupleConnection';
 import type { User } from 'firebase/auth';
 import type { Memory, MemoryDraft, Message } from './types';
+import type { RoomDraft } from './components/chat/ChatPage';
+import { isNativePlatform } from './lib/native';
 import { loadMemories, loadMessages, saveMemories, saveMessages } from './utils/storage';
 import { displayName, type UserProfile } from './utils/profile';
 import {
@@ -215,6 +217,11 @@ function App({ user, profile, onProfileChange }: AppProps) {
   const chatClearAllActivityRef = useRef(false);
   const knownActivityIds = useRef<Set<string> | null>(null);
   const tabHistory = useRef<Tab[]>(['home']);
+  const chatReturnTab = useRef<Exclude<Tab, 'chat'>>('home');
+  const chatDraftRef = useRef<RoomDraft>({ scope: '', text: '' });
+  const roomScope = JSON.stringify([user.uid, connection?.coupleId ?? null]);
+  const roomOpen = tab === 'chat';
+  const baseTab = roomOpen ? chatReturnTab.current : tab;
   const unreadCount = useMemo(() => notifications.filter((item) => !item.read).length, [notifications]);
   const coupleDay = useMemo(() => {
     const start = parseDate(relationshipStartDate);
@@ -222,12 +229,58 @@ function App({ user, profile, onProfileChange }: AppProps) {
   }, [relationshipStartDate]);
   const anniversaries = useMemo(() => buildAnniversaries(profile, connection?.partnerProfile ?? null, relationshipStartDate), [connection?.partnerProfile, profile, relationshipStartDate]);
   const openSettings = useCallback(() => setSettingsOpen(true), []);
+  const restoreChatReturn = useCallback(() => {
+    if (tabHistory.current.at(-1) === 'chat') tabHistory.current.pop();
+    setNotificationMessageId(undefined);
+    setChatToolsSection(undefined);
+    setTab(chatReturnTab.current);
+  }, []);
+  const exitChatRoom = useCallback(() => {
+    if (!isNativePlatform() && window.history.state?.nanerChatRoom === true) {
+      window.history.back();
+    } else restoreChatReturn();
+  }, [restoreChatReturn]);
   const navigateTab = useCallback((next: Tab) => {
     if (next === tab) return;
     if (next === 'location') setFootprintMemoryId(undefined);
-    tabHistory.current.push(next);
+    if (next === 'chat') {
+      chatReturnTab.current = tab === 'chat' ? chatReturnTab.current : tab;
+      if (!isNativePlatform() && window.history.state?.nanerChatRoom !== true) {
+        window.history.pushState({ ...(window.history.state ?? {}), nanerChatRoom: true }, '');
+      }
+    } else if (tab === 'chat') {
+      if (tabHistory.current.at(-1) === 'chat') tabHistory.current.pop();
+      if (!isNativePlatform() && window.history.state?.nanerChatRoom === true) {
+        const { nanerChatRoom: _room, ...state } = window.history.state;
+        window.history.replaceState(state, '');
+      }
+      setNotificationMessageId(undefined);
+      setChatToolsSection(undefined);
+    }
+    if (tabHistory.current.at(-1) !== next) tabHistory.current.push(next);
     setTab(next);
   }, [tab]);
+  useEffect(() => {
+    if (isNativePlatform()) return;
+    // Clear an orphan marker after reload; a room belongs to this app session.
+    if (window.history.state?.nanerChatRoom === true) {
+      const { nanerChatRoom: _room, ...state } = window.history.state;
+      window.history.replaceState(state, '');
+    }
+  }, []);
+  useEffect(() => {
+    if (isNativePlatform()) return;
+    const onPopState = () => {
+      if (tab === 'chat' && window.history.state?.nanerChatRoom !== true) restoreChatReturn();
+      else if (tab !== 'chat' && window.history.state?.nanerChatRoom === true) {
+        chatReturnTab.current = tab;
+        if (tabHistory.current.at(-1) !== 'chat') tabHistory.current.push('chat');
+        setTab('chat');
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [tab, restoreChatReturn]);
   const navigateMoreTarget = useCallback((target: MoreNavigationTarget) => {
     if (target.area === 'home') {
       if (target.profileEditor) setProfileEditorRequest((value) => value + 1);
@@ -428,6 +481,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
         (next) => {
           if (disposed) return;
           if (transitionCoupleCache(user.uid, next?.coupleId ?? null)) {
+            chatDraftRef.current = { scope: '', text: '' };
             previousMessages.current = [];
             previousMemories.current = [];
             memoriesRef.current = [];
@@ -579,6 +633,10 @@ function App({ user, profile, onProfileChange }: AppProps) {
 
   useEffect(() => {
     const handleHomeRequest = () => {
+      if (!isNativePlatform() && window.history.state?.nanerChatRoom === true) {
+        const { nanerChatRoom: _room, ...state } = window.history.state;
+        window.history.replaceState(state, '');
+      }
       tabHistory.current = ['home'];
       setTab('home');
       setSettingsOpen(false);
@@ -593,6 +651,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
       if (event.defaultPrevented) return;
       if (settingsOpen) { event.preventDefault(); setSettingsOpen(false); return; }
       if (notificationsOpen) { event.preventDefault(); setNotificationsOpen(false); return; }
+      if (tab === 'chat') { event.preventDefault(); exitChatRoom(); return; }
       if (tabHistory.current.length > 1) {
         event.preventDefault();
         tabHistory.current.pop();
@@ -603,7 +662,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
     };
     window.addEventListener('route-native-back', handleBack);
     return () => window.removeEventListener('route-native-back', handleBack);
-  }, [notificationsOpen, settingsOpen, tab]);
+  }, [notificationsOpen, settingsOpen, tab, exitChatRoom]);
 
   useEffect(() => {
     const markChatClearAll = () => { chatClearAllActivityRef.current = true; };
@@ -748,14 +807,15 @@ function App({ user, profile, onProfileChange }: AppProps) {
   const AppHeader = ({ title, onSettings = openSettings, settingsLabel }: PageHeaderProps) => <SharedAppHeader title={title} settingsLabel={settingsLabel} onSettings={onSettings} onNotifications={openNotifications} unreadCount={unreadCount} />;
 
   return <>
-    <div className="app-shell"><main><Suspense fallback={<div className="page auth-loading" role="status" aria-live="polite"><div className="loading-mark" /><p>화면을 불러오는 중이에요</p></div>}>
-      {tab === 'home' && <HomePage key={user.uid} uid={user.uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} memories={memories} latestMessage={messages[messages.length - 1]} onNavigate={navigateTab} onOpenMemory={openMemory} onOpenFootprints={() => openFootprints()} onSaveStartDate={saveStartDate} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} profileEditorRequest={profileEditorRequest} />}
-      {tab === 'memories' && <MemoriesPage key={user.uid} requestedTab={requestedHubTab} Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={() => { setFootprintMemoryId(undefined); navigateTab('location'); }} onOpenFootprints={(memoryId) => openFootprints(memoryId)} sharedProfile={profile} sharedConnection={connection} sharedRelationshipStartDate={relationshipStartDate} />}
-      {tab === 'location' && <FootprintsPage key={`${user.uid}:${footprintMemoryId ?? ''}`} uid={user.uid} connection={connection} memories={memories} initialMemoryId={footprintMemoryId} onOpenMemory={openMemory} Header={AppHeader} />}
-      {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} connection={connection} initialMessageId={notificationMessageId} notificationRequest={notificationMessageRequest} initialToolsSection={chatToolsSection} toolsRequest={chatToolsRequest}/>}
-      {tab === 'anniversary' && <AnniversaryPage key={relationshipStartDate ?? ''} connected={Boolean(connection)} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} onSaveStartDate={saveStartDate} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
-      {tab === 'more' && <MorePage profile={profile} connected={Boolean(connection)} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} onNavigate={navigateMoreTarget} />}
-    </Suspense></main><BottomNav tab={tab} onNavigate={navigateTab} /></div>
+    <div className={`app-shell${roomOpen ? ' naner-room-open' : ''}`}><main className="naner-base-screen" hidden={roomOpen}><Suspense fallback={<div className="page auth-loading" role="status" aria-live="polite"><div className="loading-mark" /><p>화면을 불러오는 중이에요</p></div>}>
+      {baseTab === 'home' && <HomePage key={user.uid} uid={user.uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} memories={memories} latestMessage={messages[messages.length - 1]} onNavigate={navigateTab} onOpenMemory={openMemory} onOpenFootprints={() => openFootprints()} onSaveStartDate={saveStartDate} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} profileEditorRequest={profileEditorRequest} />}
+      {baseTab === 'memories' && <MemoriesPage key={user.uid} requestedTab={requestedHubTab} Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={() => { setFootprintMemoryId(undefined); navigateTab('location'); }} onOpenFootprints={(memoryId) => openFootprints(memoryId)} sharedProfile={profile} sharedConnection={connection} sharedRelationshipStartDate={relationshipStartDate} />}
+      {baseTab === 'location' && <FootprintsPage key={`${user.uid}:${footprintMemoryId ?? ''}`} uid={user.uid} connection={connection} memories={memories} initialMemoryId={footprintMemoryId} onOpenMemory={openMemory} Header={AppHeader} />}
+      {baseTab === 'anniversary' && <AnniversaryPage key={relationshipStartDate ?? ''} connected={Boolean(connection)} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} onSaveStartDate={saveStartDate} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
+      {baseTab === 'more' && <MorePage profile={profile} connected={Boolean(connection)} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} onNavigate={navigateMoreTarget} />}
+    </Suspense></main>
+      {roomOpen ? <main className="naner-room-screen"><Suspense fallback={<div className="page auth-loading" role="status"><button type="button" onClick={exitChatRoom} aria-label="채팅방 나가기">← 뒤로가기</button><div className="loading-mark" /><p>대화를 불러오는 중이에요</p></div>}><ChatPage key={roomScope} roomScope={roomScope} draftCache={chatDraftRef} onBack={exitChatRoom} messages={messages} setMessages={setMessages} connection={connection} initialMessageId={notificationMessageId} notificationRequest={notificationMessageRequest} initialToolsSection={chatToolsSection} toolsRequest={chatToolsRequest} /></Suspense></main> : <BottomNav tab={tab} onNavigate={navigateTab} />}
+    </div>
 
     <Suspense fallback={null}>
       {settingsOpen && <AccountSettings user={user} profile={profile} onProfileChange={onProfileChange} onClose={() => setSettingsOpen(false)} />}
