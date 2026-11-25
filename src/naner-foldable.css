@@ -1,0 +1,68 @@
+/* Phase 5: expanded mobile two-pane workspaces. Compact and desktop
+ * layouts remain unchanged; Phase 6 will refine tablet-specific proportions. */
+@media (min-width:600px) {
+  html body #root .route-responsive-root:not([data-route-desktop="true"]) .app-shell .home-dashboard .home-dashboard-grid {
+    grid-template-columns:minmax(0,43fr) minmax(0,57fr) !important;
+    gap:14px !important;
+  }
+  html body #root .route-responsive-root:not([data-route-desktop="true"]) .home-dashboard .home-dashboard-side {
+    gap:12px !important;
+  }
+  html body #root .route-responsive-root:not([data-route-desktop="true"]) .home-dashboard .home-couple-time-card {
+    padding:12px !important;
+    grid-template-rows:auto auto !important;
+  }
+  html body #root .route-responsive-root:not([data-route-desktop="true"]) .home-dashboard .home-couple-time-center strong {
+    font-size:clamp(32px,13cqi,49px) !important;
+  }
+  html body #root .route-responsive-root:not([data-route-desktop="true"]) .home-dashboard .home-memory-grid {
+    grid-auto-rows:minmax(76px,1fr) !important;
+  }
+  html body #root .app-shell .naner-album-workspace {
+    display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start;min-width:0;
+  }
+  .naner-album-list,.naner-album-detail {min-width:0}
+  .naner-album-detail {border-left:1px solid var(--border);padding-left:12px;position:sticky;top:0;max-height:calc(100dvh - 150px);overflow-y:auto;scrollbar-width:none}
+  .naner-album-detail::-webkit-scrollbar {display:none}
+  html body #root .app-shell .naner-album-list .memory-list {grid-template-columns:repeat(2,minmax(0,1fr)) !important;gap:9px !important}
+  html body #root .app-shell .naner-album-detail .memory-detail {width:100% !important;max-width:none !important;min-height:0 !important;height:auto !important;padding:0 !important;margin:0 !important;overflow:visible !important;background:var(--surface)}
+  html body #root .app-shell .naner-album-detail .memory-detail .detail-gallery {width:100% !important;height:clamp(120px,30dvh,280px) !important;min-height:0 !important}
+  .naner-album-detail .detail-heading h1 {font-size:19px !important;overflow-wrap:anywhere}
+  .naner-panel-empty {display:grid;place-content:center;text-align:center;min-height:170px;gap:8px;color:var(--text-secondary);padding:16px}
+  .naner-panel-empty b {color:var(--text-primary);font-size:14px}
+  html body #root .app-shell .naner-more-workspace {display:grid !important;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px !important;align-items:start;min-width:0}
+  .naner-more-list {min-width:0}
+  html body #root .app-shell .naner-more-detail {min-width:0;border-left:1px solid var(--border);padding-left:12px;max-height:calc(100dvh - 100px);overflow:auto;scrollbar-width:none}
+  .naner-more-detail::-webkit-scrollbar {display:none}
+  html body #root .app-shell .naner-more-detail > .more-sheet {position:relative !important;inset:auto !important;transform:none !important;width:100% !important;max-width:none !important;max-height:none !important;min-height:0 !important;overflow:visible !important;margin:0 !important;padding:12px 0 !important;border:0 !important;box-shadow:none !important;background:var(--surface) !important}
+  html body #root .app-shell .naner-more-list .more-customize-grid {display:flex !important;flex-direction:column !important}
+  html body #root .app-shell .naner-more-list .more-customize-grid > button {display:grid !important;grid-template-columns:24px minmax(0,1fr) 16px !important;gap:8px !important}
+  .naner-more-list .more-customize-grid > button > small {grid-column:2;grid-row:2;text-align:left !important}
+  .naner-more-list .more-customize-grid > button > .naner-more-chevron {grid-column:3;grid-row:1/3}
+  html body #root .app-shell .naner-more-list .more-customize-grid > button[aria-pressed="true"] {background:var(--primary-soft) !important;color:var(--accent-text) !important;border-radius:9px !important}
+  html body #root .app-shell .chat-page.naner-chat-split {--naner-chat-side:clamp(205px,32vw,285px);position:relative !important}
+  html body #root .app-shell .chat-page.naner-chat-split > :is(.messages,.chat-next-schedule,.chat-sync-error,.chat-flow-notice,.chat-media-progress,.scheduled-chat-list) {width:calc(100% - var(--naner-chat-side)) !important;max-width:none !important;margin-inline:0 !important;box-sizing:border-box}
+  html body #root .app-shell .chat-page.naner-chat-split > .messages {padding-inline:12px !important}
+  html body #root .app-shell .chat-page .naner-chat-side {position:absolute;right:0;top:calc(56px + env(safe-area-inset-top,0px));bottom:0;width:var(--naner-chat-side);box-sizing:border-box;border-left:1px solid var(--border);background:var(--surface);padding:12px;overflow-y:auto;scrollbar-width:none;z-index:3}
+  .naner-chat-side::-webkit-scrollbar {display:none}
+  .naner-chat-side-head {display:flex;align-items:center;justify-content:space-between;gap:4px}
+  .naner-chat-side-head h2 {font-size:16px;margin:0}
+  .naner-chat-side button {color:var(--text-primary);background:transparent;border:0;border-radius:8px;min-height:36px}
+  .naner-chat-side section {margin-top:20px}
+  .naner-chat-side section h3 {font-size:13px;margin:0 0 10px}
+  .naner-chat-side section p {font-size:11px;color:var(--text-secondary);overflow-wrap:anywhere}
+  .naner-chat-media-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .naner-chat-media-grid button {padding:0;overflow:hidden;aspect-ratio:1}
+  .naner-chat-media-grid img {width:100%;height:100%;display:block;object-fit:cover}
+  .naner-chat-side .naner-side-item {display:block;text-align:left;width:100%;padding:9px;background:var(--naner-neutral-fill);margin:6px 0;overflow-wrap:anywhere}
+  .naner-chat-side .naner-side-item small {display:block;font-size:10px;color:var(--text-secondary)}
+  .naner-chat-side .naner-quick-signal {background:var(--primary-soft);color:var(--accent-text);padding:6px 9px;margin:3px 3px 0 0}
+  html body #root .route-responsive-root:not([data-route-desktop="true"]) .footprints-page .footprints-workspace {grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) !important;gap:14px !important;align-items:stretch}
+  html body #root .route-responsive-root:not([data-route-desktop="true"]) .footprints-page .footprints-map {height:clamp(280px,56dvh,580px) !important;min-height:0 !important}
+  html body #root .route-responsive-root:not([data-route-desktop="true"]) .footprints-page .footprints-list {max-height:clamp(280px,56dvh,580px) !important;overflow-y:auto;scrollbar-width:none}
+  .naner-visit-focus {display:block;width:100%;text-align:left;border:0;background:transparent;color:var(--text-primary);padding:5px 0;min-height:44px;font-weight:700;overflow-wrap:anywhere}
+  .naner-visit-focus[aria-pressed="true"] {color:var(--accent-text)}
+}
+
+/* Transparent wrappers retain the exact compact grid/flex flow. */
+.naner-compact-contents {display:contents;}

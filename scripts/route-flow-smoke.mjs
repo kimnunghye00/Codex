@@ -87,7 +87,7 @@ const header = read('src/components/navigation/AppHeader.tsx');
 const bottomNav = read('src/components/navigation/BottomNav.tsx');
 const more = read('src/components/more/MoreServices.tsx');
 const chat = read('src/components/chat/ChatPage.tsx');
-const danduliSticker = read('src/components/chat/DanduliSticker.tsx');
+const danduliSticker = read('src/components/chat/DanduliSticker.tsx') + read('src/components/chat/stickerCatalog.ts');
 const danduliStickerStyles = read('src/danduli-stickers.css');
 const chatStyles = read('src/styles/features/chat.ts');
 const memories = read('src/components/memories/MemoriesPage.tsx');
@@ -113,11 +113,11 @@ check('home adaptive styles load with authenticated app instead of startup', app
 check('home summary preserves content-based sizing and container queries', homeAdaptive.includes('min-height:max-content !important') && homeAdaptive.includes('display:contents !important') && homeAdaptive.includes('overflow-y:auto !important') && homeAdaptive.includes('@container home-summary') && homeAdaptive.includes('.home-schedule-row:nth-child(n+2)'));
 check('navigation layout has one wide-screen owner', !bottomNav.includes('lg:!flex-col') && !bottomNav.includes('lg:!left-') && adaptiveWindow.includes('flex-direction:column !important') && adaptiveWindow.includes('flex-direction:row !important'));
 
-check('App routes home', app.includes("tab === 'home'"));
+check('App routes home', app.includes("baseTab === 'home'"));
 check('App routes memories directly', app.includes("from './components/memories/MemoriesPage'") && /<MemoriesPage\b[^>]*\brequestedTab=\{requestedHubTab\}/.test(app));
-check('App routes chat directly into page', app.includes("tab === 'chat'") && app.includes('<ChatPage Header={AppHeader}') && !app.includes('chat-room-layer'));
-check('Map tab renders footprints and has no date planning', app.includes("tab === 'location' && <FootprintsPage") && !app.includes('DateMapPage'));
-check('App routes more', app.includes("tab === 'more'"));
+check('App enters an independent chat room without primary nav', app.includes("tab === 'chat'") && app.includes('hidden={roomOpen}') && app.includes('roomOpen ? <main className="naner-room-screen"') && app.includes('onBack={exitChatRoom}') && app.includes(': <BottomNav tab={tab}'));
+check('Map tab renders footprints and has no date planning', app.includes("baseTab === 'location' && <FootprintsPage") && !app.includes('DateMapPage'));
+check('App routes more', app.includes("baseTab === 'more'"));
 check('native back handler remains connected', app.includes('route-native-back'));
 check('App uses realtime couple subscription', app.includes('subscribeRealCoupleConnection'));
 
@@ -132,16 +132,16 @@ check('CoupleConnect consumes realtime invite snapshots', coupleConnect.includes
 check('pending couple connection is restart-persisted', coupleConnect.includes('persistSession') && coupleConnect.includes('loadPersistedSession') && coupleSession.includes('route.coupleConnect.pending:'));
 
 check('More keeps typed navigation contract', more.includes('onNavigate: (target: MoreNavigationTarget) => void'));
-check('More is a customization hub', more.includes('단둘이 꾸미기') && more.includes("'chat-style'") && more.includes("'store'") && more.includes("profileEditor: true") && more.includes('사진 · 배경 편집'));
+check('More is a customization hub', more.includes('나/너 꾸미기') && more.includes("'chat-style'") && more.includes("'store'") && more.includes("profileEditor: true") && more.includes('사진 · 배경 편집'));
 check('More removes duplicate quick-settings section', !more.includes('more-quick-settings'));
 check('More removes duplicated service navigation and settings', !more.includes("id: 'settings', label: '설정'") && !more.includes("id: 'date', label: '약속'") && !more.includes("id: 'footprint', label: '발자취'"));
 check('More exposes theme icon emoticon customization', more.includes("openSheet('theme')") && more.includes("openSheet('app-icon')") && more.includes("openSheet('emoticon')"));
 check('More uses typed navigation for linked settings', !more.includes('querySelectorAll') && more.includes("toolsSection: 'settings'") && more.includes("toolsSection: 'stickers'"));
 check('profile customization opens the real photo editor', app.includes('profileEditorRequest={profileEditorRequest}') && homeTools.includes('profileEditorRequest') && homeTools.includes('backgroundPhotoDataUrl'));
 
-check('chat screen title is 대화', chat.includes('<Header title="대화"'));
+check('chat has a room-specific partner header and explicit back', chat.includes('className="naner-room-header"') && chat.includes('aria-label="채팅방 나가기"') && chat.includes('{partnerName}'));
 check('chat realtime subscription is present', chat.includes('subscribeCoupleMessages'));
-check('chat header opens its own settings without a duplicate profile bar', chat.includes('onSettings={openChatMenu}') && !chat.includes('className="chat-profile"'));
+check('chat header opens its own settings without a duplicate profile bar', chat.includes('onClick={openChatMenu}') && chat.includes('onClick={openScheduleMessage}') && !chat.includes('className="chat-profile"'));
 check('memories header opens tab and anniversary settings', memories.includes('onSettings={() => setOrderOpen(true)}'));
 check('map header opens footprint settings', location.includes('settingsLabel="발자취 설정"'));
 check('home and more headers open page settings', app.includes('settingsLabel="홈 설정"') && app.includes('settingsLabel="더보기 설정"') && more.includes('내 프로필') && more.includes('상대방 프로필 및 연결'));
@@ -290,6 +290,21 @@ check('account isolation blocks React mount', main.indexOf('await initializeRunt
 check('account isolation policy is used', recovery.includes('decideAccountIsolation') && accountPolicy.includes("'reset-orphan'") && accountPolicy.includes("'reset-switch'"));
 check('runtime recovery keeps Firestore cache isolation', firestoreCacheReset.includes('clearNativeFirestorePersistence'));
 
+// NANER Phase 2: preserve existing theme IDs and the adaptive geometry owner.
+const nanerSystem = read('src/naner-design-system.css');
+const nanerThemes = read('src/route-themes.ts');
+const nanerPalette = read('src/route-theme-accessibility.css');
+check('NANER only exposes Modern Violet and keeps the theme preference key', nanerThemes.includes("const DEFAULT_THEME = 'modern-violet'") && !nanerThemes.includes("id: 'sunset-route'") && !nanerThemes.includes("id: 'neon-night'") && nanerThemes.includes("const STORAGE_KEY = 'route-theme-v2'"));
+check('NANER palette and minimal navigation primitives are wired', nanerPalette.includes("data-route-theme='modern-violet'") && nanerPalette.includes('--primary:#635BEB') && nanerSystem.includes('background: transparent !important;') && nanerSystem.includes('.nav-icon') && read('src/main.tsx').includes("import './naner-design-system.css';") && read('src/styles.css').includes('Pretendard Variable'));
+
+check('NANER phone composition connects real home previews, album and profile list', app.includes('latestMessage={latestHomeMessage}') && app.includes('naner-home-chat') && memories.includes('naner-memory-add') && memories.includes("setFilter('video')") && more.includes('naner-more-profile') && location.includes('naner-location-settings') && app.includes("import './naner-phone-layout.css';"));
+check('NANER own footprints use only own GPS records, without weakening joint verification', location.includes("scope === 'mine' ? myVisits : jointVisits") && location.includes("scope === 'mine' ? mySamples : partnerSamples") && location.includes("scope === 'together' ? jointById.get(visit.id)") && location.includes("buildJointFootprints"));
+check('NANER room keeps scoped draft and previous page, with web and native back', app.includes('chatReturnTab') && app.includes('roomScope={roomScope}') && app.includes('draftCache={chatDraftRef}') && app.includes("window.addEventListener('popstate'") && app.includes("if (tab === 'chat') { event.preventDefault(); exitChatRoom(); return; }") && chat.includes('draftCache.current.scope === roomScope') && chat.includes('draftCache.current = { scope: roomScope, text: draft, replyTo }'));
+check('NANER room keeps visual viewport composer and hides scrollbars', chat.includes('const bottom = visibleBottom;') && chat.includes("composer.style.setProperty('position', 'fixed', 'important')") && read('src/naner-chat-room.css').includes('scrollbar-width:none !important') && read('src/styles/features/chat.ts').includes('naner-chat-room.css'));
+check('NANER expanded mobile workspaces preserve compact routes and real actions', read('src/utils/useExpandedMobile.ts').includes('width >= 600') && memories.includes('naner-album-detail') && memories.includes('!expanded || activeTab') && chat.includes('naner-chat-side') && chat.includes('dockWidth') && more.includes('naner-more-detail') && location.includes("type: 'focus', visit") && app.includes("import './naner-foldable.css';"));
+check('NANER spacious tablet layout and scrollable hidden tracks', read('src/utils/navigationPlatform.ts').includes('width >= 840') && app.includes('tablet ? 3 : 2') && read('src/naner-tablet.css').includes('repeat(3,minmax(0,1fr))') && read('src/naner-tablet.css').includes('scrollbar-width:none !important') && chat.includes('tabIndex={tablet ? 0 : undefined}') && more.includes('naner-tablet-theme-preview') && more.includes("sheet === 'layout'") && app.includes("import './naner-tablet.css';"));
+check('NANER home preview has a scoped, bounded subscription independent of history', app.includes('subscribeCouplePreview(coupleId, user.uid') && app.includes('homeChatPreview?.scope === roomScope') && read('src/lib/chatRealtime.ts').includes('limitToLast(20)'));
+check('NANER compact and expanded chat share scoped scheduled drafts and optimized media', chat.includes('visibleScheduledDrafts(scheduledDrafts, connection?.coupleId)') && chat.includes('roomScheduledDrafts.map') && chat.includes('chatMediaPreviewUrl(url)'));
 console.log(`\nROUTE flow smoke gate: ${passes.length} checks passed.`);
 for (const pass of passes) console.log(`  ✓ ${pass}`);
 

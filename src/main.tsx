@@ -1,7 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import Root from './Root';
-import { AppCrashBoundary, installGlobalCrashDiagnostics } from './AppCrashBoundary';
+import { AppCrashBoundary } from './AppCrashBoundary';
+import { installGlobalCrashDiagnostics } from './crashDiagnostics';
 import { applySavedRouteAppIcon } from './utils/appIcon';
 import { applySavedRouteProfileStyle } from './utils/profileStyle';
 import { authPersistenceReady } from './lib/firebaseAuth';
@@ -48,6 +49,7 @@ import './route-mobile-bugfix-v29.css';
 import './route-popup-system-v31.css';
 import './app-header-alignment.css';
 import './adaptive-window.css';
+import './naner-design-system.css';
 
 const NATIVE_SPLASH_FAILSAFE_MS = 2500;
 const DEFERRED_RUNTIME_FALLBACK_MS = 900;
@@ -72,24 +74,28 @@ function mountBootstrapShell() {
     'justify-content:center',
     'gap:12px',
     'padding:32px',
-    'background:#fffaf8',
-    'color:#3d405b',
-    'font-family:"SUIT Variable","SUIT",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+    'background:#FFFFFF',
+    'color:#19191B',
+    'font-family:"Pretendard Variable","Pretendard","SUIT Variable","SUIT",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
     'text-align:center',
   ].join(';');
 
   const brand = document.createElement('strong');
-  brand.textContent = '단둘이';
+  brand.append('나');
+  const slash = document.createElement('em');
+  slash.textContent = '/';
+  slash.style.cssText = 'color:#635BEB;font-style:normal';
+  brand.append(slash, '너');
   brand.style.cssText = 'font-size:26px;letter-spacing:-1px;font-weight:900';
 
   const message = document.createElement('span');
   message.textContent = '우리의 기록을 준비하고 있어요';
-  message.style.cssText = 'font-size:12px;line-height:1.5;color:#777687';
+  message.style.cssText = 'font-size:12px;line-height:1.5;color:#707078';
 
   const indicator = document.createElement('span');
   indicator.textContent = '•••';
   indicator.setAttribute('aria-hidden', 'true');
-  indicator.style.cssText = 'font-size:13px;letter-spacing:4px;color:#e07a5f';
+  indicator.style.cssText = 'font-size:13px;letter-spacing:4px;color:#635BEB';
 
   shell.append(brand, message, indicator);
   root.replaceChildren(shell);
@@ -110,24 +116,28 @@ function mountBootstrapFailure() {
     'justify-content:center',
     'gap:12px',
     'padding:32px',
-    'background:#fffaf8',
-    'color:#3d405b',
-    'font-family:"SUIT Variable","SUIT",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+    'background:#FFFFFF',
+    'color:#19191B',
+    'font-family:"Pretendard Variable","Pretendard","SUIT Variable","SUIT",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
     'text-align:center',
   ].join(';');
 
   const brand = document.createElement('strong');
-  brand.textContent = '단둘이';
+  brand.append('나');
+  const slash = document.createElement('em');
+  slash.textContent = '/';
+  slash.style.cssText = 'color:#635BEB;font-style:normal';
+  brand.append(slash, '너');
   brand.style.cssText = 'font-size:26px;letter-spacing:-1px;font-weight:900';
 
   const message = document.createElement('span');
   message.textContent = '앱을 준비하는 중 문제가 생겼어요. 다시 실행해 주세요.';
-  message.style.cssText = 'max-width:280px;font-size:12px;line-height:1.6;color:#777687';
+  message.style.cssText = 'max-width:280px;font-size:12px;line-height:1.6;color:#707078';
 
   const retry = document.createElement('button');
   retry.type = 'button';
   retry.textContent = '다시 시도';
-  retry.style.cssText = 'min-height:44px;padding:0 20px;border:0;border-radius:14px;background:#3d405b;color:white;font-size:12px;font-weight:800';
+  retry.style.cssText = 'min-height:44px;padding:0 20px;border:0;border-radius:14px;background:#635BEB;color:white;font-size:12px;font-weight:800';
   retry.addEventListener('click', () => window.location.reload());
 
   shell.append(brand, message, retry);

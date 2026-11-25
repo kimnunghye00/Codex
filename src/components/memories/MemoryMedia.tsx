@@ -24,14 +24,6 @@ function cacheStorageResolution(key: string, value: Promise<string>) {
   storageUrlCache.set(key, value);
 }
 
-export function isMemoryVideo(src?: string) {
-  if (!src) return false;
-  if (src.startsWith('data:video/')) return true;
-  let normalized = src.split('#')[0];
-  try { normalized = decodeURIComponent(normalized); } catch { /* Use the original URL when percent encoding is invalid. */ }
-  return /\.(mp4|webm|mov)(\?|$)/i.test(normalized);
-}
-
 function retryableUrl(url: string, attempt: number) {
   if (!attempt || url.startsWith('blob:') || url.startsWith('data:')) return url;
   return `${url}${url.includes('?') ? '&' : '?'}route-memory-retry=${attempt}`;
@@ -54,15 +46,16 @@ function storageCandidates(source?: string) {
 
 async function resolveStorageReference(value: string) {
   if (!value.startsWith('gs://')) return value;
-  const cached = storageUrlCache.get(value);
+  const cacheKey = `${auth.currentUser?.uid ?? 'guest'}:${value}`;
+  const cached = storageUrlCache.get(cacheKey);
   if (cached) return cached;
 
   const pending = getDownloadURL(ref(storage, value)).catch((cause) => {
-    storageUrlCache.delete(value);
+    storageUrlCache.delete(cacheKey);
     console.warn('[ROUTE memory storage recovery]', cause);
     return value;
   });
-  cacheStorageResolution(value, pending);
+  cacheStorageResolution(cacheKey, pending);
   return pending;
 }
 

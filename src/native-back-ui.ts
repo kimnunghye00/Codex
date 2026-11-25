@@ -13,7 +13,7 @@ function rememberLocalTab(entry: LocalTabHistory) {
 
 function clickFirst(selectors: string[]) {
   for (const selector of selectors) {
-    const button = document.querySelector<HTMLButtonElement>(selector);
+    const button = Array.from(document.querySelectorAll<HTMLButtonElement>(selector)).find((item) => item.getClientRects().length > 0);
     if (button) { button.click(); return true; }
   }
   return false;
@@ -60,6 +60,9 @@ function installNativeBackUi() {
     if (event.defaultPrevented) return;
 
     const handled = clickFirst([
+      '.gif-camera-backdrop button[aria-label="촬영 닫기"]',
+      '.chat-delete-backdrop .chat-delete-cancel:not(:disabled)',
+      '.chat-delete-toolbar .chat-delete-toolbar-cancel:not(:disabled)',
       '.confirm-backdrop .confirm-dialog button:not(.danger)',
       '.more-sheet-backdrop .more-sheet-head button[aria-label="닫기"]',
       '.lightbox[role="dialog"] button[aria-label="닫기"]',
@@ -75,6 +78,10 @@ function installNativeBackUi() {
       event.preventDefault();
       return;
     }
+
+    // The previous page is retained but hidden while the independent chat is open.
+    // Do not let its detail view or local tab history consume chat Back.
+    if (document.querySelector('.naner-room-open')) return;
 
     const memoryMenu = document.querySelector('.memory-detail .detail-menu > div');
     if (memoryMenu) {

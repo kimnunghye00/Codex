@@ -37,7 +37,7 @@ export async function showPartnerActivityAlert(event: AppNotification) {
     try {
       const { LocalNotifications } = await import('@capacitor/local-notifications');
       await LocalNotifications.schedule({ notifications: [{
-        id: nativeId(event.id), title: event.title, body: event.detail || '단둘이에서 확인해 주세요.',
+        id: nativeId(event.id), title: event.title, body: event.detail || '나너에서 확인해 주세요.',
         extra: { screen: target.screen, itemId: target.itemId },
       }] });
     } catch (error) { console.warn('[DANDULI native activity alert]', error); }
@@ -47,7 +47,7 @@ export async function showPartnerActivityAlert(event: AppNotification) {
   // not background FCM push and does not promise delivery after the page quits.
   try {
     const notification = new Notification(event.title, {
-      body: event.detail || '단둘이에서 확인해 주세요.',
+      body: event.detail || '나너에서 확인해 주세요.',
       tag: event.id,
       icon: '/route-icon.svg',
     });

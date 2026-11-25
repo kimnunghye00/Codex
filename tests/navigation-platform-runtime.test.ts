@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isDesktopNavigation } from '../src/utils/navigationPlatform.ts';
+import { isDesktopNavigation, supportsTabletWorkspace } from '../src/utils/navigationPlatform.ts';
 
 test('Windows, Mac and Linux use desktop bottom navigation', () => {
   assert.equal(isDesktopNavigation({ platform: 'Win32', userAgent: 'Windows NT 10.0', maxTouchPoints: 10 }), true);
@@ -15,4 +15,10 @@ test('Android, iPadOS and iOS stay on the adaptive mobile layout', () => {
   assert.equal(isDesktopNavigation({ userAgent: 'iPhone; Mobile' }), false);
   assert.equal(isDesktopNavigation({ nativePlatform: 'android', userAgent: 'X11; Linux x86_64' }), false);
   assert.equal(isDesktopNavigation({ nativePlatform: 'ios', platform: 'MacIntel' }), false);
+});
+
+test('tablet workspace uses available width and excludes desktop', () => {
+  for (const width of [320, 599, 600, 768, 839]) assert.equal(supportsTabletWorkspace(width, false), false);
+  for (const width of [840, 1024, 1366]) assert.equal(supportsTabletWorkspace(width, false), true);
+  assert.equal(supportsTabletWorkspace(1440, true), false);
 });

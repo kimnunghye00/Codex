@@ -1,5 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 
+import { saveDiagnostic } from './crashDiagnostics';
+
 type Props = { children: ReactNode };
 type State = { error: Error | null; retryKey: number; crashCount: number };
 
@@ -28,23 +30,6 @@ function recordCrash() {
     return recent.length;
   } catch {
     return 1;
-  }
-}
-
-function saveDiagnostic(error: Error, info?: ErrorInfo) {
-  try {
-    const payload = {
-      at: new Date().toISOString(),
-      message: error.message || String(error),
-      stack: error.stack || '',
-      componentStack: info?.componentStack || '',
-      href: window.location.href,
-      userAgent: navigator.userAgent,
-      online: navigator.onLine,
-    };
-    sessionStorage.setItem('route-last-ui-error', JSON.stringify(payload));
-  } catch {
-    // Diagnostics must never become another source of crashes.
   }
 }
 
@@ -90,8 +75,8 @@ export class AppCrashBoundary extends Component<Props, State> {
       return (
         <main className="route-crash-screen" role="alert">
           <section className="route-crash-card">
-            <div className="route-crash-mark">단</div>
-            <small>단둘이 RECOVERY</small>
+            <div className="route-crash-mark">나</div>
+            <small>나너 RECOVERY</small>
             <h1>{repeated ? '앱을 안전하게 다시 시작할게요' : '화면을 다시 불러올게요'}</h1>
             <p>{repeated
               ? '같은 화면 오류가 반복되어 현재 데이터를 지우지 않고 앱 화면만 새로 시작하는 것이 안전해요.'
@@ -114,16 +99,3 @@ export class AppCrashBoundary extends Component<Props, State> {
   }
 }
 
-export function installGlobalCrashDiagnostics() {
-  window.addEventListener('error', (event) => {
-    const error = event.error instanceof Error ? event.error : new Error(event.message || 'window error');
-    saveDiagnostic(error);
-  });
-
-  window.addEventListener('unhandledrejection', (event) => {
-    const reason = event.reason;
-    const error = reason instanceof Error ? reason : new Error(typeof reason === 'string' ? reason : 'Unhandled promise rejection');
-    saveDiagnostic(error);
-    console.error('[DANDULI unhandled promise rejection]', reason);
-  });
-}

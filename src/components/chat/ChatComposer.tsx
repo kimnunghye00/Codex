@@ -4,8 +4,9 @@ import { CalendarClock, ContactRound, FileUp, Gift, ImagePlus, Mic, Plus, Send, 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Message } from '../../types';
-import { DanduliSticker, stickerIdFromToken, stickerLabel } from './DanduliSticker';
-import { STICKER_PACKS } from './ChatToolsPanel';
+import { DanduliSticker } from './DanduliSticker';
+import { stickerIdFromToken, stickerLabel } from './stickerCatalog';
+import { STICKER_PACKS } from './chatPreferences';
 import { GifCameraCapture } from './GifCameraCapture';
 
 const QUICK = ['기분 좋아 😊', '배고파 🍚', '심심해 🫠', '우울해 🥺', '놀아줘 ❤️'];

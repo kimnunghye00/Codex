@@ -174,7 +174,7 @@ export function PlaceTimeline({ memories, visits, schedules, datePlans, initialP
   useEffect(() => {
     if (!selectedPlace) return;
     const handleBack = (event: Event) => {
-      if (event.defaultPrevented) return;
+      if (event.defaultPrevented || document.querySelector('.naner-room-open')) return;
       event.preventDefault();
       setSelectedPlace(undefined);
     };

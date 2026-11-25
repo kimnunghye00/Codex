@@ -1,7 +1,7 @@
-import type { PageHeaderProps } from '../navigation/AppHeader';
-import { Bot, CalendarClock, ContactRound, Gift, Heart, Trash2, X } from 'lucide-react';
+import { Bot, CalendarClock, ChevronLeft, ContactRound, Ellipsis, PanelRight, Gift, Heart, Trash2, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
+import { useExpandedMobile, useTabletWorkspace } from '../../utils/useExpandedMobile';
 import { collection, doc, limit, onSnapshot, orderBy, query, setDoc, where } from 'firebase/firestore';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { CALLING_ENABLED } from '../../config/releaseFlags';
@@ -20,8 +20,11 @@ import { PERSISTENT_STATE_CHANGE_EVENT } from '../../utils/persistenceSignal';
 import { typingTimeRemaining } from '../../utils/typingStatus';
 import { ChatBubble } from './ChatBubble';
 import { ChatComposer } from './ChatComposer';
-import { ChatToolsPanel, loadChatPreferences, saveChatPreferences, type ChatPreferences } from './ChatToolsPanel';
-import { stickerIdFromToken } from './DanduliSticker';
+import { ChatToolsPanel } from './ChatToolsPanel';
+import { loadChatPreferences, saveChatPreferences, type ChatPreferences } from './chatPreferences';
+import { recentChatPhotos, visibleScheduledDrafts } from '../../utils/chatRoomPresentation';
+import { chatMediaPreviewUrl, chatMediaOriginalUrl } from '../../lib/chatMediaReference';
+import { stickerIdFromToken } from './stickerCatalog';
 
 type ChatSchedule = { id: string; title: string; date: string; startTime: string; type: 'personal' | 'couple'; ownerId: string };
 type CallMode = 'voice' | 'video' | 'screen';
@@ -71,7 +74,7 @@ function aiReplyFor(text: string) {
   const value = text.trim();
   const lower = value.toLowerCase();
   if (!value) return '응, 듣고 있어.';
-  if (/안녕|하이|hello|hi/.test(lower)) return '안녕! 이제 단둘이 안에서도 대화 테스트를 할 수 있어 😊';
+  if (/안녕|하이|hello|hi/.test(lower)) return '안녕! 이제 나너 안에서도 대화 테스트를 할 수 있어 😊';
   if (/별명/.test(value)) return '별명 기능도 같이 확인해보자.';
   if (/오류|에러|버그|안돼|안 돼|문제/.test(value)) return '어디에서 문제가 생겼는지 알려줘.';
   if (/테스트/.test(value)) return '좋아. 메시지 전송부터 확인해보자.';
@@ -163,8 +166,12 @@ function mediaErrorMessage(cause: unknown, kind: 'photo' | 'gif') {
   return kind === 'photo' ? '사진을 전송하지 못했어요. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.' : '움짤을 전송하지 못했어요. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.';
 }
 
-export function ChatPage({ Header, messages, setMessages, connection, initialMessageId, notificationRequest, initialToolsSection, toolsRequest }: {
-  Header: (props: PageHeaderProps) => React.ReactNode;
+export type RoomDraft = { scope: string; text: string; replyTo?: number };
+
+export function ChatPage({ roomScope, draftCache, onBack, messages, setMessages, connection, initialMessageId, notificationRequest, initialToolsSection, toolsRequest }: {
+  roomScope: string;
+  draftCache: React.MutableRefObject<RoomDraft>;
+  onBack: () => void;
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   connection: RealCoupleConnection | null;
@@ -174,8 +181,11 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
   toolsRequest?: number;
 }) {
   const currentUid = auth.currentUser?.uid ?? '';
-  const [draft, setDraft] = useState('');
-  const [replyTo, setReplyTo] = useState<number>();
+  const [draft, setDraft] = useState(() => draftCache.current.scope === roomScope ? draftCache.current.text : '');
+  const [replyTo, setReplyTo] = useState<number | undefined>(() => draftCache.current.scope === roomScope ? draftCache.current.replyTo : undefined);
+  useLayoutEffect(() => {
+    draftCache.current = { scope: roomScope, text: draft, replyTo };
+  }, [draftCache, roomScope, draft, replyTo]);
   const [active, setActive] = useState<number>();
   const [lightbox, setLightbox] = useState<string>();
   const [highlighted, setHighlighted] = useState<number>();
@@ -188,8 +198,12 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [savedMediaIds, setSavedMediaIds] = useState<Set<number>>(() => loadChatMemoryMessageIds());
+  const expanded = useExpandedMobile();
+  const tablet = useTabletWorkspace();
+  const [sideOpen, setSideOpen] = useState(true);
+  const splitChat = expanded && sideOpen && !deleteSelection;
   const [toolsOpen, setToolsOpen] = useState(false);
-  const [toolsInitialSection, setToolsInitialSection] = useState<'menu' | 'store' | 'settings' | 'stickers'>('menu');
+  const [toolsInitialSection, setToolsInitialSection] = useState<'menu' | 'media' | 'store' | 'settings' | 'stickers'>('menu');
   const [contactOpen, setContactOpen] = useState(false);
   const [contactForm, setContactForm] = useState({ name: '', phone: '' });
   const [preferences, setPreferences] = useState(() => loadChatPreferences(currentUid || 'guest'));
@@ -277,28 +291,22 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
     const page = pageRef.current;
     if (!page) return;
     const viewport = window.visualViewport;
-    const nav = document.querySelector<HTMLElement>('[data-route-nav]');
     const composer = page.querySelector<HTMLElement>(':scope > .composer-area');
     let frame = 0;
     let lastDockGeometry = '';
     const resize = () => {
       frame = 0;
       const visibleBottom = Math.min(window.innerHeight, (viewport?.height ?? window.innerHeight) + (viewport?.offsetTop ?? 0));
-      const navBounds = nav?.getBoundingClientRect();
-      const navStyle = nav ? getComputedStyle(nav) : null;
-      const bottomNavVisible = navBounds && navBounds.width > navBounds.height * 2
-        && !document.documentElement.classList.contains('route-keyboard-open')
-        && navStyle?.display !== 'none'
-        && navStyle?.visibility !== 'hidden'
-        && navBounds && navBounds.height > 0
-        && navBounds.top < visibleBottom && navBounds.bottom > 0;
-      const bottom = bottomNavVisible ? Math.min(visibleBottom, navBounds.top) : visibleBottom;
+      const bottom = visibleBottom;
       const bounds = page.getBoundingClientRect();
+      const dockWidth = messagesRef.current?.getBoundingClientRect().width || bounds.width;
       const height = `${Math.max(0, bottom - bounds.top)}px`;
-      const dockGeometry = [bottom, bounds.left, bounds.top, bounds.width, composer?.getBoundingClientRect().height ?? 0].join(':');
+      const headerHeight = page.querySelector<HTMLElement>(':scope > .naner-room-header')?.getBoundingClientRect().height ?? 56;
+      const dockGeometry = [bottom, bounds.left, bounds.top, dockWidth, headerHeight, composer?.getBoundingClientRect().height ?? 0].join(':');
       if (dockGeometry === lastDockGeometry) return;
       lastDockGeometry = dockGeometry;
       // Inline priority also wins over responsive Tailwind !h-dvh utilities.
+      page.style.setProperty('--naner-room-header-height', `${headerHeight}px`);
       page.style.setProperty('height', height, 'important');
       page.style.setProperty('max-height', height, 'important');
       page.style.setProperty('min-height', '0px', 'important');
@@ -309,7 +317,7 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
         composer.style.setProperty('bottom', `${Math.max(0, window.innerHeight - bottom)}px`, 'important');
         composer.style.setProperty('left', `${bounds.left}px`, 'important');
         composer.style.setProperty('right', 'auto', 'important');
-        composer.style.setProperty('width', `${bounds.width}px`, 'important');
+        composer.style.setProperty('width', `${dockWidth}px`, 'important');
         composer.style.setProperty('max-width', 'none', 'important');
         composer.style.setProperty('margin', '0px', 'important');
         composer.style.setProperty('z-index', '60', 'important');
@@ -323,7 +331,6 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
       if (!frame) frame = window.requestAnimationFrame(resize);
     };
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(scheduleResize);
-    if (nav) observer?.observe(nav);
     if (composer) observer?.observe(composer);
     // Fold transitions and multi-window can change the page before a window event.
     observer?.observe(page);
@@ -343,7 +350,7 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
       viewport?.removeEventListener('resize', scheduleResize);
       viewport?.removeEventListener('scroll', scheduleResize);
     };
-  }, [selectingMessages]);
+  }, [selectingMessages, splitChat, tablet]);
 
   const finePointerRef = useRef(false);
   useEffect(() => {
@@ -593,7 +600,7 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
     setReplyTo(undefined);
   };
 
-  const send = () => { const text = draft; setDraft(''); sendText(text); };
+  const send = () => { if (!draft.trim() || !currentUid) return; const text = draft; setDraft(''); sendText(text); };
   const sendImages = async (files: File[]) => {
     if (!files.length || !currentUid) return;
     if (mediaSendingRef.current) {
@@ -973,7 +980,9 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
     setActive(undefined);
   };
 
-  return <div ref={pageRef} className={`page full-page chat-page chat-bg-${preferences.background} chat-font-${preferences.fontSize} ${deleteSelection ? 'chat-delete-mode' : ''}`}>
+  const recentPhotos = useMemo(() => splitChat ? recentChatPhotos(messages) : [], [messages, splitChat]);
+  const roomScheduledDrafts = useMemo(() => visibleScheduledDrafts(scheduledDrafts, connection?.coupleId), [scheduledDrafts, connection?.coupleId]);
+  return <div ref={pageRef} className={`page full-page chat-page ${splitChat ? 'naner-chat-split' : ''} chat-bg-${preferences.background} chat-font-${preferences.fontSize} ${deleteSelection ? 'chat-delete-mode' : ''}`}>
     {deleteSelection
       ? <div className="chat-delete-toolbar">
         <button type="button" className="chat-delete-all-button" disabled={deleteBusy || messages.length === 0} onClick={() => void clearAllChat()}>{deleteBusy ? '삭제 중...' : '모든 대화 삭제'}</button>
@@ -982,13 +991,22 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
         <button type="button" className="chat-delete-toolbar-cancel" aria-label="삭제 선택 취소" disabled={deleteBusy} onClick={closeDeleteSelection}><X size={21} /></button>
         <button type="button" className="chat-delete-toolbar-trash" aria-label="선택 메시지 삭제" disabled={!deleteSelection.size || deleteBusy} onClick={() => setDeleteConfirmOpen(true)}><Trash2 size={21} /></button>
       </div>
-      : <Header title="대화" onSettings={openChatMenu} settingsLabel="대화 설정" />}
+      : <header className="naner-room-header" aria-label="채팅방">
+        <button type="button" onClick={onBack} aria-label="채팅방 나가기"><ChevronLeft size={24} /></button>
+        <span className="naner-room-avatar">{connection?.partnerProfile?.photoDataUrl ? <img src={connection.partnerProfile.photoDataUrl} alt="" /> : partnerInitial}</span>
+        <span className="naner-room-title"><b>{partnerName}</b><small>우리 둘만의 대화</small></span>
+        <button type="button" onClick={openScheduleMessage} aria-label="예약 메시지"><CalendarClock size={21} /></button>
+        {expanded && <button type="button" aria-pressed={sideOpen} onClick={() => setSideOpen(value => !value)} aria-label="대화 보관함"><PanelRight size={21} /></button>}
+        <button type="button" onClick={openChatMenu} aria-label="대화 설정"><Ellipsis size={23} /></button>
+      </header>}
     {nearestSchedule && <div className="chat-next-schedule"><CalendarClock size={16} /><div><small>가장 가까운 일정</small><b>{nearestSchedule.title}</b><span>{nearestSchedule.date.replaceAll('-', '.')} · {nearestSchedule.startTime}</span></div></div>}
     {syncError && <p className="chat-sync-error" role="alert">{syncError}</p>}
     {flowNotice && <p className="chat-flow-notice" role="status">{flowNotice}</p>}
     {mediaProgress && <p className="chat-media-progress" role="status" aria-live="polite">사진 {mediaProgress.completed} / {mediaProgress.total}장 전송 중...</p>}
     <div
       ref={messagesRef}
+      tabIndex={tablet ? 0 : undefined}
+      aria-label="대화 메시지"
       className="messages !min-h-0 !flex-[1_1_0px] !overflow-y-auto overscroll-contain [scroll-behavior:auto] [touch-action:pan-y] [-webkit-overflow-scrolling:touch]"
       onScroll={updateNearBottom}
       onWheel={handleMessagesWheel}
@@ -1006,8 +1024,13 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
         return <>{row.showDate && <div className="date-chip">{messageDateLabel(message.timestamp)}</div>}<ChatBubble message={displayedMessage} reply={message.replyTo ? byId.get(message.replyTo) : undefined} partnerName={partnerName} partnerInitial={partnerInitial} active={active === message.id} highlighted={highlighted === message.id} selectionMode={Boolean(deleteSelection)} selected={Boolean(deleteSelection?.has(message.id))} onAction={() => setActive(active === message.id ? undefined : message.id)} onReact={(emoji) => react(message.id, emoji)} onReply={() => { setReplyTo(message.id); setActive(undefined); }} onSave={() => saveMessage(displayedMessage)} onDelete={() => beginDeleteSelection(displayedMessage)} onToggleSelect={() => toggleDeleteSelection(displayedMessage)} onImage={setLightbox} onJump={jump} /></>;
       })() : row.kind === 'typing-ai' ? <TypingIndicator ai initial={partnerInitial} /> : <TypingIndicator ai={false} initial={partnerInitial} heart />}</div>;
     })}</div><div ref={bottomRef} /></div>
-    {scheduledDrafts.length > 0 && !deleteSelection && <details className="scheduled-chat-list danduli-scheduled-disclosure"><summary className="scheduled-strip"><CalendarClock size={14} /><span>예약 메시지 {scheduledDrafts.length}개</span><small>목록 보기</small></summary><div className="danduli-scheduled-items"><p className="danduli-scheduled-note">앱을 열어 둔 동안 전송 · 오프라인이면 재시도</p>{scheduledDrafts.map((item) => <div className="scheduled-chat-item" key={item.id}><span><b>{item.text}</b><small>{item.coupleId ? new Date(item.sendAt).toLocaleString('ko-KR') : '이전 버전 예약 · 다시 예약해 주세요'}</small></span><button type="button" onClick={() => removeScheduledChatDraft(currentUid, item.id)} aria-label="예약 메시지 취소">취소</button></div>)}</div></details>}
+    {roomScheduledDrafts.length > 0 && !deleteSelection && !splitChat && <details className="scheduled-chat-list danduli-scheduled-disclosure"><summary className="scheduled-strip"><CalendarClock size={14} /><span>예약 메시지 {roomScheduledDrafts.length}개</span><small>목록 보기</small></summary><div className="danduli-scheduled-items"><p className="danduli-scheduled-note">앱을 열어 둔 동안 전송 · 오프라인이면 재시도</p>{roomScheduledDrafts.map((item) => <div className="scheduled-chat-item" key={item.id}><span><b>{item.text}</b><small>{item.coupleId ? new Date(item.sendAt).toLocaleString('ko-KR') : '이전 버전 예약 · 다시 예약해 주세요'}</small></span><button type="button" onClick={() => removeScheduledChatDraft(currentUid, item.id)} aria-label="예약 메시지 취소">취소</button></div>)}</div></details>}
     {!deleteSelection && <ChatComposer draft={draft} reply={replyTo ? byId.get(replyTo) : undefined} partnerName={partnerName} ownedStickerPacks={preferences.ownedStickerPacks} onDraft={setDraft} onSend={send} onImages={sendImages} onGif={sendGif} onQuick={sendText} onSticker={sendStickerChoice} onSchedule={openScheduleMessage} onGift={() => setGiftOpen(true)} onFile={(file) => sendAttachment(file, 'file')} onContact={() => void openContactPicker()} onVoice={(file, duration) => sendAttachment(file, 'audio', duration)} onVoiceError={setSyncError} onStickerStore={openStickerStore} onCancelReply={() => setReplyTo(undefined)} />}
+    {splitChat && <aside className="naner-chat-side" tabIndex={0} aria-label="대화 보관함"><div className="naner-chat-side-head"><h2>대화 보관함</h2><button type="button" aria-label="보관함 닫기" onClick={() => setSideOpen(false)}><X size={19} /></button></div>
+      <section><h3>주고받은 사진</h3>{recentPhotos.length ? <div className="naner-chat-media-grid">{recentPhotos.map((url, index) => <button type="button" key={url + index} onClick={() => setLightbox(chatMediaOriginalUrl(url))} aria-label="채팅 사진 확대"><img src={chatMediaPreviewUrl(url)} alt="" loading="lazy" decoding="async" /></button>)}</div> : <p>아직 주고받은 사진이 없어요.</p>}<button type="button" className="naner-side-item" onClick={() => { setToolsInitialSection('media'); setToolsOpen(true); }}>사진 모아보기 ›</button></section>
+      <section><h3>예약 메시지</h3>{roomScheduledDrafts.map(item => <div className="naner-side-item" key={item.id}><small>{item.coupleId ? new Date(item.sendAt).toLocaleString('ko-KR') : '이전 버전 예약 · 다시 예약해 주세요'}</small><b>{item.text}</b><button type="button" onClick={() => removeScheduledChatDraft(currentUid, item.id)}>취소</button></div>)}<button type="button" className="naner-side-item" onClick={openScheduleMessage}>예약 메시지 추가</button></section>
+      <section><h3>빠른 신호</h3>{['보고 싶어','사랑해'].map(signal => <button type="button" key={signal} className="naner-quick-signal" onClick={() => sendText(signal)}>{signal}</button>)}</section>
+    </aside>}
     {toolsOpen && <ChatToolsPanel key={toolsInitialSection} initialSection={toolsInitialSection} messages={messages} partnerName={partnerName} preferences={preferences} onPreferences={setPreferences} onJump={jump} onImage={setLightbox} onImport={(imported) => setMessages(imported)} onSticker={sendStickerChoice} onClose={() => setToolsOpen(false)} />}
     {lightbox && <div className="lightbox" role="dialog" onClick={() => setLightbox(undefined)}><button aria-label="닫기"><X /></button><img src={lightbox} alt="확대된 채팅 사진" /></div>}
 
