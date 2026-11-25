@@ -36,13 +36,16 @@ jobs:
           # The previous two runs failed inside the runner's Arborist, even
           # with a clean lock. Use a separate fixed npm major and avoid nested
           # overrides. Never ignore peer dependency constraints.
-          if ! npm install --package-lock-only --ignore-scripts --no-audit; then
+          if ! npm install --ignore-scripts --no-audit; then
             echo "::warning::Incremental lock resolution failed with npm 11; resolving a clean lock."
-            rm -f package-lock.json
-            npm install --package-lock-only --ignore-scripts --no-audit
+            rm -rf node_modules package-lock.json
+            npm install --ignore-scripts --no-audit
           fi
           test -s package-lock.json
           node scripts/pin-dependencies.mjs
+          node scripts/route-dependency-smoke.mjs
+          # Validate clean installation before committing generated manifests.
+          npm ci --ignore-scripts --no-audit
           node scripts/route-dependency-smoke.mjs
       - name: Report resolver diagnostics on failure
         if: failure()
@@ -113,7 +116,7 @@ jobs:
           npm audit --omit=dev --json > qa-reports/production-audit.json || true
           node scripts/naner-security-gate.mjs
       - name: Upload actual audit results
-        if: always()
+        if: steps.audit.outcome == 'success' || steps.audit.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: NANER-dependency-audit

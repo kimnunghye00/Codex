@@ -11,6 +11,10 @@ const development = {
   'typescript-eslint': '8.74.0',
   vitest: '4.1.12',
   'firebase-tools': '15.29.0',
+  // Rolldown's optional WASI binding requires these exact peers. Making
+  // them explicit prevents npm from pruning their lock entries on Linux.
+  '@emnapi/core': '2.0.0-beta.2',
+  '@emnapi/runtime': '2.0.0-beta.2',
 };
 const overrides = {
   '@grpc/grpc-js': '1.14.5',
