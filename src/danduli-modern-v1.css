@@ -182,3 +182,44 @@ html body .app-shell .more-customize-grid > button > small {
   color: var(--text-secondary) !important;
 }
 
+
+/* Modern V4 — lightweight interaction feedback. Never transform a page or a
+ * container that owns fixed-position dialogs, maps, or the chat viewport. */
+@keyframes danduli-content-in {
+  from {opacity:.65;}
+  to {opacity:1;}
+}
+@keyframes danduli-nav-in {
+  from {transform:scale(.92);}
+  to {transform:scale(1);}
+}
+@keyframes danduli-pop-in {
+  from {opacity:0;transform:translateY(5px);}
+  to {opacity:1;transform:translateY(0);}
+}
+html body .app-shell .bottom-nav[data-route-nav] > button.active .nav-icon {
+  animation:danduli-nav-in 160ms cubic-bezier(.2,.75,.3,1);
+}
+html body .app-shell .bottom-nav[data-route-nav] > button {
+  transition:transform 120ms ease-out,color var(--danduli-ease),background-color var(--danduli-ease);
+}
+html body .app-shell :is(.bottom-nav button,.header-actions button,.hub-tabs button,.memory-filters button,.more-customize-grid button):active:not(:disabled) {
+  opacity:.76;
+}
+html body .app-shell .header-settings-menu {
+  animation:danduli-pop-in 160ms ease-out;
+}
+html body .app-shell :is(.home-couple-time-card,.hub-head,.footprints-heading,.more-service-intro) {
+  animation:danduli-content-in 180ms ease-out;
+}
+@media(hover:hover) and (pointer:fine) {
+  html body .app-shell :is(.header-actions button,.more-customize-grid button,.home-dashboard .danduli-home-add-schedule):hover:not(:disabled) {
+    background-color:var(--danduli-fill) !important;
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  html body .app-shell :is(.bottom-nav[data-route-nav] > button,.bottom-nav[data-route-nav] .nav-icon,.header-settings-menu,.home-couple-time-card,.hub-head,.footprints-heading,.more-service-intro) {
+    animation:none !important;
+    transition:none !important;
+  }
+}

@@ -22,7 +22,13 @@ export function BottomNav({ tab, onNavigate }: { tab: AppTab; onNavigate: (tab: 
       return <button
         key={id}
         className={`${active ? 'active !text-[var(--primary)] !font-bold' : '!text-[#aaa8b2]'} !mx-auto !flex !min-h-14 !flex-1 !flex-col !items-center !justify-center !gap-1 !rounded-2xl !bg-transparent !text-[10px] transition-transform active:scale-[.94] md:!min-h-[52px] md:!max-w-[150px]`}
-        onClick={() => onNavigate(id)}
+        onClick={(event) => {
+          if (active) return;
+          onNavigate(id);
+          if (event.detail > 0) {
+            void import('../../lib/native').then(({ nativeImpact }) => nativeImpact()).catch(() => {});
+          }
+        }}
         aria-current={active ? 'page' : undefined}
       >
         <span className={`${active ? '!bg-[var(--primary-soft)]' : '!bg-transparent'} nav-icon !grid !h-[31px] !w-[38px] place-items-center !rounded-xl`}>

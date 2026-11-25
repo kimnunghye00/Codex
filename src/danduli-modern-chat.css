@@ -79,3 +79,23 @@ html body .app-shell .chat-page .chat-next-schedule {
   border-radius: var(--danduli-radius-control) !important;
   box-shadow: none !important;
 }
+
+/* V4: composer feedback stays independent of keyboard and virtual list sizing. */
+html body .app-shell .chat-page .composer .send.ready {
+  transition:opacity 120ms ease-out,background-color 120ms ease-out;
+}
+html body .app-shell .chat-page .composer .send.ready:active {
+  opacity:.8;
+}
+html body .app-shell .chat-page .danduli-scheduled-disclosure > summary::after {
+  transition:transform 160ms ease-out;
+}
+html body .app-shell .chat-page .danduli-scheduled-disclosure[open] .danduli-scheduled-items {
+  animation:danduli-content-in 160ms ease-out;
+}
+@media(prefers-reduced-motion:reduce) {
+  html body .app-shell .chat-page :is(.composer .send.ready,.danduli-scheduled-items) {
+    animation:none !important;transition:none !important;
+  }
+  html body .app-shell .chat-page .danduli-scheduled-disclosure > summary::after {transition:none !important;}
+}

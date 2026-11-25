@@ -34,3 +34,14 @@ html body .app-shell .footprints-page .footprints-visit-text > small {font-varia
 html body .app-shell .footprints-page .footprints-datebar > button {min-width:44px;min-height:44px;}
 html body .app-shell .footprints-page .footprints-datebar label {min-height:44px;}
 html body .app-shell .footprints-page .footprints-map-badge {max-width:calc(100% - 24px);overflow-wrap:anywhere;}
+
+/* V4: feedback on map controls only; never animate the iframe or GPS markers. */
+html body .app-shell .footprints-page :is(.footprints-playback,.footprints-scope-tabs > button,.footprints-datebar > button) {
+  transition:background-color 160ms ease-out,color 160ms ease-out,opacity 120ms ease-out;
+}
+html body .app-shell .footprints-page :is(.footprints-playback,.footprints-scope-tabs > button,.footprints-datebar > button):active:not(:disabled) {opacity:.76;}
+html body .app-shell .footprints-video-dialog {animation:danduli-content-in 180ms ease-out;}
+@media(prefers-reduced-motion:reduce) {
+  html body .app-shell .footprints-page :is(.footprints-playback,.footprints-scope-tabs > button,.footprints-datebar > button),
+  html body .app-shell .footprints-video-dialog {transition:none !important;animation:none !important;}
+}
