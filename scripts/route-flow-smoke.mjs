@@ -102,7 +102,11 @@ const responsiveFrame = read('src/components/layout/ResponsiveAppFrame.tsx');
 check('primary navigation terminology', includesAll(bottomNav, ["'홈'", "'추억'", "'대화'", "'지도'", "'더보기'"]));
 check('shared header owns notifications', header.includes('notification-button') && header.includes('onNotifications'));
 check('shared header owns settings', header.includes('onSettings') && header.includes('onClick={openPageSettings}') && header.includes('{settingsLabel}</button>'));
-check('responsive frame owns desktop viewport', responsiveFrame.includes('lg:[&_.home-page]:!h-dvh') && responsiveFrame.includes('lg:[&_.home-page]:!min-h-0'));
+const adaptiveWindow = read('src/adaptive-window.css');
+check('shared frame delegates expanded layout to adaptive window CSS', responsiveFrame.includes('route-responsive-root') && !responsiveFrame.includes('max-w-[1320px]') && !responsiveFrame.includes('!pl-28'));
+check('expanded window reserves a left navigation rail', adaptiveWindow.includes('@media (min-width:600px)') && adaptiveWindow.includes('margin:0 0 0 var(--route-rail-width)') && adaptiveWindow.includes('inset:0 auto 0 0'));
+check('tablet and compact window layouts remain available', adaptiveWindow.includes('@media (min-width:900px)') && adaptiveWindow.includes('@media (max-width:599px)') && adaptiveWindow.includes('repeat(auto-fill,minmax(min(100%,200px),1fr))'));
+check('tablet media keeps aspect ratio', adaptiveWindow.includes('object-fit:contain !important') && adaptiveWindow.includes('.detail-gallery'));
 
 check('App routes home', app.includes("tab === 'home'"));
 check('App routes memories directly', app.includes("from './components/memories/MemoriesPage'") && /<MemoriesPage\b[^>]*\brequestedTab=\{requestedHubTab\}/.test(app));

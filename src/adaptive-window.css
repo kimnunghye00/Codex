@@ -292,3 +292,78 @@ html body .app-shell .home-dashboard .home-dashboard-side .home-couple-time-cent
 @container home-summary (min-width:261px) {
   html body .app-shell .home-dashboard .home-dashboard-side .home-memory-grid { grid-template-columns:repeat(4,minmax(0,1fr)) !important; }
 }
+
+/* Tablet workspace: measure available space after the rail. The page itself
+ * stays edge to edge; media keeps a usable reading width within the page.
+ * 600px+ is shared with foldables; narrower split windows use the phone UI.
+ */
+@media (min-width:600px) {
+  html body #root .app-shell > main > .page > .app-global-header.topbar {
+    padding-top:max(10px,env(safe-area-inset-top,0px)) !important;
+    min-height:calc(58px + max(10px,env(safe-area-inset-top,0px))) !important;
+    height:auto !important;
+  }
+  html body #root .app-shell > main > .footprints-page .footprints-workspace {
+    grid-template-columns:minmax(0,1.45fr) minmax(0,1fr) !important;
+    min-height:0; align-items:start;
+  }
+  html body #root .app-shell > main > .footprints-page :is(.footprints-map,.footprints-list) {
+    height:clamp(260px,55dvh,900px) !important; min-height:0 !important; max-height:none !important;
+  }
+  html body #root .app-shell > main > .footprints-page .footprints-map iframe {
+    height:100% !important; min-height:0 !important; max-height:none !important;
+  }
+  html body #root .app-shell > main > .chat-page .messages {
+    width:100% !important; max-width:none !important; margin-inline:0 !important;
+    box-sizing:border-box;
+  }
+  html body #root .app-shell > main > .chat-page .message-wrap {
+    max-width:min(78%,680px) !important;
+  }
+  html body #root .app-shell > main > .chat-page .bubble-row-media .message-wrap {
+    max-width:min(76%,480px) !important;
+  }
+  html body #root .app-shell > main > .memory-detail .detail-gallery {
+    aspect-ratio:auto !important; height:clamp(240px,52dvh,760px);
+    border-radius:16px;
+  }
+  html body #root .app-shell > main > .memory-detail .detail-gallery :is(img,video) {
+    display:block; width:100%; height:100%; object-fit:contain !important;
+  }
+  html body #root .app-shell > main > .more-page .more-customize-grid {
+    grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr)) !important;
+  }
+  html body #root .app-shell > main > .more-page .more-customize-grid > button {
+    min-height:108px; padding:12px 8px;
+  }
+  html body #root .app-shell > main > .more-page .more-customize-grid > button small {
+    white-space:normal; overflow:visible; overflow-wrap:anywhere;
+  }
+}
+@media (min-width:900px) {
+  html body #root .app-shell > main > .footprints-page .footprints-workspace {
+    grid-template-columns:minmax(0,1.7fr) minmax(250px,1fr) !important;
+    gap:18px;
+  }
+  html body #root .app-shell > main > .route-hub .memory-list {
+    grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr)) !important;
+    gap:16px !important;
+  }
+  html body #root .app-shell > main > .more-page .more-settings-screen-body {
+    display:grid; grid-template-columns:repeat(2,minmax(0,1fr));
+    align-content:start; align-items:start; gap:16px;
+    padding:16px max(18px,env(safe-area-inset-right,0px)) max(24px,env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px));
+  }
+  html body #root .app-shell > main > .more-page .more-settings-section { min-width:0; }
+  html body #root .app-shell .home-dashboard .home-dashboard-grid {
+    grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) !important;
+  }
+  html body #root .app-shell .home-dashboard .home-dashboard-side {
+    gap:clamp(10px,1.4dvh,18px) !important;
+  }
+}
+/* iPad split view and narrow Android multi-window need the compact shell,
+ * including the entire width of a 480–599px window. */
+@media (max-width:599px) {
+  html body #root .app-shell { width:100% !important; max-width:none !important; }
+}

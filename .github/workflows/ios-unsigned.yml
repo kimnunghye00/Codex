@@ -63,7 +63,7 @@ jobs:
           }
           JSON
 
-      - name: Build unsigned iPhone app
+      - name: Build unsigned iPhone and iPad app
         shell: bash
         run: |
           set -euo pipefail
@@ -74,6 +74,7 @@ jobs:
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
             -derivedDataPath release/ios-device \
+            TARGETED_DEVICE_FAMILY="1,2" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY='' \

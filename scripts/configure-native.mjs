@@ -73,6 +73,20 @@ if (fs.existsSync(iosPlist)) {
   // Background footprint tracking is Android-only in this phase. Keep iOS on
   // foreground location so its permission text does not over-promise behavior.
   plist = plist.replace(/\s*<key>NSLocationAlwaysAndWhenInUseUsageDescription<\/key>\s*<string>[^<]*<\/string>/g, '');
+  // Generated Capacitor projects are rebuilt in CI. Keep all four iPad
+  // orientations enabled so the app participates in iPad multitasking.
+  const ipadOrientationKey = '<key>UISupportedInterfaceOrientations~ipad</key>';
+  const ipadOrientations = ipadOrientationKey + '\n\t<array>\n'
+    + '\t\t<string>UIInterfaceOrientationPortrait</string>\n'
+    + '\t\t<string>UIInterfaceOrientationPortraitUpsideDown</string>\n'
+    + '\t\t<string>UIInterfaceOrientationLandscapeLeft</string>\n'
+    + '\t\t<string>UIInterfaceOrientationLandscapeRight</string>\n\t</array>';
+  if (plist.includes(ipadOrientationKey)) {
+    plist = plist.replace(/<key>UISupportedInterfaceOrientations~ipad<\/key>\s*<array>[\s\S]*?<\/array>/, ipadOrientations);
+  } else {
+    plist = plist.replace('</dict>', '\t' + ipadOrientations + '\n</dict>');
+  }
+  plist = plist.replace(/<key>UIRequiresFullScreen<\/key>\s*<(?:true|false)\s*\/>/g, '<key>UIRequiresFullScreen</key>\n\t<false/>');
   fs.writeFileSync(iosPlist, plist);
   console.log('Configured iOS foreground usage descriptions.');
 }
