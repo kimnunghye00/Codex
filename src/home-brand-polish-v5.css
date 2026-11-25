@@ -1,4 +1,4 @@
-/* 단둘이 home polish v5
+/* 나너 home polish v5
  * Goal: make the dashboard feel like one product instead of a stack of cards.
  * The visual language is built around a route line, two waypoints and one heart node.
  */
@@ -173,7 +173,7 @@
 }
 
 .home-dashboard .home-card-title span::before {
-  content: '단둘이 · ';
+  content: '나너 · ';
   color: var(--primary);
   font-size: .78em;
   letter-spacing: .04em;

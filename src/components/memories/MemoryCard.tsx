@@ -105,7 +105,7 @@ function MemoryCardComponent({ memory, onOpen }: { memory: Memory; onOpen: (id: 
       {memory.images.length > 1 && <span className="danduli-memory-count" aria-label={`사진 및 영상 ${memory.images.length}개`}>{memory.images.length}개</span>}
       <span className={memory.favorite ? 'memory-favorite-badge active' : 'memory-favorite-badge'}><Heart size={17} fill={memory.favorite ? 'currentColor' : 'none'} /></span>
     </div>
-    <div className="memory-card-copy"><span>{date.getFullYear()}년 {date.getMonth() + 1}월 {date.getDate()}일</span><h3>{memory.title}</h3>{memory.location && <p><MapPin size={12} />{memory.location}</p>}</div>
+    <div className="memory-card-copy"><h3>{memory.title}</h3><span>{date.getMonth() + 1}월 {date.getDate()}일 · {date.getFullYear()}년{isMemoryVideo(cover) || memory.videos?.length ? ' · 영상' : ''}</span>{memory.location && <p><MapPin size={12} />{memory.location}</p>}</div>
   </article>;
 }
 

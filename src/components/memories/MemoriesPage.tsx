@@ -2,6 +2,7 @@ import type { PageHeaderProps } from '../navigation/AppHeader';
 import { CalendarDays, ChevronRight, Crown, GripVertical, Heart, MapPin, Pencil, Plus, Sparkles, Trash2, Trophy, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
+import { useExpandedMobile } from '../../utils/useExpandedMobile';
 import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
 import type { Memory, MemoryDraft } from '../../types';
 import { auth, db } from '../../lib/firebase';
@@ -10,6 +11,7 @@ import { subscribeCoupleShared } from '../../lib/coupleShared';
 import { loadProfile, type UserProfile } from '../../utils/profile';
 import { loadLocationVisits } from '../../utils/location';
 import { MemoryCard } from './MemoryCard';
+import { isMemoryVideo, MemoryImage } from './MemoryMedia';
 import { MemoryDetail } from './MemoryDetail';
 import { MemoryForm } from './MemoryForm';
 import { PlaceTimeline } from './PlaceTimeline';
@@ -132,8 +134,10 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
   });
   const draggingTabRef = useRef<HubTabId | null>(null);
   const [draggingTab, setDraggingTab] = useState<HubTabId | null>(null);
+  const expanded = useExpandedMobile();
   const [filter, setFilter] = useState<Filter>('all');
   const [selected, setSelected] = useState<number | undefined>(initialDraft ? undefined : initialMemoryId);
+  const [mediaPosition, setMediaPosition] = useState<{ id: number; index: number }>();
   const [editing, setEditing] = useState<Memory | null | undefined>(initialDraft ? null : undefined);
   const [remoteSchedules, setRemoteSchedules] = useState<{ coupleId: string; items: Schedule[] }>();
   const schedules = remoteSchedules?.coupleId === connection?.coupleId ? remoteSchedules?.items ?? EMPTY_SCHEDULES : EMPTY_SCHEDULES;
@@ -188,7 +192,7 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
 
   useEffect(() => {
     const handleBack = (event: Event) => {
-      if (event.defaultPrevented) return;
+      if (event.defaultPrevented || document.querySelector('.naner-room-open')) return;
       if (editing !== undefined) { event.preventDefault(); setEditing(undefined); if (initialDraft) onClearInitialDraft(); return; }
       if (scheduleOpen) { event.preventDefault(); setScheduleOpen(false); setEditingScheduleId(undefined); return; }
       if (dateOpen) { event.preventDefault(); setDateOpen(false); setEditingDatePlanId(undefined); setEditingLegacyPromiseId(undefined); setDateSourceKey(undefined); return; }
@@ -201,7 +205,7 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
 
   const years = useMemo(() => [...new Set(memories.map((memory) => memory.date.slice(0, 4)))].sort().reverse(), [memories]);
   const shown = useMemo(
-    () => memories.filter((memory) => filter === 'all' || filter === 'favorite' && memory.favorite || memory.date.startsWith(filter)),
+    () => memories.filter((memory) => filter === 'all' || filter === 'favorite' && memory.favorite || filter === 'video' && (Boolean(memory.videos?.length) || memory.images.some(isMemoryVideo)) || memory.date.startsWith(filter)),
     [filter, memories],
   );
   const selectedMemory = useMemo(() => memories.find((memory) => memory.id === selected), [memories, selected]);
@@ -659,24 +663,26 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
     }
   };
 
-  if (selectedMemory) return <><MemoryDetail key={selectedMemory.id} memory={selectedMemory} onBack={() => { setSelected(undefined); onClearInitial(); }} onFavorite={() => favorite(selectedMemory.id)} onEdit={() => setEditing(selectedMemory)} onDelete={() => { setMemories((items) => items.filter((item) => item.id !== selectedMemory.id)); setSelected(undefined); }} onOpenPlaceTimeline={(place) => { setSelected(undefined); onClearInitial(); setActiveTab('record'); setPlaceTimelineFocus(place); }} onOpenFootprints={onOpenFootprints ? () => onOpenFootprints(selectedMemory.id) : undefined} onOpenLocation={onOpenLocation} />{editing && <MemoryForm memory={editing} onClose={() => setEditing(undefined)} onSave={(memory) => { update(memory); setEditing(undefined); }} />}</>;
+  const detail = selectedMemory ? <MemoryDetail key={selectedMemory.id} memory={selectedMemory} imageIndex={mediaPosition?.id === selectedMemory.id ? mediaPosition.index : 0} onImageIndexChange={index => setMediaPosition({ id: selectedMemory.id, index })} onBack={() => { setSelected(undefined); onClearInitial(); }} onFavorite={() => favorite(selectedMemory.id)} onEdit={() => setEditing(selectedMemory)} onDelete={() => { setMemories((items) => items.filter((item) => item.id !== selectedMemory.id)); setSelected(undefined); }} onOpenPlaceTimeline={(place) => { setSelected(undefined); onClearInitial(); setActiveTab('record'); setPlaceTimelineFocus(place); }} onOpenFootprints={onOpenFootprints ? () => onOpenFootprints(selectedMemory.id) : undefined} onOpenLocation={onOpenLocation} /> : null;
+  if (selectedMemory && (!expanded || activeTab !== 'album')) return <>{detail}{editing && <MemoryForm memory={editing} onClose={() => setEditing(undefined)} onSave={(memory) => { update(memory); setEditing(undefined); }} />}</>;
 
   return <div className="page memories-page route-hub"><Header title="추억" onSettings={() => setOrderOpen(true)} settingsLabel="추억 설정" />
-    <div className="hub-head"><div><small>단둘이</small><h1>{TAB_LABEL[activeTab]}</h1></div></div>
-    <div className="hub-tabs">{tabOrder.map((tab) => <button key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>{TAB_LABEL[tab]}</button>)}</div>
+    <div className="hub-head"><h1>{activeTab === 'album' ? '추억' : TAB_LABEL[activeTab]}</h1>{activeTab === 'album' && <button type="button" className="naner-memory-add" onClick={() => { onClearInitialDraft(); setEditing(null); }}><Plus size={16} />추가</button>}</div>
+    <div className="hub-tabs">{tabOrder.map((tab) => <button key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => { if (tab !== 'album') { setSelected(undefined); onClearInitial(); } setActiveTab(tab); }}>{TAB_LABEL[tab]}</button>)}</div>
 
     {activeTab === 'album' && <>
-      {sameDayMemories.length > 0 && <section className="last-year-card"><div><Sparkles size={16} /><span><b>작년 우리</b><small>같은 날짜의 추억을 다시 만나보세요</small></span></div><button onClick={() => setSelected(sameDayMemories[0].id)}>바로 보기 <ChevronRight size={15} /></button></section>}
-      <div className="danduli-album-summary"><span>{filter === 'all' ? '전체 추억' : filter === 'favorite' ? '즐겨찾기' : `${filter}년 추억`}</span><strong>{shown.length}개</strong></div>
-      <div className="memory-filters"><button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>전체</button><button className={filter === 'favorite' ? 'active' : ''} onClick={() => setFilter('favorite')}>즐겨찾기</button>{years.map((year) => <button key={year} className={filter === year ? 'active' : ''} onClick={() => setFilter(year)}>{year}</button>)}</div>
-      <div className="memory-list">{shown.map((memory) => <MemoryCard key={memory.id} memory={memory} onOpen={openMemory} />)}{!shown.length && <div className="memory-empty danduli-memory-empty"><b>{filter === 'favorite' ? '즐겨찾기한 추억이 없어요' : filter !== 'all' ? '이 기간의 추억이 없어요' : '아직 남긴 추억이 없어요'}</b><span>{filter === 'all' ? '함께한 순간을 사진과 영상으로 남겨보세요.' : '전체 앨범에서 다른 추억을 확인할 수 있어요.'}</span><button type="button" className="primary" onClick={() => { if (filter !== 'all') setFilter('all'); else { onClearInitialDraft(); setEditing(null); } }}>{filter === 'all' ? '첫 추억 추가' : '전체 추억 보기'}</button></div>}</div>
-      <button className="fab" onClick={() => { onClearInitialDraft(); setEditing(null); }}><Plus size={18} />추억 추가</button>
+      <div className={expanded ? 'naner-album-workspace' : 'naner-compact-contents'}><div className={expanded ? 'naner-album-list' : 'naner-compact-contents'}>
+      {sameDayMemories.length > 0 && <section className={`last-year-card naner-feature ${sameDayMemories[0].images[0] && !isMemoryVideo(sameDayMemories[0].images[0]) ? 'has-photo' : ''}`}>{sameDayMemories[0].images[0] && !isMemoryVideo(sameDayMemories[0].images[0]) && <span className="naner-feature-photo"><MemoryImage src={sameDayMemories[0].images[0]} alt="" loading="lazy" /></span>}<div><Sparkles size={16} /><span><b>작년 우리</b><small>같은 날짜의 추억을 다시 만나보세요</small></span></div><button onClick={() => setSelected(sameDayMemories[0].id)}>바로 보기 <ChevronRight size={15} /></button></section>}
+      <div className="danduli-album-summary"><span>{filter === 'all' ? '전체 추억' : filter === 'favorite' ? '즐겨찾기' : filter === 'video' ? '영상' : `${filter}년 추억`}</span><strong>{shown.length}개</strong></div>
+      <div className="memory-filters"><button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>전체</button><button className={filter === 'favorite' ? 'active' : ''} onClick={() => setFilter('favorite')}>즐겨찾기</button><button className={filter === 'video' ? 'active' : ''} onClick={() => setFilter('video')}>영상</button>{years.map((year) => <button key={year} className={filter === year ? 'active' : ''} onClick={() => setFilter(year)}>{year}</button>)}</div>
+      <div className="memory-list">{shown.map((memory) => <MemoryCard key={memory.id} memory={memory} onOpen={openMemory} />)}{!shown.length && <div className="memory-empty danduli-memory-empty"><b>{filter === 'favorite' ? '즐겨찾기한 추억이 없어요' : filter === 'video' ? '저장된 영상이 없어요' : filter !== 'all' ? '이 기간의 추억이 없어요' : '아직 남긴 추억이 없어요'}</b><span>{filter === 'all' ? '함께한 순간을 사진과 영상으로 남겨보세요.' : '전체 앨범에서 다른 추억을 확인할 수 있어요.'}</span><button type="button" className="primary" onClick={() => { if (filter !== 'all') setFilter('all'); else { onClearInitialDraft(); setEditing(null); } }}>{filter === 'all' ? '첫 추억 추가' : '전체 추억 보기'}</button></div>}</div>
+      </div>{expanded && <aside className="naner-album-detail" aria-label="추억 상세">{detail ?? <div className="naner-panel-empty"><b>추억 상세</b><span>왼쪽에서 추억을 선택해 주세요.</span></div>}</aside>}</div>
       {editing !== undefined && <MemoryForm memory={editing ?? undefined} draft={editing === null ? initialDraft : undefined} onClose={() => { setEditing(undefined); if (initialDraft) onClearInitialDraft(); }} onSave={(memory) => { update(memory); setEditing(undefined); onClearInitialDraft(); setSelected(memory.id); }} />}
     </>}
 
     {activeTab === 'anniversary' && <div className="hub-stack"><section className="hub-hero anniversary-hero"><Heart fill="currentColor" /><div><small>OUR DAYS</small><h2>함께 기다리는 날</h2><p>기념일에서 바로 약속을 만들 수 있어요.</p></div></section>{anniversaries.map((item) => { const planned = datePlans.some((plan) => plan.anniversaryKey === anniversaryPlanKey(item)); return <article className="anniversary-row" key={`${item.title}-${item.date}`}><span>{item.icon}</span><div><b>{item.title}</b><small>{item.date.replaceAll('-', '.')}</small></div><div className="anniversary-flow-actions"><strong>{dayBadge(item.date)}</strong><button type="button" className={planned ? 'planned' : ''} onClick={() => openDatePlan(item)}><Plus size={12} />{planned ? '약속 보기' : '약속'}</button></div></article>; })}</div>}
 
-    {activeTab === 'record' && <div className="hub-stack"><section className="hub-hero record-hero"><Crown /><div><small>우리의 기록</small><h2>우리의 기록</h2><p>단둘이에서 쌓인 둘의 기록을 모아봤어요.</p></div></section><div className="record-grid"><article><MapPin /><small>방문 장소</small><b>{visits.length}회</b><span>{topPlace ? `${topPlace[0]} · ${topPlace[1]}회` : '위치 기록을 시작해보세요'}</span></article><article><Heart /><small>추억</small><b>{memories.length}개</b><span>함께 남긴 사진과 영상</span></article></div><PlaceTimeline memories={memories} visits={visits} schedules={visibleSchedules} datePlans={datePlans} initialPlace={placeTimelineFocus} onConsumeInitialPlace={() => setPlaceTimelineFocus(undefined)} onOpenMemory={(id) => setSelected(id)} onOpenLocation={onOpenLocation} /></div>}
+    {activeTab === 'record' && <div className="hub-stack"><section className="hub-hero record-hero"><Crown /><div><small>우리의 기록</small><h2>우리의 기록</h2><p>나너에서 쌓인 둘의 기록을 모아봤어요.</p></div></section><div className="record-grid"><article><MapPin /><small>방문 장소</small><b>{visits.length}회</b><span>{topPlace ? `${topPlace[0]} · ${topPlace[1]}회` : '위치 기록을 시작해보세요'}</span></article><article><Heart /><small>추억</small><b>{memories.length}개</b><span>함께 남긴 사진과 영상</span></article></div><PlaceTimeline memories={memories} visits={visits} schedules={visibleSchedules} datePlans={datePlans} initialPlace={placeTimelineFocus} onConsumeInitialPlace={() => setPlaceTimelineFocus(undefined)} onOpenMemory={(id) => setSelected(id)} onOpenLocation={onOpenLocation} /></div>}
 
     {activeTab === 'tier' && <div className="hub-stack"><section className="hub-hero tier-hero"><Trophy /><div><small>COUPLE TIER</small><h2>이번 달 커플 랭킹</h2><p>공개 참여를 선택한 커플끼리 재미로 경쟁해요.</p></div></section><div className="tier-card"><span>🥇</span><div><b>달달커플</b><small>이번 달 데이트 기록</small></div><strong>24회</strong></div><div className="tier-card"><span>🥈</span><div><b>콩떡커플</b><small>이번 달 데이트 기록</small></div><strong>21회</strong></div><div className="tier-card"><span>🥉</span><div><b>{realName(profile,'나')} ❤️ {realName(partner,'상대방')}</b><small>내 커플 · 샘플 순위</small></div><strong>{Math.max(0, Math.min(20, datePlans.length))}회</strong></div><p className="hub-note">실제 전체 사용자 순위는 서버 집계와 공개 동의 기능을 연결한 뒤 활성화돼요.</p></div>}
 

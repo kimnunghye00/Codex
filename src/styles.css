@@ -1,4 +1,12 @@
 @font-face {
+  font-family: 'Pretendard Variable';
+  font-style: normal;
+  font-weight: 45 920;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/woff2/PretendardVariable.woff2') format('woff2');
+}
+
+@font-face {
   font-family: 'SUIT Variable';
   font-style: normal;
   font-weight: 100 900;
@@ -7,9 +15,9 @@
 }
 
 :root {
-  font-family: 'SUIT Variable', 'SUIT', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  color: #24242c;
-  background: #efeff5;
+  font-family: 'Pretendard Variable', 'Pretendard', 'SUIT Variable', 'SUIT', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #19191B;
+  background: #FFFFFF;
   font-synthesis: none;
   --primary: #5b5bd6;
   --primary-light: #7c7ce8;
@@ -23,7 +31,7 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; background: #efeff5; }
+body { margin: 0; min-width: 320px; background: var(--background); }
 button, input, textarea, select { font: inherit; }
 button { -webkit-tap-highlight-color: transparent; }
 button:focus-visible, input:focus-visible { outline: 3px solid #5b5bd633; outline-offset: 2px; }

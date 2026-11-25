@@ -6,19 +6,10 @@ type RouteTheme = {
 };
 
 const STORAGE_KEY = 'route-theme-v2';
-const DEFAULT_THEME = 'sunset-route';
+const DEFAULT_THEME = 'modern-violet';
 
 const themes: RouteTheme[] = [
-  { id: 'sunset-route', name: '선셋 로즈', description: '크림 배경에 차분한 로즈 포인트', isDefault: true },
-  { id: 'midnight-walk', name: '문라이트', description: '깊은 남색과 은은한 달빛 블루' },
-  { id: 'forest-trail', name: '세이지 가든', description: '맑은 아이보리와 편안한 세이지' },
-  { id: 'spring-blossom', name: '블러시 핑크', description: '부드러운 핑크와 말린 장미빛' },
-  { id: 'ocean-drive', name: '미스트 블루', description: '안개 낀 하늘빛과 차분한 블루' },
-  { id: 'lavender-fog', name: '라벤더 밀크', description: '우윳빛 배경과 은은한 라벤더' },
-  { id: 'autumn-breeze', name: '피치 테라코타', description: '포근한 피치와 흙빛 브라운' },
-  { id: 'champagne-day', name: '바닐라 라떼', description: '바닐라 크림과 따뜻한 모카' },
-  { id: 'mono-track', name: '소프트 그레이', description: '깔끔한 화이트와 부드러운 차콜' },
-  { id: 'neon-night', name: '플럼 나이트', description: '차분한 밤보라와 은은한 모브' },
+  { id: 'modern-violet', name: 'Modern Violet', description: '화이트와 차콜, 선명한 바이올렛 포인트', isDefault: true },
 ];
 
 type ThemePreviewPalette = {
@@ -37,145 +28,19 @@ type ThemePreviewPalette = {
 };
 
 const previewPalettes: Record<string, ThemePreviewPalette> = {
-  "sunset-route": {
-    "primary": "#66515B",
-    "primaryLight": "#A65365",
-    "soft": "#F3E6E8",
-    "background": "#FAF7F6",
+  "modern-violet": {
+    "primary": "#635BEB",
+    "primaryLight": "#756EF0",
+    "soft": "#EEECFF",
+    "background": "#FFFFFF",
     "surface": "#FFFFFF",
     "surfaceElevated": "#FFFFFF",
-    "text": "#39333A",
-    "muted": "#70636B",
-    "border": "#E6DCDF",
-    "accent": "#A65365",
-    "emotion": "#A65365",
-    "accentText": "#A65365"
-  },
-  "midnight-walk": {
-    "primary": "#526A90",
-    "primaryLight": "#526A90",
-    "soft": "#29364B",
-    "background": "#171E2B",
-    "surface": "#202A3A",
-    "surfaceElevated": "#202A3A",
-    "text": "#EDF1F7",
-    "muted": "#B7C2D2",
-    "border": "#3D4A60",
-    "accent": "#526A90",
-    "emotion": "#B9CAE8",
-    "accentText": "#B9CAE8"
-  },
-  "forest-trail": {
-    "primary": "#46695C",
-    "primaryLight": "#46695C",
-    "soft": "#E6EEE8",
-    "background": "#F6F8F5",
-    "surface": "#FFFFFF",
-    "surfaceElevated": "#FFFFFF",
-    "text": "#303D36",
-    "muted": "#5D6C63",
-    "border": "#D8E2DA",
-    "accent": "#46695C",
-    "emotion": "#46695C",
-    "accentText": "#46695C"
-  },
-  "spring-blossom": {
-    "primary": "#95556C",
-    "primaryLight": "#A04D68",
-    "soft": "#F6E6EC",
-    "background": "#FCF7F9",
-    "surface": "#FFFFFF",
-    "surfaceElevated": "#FFFFFF",
-    "text": "#44343C",
-    "muted": "#79616C",
-    "border": "#EADBE2",
-    "accent": "#A04D68",
-    "emotion": "#95556C",
-    "accentText": "#95556C"
-  },
-  "ocean-drive": {
-    "primary": "#466B80",
-    "primaryLight": "#466B80",
-    "soft": "#E5EEF3",
-    "background": "#F5F8FA",
-    "surface": "#FFFFFF",
-    "surfaceElevated": "#FFFFFF",
-    "text": "#303D46",
-    "muted": "#5B6C78",
-    "border": "#D9E3E9",
-    "accent": "#466B80",
-    "emotion": "#466B80",
-    "accentText": "#466B80"
-  },
-  "lavender-fog": {
-    "primary": "#75608B",
-    "primaryLight": "#75608B",
-    "soft": "#EEE7F4",
-    "background": "#F9F7FB",
-    "surface": "#FFFFFF",
-    "surfaceElevated": "#FFFFFF",
-    "text": "#3D3548",
-    "muted": "#6E6179",
-    "border": "#E3DCEB",
-    "accent": "#75608B",
-    "emotion": "#75608B",
-    "accentText": "#75608B"
-  },
-  "autumn-breeze": {
-    "primary": "#91614C",
-    "primaryLight": "#A05B43",
-    "soft": "#F5E8DF",
-    "background": "#FBF7F3",
-    "surface": "#FFFFFF",
-    "surfaceElevated": "#FFFFFF",
-    "text": "#45382F",
-    "muted": "#74655B",
-    "border": "#E8DED5",
-    "accent": "#A05B43",
-    "emotion": "#91614C",
-    "accentText": "#91614C"
-  },
-  "champagne-day": {
-    "primary": "#79654D",
-    "primaryLight": "#79654D",
-    "soft": "#F0EADF",
-    "background": "#FAF9F5",
-    "surface": "#FFFFFF",
-    "surfaceElevated": "#FFFFFF",
-    "text": "#403A32",
-    "muted": "#6D665A",
-    "border": "#E3DFD4",
-    "accent": "#79654D",
-    "emotion": "#79654D",
-    "accentText": "#79654D"
-  },
-  "mono-track": {
-    "primary": "#555B65",
-    "primaryLight": "#555B65",
-    "soft": "#EAECEF",
-    "background": "#F7F8F9",
-    "surface": "#FFFFFF",
-    "surfaceElevated": "#FFFFFF",
-    "text": "#30343B",
-    "muted": "#636973",
-    "border": "#DDE1E6",
-    "accent": "#555B65",
-    "emotion": "#555B65",
-    "accentText": "#555B65"
-  },
-  "neon-night": {
-    "primary": "#79608F",
-    "primaryLight": "#79608F",
-    "soft": "#3B2E47",
-    "background": "#211C28",
-    "surface": "#2B2434",
-    "surfaceElevated": "#2B2434",
-    "text": "#F4EEF8",
-    "muted": "#C7BCCE",
-    "border": "#514459",
-    "accent": "#79608F",
-    "emotion": "#D5BBE5",
-    "accentText": "#D5BBE5"
+    "text": "#19191B",
+    "muted": "#707078",
+    "border": "#EBEBEF",
+    "accent": "#635BEB",
+    "emotion": "#635BEB",
+    "accentText": "#5149CE"
   }
 };
 
@@ -201,8 +66,9 @@ function applyTheme(id: string) {
   localStorage.setItem(STORAGE_KEY, next);
 
   // The old three-theme system uses data-meluni-theme. Keep it neutral so its dark/
-  // lavender rules can never overwrite the current 단둘이 palette.
+  // lavender rules can never overwrite the current 나너 palette.
   document.documentElement.dataset.meluniTheme = 'default';
+  localStorage.removeItem('meluni-theme');
 }
 
 function makeThemeButton(theme: RouteTheme, selectedId: string, onSelect: (id: string) => void) {
@@ -284,7 +150,7 @@ function makePreview(theme: RouteTheme) {
       <div class="route-theme-preview-screen active" role="tabpanel" data-route-preview-screen="home">
         <div class="route-theme-preview-phone route-theme-preview-home route-theme-preview-real-home">
           <div class="route-theme-preview-home-topbar">
-            <strong>단둘이</strong>
+            <strong>나/너</strong>
             <span><i></i><i></i></span>
           </div>
 
@@ -294,7 +160,7 @@ function makePreview(theme: RouteTheme) {
               <span class="route-theme-preview-map-road road-one"></span>
               <span class="route-theme-preview-map-road road-two"></span>
               <span class="route-theme-preview-map-river"></span>
-              <span class="route-theme-preview-map-label label-route">단둘이</span>
+              <span class="route-theme-preview-map-label label-route">나너</span>
               <span class="route-theme-preview-map-label label-cafe">카페</span>
               <span class="route-theme-preview-map-label label-park">공원</span>
               <div class="route-theme-preview-location-card">
@@ -426,7 +292,7 @@ function openThemeSheet() {
   const header = document.createElement('div');
   header.className = 'route-theme-sheet-header';
   const heading = document.createElement('div');
-  heading.innerHTML = '<small>단둘이 THEME</small><h2>테마 선택</h2><p>홈과 대화방에서 우리에게 어울리는 분위기를 골라보세요.</p>';
+  heading.innerHTML = '<small>나너 THEME</small><h2>테마 선택</h2><p>홈과 대화방에서 우리에게 어울리는 분위기를 골라보세요.</p>';
   const close = document.createElement('button');
   close.type = 'button';
   close.className = 'route-theme-sheet-close';
@@ -444,7 +310,7 @@ function openThemeSheet() {
   options.append(...themes.map((theme) => makeThemeButton(theme, pendingId, (id) => { pendingId = id; refresh(); })));
   const note = document.createElement('p');
   note.className = 'route-theme-sheet-note';
-  note.textContent = '닫으면 선택한 테마가 저장되고 다음 실행에도 유지돼요.';
+  note.textContent = 'Modern Violet이 기본 테마예요. 새 테마는 추후 추가될 예정이에요.';
   const commit = () => { applyTheme(pendingId); removeThemeSheet(); };
   close.addEventListener('click', commit);
   overlay.addEventListener('pointerdown', (event) => { if (event.target === overlay) commit(); });

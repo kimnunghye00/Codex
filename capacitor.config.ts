@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.e2.danduli',
-  appName: '단둘이',
+  appName: '나너',
   webDir: 'dist',
   backgroundColor: '#fffaf8',
   android: {
@@ -21,7 +21,7 @@ const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
       // Native auto-hide is the last-resort launch guard. src/main.tsx still
-      // hides the splash as soon as 단둘이 paints, but a module-load failure can
+      // hides the splash as soon as 나너 paints, but a module-load failure can
       // no longer strand the user behind the native splash forever.
       launchShowDuration: 1800,
       launchAutoHide: true,
