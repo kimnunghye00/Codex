@@ -1,0 +1,224 @@
+name: NANER 2.0 QA only
+on:
+  push:
+    branches: [design/naner-phase8-qa]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: naner-qa-only
+  cancel-in-progress: true
+jobs:
+  web-preview:
+    if: github.ref == 'refs/heads/design/naner-phase8-qa'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Audit dependencies separately
+        id: audit
+        shell: bash
+        run: |
+          mkdir -p qa-reports
+          npm audit --json > qa-reports/full-audit.json || true
+          npm audit --omit=dev --audit-level=high --json > qa-reports/production-audit.json
+        continue-on-error: true
+      - name: Upload dependency audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NANER-dependency-audit
+          path: qa-reports/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Build verified web source
+        run: |
+          npm run build
+          npm run stability:bundle
+          npm run stability:runtime
+          npm run stability:flow
+          test -f dist/manifest.webmanifest
+          test -f dist/sw.js
+          printf '%s\n' "$GITHUB_SHA" > dist/qa-build.txt
+      - name: Upload test web bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: NANER-2.0-test-web
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish expiring test channel only
+        if: steps.audit.outcome == 'success'
+        shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.ROUTE_FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_TOKEN: ${{ secrets.ROUTE_FIREBASE_TOKEN }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/design/naner-phase8-qa
+          if [[ -n "$FIREBASE_SERVICE_ACCOUNT_JSON" ]]; then
+            ADC_FILE="$RUNNER_TEMP/naner-qa-service-account.json"
+            printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > "$ADC_FILE"
+            chmod 600 "$ADC_FILE"
+            export GOOGLE_APPLICATION_CREDENTIALS="$ADC_FILE"
+            unset FIREBASE_TOKEN
+            trap 'rm -f "$ADC_FILE"' EXIT
+          elif [[ -z "$FIREBASE_TOKEN" ]]; then
+            echo "::error::Preview hosting credentials missing; the web bundle remains available."
+            exit 1
+          fi
+          # A dedicated config includes exactly one Hosting target and NO rules,
+          # Functions, Storage or live deploy command. Never touch live channels.
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const config = JSON.parse(fs.readFileSync('firebase.json', 'utf8'));
+          const target = config.hosting.find(item => item.target === 'danduli');
+          if (!target || target.public !== 'dist') throw Error('Unexpected hosting configuration');
+          fs.writeFileSync('firebase.qa.json', JSON.stringify({hosting:[target]}));
+          NODE
+          npx --yes firebase-tools@15.29.0 hosting:channel:deploy naner-qa --project meluni-f4e00 --config firebase.qa.json --only danduli --expires 7d --non-interactive --json > qa-preview.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const data = JSON.parse(fs.readFileSync('qa-preview.json','utf8'));
+          const found = [];
+          function walk(value) {
+            if (typeof value === 'string' && /^https:\/\/danduli--naner-qa-[a-z0-9-]+\.web\.app\/?$/.test(value)) found.push(value);
+            else if (value && typeof value === 'object') Object.values(value).forEach(walk);
+          }
+          walk(data);
+          const url = found[0];
+          if (!url) throw Error('Preview URL was not returned');
+          fs.writeFileSync('qa-preview-url.txt', url.replace(/\/$/,'')+'\n');
+          NODE
+          URL="$(cat qa-preview-url.txt)"
+          curl --fail --silent --show-error --retry 5 --retry-delay 4 "$URL/qa-build.txt" | grep -Fx "$GITHUB_SHA"
+          echo "Preview URL: $URL"
+          echo "### Test preview (7 days)" >> "$GITHUB_STEP_SUMMARY"
+          echo "$URL" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload verified preview URL
+        if: steps.audit.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: NANER-preview-url
+          path: qa-preview-url.txt
+          if-no-files-found: error
+      - name: Report unresolved production dependency risk
+        if: steps.audit.outcome != 'success'
+        run: |
+          echo "::error::Production dependency audit did not pass. Public preview withheld; test artifacts and audit report are available."
+          exit 1
+  build-apk:
+    if: github.ref == 'refs/heads/design/naner-phase8-qa'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Prepare fixed DANDULI test signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p android/signing
+          base64 --decode android/route-test-debug.keystore.b64 > android/signing/route-test-debug.keystore
+          EXPECTED="40F608CE3D3DD13773271E6D61B2EB1C513904636AECD662D78B882C7A006A5A"
+          ACTUAL="$(keytool -list -v -keystore android/signing/route-test-debug.keystore -storepass android -alias androiddebugkey | awk '/SHA256:/{print $2; exit}' | tr -d ':')"
+          echo "DANDULI test signing certificate SHA-256: ${ACTUAL}"
+          test "${ACTUAL}" = "${EXPECTED}"
+
+      - name: Restore Firebase Android config
+        shell: bash
+        env:
+          ROUTE_GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.ROUTE_GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ROUTE_GOOGLE_SERVICES_JSON_BASE64:-}" ]; then
+            echo "::warning::ROUTE_GOOGLE_SERVICES_JSON_BASE64 is not configured. The APK can still build, but native Firebase features such as FCM push notifications will remain unavailable."
+            exit 0
+          fi
+
+          printf '%s' "${ROUTE_GOOGLE_SERVICES_JSON_BASE64}" | base64 --decode > android/app/google-services.json
+          test -s android/app/google-services.json
+
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const path = 'android/app/google-services.json';
+          const json = JSON.parse(fs.readFileSync(path, 'utf8'));
+          const projectId = json?.project_info?.project_id;
+          const clients = Array.isArray(json?.client) ? json.client : [];
+          const danduliClient = clients.find((client) => client?.client_info?.android_client_info?.package_name === 'com.e2.danduli');
+          if (projectId !== 'meluni-f4e00') {
+            throw new Error(`Unexpected Firebase project_id: ${projectId ?? 'missing'}`);
+          }
+          if (!danduliClient) {
+            console.log('::warning::Firebase Android app com.e2.danduli is not present in the current google-services.json. Continuing this build without native Firebase services.');
+            fs.unlinkSync(path);
+            process.exit(0);
+          }
+          console.log('Firebase Android config verified for meluni-f4e00 / com.e2.danduli.');
+          NODE
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Configure native permissions
+        run: npm run native:configure
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Make Gradle executable
+        run: chmod +x android/gradlew
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Verify APK signing identity and version
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          APKSIGNER="$(find "${ANDROID_HOME}/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          EXPECTED="40f608ce3d3dd13773271e6d61b2eb1c513904636aecd662d78b882c7a006a5a"
+          CERT_OUTPUT="$(${APKSIGNER} verify --print-certs "${APK}")"
+          printf '%s\n' "${CERT_OUTPUT}"
+          ACTUAL="$(printf '%s\n' "${CERT_OUTPUT}" | sed -n 's/^.*certificate SHA-256 digest:[[:space:]]*//p' | head -n 1 | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+          echo "APK signer SHA-256: ${ACTUAL}"
+          if [ -z "${ACTUAL}" ]; then
+            echo "Could not read APK signing certificate digest." >&2
+            exit 1
+          fi
+          test "${ACTUAL}" = "${EXPECTED}"
+          AAPT="$(find "${ANDROID_HOME}/build-tools" -type f -name aapt | sort -V | tail -n 1)"
+          ${AAPT} dump badging "${APK}" | head -n 1
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NANER-2.0-test-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
