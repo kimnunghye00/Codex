@@ -1,5 +1,4 @@
-import type { PageHeaderProps } from '../navigation/AppHeader';
-import { Bot, CalendarClock, ContactRound, Gift, Heart, Trash2, X } from 'lucide-react';
+import { Bot, CalendarClock, ChevronLeft, ContactRound, Ellipsis, Gift, Heart, Trash2, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { collection, doc, limit, onSnapshot, orderBy, query, setDoc, where } from 'firebase/firestore';
@@ -71,7 +70,7 @@ function aiReplyFor(text: string) {
   const value = text.trim();
   const lower = value.toLowerCase();
   if (!value) return '응, 듣고 있어.';
-  if (/안녕|하이|hello|hi/.test(lower)) return '안녕! 이제 단둘이 안에서도 대화 테스트를 할 수 있어 😊';
+  if (/안녕|하이|hello|hi/.test(lower)) return '안녕! 이제 나너 안에서도 대화 테스트를 할 수 있어 😊';
   if (/별명/.test(value)) return '별명 기능도 같이 확인해보자.';
   if (/오류|에러|버그|안돼|안 돼|문제/.test(value)) return '어디에서 문제가 생겼는지 알려줘.';
   if (/테스트/.test(value)) return '좋아. 메시지 전송부터 확인해보자.';
@@ -163,8 +162,12 @@ function mediaErrorMessage(cause: unknown, kind: 'photo' | 'gif') {
   return kind === 'photo' ? '사진을 전송하지 못했어요. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.' : '움짤을 전송하지 못했어요. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.';
 }
 
-export function ChatPage({ Header, messages, setMessages, connection, initialMessageId, notificationRequest, initialToolsSection, toolsRequest }: {
-  Header: (props: PageHeaderProps) => React.ReactNode;
+export type RoomDraft = { scope: string; text: string; replyTo?: number };
+
+export function ChatPage({ roomScope, draftCache, onBack, messages, setMessages, connection, initialMessageId, notificationRequest, initialToolsSection, toolsRequest }: {
+  roomScope: string;
+  draftCache: React.MutableRefObject<RoomDraft>;
+  onBack: () => void;
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   connection: RealCoupleConnection | null;
@@ -174,8 +177,11 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
   toolsRequest?: number;
 }) {
   const currentUid = auth.currentUser?.uid ?? '';
-  const [draft, setDraft] = useState('');
-  const [replyTo, setReplyTo] = useState<number>();
+  const [draft, setDraft] = useState(() => draftCache.current.scope === roomScope ? draftCache.current.text : '');
+  const [replyTo, setReplyTo] = useState<number | undefined>(() => draftCache.current.scope === roomScope ? draftCache.current.replyTo : undefined);
+  useLayoutEffect(() => {
+    draftCache.current = { scope: roomScope, text: draft, replyTo };
+  }, [draftCache, roomScope, draft, replyTo]);
   const [active, setActive] = useState<number>();
   const [lightbox, setLightbox] = useState<string>();
   const [highlighted, setHighlighted] = useState<number>();
@@ -277,22 +283,13 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
     const page = pageRef.current;
     if (!page) return;
     const viewport = window.visualViewport;
-    const nav = document.querySelector<HTMLElement>('[data-route-nav]');
     const composer = page.querySelector<HTMLElement>(':scope > .composer-area');
     let frame = 0;
     let lastDockGeometry = '';
     const resize = () => {
       frame = 0;
       const visibleBottom = Math.min(window.innerHeight, (viewport?.height ?? window.innerHeight) + (viewport?.offsetTop ?? 0));
-      const navBounds = nav?.getBoundingClientRect();
-      const navStyle = nav ? getComputedStyle(nav) : null;
-      const bottomNavVisible = navBounds && navBounds.width > navBounds.height * 2
-        && !document.documentElement.classList.contains('route-keyboard-open')
-        && navStyle?.display !== 'none'
-        && navStyle?.visibility !== 'hidden'
-        && navBounds && navBounds.height > 0
-        && navBounds.top < visibleBottom && navBounds.bottom > 0;
-      const bottom = bottomNavVisible ? Math.min(visibleBottom, navBounds.top) : visibleBottom;
+      const bottom = visibleBottom;
       const bounds = page.getBoundingClientRect();
       const height = `${Math.max(0, bottom - bounds.top)}px`;
       const dockGeometry = [bottom, bounds.left, bounds.top, bounds.width, composer?.getBoundingClientRect().height ?? 0].join(':');
@@ -323,7 +320,6 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
       if (!frame) frame = window.requestAnimationFrame(resize);
     };
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(scheduleResize);
-    if (nav) observer?.observe(nav);
     if (composer) observer?.observe(composer);
     // Fold transitions and multi-window can change the page before a window event.
     observer?.observe(page);
@@ -982,7 +978,13 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
         <button type="button" className="chat-delete-toolbar-cancel" aria-label="삭제 선택 취소" disabled={deleteBusy} onClick={closeDeleteSelection}><X size={21} /></button>
         <button type="button" className="chat-delete-toolbar-trash" aria-label="선택 메시지 삭제" disabled={!deleteSelection.size || deleteBusy} onClick={() => setDeleteConfirmOpen(true)}><Trash2 size={21} /></button>
       </div>
-      : <Header title="대화" onSettings={openChatMenu} settingsLabel="대화 설정" />}
+      : <header className="naner-room-header" aria-label="채팅방">
+        <button type="button" onClick={onBack} aria-label="채팅방 나가기"><ChevronLeft size={24} /></button>
+        <span className="naner-room-avatar">{connection?.partnerProfile?.photoDataUrl ? <img src={connection.partnerProfile.photoDataUrl} alt="" /> : partnerInitial}</span>
+        <span className="naner-room-title"><b>{partnerName}</b><small>우리 둘만의 대화</small></span>
+        <button type="button" onClick={openScheduleMessage} aria-label="예약 메시지"><CalendarClock size={21} /></button>
+        <button type="button" onClick={openChatMenu} aria-label="대화 설정"><Ellipsis size={23} /></button>
+      </header>}
     {nearestSchedule && <div className="chat-next-schedule"><CalendarClock size={16} /><div><small>가장 가까운 일정</small><b>{nearestSchedule.title}</b><span>{nearestSchedule.date.replaceAll('-', '.')} · {nearestSchedule.startTime}</span></div></div>}
     {syncError && <p className="chat-sync-error" role="alert">{syncError}</p>}
     {flowNotice && <p className="chat-flow-notice" role="status">{flowNotice}</p>}

@@ -1,57 +1,29 @@
 /*
  * ROUTE theme contrast safety layer.
- * Loaded after every feature stylesheet so all ten palettes remain readable.
+ * Loaded after every feature stylesheet so the active palette remains readable.
  * Keep semantic colors here instead of letting legacy/hard-coded colors win.
  */
 
-:root[data-route-theme='sunset-route'] {
-  --primary:#66515B !important; --primary-light:#A65365 !important; --primary-soft:#F3E6E8 !important; --background:#FAF7F6 !important; --surface:#FFFFFF !important; --surface-elevated:#FFFFFF !important; --surface-soft:#F3E6E8 !important; --text-primary:#39333A !important; --text-secondary:#70636B !important; --border:#E6DCDF !important; --emotion:#A65365 !important; --route-accent:#A65365 !important; --route-accent-soft:#F3E6E8 !important; --accent-text:#A65365 !important; --on-primary:#FFFFFF !important; --on-accent:#FFFFFF !important; --control-bg:#F3E6E8 !important; --placeholder:#70636B !important;
+:root[data-route-theme='modern-violet'] {
+  --primary:#635BEB !important;
+  --primary-light:#756EF0 !important;
+  --primary-soft:#EEECFF !important;
+  --background:#FFFFFF !important;
+  --surface:#FFFFFF !important;
+  --surface-elevated:#FFFFFF !important;
+  --surface-soft:#F5F5F7 !important;
+  --text-primary:#19191B !important;
+  --text-secondary:#707078 !important;
+  --border:#EBEBEF !important;
+  --emotion:#635BEB !important;
+  --route-accent:#635BEB !important;
+  --route-accent-soft:#EEECFF !important;
+  --accent-text:#5149CE !important;
+  --on-primary:#FFFFFF !important;
+  --on-accent:#FFFFFF !important;
+  --control-bg:#F5F5F7 !important;
+  --placeholder:#707078 !important;
   color-scheme:light;
-}
-
-:root[data-route-theme='midnight-walk'] {
-  --primary:#526A90 !important; --primary-light:#526A90 !important; --primary-soft:#29364B !important; --background:#171E2B !important; --surface:#202A3A !important; --surface-elevated:#202A3A !important; --surface-soft:#29364B !important; --text-primary:#EDF1F7 !important; --text-secondary:#B7C2D2 !important; --border:#3D4A60 !important; --emotion:#B9CAE8 !important; --route-accent:#526A90 !important; --route-accent-soft:#29364B !important; --accent-text:#B9CAE8 !important; --on-primary:#FFFFFF !important; --on-accent:#FFFFFF !important; --control-bg:#29364B !important; --placeholder:#B7C2D2 !important;
-  color-scheme:dark;
-}
-
-:root[data-route-theme='forest-trail'] {
-  --primary:#46695C !important; --primary-light:#46695C !important; --primary-soft:#E6EEE8 !important; --background:#F6F8F5 !important; --surface:#FFFFFF !important; --surface-elevated:#FFFFFF !important; --surface-soft:#E6EEE8 !important; --text-primary:#303D36 !important; --text-secondary:#5D6C63 !important; --border:#D8E2DA !important; --emotion:#46695C !important; --route-accent:#46695C !important; --route-accent-soft:#E6EEE8 !important; --accent-text:#46695C !important; --on-primary:#FFFFFF !important; --on-accent:#FFFFFF !important; --control-bg:#E6EEE8 !important; --placeholder:#5D6C63 !important;
-  color-scheme:light;
-}
-
-:root[data-route-theme='spring-blossom'] {
-  --primary:#95556C !important; --primary-light:#A04D68 !important; --primary-soft:#F6E6EC !important; --background:#FCF7F9 !important; --surface:#FFFFFF !important; --surface-elevated:#FFFFFF !important; --surface-soft:#F6E6EC !important; --text-primary:#44343C !important; --text-secondary:#79616C !important; --border:#EADBE2 !important; --emotion:#95556C !important; --route-accent:#A04D68 !important; --route-accent-soft:#F6E6EC !important; --accent-text:#95556C !important; --on-primary:#FFFFFF !important; --on-accent:#FFFFFF !important; --control-bg:#F6E6EC !important; --placeholder:#79616C !important;
-  color-scheme:light;
-}
-
-:root[data-route-theme='ocean-drive'] {
-  --primary:#466B80 !important; --primary-light:#466B80 !important; --primary-soft:#E5EEF3 !important; --background:#F5F8FA !important; --surface:#FFFFFF !important; --surface-elevated:#FFFFFF !important; --surface-soft:#E5EEF3 !important; --text-primary:#303D46 !important; --text-secondary:#5B6C78 !important; --border:#D9E3E9 !important; --emotion:#466B80 !important; --route-accent:#466B80 !important; --route-accent-soft:#E5EEF3 !important; --accent-text:#466B80 !important; --on-primary:#FFFFFF !important; --on-accent:#FFFFFF !important; --control-bg:#E5EEF3 !important; --placeholder:#5B6C78 !important;
-  color-scheme:light;
-}
-
-:root[data-route-theme='lavender-fog'] {
-  --primary:#75608B !important; --primary-light:#75608B !important; --primary-soft:#EEE7F4 !important; --background:#F9F7FB !important; --surface:#FFFFFF !important; --surface-elevated:#FFFFFF !important; --surface-soft:#EEE7F4 !important; --text-primary:#3D3548 !important; --text-secondary:#6E6179 !important; --border:#E3DCEB !important; --emotion:#75608B !important; --route-accent:#75608B !important; --route-accent-soft:#EEE7F4 !important; --accent-text:#75608B !important; --on-primary:#FFFFFF !important; --on-accent:#FFFFFF !important; --control-bg:#EEE7F4 !important; --placeholder:#6E6179 !important;
-  color-scheme:light;
-}
-
-:root[data-route-theme='autumn-breeze'] {
-  --primary:#91614C !important; --primary-light:#A05B43 !important; --primary-soft:#F5E8DF !important; --background:#FBF7F3 !important; --surface:#FFFFFF !important; --surface-elevated:#FFFFFF !important; --surface-soft:#F5E8DF !important; --text-primary:#45382F !important; --text-secondary:#74655B !important; --border:#E8DED5 !important; --emotion:#91614C !important; --route-accent:#A05B43 !important; --route-accent-soft:#F5E8DF !important; --accent-text:#91614C !important; --on-primary:#FFFFFF !important; --on-accent:#FFFFFF !important; --control-bg:#F5E8DF !important; --placeholder:#74655B !important;
-  color-scheme:light;
-}
-
-:root[data-route-theme='champagne-day'] {
-  --primary:#79654D !important; --primary-light:#79654D !important; --primary-soft:#F0EADF !important; --background:#FAF9F5 !important; --surface:#FFFFFF !important; --surface-elevated:#FFFFFF !important; --surface-soft:#F0EADF !important; --text-primary:#403A32 !important; --text-secondary:#6D665A !important; --border:#E3DFD4 !important; --emotion:#79654D !important; --route-accent:#79654D !important; --route-accent-soft:#F0EADF !important; --accent-text:#79654D !important; --on-primary:#FFFFFF !important; --on-accent:#FFFFFF !important; --control-bg:#F0EADF !important; --placeholder:#6D665A !important;
-  color-scheme:light;
-}
-
-:root[data-route-theme='mono-track'] {
-  --primary:#555B65 !important; --primary-light:#555B65 !important; --primary-soft:#EAECEF !important; --background:#F7F8F9 !important; --surface:#FFFFFF !important; --surface-elevated:#FFFFFF !important; --surface-soft:#EAECEF !important; --text-primary:#30343B !important; --text-secondary:#636973 !important; --border:#DDE1E6 !important; --emotion:#555B65 !important; --route-accent:#555B65 !important; --route-accent-soft:#EAECEF !important; --accent-text:#555B65 !important; --on-primary:#FFFFFF !important; --on-accent:#FFFFFF !important; --control-bg:#EAECEF !important; --placeholder:#636973 !important;
-  color-scheme:light;
-}
-
-:root[data-route-theme='neon-night'] {
-  --primary:#79608F !important; --primary-light:#79608F !important; --primary-soft:#3B2E47 !important; --background:#211C28 !important; --surface:#2B2434 !important; --surface-elevated:#2B2434 !important; --surface-soft:#3B2E47 !important; --text-primary:#F4EEF8 !important; --text-secondary:#C7BCCE !important; --border:#514459 !important; --emotion:#D5BBE5 !important; --route-accent:#79608F !important; --route-accent-soft:#3B2E47 !important; --accent-text:#D5BBE5 !important; --on-primary:#FFFFFF !important; --on-accent:#FFFFFF !important; --control-bg:#3B2E47 !important; --placeholder:#C7BCCE !important;
-  color-scheme:dark;
 }
 
 /* Base page and typography contrast. */
