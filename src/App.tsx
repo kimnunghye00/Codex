@@ -35,6 +35,7 @@ import './home-couple-tools.css';
 import './home-couple-layout.css';
 import './home-map-overlay.css';
 import './home-brand-polish-v5.css';
+import './home-adaptive.css';
 
 const FootprintsPage = lazy(() => import('./components/footprints/FootprintsPage').then((module) => ({ default: module.FootprintsPage })));
 

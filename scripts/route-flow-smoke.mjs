@@ -108,6 +108,10 @@ check('expanded window reserves a left navigation rail', adaptiveWindow.includes
 check('tablet and compact window layouts remain available', adaptiveWindow.includes('@media (min-width:900px)') && adaptiveWindow.includes('@media (max-width:599px)') && adaptiveWindow.includes('repeat(auto-fill,minmax(min(100%,200px),1fr))'));
 check('desktop OS keeps horizontal navigation', responsiveFrame.includes('data-route-desktop') && adaptiveWindow.includes('[data-route-desktop="true"]') && adaptiveWindow.includes('inset:auto 0 0 0 !important') && adaptiveWindow.includes('--route-desktop-nav-height'));
 check('tablet media keeps aspect ratio', adaptiveWindow.includes('object-fit:contain !important') && adaptiveWindow.includes('.detail-gallery'));
+const homeAdaptive = read('src/home-adaptive.css');
+check('home adaptive styles load with authenticated app instead of startup', app.includes("import './home-adaptive.css';") && !read('src/main.tsx').includes("import './home-adaptive.css';") && !adaptiveWindow.includes('container-name:home-summary'));
+check('home summary preserves content-based sizing and container queries', homeAdaptive.includes('min-height:max-content !important') && homeAdaptive.includes('display:contents !important') && homeAdaptive.includes('overflow-y:auto !important') && homeAdaptive.includes('@container home-summary') && homeAdaptive.includes('.home-schedule-row:nth-child(n+2)'));
+check('navigation layout has one wide-screen owner', !bottomNav.includes('lg:!flex-col') && !bottomNav.includes('lg:!left-') && adaptiveWindow.includes('flex-direction:column !important') && adaptiveWindow.includes('flex-direction:row !important'));
 
 check('App routes home', app.includes("tab === 'home'"));
 check('App routes memories directly', app.includes("from './components/memories/MemoriesPage'") && /<MemoriesPage\b[^>]*\brequestedTab=\{requestedHubTab\}/.test(app));
