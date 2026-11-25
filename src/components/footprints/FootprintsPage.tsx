@@ -49,6 +49,7 @@ import {
 } from '../../utils/location';
 import { PageSettingsSheet, PageSettingToggle } from '../navigation/PageSettingsSheet';
 import './FootprintsPage.css';
+import '../../danduli-modern-footprints.css';
 
 const MAP_ORIGIN = typeof window !== 'undefined' && window.location.hostname === 'danduli.web.app'
   ? 'https://danduli.web.app' : 'https://meluni-f4e00.web.app';
@@ -680,8 +681,8 @@ export function FootprintsPage({
     <div className="footprints-heading">
       <div>
         <small>COUPLE FOOTPRINTS</small>
-        <h1>우리의 발자취 ♡</h1>
-        <p>상대방의 이동과 둘이 실제로 함께 있었던 시간을 구분해서 확인해요.</p>
+        <h1>우리의 발자취</h1>
+        <p>날짜를 선택해 상대방의 이동 또는 함께한 장소를 확인해요.</p>
       </div>
     </div>
 

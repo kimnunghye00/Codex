@@ -322,11 +322,11 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
     const scheduleResize = () => {
       if (!frame) frame = window.requestAnimationFrame(resize);
     };
-    const observer = new ResizeObserver(scheduleResize);
-    if (nav) observer.observe(nav);
-    if (composer) observer.observe(composer);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(scheduleResize);
+    if (nav) observer?.observe(nav);
+    if (composer) observer?.observe(composer);
     // Fold transitions and multi-window can change the page before a window event.
-    observer.observe(page);
+    observer?.observe(page);
     const keyboardObserver = new MutationObserver(scheduleResize);
     keyboardObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     window.addEventListener('resize', scheduleResize);
@@ -336,7 +336,7 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
     resize();
     return () => {
       window.cancelAnimationFrame(frame);
-      observer.disconnect();
+      observer?.disconnect();
       keyboardObserver.disconnect();
       window.removeEventListener('resize', scheduleResize);
       window.removeEventListener('route-app-resume', scheduleResize);
@@ -1006,7 +1006,7 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
         return <>{row.showDate && <div className="date-chip">{messageDateLabel(message.timestamp)}</div>}<ChatBubble message={displayedMessage} reply={message.replyTo ? byId.get(message.replyTo) : undefined} partnerName={partnerName} partnerInitial={partnerInitial} active={active === message.id} highlighted={highlighted === message.id} selectionMode={Boolean(deleteSelection)} selected={Boolean(deleteSelection?.has(message.id))} onAction={() => setActive(active === message.id ? undefined : message.id)} onReact={(emoji) => react(message.id, emoji)} onReply={() => { setReplyTo(message.id); setActive(undefined); }} onSave={() => saveMessage(displayedMessage)} onDelete={() => beginDeleteSelection(displayedMessage)} onToggleSelect={() => toggleDeleteSelection(displayedMessage)} onImage={setLightbox} onJump={jump} /></>;
       })() : row.kind === 'typing-ai' ? <TypingIndicator ai initial={partnerInitial} /> : <TypingIndicator ai={false} initial={partnerInitial} heart />}</div>;
     })}</div><div ref={bottomRef} /></div>
-    {scheduledDrafts.length > 0 && !deleteSelection && <div className="scheduled-chat-list"><div className="scheduled-strip"><CalendarClock size={14} /><span>예약 메시지 {scheduledDrafts.length}개</span><small>앱을 열어 둔 동안 전송 · 오프라인이면 재시도</small></div>{scheduledDrafts.map((item) => <div className="scheduled-chat-item" key={item.id}><span><b>{item.text}</b><small>{item.coupleId ? new Date(item.sendAt).toLocaleString('ko-KR') : '이전 버전 예약 · 다시 예약해 주세요'}</small></span><button type="button" onClick={() => removeScheduledChatDraft(currentUid, item.id)} aria-label="예약 메시지 취소">취소</button></div>)}</div>}
+    {scheduledDrafts.length > 0 && !deleteSelection && <details className="scheduled-chat-list danduli-scheduled-disclosure"><summary className="scheduled-strip"><CalendarClock size={14} /><span>예약 메시지 {scheduledDrafts.length}개</span><small>목록 보기</small></summary><div className="danduli-scheduled-items"><p className="danduli-scheduled-note">앱을 열어 둔 동안 전송 · 오프라인이면 재시도</p>{scheduledDrafts.map((item) => <div className="scheduled-chat-item" key={item.id}><span><b>{item.text}</b><small>{item.coupleId ? new Date(item.sendAt).toLocaleString('ko-KR') : '이전 버전 예약 · 다시 예약해 주세요'}</small></span><button type="button" onClick={() => removeScheduledChatDraft(currentUid, item.id)} aria-label="예약 메시지 취소">취소</button></div>)}</div></details>}
     {!deleteSelection && <ChatComposer draft={draft} reply={replyTo ? byId.get(replyTo) : undefined} partnerName={partnerName} ownedStickerPacks={preferences.ownedStickerPacks} onDraft={setDraft} onSend={send} onImages={sendImages} onGif={sendGif} onQuick={sendText} onSticker={sendStickerChoice} onSchedule={openScheduleMessage} onGift={() => setGiftOpen(true)} onFile={(file) => sendAttachment(file, 'file')} onContact={() => void openContactPicker()} onVoice={(file, duration) => sendAttachment(file, 'audio', duration)} onVoiceError={setSyncError} onStickerStore={openStickerStore} onCancelReply={() => setReplyTo(undefined)} />}
     {toolsOpen && <ChatToolsPanel key={toolsInitialSection} initialSection={toolsInitialSection} messages={messages} partnerName={partnerName} preferences={preferences} onPreferences={setPreferences} onJump={jump} onImage={setLightbox} onImport={(imported) => setMessages(imported)} onSticker={sendStickerChoice} onClose={() => setToolsOpen(false)} />}
     {lightbox && <div className="lightbox" role="dialog" onClick={() => setLightbox(undefined)}><button aria-label="닫기"><X /></button><img src={lightbox} alt="확대된 채팅 사진" /></div>}

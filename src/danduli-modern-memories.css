@@ -1,0 +1,118 @@
+/* Memories — photo-first hierarchy and consistent filters. */
+html body .app-shell .memories-page .hub-head h1 {
+  font-size: 26px;
+  letter-spacing: -.045em;
+  font-weight: 800;
+}
+html body .app-shell .memories-page .hub-head small {
+  display: none;
+}
+html body .app-shell .memories-page :is(.hub-tabs,.memory-filters) > button {
+  font-size: 12px !important;
+  border-radius: 12px !important;
+  box-shadow: none !important;
+}
+html body .app-shell .memories-page :is(.hub-tabs,.memory-filters) > button:not(.active) {
+  background: var(--surface) !important;
+  color: var(--text-secondary) !important;
+  border-color: var(--danduli-card-line) !important;
+}
+html body .app-shell .memories-page :is(.hub-tabs,.memory-filters) > button.active {
+  background: var(--primary) !important;
+  color: var(--on-primary, #fff) !important;
+  border-color: var(--primary) !important;
+}
+html body .app-shell .memories-page :is(.memory-card,.last-year-card,.hub-hero,.anniversary-row,.tier-card,.record-grid article) {
+  border: 1px solid var(--danduli-card-line) !important;
+  border-radius: var(--danduli-radius-card) !important;
+  box-shadow: none !important;
+  background: var(--surface) !important;
+}
+html body .app-shell .memories-page .memory-card-copy h3 {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+html body .app-shell .memories-page .memory-card-copy > span {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+html body .app-shell .memories-page .memory-card-copy p {
+  font-size: 11px;
+}
+
+html body .app-shell .memories-page .danduli-memory-empty {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px 16px;
+  border: 1px dashed var(--border);
+  border-radius: var(--danduli-radius-card);
+  background: var(--surface);
+  color: var(--text-primary);
+  text-align: center;
+}
+.danduli-memory-empty > b { font-size: 15px; }
+.danduli-memory-empty > span { font-size: 12px; color: var(--text-secondary); }
+.danduli-memory-empty > button { padding-inline: 18px; }
+
+/* V3: photo-first, predictable grid with real album counts. */
+.danduli-album-summary {
+  display:flex;align-items:center;justify-content:space-between;
+  margin:8px 0;color:var(--text-secondary);font-size:12px;
+}
+.danduli-album-summary strong {color:var(--text-primary);font-size:13px;font-variant-numeric:tabular-nums;}
+html body .app-shell .memories-page .memory-list {
+  grid-template-columns:repeat(auto-fill,minmax(min(100%,155px),1fr)) !important;
+  gap:12px;
+}
+@media(min-width:600px) {
+  html body .app-shell .memories-page .memory-list {
+    grid-template-columns:repeat(auto-fill,minmax(190px,1fr)) !important;
+  }
+}
+html body .app-shell .memories-page .memory-cover {
+  aspect-ratio:4/5;
+  background:var(--danduli-fill) !important;
+}
+html body .app-shell .memories-page .memory-card {
+  min-width:0;overflow:hidden;cursor:pointer;
+}
+html body .app-shell .memories-page .memory-card-copy h3 {
+  min-height:0;overflow-wrap:anywhere;
+}
+.danduli-memory-count {
+  position:absolute;left:10px;bottom:10px;padding:4px 8px;
+  border-radius:8px;background:#151515bd;color:white;font-size:11px;
+  font-weight:650;pointer-events:none;
+}
+
+/* V4: fade only decoded album photos; no animated skeleton or video effects. */
+html body .app-shell .memories-page .memory-card .memory-cover img.danduli-media-ready {
+  animation:danduli-content-in 180ms ease-out;
+}
+@media(hover:hover) and (pointer:fine) {
+  html body .app-shell .memories-page .memory-card .memory-cover img {
+    transition:transform 220ms ease-out;
+  }
+  html body .app-shell .memories-page .memory-card:hover .memory-cover img {transform:scale(1.025);}
+}
+@media(prefers-reduced-motion:reduce) {
+  html body .app-shell .memories-page .memory-card .memory-cover img {
+    animation:none !important;transition:none !important;transform:none !important;
+  }
+}
+
+/* V5: stable card columns when filtering down to a single memory. */
+@media(max-width:359px) {
+  html body #root .app-shell > main > .route-hub .memory-list {
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    gap:8px !important;
+  }
+  html body .app-shell .memories-page .memory-card-copy {padding:8px;}
+  html body .app-shell .memories-page .memory-card-copy h3 {font-size:13px;}
+}

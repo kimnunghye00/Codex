@@ -305,7 +305,8 @@ function MemoryImageSource({ src, alt, className, loading = 'lazy', decoding = '
     className={className}
     loading={loading}
     decoding={decoding}
-    onLoad={() => {
+    onLoad={(event) => {
+      event.currentTarget.classList.add('danduli-media-ready');
       if (legacyRecovery.url && displayUrl === legacyRecovery.url) persistRecoveredUrl(src, legacyRecovery.url, legacyRecovery.slot);
     }}
     onError={handleError}

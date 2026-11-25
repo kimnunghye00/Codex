@@ -1,0 +1,118 @@
+/* Conversations — protect composer and media geometry, only style controls. */
+html body .app-shell .chat-page .message-wrap > .bubble:not(.sticker-bubble):not(.media-bubble):not(.gallery-bubble):not(.utility-bubble) {
+  border-radius: 18px 18px 18px 6px !important;
+  /* Preserve the user-selected chat font size. */
+  box-shadow: none !important;
+}
+html body .app-shell .chat-page .bubble-row.mine .message-wrap > .bubble:not(.sticker-bubble):not(.media-bubble):not(.gallery-bubble):not(.utility-bubble) {
+  border-radius: 18px 18px 6px 18px !important;
+}
+html body .app-shell .chat-page .composer-area .composer {
+  background: var(--surface) !important;
+  border-color: var(--danduli-card-line) !important;
+  box-shadow: none !important;
+}
+html body .app-shell .chat-page .composer textarea {
+  background: var(--danduli-fill) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--danduli-card-line) !important;
+  border-radius: 22px !important;
+}
+html body .app-shell .chat-page .composer textarea:focus {
+  border-color: var(--accent-text, var(--primary)) !important;
+}
+html body .app-shell .chat-page .composer textarea::placeholder {
+  color: var(--placeholder, var(--text-secondary)) !important;
+}
+html body .app-shell .chat-page .composer > button:not(.send) {
+  color: var(--text-secondary) !important;
+  box-shadow: none !important;
+}
+html body .app-shell .chat-page .composer .send.ready {
+  color: var(--on-primary, #fff) !important;
+  background: var(--primary) !important;
+  box-shadow: none !important;
+}
+html body .app-shell .chat-page .message-meta {
+  color: var(--text-secondary) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+html body .app-shell .chat-page .danduli-scheduled-disclosure {
+  flex: 0 0 auto;
+  min-height: 0;
+  max-height: min(22dvh,180px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+html body .app-shell .chat-page .danduli-scheduled-disclosure > summary {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  cursor: pointer;
+  list-style: none;
+}
+.danduli-scheduled-disclosure > summary::-webkit-details-marker { display:none; }
+.danduli-scheduled-disclosure > summary::after {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  margin-inline-start: auto;
+  flex-shrink: 0;
+}
+.danduli-scheduled-disclosure[open] > summary::after { transform: rotate(225deg); }
+.danduli-scheduled-note { color:var(--text-secondary);font-size:11px;padding:4px 8px;margin:0; }
+
+/* V3: make contextual information quieter without altering the message list. */
+html body .app-shell .chat-page .date-chip {
+  background: var(--danduli-fill) !important;
+  color: var(--text-secondary) !important;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--danduli-card-line);
+}
+html body .app-shell .chat-page .chat-next-schedule {
+  background: var(--surface) !important;
+  border-color: var(--danduli-card-line) !important;
+  border-radius: var(--danduli-radius-control) !important;
+  box-shadow: none !important;
+}
+
+/* V4: composer feedback stays independent of keyboard and virtual list sizing. */
+html body .app-shell .chat-page .composer .send.ready {
+  transition:opacity 120ms ease-out,background-color 120ms ease-out;
+}
+html body .app-shell .chat-page .composer .send.ready:active {
+  opacity:.8;
+}
+html body .app-shell .chat-page .danduli-scheduled-disclosure > summary::after {
+  transition:transform 160ms ease-out;
+}
+html body .app-shell .chat-page .danduli-scheduled-disclosure[open] .danduli-scheduled-items {
+  animation:danduli-content-in 160ms ease-out;
+}
+@media(prefers-reduced-motion:reduce) {
+  html body .app-shell .chat-page :is(.composer .send.ready,.danduli-scheduled-items) {
+    animation:none !important;transition:none !important;
+  }
+  html body .app-shell .chat-page .danduli-scheduled-disclosure > summary::after {transition:none !important;}
+}
+
+/* V5: the textarea takes the remaining width on narrow cover screens.
+ * Keep the existing measured fixed dock, IME handling and message virtualization. */
+@media(max-width:399px) {
+  html body .app-shell .chat-page .composer textarea {
+    width:0 !important;min-width:0 !important;flex:1 1 0% !important;
+    padding-inline:10px !important;
+  }
+  html body .app-shell .chat-page .composer {gap:4px !important;}
+}
+html.route-keyboard-open body .app-shell .chat-page .danduli-scheduled-disclosure {
+  max-height:min(16dvh,96px);
+}
+html body .app-shell .chat-page .composer-area {
+  padding-inline-start:max(7px,env(safe-area-inset-left,0px));
+  padding-inline-end:max(7px,env(safe-area-inset-right,0px));
+}

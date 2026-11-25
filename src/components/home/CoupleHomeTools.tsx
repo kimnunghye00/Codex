@@ -633,13 +633,13 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
               </span>
               <em>{label}</em>
             </article>;
-          }) : <div className="home-schedule-empty">
+          }) : <button type="button" className="home-schedule-empty danduli-home-add-schedule" onClick={() => setScheduleOpen(true)}>
             <span className="home-schedule-empty-icon" aria-hidden="true"><CalendarDays size={18} /></span>
             <span className="home-schedule-empty-copy">
-              <b>아직 예정된 일정이 없어요</b>
-              <small>둘이 함께할 다음 일정을 만들어보세요.</small>
+              <b>일정 추가</b>
+              <small>아직 예정된 일정이 없어요.</small>
             </span>
-          </div>}
+          </button>}
         </div>
 
       </section>}
