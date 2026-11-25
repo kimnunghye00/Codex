@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Message } from '../../types';
 import { DanduliSticker } from './DanduliSticker';
 import { stickerIdFromToken } from './stickerCatalog';
-import { STICKER_PACKS, type ChatPreferences, type ChatBackground, type StickerPack } from './chatPreferences';
+import { STICKER_PACKS, fallbackPackIds, type ChatPreferences, type ChatBackground, type StickerPack } from './chatPreferences';
 
 function exportMessages(messages: Message[], partnerName: string) {
   const payload = {

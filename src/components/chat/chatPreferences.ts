@@ -22,7 +22,7 @@ export const STICKER_PACKS: StickerPack[] = [
 ];
 
 const PREF_KEY_PREFIX = 'route-chat-preferences:';
-const fallbackPackIds = ['danduli-couple', ...DANDULI_NEW_STICKER_PACKS.map((pack) => pack.id)];
+export const fallbackPackIds = ['danduli-couple', ...DANDULI_NEW_STICKER_PACKS.map((pack) => pack.id)];
 const availableStickerPackIds = new Set(STICKER_PACKS.map((pack) => pack.id));
 
 export function defaultChatPreferences(): ChatPreferences {
