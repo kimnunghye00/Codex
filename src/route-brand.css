@@ -3,8 +3,8 @@
 }
 
 /* Phase 1: approved NANER wordmark, independent of legacy tagline spans. */
-.wordmark strong.naner-wordmark, .couple-connect-brand strong.naner-wordmark {
-  color: var(--text-primary, #19191B);
+.wordmark strong.naner-wordmark, .couple-connect-brand strong.naner-wordmark, .couple-gate-loading strong.naner-wordmark {
+  color: var(--text-primary, #19191B) !important;
   white-space: nowrap;
 }
 .naner-wordmark .naner-slash {

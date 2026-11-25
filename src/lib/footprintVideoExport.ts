@@ -273,7 +273,7 @@ function drawHeader(
   context.textAlign = 'right';
   context.fillStyle = '#3D405B';
   context.font = '900 ' + (orientation === 'portrait' ? 18 : 16) + 'px system-ui, sans-serif';
-  context.fillText('단둘이', width - side, top + titleSize);
+  context.fillText('나너', width - side, top + titleSize);
 }
 
 function activePlaybackState(plan: FootprintVideoPlan, elapsedMs: number) {
@@ -1115,7 +1115,7 @@ async function shareWebVideo(blob: Blob, fileName: string, mimeType: string, tit
   try {
     await navigator.share({
       title,
-      text: '단둘이에서 만든 우리 데이트 발자취 영상이에요.',
+      text: '나너에서 만든 우리 데이트 발자취 영상이에요.',
       files: [file],
     });
     return true;
@@ -1196,7 +1196,7 @@ export async function shareFootprintVideo(
   options: FootprintVideoExportOptions,
 ): Promise<FootprintVideoShareResult> {
   const prepared = await prepareFootprintVideoShare(options);
-  const title = options.title || '단둘이 발자취';
+  const title = options.title || '나너 발자취';
 
   if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
     const uri = await saveAndroidVideo(prepared.blob, prepared.fileName, prepared.mimeType);
