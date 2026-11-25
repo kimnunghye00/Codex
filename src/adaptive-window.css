@@ -1,68 +1,94 @@
-/* One medium-window geometry for unfolded phones and small tablets.
- * Keep existing compact and desktop styles; never key UI to a device model.
- * Geometry changes are CSS-only so React state and focused inputs stay mounted.
+/* A single full-width shell with a left navigation rail on expanded windows.
+ * The rail is reserved in the layout, never layered over the page. Compact
+ * windows keep the existing bottom navigation. No device detection or remount.
  */
-@media (min-width:600px) and (max-width:1023px) {
-  :root { --route-adaptive-nav: calc(72px + env(safe-area-inset-bottom, 0px)); }
+@media (min-width:600px) {
+  :root {
+    --route-rail-body:clamp(64px,9vw,80px);
+    --route-rail-width:calc(var(--route-rail-body) + env(safe-area-inset-left,0px));
+    --route-wide-gutter:clamp(10px,1.8vw,24px);
+  }
   html body { padding:0 !important; }
   html body #root .app-shell {
-    width:100% !important; max-width:100% !important;
-    min-height:100dvh !important; margin:0 !important; border-radius:0 !important;
-  }
-  html body .app-shell > main {
-    width:100% !important; max-width:100% !important;
-    margin:0 !important; min-width:0; padding-bottom:var(--route-adaptive-nav) !important;
-  }
-  html body .app-shell > .bottom-nav[data-route-nav] {
-    position:fixed !important; inset:auto 0 0 !important;
     width:100% !important; max-width:none !important;
-    height:var(--route-adaptive-nav) !important;
-    transform:none !important; margin:0 !important; border-radius:0 !important;
-    padding:6px max(12px,env(safe-area-inset-right,0px)) max(6px,env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px)) !important;
-    flex-direction:row !important; box-sizing:border-box !important;
+    min-height:100dvh !important; margin:0 !important; border-radius:0 !important;
+    box-shadow:none !important;
   }
-  html body .app-shell > .bottom-nav[data-route-nav] > button {
-    min-width:0; min-height:44px !important; flex:1 1 0 !important; max-width:160px !important;
+  html body #root .app-shell > main {
+    width:calc(100% - var(--route-rail-width)) !important;
+    max-width:none !important; min-width:0 !important;
+    margin:0 0 0 var(--route-rail-width) !important;
+    min-height:100dvh; padding:0 !important; box-sizing:border-box;
   }
-  html.route-keyboard-open body .app-shell > .bottom-nav[data-route-nav] { visibility:hidden !important; pointer-events:none !important; }
-  html.route-keyboard-open body .app-shell > main { padding-bottom:0 !important; }
-  html body .app-shell .page {
-    width:100% !important; max-width:100% !important; margin-inline:auto !important; min-width:0;
-    box-sizing:border-box;
+  html body #root .app-shell > .bottom-nav[data-route-nav] {
+    position:fixed !important; inset:0 auto 0 0 !important;
+    width:var(--route-rail-width) !important; max-width:none !important;
+    height:100dvh !important; min-height:0 !important;
+    translate:none !important; transform:none !important; margin:0 !important;
+    border-radius:0 !important; border:0 !important; border-right:1px solid var(--border) !important;
+    padding:max(8px,env(safe-area-inset-top,0px)) 5px max(8px,env(safe-area-inset-bottom,0px)) calc(5px + env(safe-area-inset-left,0px)) !important;
+    display:flex !important; flex-direction:column !important;
+    align-items:center !important; justify-content:safe center !important;
+    gap:4px !important; box-sizing:border-box !important; overflow-y:auto;
+    visibility:visible !important; pointer-events:auto !important; box-shadow:none !important;
   }
-  html body .app-shell .page > .app-global-header.topbar {
-    position:relative !important; left:auto !important; width:100% !important;
-    min-width:0 !important; max-width:100% !important; margin-inline:0 !important;
-    padding-inline:0 !important; box-sizing:border-box !important;
+  html body #root .app-shell > .bottom-nav[data-route-nav] > button {
+    width:100% !important; max-width:none !important;
+    min-width:0 !important; min-height:48px !important;
+    flex:0 0 auto !important; margin:0 !important;
   }
-  html body .app-shell .chat-page > .app-global-header.topbar {
-    padding-inline:var(--route-page-gutter,22px) !important;
+  html body #root .app-shell > main > :is(.page,.memory-detail) {
+    width:100% !important; max-width:none !important; min-width:0 !important;
+    margin:0 !important; box-sizing:border-box;
+    padding-inline-start:var(--route-wide-gutter) !important;
+    padding-inline-end:max(var(--route-wide-gutter),env(safe-area-inset-right,0px)) !important;
   }
-  html body .app-shell .home-dashboard.page,
-  html body .app-shell .more-page {
-    height:calc(100dvh - var(--route-adaptive-nav)) !important;
-    max-height:calc(100dvh - var(--route-adaptive-nav)) !important;
-    min-height:0 !important;
+  html body #root .app-shell > main > .page > .app-global-header.topbar {
+    position:relative !important; left:auto !important; right:auto !important;
+    width:100% !important; min-width:0 !important; max-width:100% !important;
+    margin-inline:0 !important; padding-inline:0 !important; box-sizing:border-box !important;
   }
-  html body .app-shell .home-dashboard .home-dashboard-grid {
+  html body #root .app-shell > main > .chat-page > .app-global-header.topbar {
+    padding-inline:var(--route-wide-gutter) !important;
+  }
+  html body #root .app-shell > main > .home-dashboard.page,
+  html body #root .app-shell > main > .more-page {
+    display:flex !important; flex-direction:column !important;
+    height:100dvh !important; max-height:100dvh !important; min-height:0 !important;
+    padding-bottom:max(8px,env(safe-area-inset-bottom,0px)) !important;
+    row-gap:0 !important;
+  }
+  html body #root .app-shell .home-dashboard .home-dashboard-grid {
     width:100% !important; max-width:100% !important; margin-inline:0 !important;
-    gap:12px !important; min-height:0; flex:1 1 auto;
+    min-height:0; flex:1 1 auto;
   }
-  html body .app-shell .home-dashboard .home-dashboard-side {
-    min-width:0; min-height:0;
-    gap:9px !important;
+  html body #root .app-shell > main > .route-hub,
+  html body #root .app-shell > main > .footprints-page,
+  html body #root .app-shell > main > .memory-detail {
+    min-height:100dvh;
+    padding-bottom:max(24px,env(safe-area-inset-bottom,0px)) !important;
   }
-  html body .app-shell .home-dashboard .home-dashboard-side > :is(section, article) { min-width:0; min-height:0; }
-  html body .app-shell .route-hub .memory-list {
-    display:grid !important; grid-template-columns:repeat(3,minmax(0,1fr)) !important; gap:12px !important;
+  html body #root .app-shell > main > .route-hub .memory-list {
+    display:grid !important;
+    grid-template-columns:repeat(auto-fill,minmax(min(100%,170px),1fr)) !important;
+    gap:12px !important;
   }
-  html body .app-shell .route-hub .memory-empty { grid-column:1/-1; }
-  html body .app-shell .route-hub .hub-tabs { min-width:0; max-width:100%; overflow-x:auto; }
-  html body .app-shell .more-page .more-scroll { min-height:0; max-width:100%; }
-  html body .app-shell .more-page .route-more-services { width:min(100%,900px); max-width:100%; }
+  html body #root .app-shell > main > .route-hub .memory-empty { grid-column:1/-1; }
+  html body #root .app-shell > main > .route-hub .fab {
+    left:calc(var(--route-rail-width) + (100vw - var(--route-rail-width))/2) !important;
+    bottom:max(18px,env(safe-area-inset-bottom,0px)) !important;
+  }
+  html body #root .app-shell > main > .route-hub .hub-tabs { min-width:0; max-width:100%; overflow-x:auto; }
+  html body #root .app-shell > main > .more-page .more-scroll {
+    flex:1 1 0; height:auto !important; min-height:0; max-width:100%;
+  }
+  html body #root .app-shell > main > .more-page .route-more-services {
+    width:100% !important; max-width:none !important;
+  }
 }
-@media (min-width:840px) and (max-width:1023px) {
-  html body .app-shell .route-hub .memory-list { grid-template-columns:repeat(4,minmax(0,1fr)) !important; }
+@media (min-width:600px) and (max-height:520px) {
+  html body #root .app-shell > main > .home-dashboard.page { overflow-y:auto !important; }
+  html body #root .app-shell .home-dashboard .home-dashboard-grid { min-height:430px !important; flex:none; }
 }
 /* A shallow multi-window must allow access to controls instead of clipping them.
  * Normal portrait Home/More retain their existing fixed-screen behavior. */
