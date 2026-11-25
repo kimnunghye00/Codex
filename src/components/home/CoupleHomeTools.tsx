@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTabletWorkspace } from '../../utils/useExpandedMobile';
 import type React from 'react';
 import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
 import { CalendarDays, Camera, ChevronRight, Clock3, Heart, ImagePlus, MapPin, Minus, Plus, RotateCcw, Trash2, X } from 'lucide-react';
@@ -360,6 +361,7 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
     return [...merged.values()].sort((a, b) => `${a.date} ${a.startTime}`.localeCompare(`${b.date} ${b.startTime}`));
   }, [legacyPromises, localSchedules, remoteSchedules]);
 
+  const tablet = useTabletWorkspace();
   const upcoming = useMemo(() => schedules.filter((item) => item.date >= todayKey()).slice(0, 3), [schedules]);
   const upcomingAnniversaries = useMemo(() => romanticAnniversaries(relationshipStartDate).slice(0, 2), [relationshipStartDate]);
   const partner = connection?.partnerProfile ?? null;
@@ -619,7 +621,7 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
         {notice && <p className="schedule-help route-home-save-notice">{notice}</p>}
 
         <div className="home-schedule-list">
-          {upcoming.length ? upcoming.slice(0, 1).map((item) => {
+          {upcoming.length ? upcoming.slice(0, tablet ? 2 : 1).map((item) => {
             const mine = item.ownerId === uid;
             const label = item.type === 'couple' ? '약속' : mine ? '나' : partnerName;
             return <article className="home-schedule-row" key={item.id}>

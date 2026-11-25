@@ -41,6 +41,8 @@ import './home-adaptive.css';
 import './danduli-modern-v1.css';
 import './naner-phone-layout.css';
 import './naner-foldable.css';
+import './naner-tablet.css';
+import { useTabletWorkspace } from './utils/useExpandedMobile';
 
 const FootprintsPage = lazy(() => import('./components/footprints/FootprintsPage').then((module) => ({ default: module.FootprintsPage })));
 
@@ -837,7 +839,8 @@ const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connect
     setHomePreferences(next);
     setStorageNotice(savePagePreferences(uid, 'home', next) ? '' : '기기 저장 공간을 확인해 주세요. 지금은 이 화면에만 적용돼요.');
   };
-  const previewMemories = memories.slice(0, 2);
+  const tablet = useTabletWorkspace();
+  const previewMemories = memories.slice(0, tablet ? 3 : 2);
   const latestMessagePreview = latestMessage?.type === 'text' ? latestMessage.text : latestMessage ? ({ image: '사진', gallery: '사진 모음', gif: '움짤', sticker: '이모티콘', file: '파일', contact: '연락처', audio: '음성 메시지', call: '통화 기록' } as Record<string, string>)[latestMessage.type] : undefined;
   const personalVisits = useMemo(() => previewLegacyFootprints(uid, loadLocationVisits(uid)), [uid]);
   const recentPlaces = personalVisits.slice(-3).reverse();

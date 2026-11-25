@@ -1,6 +1,6 @@
 import { Bell, Cake, ChevronLeft, ChevronRight, CircleHelp, DatabaseBackup, Heart, Images, Info, KeyRound, LockKeyhole, MapPinned, MessageCircle, MessageSquareText, Moon, Palette, ShoppingBag, Smartphone, Sparkles, Sticker, UserRound, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { useExpandedMobile } from '../../utils/useExpandedMobile';
+import { useExpandedMobile, useTabletWorkspace } from '../../utils/useExpandedMobile';
 import { auth } from '../../lib/firebaseAuth';
 import type { UserProfile } from '../../utils/profile';
 import { SYSTEM_DARK_KEY, isSystemDarkEnabled, setSystemDarkEnabled } from '../../system-dark';
@@ -18,7 +18,7 @@ import { DanduliSticker, stickerIdFromToken } from '../chat/DanduliSticker';
 import type { HubTabId } from '../memories/MemoriesPage';
 
 type AppIconId = RouteAppIconId;
-type MoreSheet = 'theme' | 'app-icon' | 'emoticon' | 'chat-style' | 'store';
+type MoreSheet = 'theme' | 'app-icon' | 'emoticon' | 'chat-style' | 'store' | 'layout';
 
 export type MoreNavigationTarget =
   | { area: 'home'; profileEditor?: boolean }
@@ -91,6 +91,7 @@ export function MoreServices({
   onNavigate: (target: MoreNavigationTarget) => void;
 }) {
   const expanded = useExpandedMobile();
+  const tablet = useTabletWorkspace();
   const [sheet, setSheet] = useState<MoreSheet | null>(() => expanded ? 'theme' : null);
   const [appIcon, setAppIcon] = useState<AppIconId>(() => normalizeRouteAppIcon(localStorage.getItem('route-app-icon')));
   const nativeAppIconSupported = supportsNativeRouteAppIcon();
@@ -365,13 +366,15 @@ export function MoreServices({
       </div>
     </section>
 
-    <section className="more-feature-section"><div className="more-section-title"><h2>서비스 관리</h2></div><div className="more-customize-grid"><button type="button" onClick={onOpenPageSettings}><span className="more-customize-icon"><KeyRound /></span><b>전체 설정</b><small>서비스 설정</small><ChevronRight className="naner-more-chevron" /></button><button type="button" onClick={onOpenSettings}><span className="more-customize-icon"><UserRound /></span><b>계정 및 보안</b><small>계정 관리</small><ChevronRight className="naner-more-chevron" /></button><button type="button" onClick={onOpenNotifications}><span className="more-customize-icon"><Bell /></span><b>알림</b><small>최근 활동</small><ChevronRight className="naner-more-chevron" /></button><button type="button" onClick={() => window.alert('나너 2.0 · 서비스 정보')}><span className="more-customize-icon"><Info /></span><b>앱 정보</b><small>나너 2.0</small><ChevronRight className="naner-more-chevron" /></button></div></section>
+    <section className="more-feature-section"><div className="more-section-title"><h2>서비스 관리</h2></div><div className="more-customize-grid">{tablet && <button type="button" aria-pressed={sheet === 'layout'} onClick={() => openSheet('layout')}><span className="more-customize-icon"><Smartphone /></span><b>화면 구성</b><small>자동 최적화</small><ChevronRight className="naner-more-chevron" /></button>}<button type="button" onClick={onOpenPageSettings}><span className="more-customize-icon"><KeyRound /></span><b>전체 설정</b><small>서비스 설정</small><ChevronRight className="naner-more-chevron" /></button><button type="button" onClick={onOpenSettings}><span className="more-customize-icon"><UserRound /></span><b>계정 및 보안</b><small>계정 관리</small><ChevronRight className="naner-more-chevron" /></button><button type="button" onClick={onOpenNotifications}><span className="more-customize-icon"><Bell /></span><b>알림</b><small>최근 활동</small><ChevronRight className="naner-more-chevron" /></button><button type="button" onClick={() => window.alert('나너 2.0 · 서비스 정보')}><span className="more-customize-icon"><Info /></span><b>앱 정보</b><small>나너 2.0</small><ChevronRight className="naner-more-chevron" /></button></div></section>
 
     </div>
     {(expanded || sheet) && <div className={expanded ? "naner-more-detail" : "more-sheet-backdrop"} role={expanded ? "region" : "dialog"} aria-label="꾸미기 상세" aria-modal={expanded ? undefined : true} onMouseDown={(event) => { if (!expanded && event.target === event.currentTarget) setSheet(null); }}>
       <section className="more-sheet">
         {!sheet && <div className="naner-panel-empty"><b>꾸미기</b><span>왼쪽 메뉴에서 설정할 항목을 선택해 주세요.</span></div>}
-        {sheet === 'theme' && <><HeaderBar title="테마" onClose={() => setSheet(null)} /><p className="more-sheet-description">현재 나너의 기본 테마예요. 새 테마는 추후 추가돼요.</p><div className="naner-single-theme"><i aria-hidden="true" /><span><b>Modern Violet</b><small>화이트 · 차콜 · 바이올렛</small></span><b>사용 중</b></div></>}
+        {sheet === 'theme' && <><HeaderBar title="테마" onClose={() => setSheet(null)} /><p className="more-sheet-description">현재 나너의 기본 테마예요. 새 테마는 추후 추가돼요.</p><div className="naner-single-theme"><i aria-hidden="true" /><span><b>Modern Violet</b><small>화이트 · 차콜 · 바이올렛</small></span><b>사용 중</b></div>{tablet && <div className="naner-tablet-theme-preview"><h3>테마 미리보기</h3><div className="naner-theme-swatches" aria-label="Modern Violet 색상">{['#FFFFFF','#F5F5F7','#19191B','#635BEB','#EEECFF'].map(color => <i key={color} style={{ background: color }} title={color} />)}</div><div className="naner-theme-preview-messages" aria-label="예시 대화"><span>오늘도 좋은 하루 보내!</span><span>너도 좋은 하루 보내.</span></div></div>}</>}
+
+        {sheet === 'layout' && <><HeaderBar title="화면 구성" onClose={() => setSheet(null)} /><p className="more-sheet-description">사용 가능한 화면 너비에 맞춰 나너가 자동으로 배치돼요.</p><div className="naner-layout-description"><div><b>현재 화면</b><span>{tablet ? '태블릿형' : expanded ? '폴더블형' : '일반폰형'}</span></div><div><b>메뉴바</b><span>{expanded ? '왼쪽' : '하단'}</span></div><div><b>대화방</b><span>{expanded ? '독립 화면 · 보관함 지원' : '독립 화면'}</span></div><div><b>화면 전환</b><span>자동</span></div></div></>}
 
         {sheet === 'app-icon' && <><HeaderBar title="앱 아이콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">4가지 나너 아이콘 중 원하는 스타일을 선택해요. Android에서는 적용 결과를 확인한 뒤 알려드려요.</p>
           <div className="app-icon-current-status" role="status" aria-live="polite">

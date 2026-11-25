@@ -44,7 +44,7 @@ function wirePreviewVisibilityGuard() {
   window.addEventListener('route-app-pause', pauseActive);
 }
 
-function MemoryCardComponent({ memory, onOpen }: { memory: Memory; onOpen: (id: number) => void }) {
+function MemoryCardComponent({ memory, selected = false, onOpen }: { memory: Memory; selected?: boolean; onOpen: (id: number) => void }) {
   const date = new Date(`${memory.date}T00:00:00`);
   const cardRef = useRef<HTMLElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -95,7 +95,7 @@ function MemoryCardComponent({ memory, onOpen }: { memory: Memory; onOpen: (id: 
     };
   }, [cover, mediaActive]);
 
-  return <article ref={cardRef} className="memory-card" role="button" tabIndex={0} aria-label={`${memory.title} 추억 보기`} onClick={() => onOpen(memory.id)} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onOpen(memory.id); } }}>
+  return <article ref={cardRef} className="memory-card" role="button" aria-current={selected ? true : undefined} tabIndex={0} aria-label={`${memory.title} 추억 보기`} onClick={() => onOpen(memory.id)} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onOpen(memory.id); } }}>
     <div className="memory-cover">
       {!mediaActive
         ? <span className="memory-media-fallback" aria-hidden="true" />
@@ -109,4 +109,4 @@ function MemoryCardComponent({ memory, onOpen }: { memory: Memory; onOpen: (id: 
   </article>;
 }
 
-export const MemoryCard = memo(MemoryCardComponent, (previous, next) => previous.memory === next.memory && previous.onOpen === next.onOpen);
+export const MemoryCard = memo(MemoryCardComponent, (previous, next) => previous.memory === next.memory && previous.selected === next.selected && previous.onOpen === next.onOpen);

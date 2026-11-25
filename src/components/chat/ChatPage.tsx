@@ -1,7 +1,7 @@
 import { Bot, CalendarClock, ChevronLeft, ContactRound, Ellipsis, PanelRight, Gift, Heart, Trash2, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
-import { useExpandedMobile } from '../../utils/useExpandedMobile';
+import { useExpandedMobile, useTabletWorkspace } from '../../utils/useExpandedMobile';
 import { collection, doc, limit, onSnapshot, orderBy, query, setDoc, where } from 'firebase/firestore';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { CALLING_ENABLED } from '../../config/releaseFlags';
@@ -196,6 +196,7 @@ export function ChatPage({ roomScope, draftCache, onBack, messages, setMessages,
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [savedMediaIds, setSavedMediaIds] = useState<Set<number>>(() => loadChatMemoryMessageIds());
   const expanded = useExpandedMobile();
+  const tablet = useTabletWorkspace();
   const [sideOpen, setSideOpen] = useState(true);
   const splitChat = expanded && sideOpen && !deleteSelection;
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -297,10 +298,12 @@ export function ChatPage({ roomScope, draftCache, onBack, messages, setMessages,
       const bounds = page.getBoundingClientRect();
       const dockWidth = messagesRef.current?.getBoundingClientRect().width || bounds.width;
       const height = `${Math.max(0, bottom - bounds.top)}px`;
-      const dockGeometry = [bottom, bounds.left, bounds.top, dockWidth, composer?.getBoundingClientRect().height ?? 0].join(':');
+      const headerHeight = page.querySelector<HTMLElement>(':scope > .naner-room-header')?.getBoundingClientRect().height ?? 56;
+      const dockGeometry = [bottom, bounds.left, bounds.top, dockWidth, headerHeight, composer?.getBoundingClientRect().height ?? 0].join(':');
       if (dockGeometry === lastDockGeometry) return;
       lastDockGeometry = dockGeometry;
       // Inline priority also wins over responsive Tailwind !h-dvh utilities.
+      page.style.setProperty('--naner-room-header-height', `${headerHeight}px`);
       page.style.setProperty('height', height, 'important');
       page.style.setProperty('max-height', height, 'important');
       page.style.setProperty('min-height', '0px', 'important');
@@ -344,7 +347,7 @@ export function ChatPage({ roomScope, draftCache, onBack, messages, setMessages,
       viewport?.removeEventListener('resize', scheduleResize);
       viewport?.removeEventListener('scroll', scheduleResize);
     };
-  }, [selectingMessages, splitChat]);
+  }, [selectingMessages, splitChat, tablet]);
 
   const finePointerRef = useRef(false);
   useEffect(() => {
@@ -998,6 +1001,8 @@ export function ChatPage({ roomScope, draftCache, onBack, messages, setMessages,
     {mediaProgress && <p className="chat-media-progress" role="status" aria-live="polite">사진 {mediaProgress.completed} / {mediaProgress.total}장 전송 중...</p>}
     <div
       ref={messagesRef}
+      tabIndex={tablet ? 0 : undefined}
+      aria-label="대화 메시지"
       className="messages !min-h-0 !flex-[1_1_0px] !overflow-y-auto overscroll-contain [scroll-behavior:auto] [touch-action:pan-y] [-webkit-overflow-scrolling:touch]"
       onScroll={updateNearBottom}
       onWheel={handleMessagesWheel}
@@ -1017,7 +1022,7 @@ export function ChatPage({ roomScope, draftCache, onBack, messages, setMessages,
     })}</div><div ref={bottomRef} /></div>
     {scheduledDrafts.length > 0 && !deleteSelection && !splitChat && <details className="scheduled-chat-list danduli-scheduled-disclosure"><summary className="scheduled-strip"><CalendarClock size={14} /><span>예약 메시지 {scheduledDrafts.length}개</span><small>목록 보기</small></summary><div className="danduli-scheduled-items"><p className="danduli-scheduled-note">앱을 열어 둔 동안 전송 · 오프라인이면 재시도</p>{scheduledDrafts.map((item) => <div className="scheduled-chat-item" key={item.id}><span><b>{item.text}</b><small>{item.coupleId ? new Date(item.sendAt).toLocaleString('ko-KR') : '이전 버전 예약 · 다시 예약해 주세요'}</small></span><button type="button" onClick={() => removeScheduledChatDraft(currentUid, item.id)} aria-label="예약 메시지 취소">취소</button></div>)}</div></details>}
     {!deleteSelection && <ChatComposer draft={draft} reply={replyTo ? byId.get(replyTo) : undefined} partnerName={partnerName} ownedStickerPacks={preferences.ownedStickerPacks} onDraft={setDraft} onSend={send} onImages={sendImages} onGif={sendGif} onQuick={sendText} onSticker={sendStickerChoice} onSchedule={openScheduleMessage} onGift={() => setGiftOpen(true)} onFile={(file) => sendAttachment(file, 'file')} onContact={() => void openContactPicker()} onVoice={(file, duration) => sendAttachment(file, 'audio', duration)} onVoiceError={setSyncError} onStickerStore={openStickerStore} onCancelReply={() => setReplyTo(undefined)} />}
-    {splitChat && <aside className="naner-chat-side" aria-label="대화 보관함"><div className="naner-chat-side-head"><h2>대화 보관함</h2><button type="button" aria-label="보관함 닫기" onClick={() => setSideOpen(false)}><X size={19} /></button></div>
+    {splitChat && <aside className="naner-chat-side" tabIndex={0} aria-label="대화 보관함"><div className="naner-chat-side-head"><h2>대화 보관함</h2><button type="button" aria-label="보관함 닫기" onClick={() => setSideOpen(false)}><X size={19} /></button></div>
       <section><h3>주고받은 사진</h3>{recentPhotos.length ? <div className="naner-chat-media-grid">{recentPhotos.map((url, index) => <button type="button" key={url + index} onClick={() => setLightbox(url)} aria-label="채팅 사진 확대"><img src={url} alt="" loading="lazy" decoding="async" /></button>)}</div> : <p>아직 주고받은 사진이 없어요.</p>}<button type="button" className="naner-side-item" onClick={() => { setToolsInitialSection('media'); setToolsOpen(true); }}>사진 모아보기 ›</button></section>
       <section><h3>예약 메시지</h3>{scheduledDrafts.filter(item => !item.coupleId || item.coupleId === connection?.coupleId).map(item => <div className="naner-side-item" key={item.id}><small>{item.coupleId ? new Date(item.sendAt).toLocaleString('ko-KR') : '이전 버전 예약 · 다시 예약해 주세요'}</small><b>{item.text}</b><button type="button" onClick={() => removeScheduledChatDraft(currentUid, item.id)}>취소</button></div>)}<button type="button" className="naner-side-item" onClick={openScheduleMessage}>예약 메시지 추가</button></section>
       <section><h3>빠른 신호</h3>{['보고 싶어','사랑해'].map(signal => <button type="button" key={signal} className="naner-quick-signal" onClick={() => sendText(signal)}>{signal}</button>)}</section>
