@@ -367,3 +367,56 @@ html body .app-shell .home-dashboard .home-dashboard-side .home-couple-time-cent
 @media (max-width:599px) {
   html body #root .app-shell { width:100% !important; max-width:none !important; }
 }
+
+/* Desktop OS policy: use the mobile-style bottom navigation at every width.
+ * All existing expanded content layouts stay intact. The desktop rail
+ * override lives last, scoped to the platform marker on the shared frame.
+ */
+html body #root .route-responsive-root[data-route-desktop="true"] {
+  --route-desktop-nav-height:72px;
+}
+html body #root .route-responsive-root[data-route-desktop="true"] .app-shell > main {
+  width:100% !important; max-width:none !important; margin:0 !important;
+  min-height:calc(100dvh - var(--route-desktop-nav-height)) !important;
+  padding-bottom:var(--route-desktop-nav-height) !important;
+  box-sizing:content-box;
+}
+html body #root .route-responsive-root[data-route-desktop="true"] .app-shell > .bottom-nav[data-route-nav] {
+  position:fixed !important; inset:auto 0 0 0 !important;
+  width:100% !important; max-width:none !important;
+  height:var(--route-desktop-nav-height) !important; min-height:0 !important;
+  margin:0 !important; translate:none !important; transform:none !important;
+  display:flex !important; flex-direction:row !important;
+  align-items:center !important; justify-content:center !important;
+  gap:clamp(0px,1.5vw,16px) !important;
+  padding:5px 8px !important;
+  border:0 !important; border-top:1px solid var(--border) !important;
+  border-radius:0 !important; box-sizing:border-box;
+  overflow:visible !important; visibility:visible !important; pointer-events:auto !important;
+}
+html body #root .route-responsive-root[data-route-desktop="true"] .app-shell > .bottom-nav[data-route-nav] > button {
+  flex:1 1 0 !important; width:auto !important; min-width:0 !important;
+  min-height:52px !important; max-width:150px !important; margin:0 !important;
+}
+html body #root .route-responsive-root[data-route-desktop="true"] .app-shell > main > :is(.home-dashboard.page,.more-page) {
+  height:calc(100dvh - var(--route-desktop-nav-height)) !important;
+  max-height:calc(100dvh - var(--route-desktop-nav-height)) !important;
+  min-height:0 !important;
+}
+html body #root .route-responsive-root[data-route-desktop="true"] .app-shell > main > :is(.route-hub,.footprints-page,.memory-detail) {
+  min-height:calc(100dvh - var(--route-desktop-nav-height));
+}
+html body #root .route-responsive-root[data-route-desktop="true"] .app-shell > main > .route-hub .fab {
+  left:50% !important; right:auto !important;
+  bottom:calc(var(--route-desktop-nav-height) + 16px) !important;
+}
+/* The chat composer uses measured nav geometry, so its lower edge follows
+ * the restored horizontal nav without a second fixed offset. */
+@media (max-height:600px) {
+  html body #root .route-responsive-root[data-route-desktop="true"] .app-shell > main > .home-dashboard.page {
+    overflow-y:auto !important;
+  }
+  html body #root .route-responsive-root[data-route-desktop="true"] .app-shell .home-dashboard .home-dashboard-grid {
+    min-height:430px !important; flex:none;
+  }
+}

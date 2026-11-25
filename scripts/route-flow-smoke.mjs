@@ -106,6 +106,7 @@ const adaptiveWindow = read('src/adaptive-window.css');
 check('shared frame delegates expanded layout to adaptive window CSS', responsiveFrame.includes('route-responsive-root') && !responsiveFrame.includes('max-w-[1320px]') && !responsiveFrame.includes('!pl-28'));
 check('expanded window reserves a left navigation rail', adaptiveWindow.includes('@media (min-width:600px)') && adaptiveWindow.includes('margin:0 0 0 var(--route-rail-width)') && adaptiveWindow.includes('inset:0 auto 0 0'));
 check('tablet and compact window layouts remain available', adaptiveWindow.includes('@media (min-width:900px)') && adaptiveWindow.includes('@media (max-width:599px)') && adaptiveWindow.includes('repeat(auto-fill,minmax(min(100%,200px),1fr))'));
+check('desktop OS keeps horizontal navigation', responsiveFrame.includes('data-route-desktop') && adaptiveWindow.includes('[data-route-desktop="true"]') && adaptiveWindow.includes('inset:auto 0 0 0 !important') && adaptiveWindow.includes('--route-desktop-nav-height'));
 check('tablet media keeps aspect ratio', adaptiveWindow.includes('object-fit:contain !important') && adaptiveWindow.includes('.detail-gallery'));
 
 check('App routes home', app.includes("tab === 'home'"));
