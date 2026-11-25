@@ -79,3 +79,8 @@ html body #root .app-shell .more-page .more-customize-grid > button > small{font
 .naner-single-theme i{width:32px;height:32px;border-radius:9px;background:#635BEB}
 .naner-single-theme span{display:grid;gap:4px;flex:1}
 .naner-single-theme small{color:var(--text-secondary)}
+
+/* Three scope choices on compact cover displays, including the user's own GPS. */
+html body #root .app-shell .footprints-page .footprints-scope-tabs > button{gap:4px;padding:7px 4px !important}
+html body #root .app-shell .footprints-page .footprints-scope-tabs > button b{font-size:12px;white-space:normal}
+@media(max-width:399px){html body #root .app-shell .footprints-page .footprints-scope-tabs > button svg{display:none}}

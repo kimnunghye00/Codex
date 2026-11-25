@@ -845,7 +845,7 @@ function MorePage({ profile, connected, onSettings, onNotifications, unreadCount
   const [moreSettingsOpen, setMoreSettingsOpen] = useState(false);
   return <div className="page more-page">
     <SharedAppHeader title="더보기" onSettings={() => setMoreSettingsOpen(true)} settingsLabel="더보기 설정" onNotifications={onNotifications} unreadCount={unreadCount} />
-    <div className="more-scroll"><MoreServices profile={profile} connected={connected} onOpenSettings={() => { setMoreSettingsOpen(false); onSettings(); }} settingsOpen={moreSettingsOpen} onCloseSettings={() => setMoreSettingsOpen(false)} onOpenNotifications={onNotifications} onNavigate={onNavigate} /></div>
+    <div className="more-scroll"><MoreServices profile={profile} connected={connected} onOpenPageSettings={() => setMoreSettingsOpen(true)} onOpenSettings={() => { setMoreSettingsOpen(false); onSettings(); }} settingsOpen={moreSettingsOpen} onCloseSettings={() => setMoreSettingsOpen(false)} onOpenNotifications={onNotifications} onNavigate={onNavigate} /></div>
   </div>;
 }
 

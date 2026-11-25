@@ -1,6 +1,6 @@
 /*
  * ROUTE theme contrast safety layer.
- * Loaded after every feature stylesheet so the active palette remain readable.
+ * Loaded after every feature stylesheet so the active palette remains readable.
  * Keep semantic colors here instead of letting legacy/hard-coded colors win.
  */
 
@@ -25,16 +25,6 @@
   --placeholder:#707078 !important;
   color-scheme:light;
 }
-
-
-
-
-
-
-
-
-
-
 
 /* Base page and typography contrast. */
 :root[data-route-theme] body,

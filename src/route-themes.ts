@@ -10,7 +10,6 @@ const DEFAULT_THEME = 'modern-violet';
 
 const themes: RouteTheme[] = [
   { id: 'modern-violet', name: 'Modern Violet', description: '화이트와 차콜, 선명한 바이올렛 포인트', isDefault: true },
-
 ];
 
 type ThemePreviewPalette = {
@@ -42,7 +41,7 @@ const previewPalettes: Record<string, ThemePreviewPalette> = {
     "accent": "#635BEB",
     "emotion": "#635BEB",
     "accentText": "#5149CE"
-}
+  }
 };
 
 const validTheme = (value: string | null) => themes.some((theme) => theme.id === value) ? value! : DEFAULT_THEME;

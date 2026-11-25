@@ -74,6 +74,7 @@ export function MoreServices({
   profile,
   connected,
   onOpenSettings,
+  onOpenPageSettings,
   settingsOpen = false,
   onCloseSettings = () => {},
   onOpenNotifications,
@@ -82,6 +83,7 @@ export function MoreServices({
   profile: UserProfile;
   connected: boolean;
   onOpenSettings: () => void;
+  onOpenPageSettings: () => void;
   settingsOpen?: boolean;
   onCloseSettings?: () => void;
   onOpenNotifications: () => void;
@@ -360,7 +362,7 @@ export function MoreServices({
       </div>
     </section>
 
-    <section className="more-feature-section"><div className="more-section-title"><h2>서비스 관리</h2></div><div className="more-customize-grid"><button type="button" onClick={onOpenSettings}><span className="more-customize-icon"><UserRound /></span><b>계정 및 보안</b><small>계정 관리</small><ChevronRight className="naner-more-chevron" /></button><button type="button" onClick={onOpenNotifications}><span className="more-customize-icon"><Bell /></span><b>알림</b><small>최근 활동</small><ChevronRight className="naner-more-chevron" /></button><button type="button" onClick={() => window.alert('나너 2.0 · 서비스 정보')}><span className="more-customize-icon"><Info /></span><b>앱 정보</b><small>나너 2.0</small><ChevronRight className="naner-more-chevron" /></button></div></section>
+    <section className="more-feature-section"><div className="more-section-title"><h2>서비스 관리</h2></div><div className="more-customize-grid"><button type="button" onClick={onOpenPageSettings}><span className="more-customize-icon"><KeyRound /></span><b>전체 설정</b><small>서비스 설정</small><ChevronRight className="naner-more-chevron" /></button><button type="button" onClick={onOpenSettings}><span className="more-customize-icon"><UserRound /></span><b>계정 및 보안</b><small>계정 관리</small><ChevronRight className="naner-more-chevron" /></button><button type="button" onClick={onOpenNotifications}><span className="more-customize-icon"><Bell /></span><b>알림</b><small>최근 활동</small><ChevronRight className="naner-more-chevron" /></button><button type="button" onClick={() => window.alert('나너 2.0 · 서비스 정보')}><span className="more-customize-icon"><Info /></span><b>앱 정보</b><small>나너 2.0</small><ChevronRight className="naner-more-chevron" /></button></div></section>
 
     {sheet && <div className="more-sheet-backdrop" role="dialog" aria-modal="true" onMouseDown={(event) => { if (event.target === event.currentTarget) setSheet(null); }}>
       <section className="more-sheet">
@@ -388,7 +390,7 @@ export function MoreServices({
           <button type="button" onClick={() => openSheet('emoticon')}><Sticker /><span><b>이모티콘 팩</b><small>대화에서 쓰는 감정 표현</small></span><em>보기</em></button>
           <button type="button" onClick={() => openSheet('app-icon')}><Smartphone /><span><b>앱 아이콘</b><small>홈 화면을 우리 스타일로</small></span><em>보기</em></button>
           <button type="button" onClick={() => openSheet('theme')}><Sparkles /><span><b>테마 컬렉션</b><small>앱 전체 분위기 바꾸기</small></span><em>보기</em></button>
-        </div><p className="more-store-coming">추가 유료 테마와 캐릭터 꾸미기는 모바일 스토어 연동 단계에서 확장할 수 있어요.</p></>}
+        </div><p className="more-store-coming">새 테마는 디자인 검토 후 추가될 예정이에요.</p></>}
 
         {notice && <p className="more-sheet-notice">{notice}</p>}
       </section>

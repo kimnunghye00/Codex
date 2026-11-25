@@ -298,6 +298,7 @@ check('NANER only exposes Modern Violet and keeps the theme preference key', nan
 check('NANER palette and minimal navigation primitives are wired', nanerPalette.includes("data-route-theme='modern-violet'") && nanerPalette.includes('--primary:#635BEB') && nanerSystem.includes('background: transparent !important;') && nanerSystem.includes('.nav-icon') && read('src/main.tsx').includes("import './naner-design-system.css';") && read('src/styles.css').includes('Pretendard Variable'));
 
 check('NANER phone composition connects real home previews, album and profile list', app.includes('latestMessage={messages[messages.length - 1]}') && app.includes('naner-home-chat') && memories.includes('naner-memory-add') && memories.includes("setFilter('video')") && more.includes('naner-more-profile') && location.includes('naner-location-settings') && app.includes("import './naner-phone-layout.css';"));
+check('NANER own footprints use only own GPS records, without weakening joint verification', location.includes("scope === 'mine' ? myVisits : jointVisits") && location.includes("scope === 'mine' ? mySamples : partnerSamples") && location.includes("scope === 'together' ? jointById.get(visit.id)") && location.includes("buildJointFootprints"));
 console.log(`\nROUTE flow smoke gate: ${passes.length} checks passed.`);
 for (const pass of passes) console.log(`  ✓ ${pass}`);
 
