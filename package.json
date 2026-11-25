@@ -63,7 +63,9 @@
     "globals": "17.11.0",
     "tailwindcss": "4.3.3",
     "typescript-eslint": "8.74.0",
-    "vitest": "4.1.12"
+    "vitest": "4.1.12",
+    "@emnapi/core": "2.0.0-beta.2",
+    "@emnapi/runtime": "2.0.0-beta.2"
   },
   "engines": {
     "node": ">=22.13.0"
