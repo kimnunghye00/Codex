@@ -91,7 +91,7 @@ export function MoreServices({
   onNavigate: (target: MoreNavigationTarget) => void;
 }) {
   const expanded = useExpandedMobile();
-  const [sheet, setSheet] = useState<MoreSheet | null>(null);
+  const [sheet, setSheet] = useState<MoreSheet | null>(() => expanded ? 'theme' : null);
   const [appIcon, setAppIcon] = useState<AppIconId>(() => normalizeRouteAppIcon(localStorage.getItem('route-app-icon')));
   const nativeAppIconSupported = supportsNativeRouteAppIcon();
   const [appIconStateLoading, setAppIconStateLoading] = useState(nativeAppIconSupported);
@@ -351,7 +351,7 @@ export function MoreServices({
     </div>
   </div>;
 
-  return <div className={`route-more-services${expanded ? ' naner-more-workspace' : ''}`}><div className={expanded ? 'naner-more-list' : undefined}>
+  return <div className={`route-more-services${expanded ? ' naner-more-workspace' : ''}`}><div className={expanded ? 'naner-more-list' : 'naner-compact-contents'}>
     <button type="button" className="naner-more-profile" onClick={openProfileEditor}><span className="naner-more-avatar">{profile.photoDataUrl ? <img src={profile.photoDataUrl} alt="" /> : (profile.name?.trim().slice(0, 1) || '나')}</span><span className="naner-more-profile-copy"><b>{profile.name || '내 프로필'}</b><small>{connected ? '커플 연결됨' : '커플 연결 전'}</small></span><ChevronRight size={18} /></button>
     <section className="more-feature-section more-customize-section" aria-labelledby="route-more-customize-title">
       <div className="more-section-title"><h2 id="route-more-customize-title">나/너 꾸미기</h2></div>

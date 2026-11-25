@@ -63,3 +63,6 @@
   .naner-visit-focus {display:block;width:100%;text-align:left;border:0;background:transparent;color:var(--text-primary);padding:5px 0;min-height:44px;font-weight:700;overflow-wrap:anywhere}
   .naner-visit-focus[aria-pressed="true"] {color:var(--accent-text)}
 }
+
+/* Transparent wrappers retain the exact compact grid/flex flow. */
+.naner-compact-contents {display:contents;}

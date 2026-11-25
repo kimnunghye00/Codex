@@ -23,8 +23,10 @@ function shortDate(value: string) {
   return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
 }
 
-export function MemoryDetail({ memory, onBack, onFavorite, onEdit, onDelete, onOpenPlaceTimeline, onOpenFootprints, onOpenLocation }: {
+export function MemoryDetail({ memory, imageIndex, onImageIndexChange, onBack, onFavorite, onEdit, onDelete, onOpenPlaceTimeline, onOpenFootprints, onOpenLocation }: {
   memory: Memory;
+  imageIndex?: number;
+  onImageIndexChange?: (index: number) => void;
   onBack: () => void;
   onFavorite: () => void;
   onEdit: () => void;
@@ -33,7 +35,9 @@ export function MemoryDetail({ memory, onBack, onFavorite, onEdit, onDelete, onO
   onOpenFootprints?: () => void;
   onOpenLocation?: (place: string) => void;
 }) {
-  const [image, setImage] = useState(0);
+  const [localImage, setLocalImage] = useState(0);
+  const image = Math.min(imageIndex ?? localImage, Math.max(0, memory.images.length - 1));
+  const setImage = onImageIndexChange ?? setLocalImage;
   const [menu, setMenu] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [relatedPreview, setRelatedPreview] = useState<Memory>();

@@ -430,6 +430,7 @@ export function FootprintsPage({
 
   const playSession = (sessionAnchorId: string) => {
     if (!dateSessions.some((session) => session.pointIds[0] === sessionAnchorId)) return;
+    if (focusedVisitId) { setFocusedVisitId(undefined); frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'clear-focus' }, MAP_ORIGIN); }
     if (selectedSessionAnchorId === sessionAnchorId && mapReady && mapVisits.length >= 2) {
       frame.current?.contentWindow?.postMessage({
         source: 'route-map-parent',
@@ -479,6 +480,7 @@ export function FootprintsPage({
 
   const togglePlayback = () => {
     if (!mapReady || mapVisits.length < 2) return;
+    if (focusedVisitId) { setFocusedVisitId(undefined); frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'clear-focus' }, MAP_ORIGIN); }
     frame.current?.contentWindow?.postMessage({
       source: 'route-map-parent',
       type: playbackState === 'playing' ? 'stop-route-playback' : 'play-route',
