@@ -290,6 +290,13 @@ check('account isolation blocks React mount', main.indexOf('await initializeRunt
 check('account isolation policy is used', recovery.includes('decideAccountIsolation') && accountPolicy.includes("'reset-orphan'") && accountPolicy.includes("'reset-switch'"));
 check('runtime recovery keeps Firestore cache isolation', firestoreCacheReset.includes('clearNativeFirestorePersistence'));
 
+// NANER Phase 2: preserve existing theme IDs and the adaptive geometry owner.
+const nanerSystem = read('src/naner-design-system.css');
+const nanerThemes = read('src/route-themes.ts');
+const nanerPalette = read('src/route-theme-accessibility.css');
+check('NANER default is Modern Violet with all legacy themes retained', nanerThemes.includes("const DEFAULT_THEME = 'modern-violet'") && ['sunset-route','midnight-walk','forest-trail','spring-blossom','ocean-drive','lavender-fog','autumn-breeze','champagne-day','mono-track','neon-night'].every(id => nanerThemes.includes("id: '" + id + "'")) && nanerThemes.includes("const STORAGE_KEY = 'route-theme-v2'"));
+check('NANER palette and minimal navigation primitives are wired', nanerPalette.includes("data-route-theme='modern-violet'") && nanerPalette.includes('--primary:#635BEB') && nanerSystem.includes('background: transparent !important;') && nanerSystem.includes('.nav-icon') && read('src/main.tsx').includes("import './naner-design-system.css';") && read('src/styles.css').includes('Pretendard Variable'));
+
 console.log(`\nROUTE flow smoke gate: ${passes.length} checks passed.`);
 for (const pass of passes) console.log(`  ✓ ${pass}`);
 

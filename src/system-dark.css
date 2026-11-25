@@ -78,3 +78,10 @@
   background:color-mix(in srgb,var(--surface) 94%,transparent) !important;
   border-top-color:var(--border) !important;
 }
+
+/* Keep Modern Violet accent text readable on dark surfaces. */
+:root[data-route-theme='modern-violet'][data-route-system-dark='1'] {
+  --accent-text:#B8B2FF !important;
+  --surface-soft:#243040 !important;
+  --emotion:#B8B2FF !important;
+}

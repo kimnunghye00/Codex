@@ -12,8 +12,8 @@
     "standalone"
   ],
   "orientation": "any",
-  "background_color": "#FAF8F5",
-  "theme_color": "#E07A5F",
+  "background_color": "#FFFFFF",
+  "theme_color": "#635BEB",
   "categories": [
     "social",
     "lifestyle"

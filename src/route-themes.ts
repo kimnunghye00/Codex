@@ -6,10 +6,11 @@ type RouteTheme = {
 };
 
 const STORAGE_KEY = 'route-theme-v2';
-const DEFAULT_THEME = 'sunset-route';
+const DEFAULT_THEME = 'modern-violet';
 
 const themes: RouteTheme[] = [
-  { id: 'sunset-route', name: '선셋 로즈', description: '크림 배경에 차분한 로즈 포인트', isDefault: true },
+  { id: 'modern-violet', name: 'Modern Violet', description: '화이트와 차콜, 선명한 바이올렛 포인트', isDefault: true },
+  { id: 'sunset-route', name: '선셋 로즈', description: '크림 배경에 차분한 로즈 포인트' },
   { id: 'midnight-walk', name: '문라이트', description: '깊은 남색과 은은한 달빛 블루' },
   { id: 'forest-trail', name: '세이지 가든', description: '맑은 아이보리와 편안한 세이지' },
   { id: 'spring-blossom', name: '블러시 핑크', description: '부드러운 핑크와 말린 장미빛' },
@@ -37,6 +38,20 @@ type ThemePreviewPalette = {
 };
 
 const previewPalettes: Record<string, ThemePreviewPalette> = {
+  "modern-violet": {
+    "primary": "#635BEB",
+    "primaryLight": "#756EF0",
+    "soft": "#EEECFF",
+    "background": "#FFFFFF",
+    "surface": "#FFFFFF",
+    "surfaceElevated": "#FFFFFF",
+    "text": "#19191B",
+    "muted": "#707078",
+    "border": "#EBEBEF",
+    "accent": "#635BEB",
+    "emotion": "#635BEB",
+    "accentText": "#5149CE"
+},
   "sunset-route": {
     "primary": "#66515B",
     "primaryLight": "#A65365",
@@ -201,7 +216,7 @@ function applyTheme(id: string) {
   localStorage.setItem(STORAGE_KEY, next);
 
   // The old three-theme system uses data-meluni-theme. Keep it neutral so its dark/
-  // lavender rules can never overwrite the current 단둘이 palette.
+  // lavender rules can never overwrite the current 나너 palette.
   document.documentElement.dataset.meluniTheme = 'default';
 }
 
@@ -284,7 +299,7 @@ function makePreview(theme: RouteTheme) {
       <div class="route-theme-preview-screen active" role="tabpanel" data-route-preview-screen="home">
         <div class="route-theme-preview-phone route-theme-preview-home route-theme-preview-real-home">
           <div class="route-theme-preview-home-topbar">
-            <strong>단둘이</strong>
+            <strong>나/너</strong>
             <span><i></i><i></i></span>
           </div>
 
@@ -294,7 +309,7 @@ function makePreview(theme: RouteTheme) {
               <span class="route-theme-preview-map-road road-one"></span>
               <span class="route-theme-preview-map-road road-two"></span>
               <span class="route-theme-preview-map-river"></span>
-              <span class="route-theme-preview-map-label label-route">단둘이</span>
+              <span class="route-theme-preview-map-label label-route">나너</span>
               <span class="route-theme-preview-map-label label-cafe">카페</span>
               <span class="route-theme-preview-map-label label-park">공원</span>
               <div class="route-theme-preview-location-card">
@@ -426,7 +441,7 @@ function openThemeSheet() {
   const header = document.createElement('div');
   header.className = 'route-theme-sheet-header';
   const heading = document.createElement('div');
-  heading.innerHTML = '<small>단둘이 THEME</small><h2>테마 선택</h2><p>홈과 대화방에서 우리에게 어울리는 분위기를 골라보세요.</p>';
+  heading.innerHTML = '<small>나너 THEME</small><h2>테마 선택</h2><p>홈과 대화방에서 우리에게 어울리는 분위기를 골라보세요.</p>';
   const close = document.createElement('button');
   close.type = 'button';
   close.className = 'route-theme-sheet-close';
