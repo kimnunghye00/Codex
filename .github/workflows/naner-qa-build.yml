@@ -25,24 +25,35 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Select a fixed npm 11 resolver
+        run: |
+          npm install --global npm@11.6.2 --no-audit --no-fund
+          test "$(npm --version)" = 11.6.2
       - name: Apply audited security updates
         run: |
           set -euo pipefail
           node scripts/naner-security-update.mjs
-          # npm Arborist may fail to reconcile old nested overrides in an
-          # existing lock. Preserve exact direct pins and resolve a clean lock
-          # only when the incremental attempt fails.
+          # The previous two runs failed inside the runner's Arborist, even
+          # with a clean lock. Use a separate fixed npm major and avoid nested
+          # overrides. Never ignore peer dependency constraints.
           if ! npm install --package-lock-only --ignore-scripts --no-audit; then
-            echo "::warning::Incremental lock resolution failed; rebuilding from exact manifest pins."
+            echo "::warning::Incremental lock resolution failed with npm 11; resolving a clean lock."
             rm -f package-lock.json
             npm install --package-lock-only --ignore-scripts --no-audit
           fi
-          # Only non-forced compatible fixes. A remaining advisory is handled
-          # by the gate, not by downgrading Firebase or suppressing reports.
-          npm audit fix --package-lock-only --ignore-scripts || true
           test -s package-lock.json
           node scripts/pin-dependencies.mjs
           node scripts/route-dependency-smoke.mjs
+      - name: Report resolver diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          npm --version
+          node --version
+          LOG="$(ls -t "$HOME"/.npm/_logs/*debug-0.log 2>/dev/null | head -1 || true)"
+          if [[ -n "$LOG" ]]; then
+            grep -E 'verbose stack|error code|error (Cannot|ERESOLVE|EOVERRIDE|ETARGET)|verbose (node|npm)' "$LOG" | tail -40 || true
+          fi
       - name: Record exact updated source on QA branch only
         id: source
         shell: bash
@@ -88,6 +99,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Use the same npm resolver
+        run: npm install --global npm@11.6.2 --no-audit --no-fund
       - name: Install exact candidate dependencies
         run: npm ci
       - name: Audit both dependency trees
@@ -150,6 +163,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Use the same npm resolver
+        run: npm install --global npm@11.6.2 --no-audit --no-fund
       - name: Install locked dependencies
         run: npm ci
       - name: Build verified web source
@@ -291,6 +306,8 @@ jobs:
           console.log('Firebase Android config verified for meluni-f4e00 / com.e2.danduli.');
           NODE
 
+      - name: Use the same npm resolver
+        run: npm install --global npm@11.6.2 --no-audit --no-fund
       - name: Install dependencies
         run: npm ci
 
