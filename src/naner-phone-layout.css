@@ -1,0 +1,81 @@
+/* NANER Phase 3: approved phone composition. Existing layout owners retain safe areas,
+ * IME, virtualization, map and dialog behavior. Wide-specific UX follows in Phases 5/6. */
+html body #root .app-shell .home-dashboard .home-dashboard-side .home-couple-time-card{order:0;background:var(--surface) !important;box-shadow:none !important}
+html body #root .app-shell .home-dashboard .home-dashboard-side .home-schedule-card{order:1;background:var(--naner-neutral-fill) !important}
+html body #root .app-shell .home-dashboard .home-dashboard-side .home-romantic-anniversary-card{order:2;background:var(--primary-soft) !important}
+html body #root .app-shell .home-dashboard .home-dashboard-side .home-memory-card{order:3;flex:0 0 auto !important}
+html body #root .app-shell .home-dashboard .home-dashboard-side .home-couple-time-center{grid-column:1/-1 !important;grid-row:2 !important}
+html body #root .app-shell .home-dashboard .home-dashboard-side .home-couple-person-me{grid-column:1/3 !important;grid-row:1 !important}
+html body #root .app-shell .home-dashboard .home-dashboard-side .home-couple-person-partner{grid-column:4/6 !important;grid-row:1 !important}
+html body #root .app-shell .home-dashboard .home-dashboard-side .home-couple-time-center strong{font-size:clamp(24px,16cqi,42px) !important;letter-spacing:-.05em;line-height:1.1}
+html body #root .app-shell .home-dashboard .home-dashboard-side :is(.home-couple-connector,.home-couple-heart-node){display:none !important}
+html body #root .app-shell .home-dashboard .naner-home-chat{order:4;display:flex;flex-direction:column;gap:5px;flex:0 0 auto;text-align:left;min-width:0;min-height:44px;padding:8px 4px;background:var(--surface);color:var(--text-primary);border:0;border-top:1px solid var(--border);border-radius:0;box-shadow:none}
+.naner-home-chat-heading{display:flex;align-items:center;justify-content:space-between;gap:4px;font-size:13px;font-weight:750}
+.naner-home-chat-preview{display:block;font-size:12px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+html body #root .app-shell .home-dashboard .home-map-card{border-radius:14px !important;box-shadow:none !important}
+html body #root .app-shell .home-dashboard .home-map-card .home-location-status{background:var(--surface) !important;color:var(--text-primary) !important;border-radius:9px;box-shadow:none}
+.naner-map-caption{position:absolute;bottom:12px;left:8px;right:8px;padding:9px 7px;background:var(--surface);color:var(--text-primary);border-radius:9px;font-size:11px;font-weight:650;z-index:2;display:flex;align-items:center;justify-content:space-between;text-align:left}
+html body #root .app-shell .memories-page .hub-head{display:flex !important;align-items:center;justify-content:space-between;gap:10px;margin:12px 0 10px}
+html body #root .app-shell .memories-page .hub-head h1{font-size:27px;letter-spacing:-.05em;font-weight:800}
+.naner-memory-add{display:flex;gap:4px;align-items:center;justify-content:center;min-height:44px;border:0;background:var(--primary);color:var(--on-primary,#fff);font-size:13px;font-weight:700;padding:0 12px;border-radius:10px;white-space:nowrap}
+html body #root .app-shell .memories-page .hub-tabs{display:flex !important;gap:14px !important;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;padding:0 !important;background:transparent !important;box-shadow:none !important}
+html body #root .app-shell .memories-page .hub-tabs > button{flex:0 0 auto !important;min-height:44px;padding:8px 0 !important;border:0 !important;border-bottom:2px solid transparent !important;border-radius:0 !important;background:transparent !important;color:var(--text-secondary) !important;box-shadow:none !important;white-space:nowrap}
+html body #root .app-shell .memories-page .hub-tabs > button.active{color:var(--text-primary) !important;border-bottom-color:var(--primary) !important;font-weight:750}
+html body #root .app-shell .memories-page .memory-filters > button{border:0 !important;border-radius:20px !important;background:var(--naner-neutral-fill) !important;color:var(--text-secondary) !important;min-height:36px}
+html body #root .app-shell .memories-page .memory-filters > button.active{background:var(--text-primary) !important;color:var(--surface) !important}
+html body #root .app-shell .memories-page .last-year-card.naner-feature{position:relative;display:flex !important;align-items:flex-end;min-height:150px;overflow:hidden;padding:14px !important;isolation:isolate;gap:8px;background:var(--naner-neutral-fill) !important}
+.naner-feature-photo{position:absolute;inset:0;z-index:-2;display:block;overflow:hidden}
+.naner-feature-photo img{width:100%;height:100%;object-fit:cover}
+.naner-feature.has-photo::after{content:'';position:absolute;inset:0;background:linear-gradient(transparent 20%,#0009);z-index:-1;pointer-events:none}
+html body #root .app-shell .memories-page .naner-feature.has-photo :is(b,small,button,svg){color:white !important}
+html body #root .app-shell .memories-page .naner-feature.has-photo button{background:#19191b90 !important;border:0 !important}
+html body #root .app-shell .memories-page .naner-feature b{font-size:21px;font-weight:800}
+html body #root .app-shell .memories-page .memory-list .memory-card{border:0 !important;border-radius:0 !important;background:transparent !important;box-shadow:none !important}
+html body #root .app-shell .memories-page .memory-list .memory-cover{aspect-ratio:1.2 !important;border-radius:10px;overflow:hidden;height:auto !important}
+html body #root .app-shell .memories-page .memory-list .memory-card-copy{padding:6px 1px 8px !important}
+html body #root .app-shell .memories-page .memory-card-copy h3{font-size:14px !important;margin:0 0 3px}
+html body #root .app-shell .memories-page .memory-card-copy > span{font-size:11px !important}
+@media(max-width:599px){
+ html body #root .app-shell .home-dashboard .home-dashboard-grid{grid-template-columns:minmax(0,40fr) minmax(0,60fr) !important;gap:10px !important}
+ html body #root .app-shell .home-dashboard .home-dashboard-side{gap:8px !important}
+ html body #root .app-shell .home-dashboard .home-dashboard-side :is(.home-couple-time-card,.home-romantic-anniversary-card,.home-schedule-card,.home-memory-card){padding:8px !important;border-radius:12px !important}
+ html body #root .app-shell .home-dashboard .home-dashboard-side .home-memory-grid{grid-template-columns:repeat(2,minmax(0,1fr)) !important;grid-auto-rows:56px !important}
+ html body #root .app-shell .home-dashboard .home-dashboard-side .home-memory-tile{min-height:56px !important}
+ html body #root .app-shell .memories-page .memory-list{grid-template-columns:repeat(2,minmax(0,1fr)) !important;gap:12px 9px !important}
+ html body #root .app-shell .footprints-page .footprints-workspace{display:grid !important;grid-template-columns:minmax(0,1fr) !important;gap:16px !important}
+}
+html body #root .app-shell .footprints-page .footprints-heading{display:flex;align-items:center;justify-content:space-between;margin:10px 0 12px;gap:8px}
+html body #root .app-shell .footprints-page .footprints-heading h1{font-size:26px;font-weight:800;letter-spacing:-.05em}
+.naner-location-settings{background:var(--primary-soft);color:var(--accent-text);border:0;border-radius:8px;min-height:44px;padding:0 9px;font-size:12px;font-weight:700;white-space:nowrap}
+html body #root .app-shell .footprints-page .footprints-scope-tabs{display:flex !important;gap:4px !important;padding:4px !important;border:0 !important;border-radius:12px;background:var(--naner-neutral-fill) !important}
+html body #root .app-shell .footprints-page .footprints-scope-tabs > button{flex:1;min-width:0;min-height:44px;justify-content:center;background:transparent !important;color:var(--text-secondary) !important;border:0 !important;border-radius:8px !important;box-shadow:none !important}
+html body #root .app-shell .footprints-page .footprints-scope-tabs > button.active{background:var(--surface) !important;color:var(--text-primary) !important;font-weight:750}
+html body #root .app-shell .footprints-page .footprints-list{background:var(--surface) !important;border:0 !important;padding-inline:0 !important;box-shadow:none !important}
+html body #root .app-shell .footprints-page .footprints-visit{background:var(--surface) !important;border:0 !important;border-bottom:1px solid var(--border) !important;box-shadow:none !important}
+html body #root .app-shell .footprints-page .footprints-sharing{background:var(--naner-neutral-fill) !important;box-shadow:none !important}
+html body #root .app-shell .chat-page .message-wrap > .bubble:not(.sticker-bubble):not(.media-bubble):not(.gallery-bubble):not(.utility-bubble){border-radius:16px 16px 16px 5px !important;box-shadow:none !important;background:var(--naner-neutral-fill) !important;color:var(--text-primary) !important}
+html body #root .app-shell .chat-page .bubble-row.mine .message-wrap > .bubble:not(.sticker-bubble):not(.media-bubble):not(.gallery-bubble):not(.utility-bubble){border-radius:16px 16px 5px 16px !important;background:var(--primary) !important;color:var(--on-primary) !important}
+html body #root .app-shell .chat-page .composer textarea{background:var(--naner-neutral-fill) !important;border:0 !important;border-radius:24px !important;box-shadow:none !important}
+html body #root .app-shell .chat-page .composer .send{border-radius:50% !important;box-shadow:none !important}
+html body #root .app-shell .chat-page .date-chip{background:transparent !important;border:0 !important;color:var(--text-secondary) !important}
+html body #root .app-shell .more-page .route-more-services{display:flex !important;flex-direction:column;gap:12px !important;background:var(--surface) !important}
+html body #root .app-shell .more-page .naner-more-profile{display:flex;align-items:center;gap:11px;border:0;background:transparent;color:var(--text-primary);padding:10px 0 16px;border-bottom:1px solid var(--border);text-align:left;width:100%;min-height:64px}
+.naner-more-avatar{display:grid;place-items:center;flex:0 0 46px;width:46px;height:46px;border-radius:50%;background:var(--primary-soft);color:var(--accent-text);font-size:18px;font-weight:750;overflow:hidden}
+.naner-more-avatar img{width:100%;height:100%;object-fit:cover}
+.naner-more-profile-copy{display:grid;gap:4px;flex:1;min-width:0}
+.naner-more-profile-copy b{font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.naner-more-profile-copy small{font-size:12px;color:var(--text-secondary)}
+html body #root .app-shell .more-page .more-feature-section{background:transparent !important;border:0 !important;border-radius:0 !important;box-shadow:none !important;padding:0 !important;min-height:0 !important}
+html body #root .app-shell .more-page .more-section-title{margin:0 0 4px !important;padding:0 !important}
+html body #root .app-shell .more-page .more-section-title h2{font-size:12px;font-weight:650;color:var(--text-secondary) !important}
+html body #root .app-shell .more-page .more-customize-grid{display:flex !important;flex-direction:column;gap:0 !important}
+html body #root .app-shell .more-page .more-customize-grid > button{display:grid !important;grid-template-columns:24px minmax(0,1fr) auto 16px;align-items:center;text-align:left;gap:10px !important;min-height:44px !important;padding:9px 0 !important;border:0 !important;border-radius:0 !important;box-shadow:none !important;background:transparent !important}
+html body #root .app-shell .more-page .more-customize-grid > button .more-customize-icon{width:24px !important;height:24px !important;min-width:0 !important;background:transparent !important;color:var(--text-primary) !important;box-shadow:none !important}
+html body #root .app-shell .more-page .more-customize-grid > button .more-customize-icon svg{width:20px;height:20px}
+html body #root .app-shell .more-page .more-customize-grid > button > b{font-size:14px !important;line-height:1.3;text-align:left}
+html body #root .app-shell .more-page .more-customize-grid > button > small{font-size:11px !important;line-height:1.3;text-align:right;color:var(--text-secondary) !important}
+.naner-more-chevron{color:var(--text-secondary);width:15px;height:15px}
+.naner-single-theme{display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:12px;padding:14px;color:var(--text-primary);background:var(--surface)}
+.naner-single-theme i{width:32px;height:32px;border-radius:9px;background:#635BEB}
+.naner-single-theme span{display:grid;gap:4px;flex:1}
+.naner-single-theme small{color:var(--text-secondary)}

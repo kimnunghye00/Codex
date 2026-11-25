@@ -1,6 +1,7 @@
 import { Bell, Cake, ChevronLeft, ChevronRight, CircleHelp, DatabaseBackup, Heart, Images, Info, KeyRound, LockKeyhole, MapPinned, MessageCircle, MessageSquareText, Moon, Palette, ShoppingBag, Smartphone, Sparkles, Sticker, UserRound, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { auth } from '../../lib/firebaseAuth';
+import type { UserProfile } from '../../utils/profile';
 import { SYSTEM_DARK_KEY, isSystemDarkEnabled, setSystemDarkEnabled } from '../../system-dark';
 import { normalizeRouteAppIcon, updateRouteFavicon, type RouteAppIconId } from '../../utils/appIcon';
 import { getNativeRouteAppIcon, setNativeRouteAppIcon, supportsNativeRouteAppIcon } from '../../app-icon-native';
@@ -16,7 +17,6 @@ import { DanduliSticker, stickerIdFromToken } from '../chat/DanduliSticker';
 import type { HubTabId } from '../memories/MemoriesPage';
 
 type AppIconId = RouteAppIconId;
-type ThemeId = 'default' | 'lavender' | 'dark';
 type MoreSheet = 'theme' | 'app-icon' | 'emoticon' | 'chat-style' | 'store';
 
 export type MoreNavigationTarget =
@@ -71,12 +71,16 @@ function HeaderBar({ title, onClose }: { title: string; onClose: () => void }) {
 }
 
 export function MoreServices({
+  profile,
+  connected,
   onOpenSettings,
   settingsOpen = false,
   onCloseSettings = () => {},
   onOpenNotifications,
   onNavigate,
 }: {
+  profile: UserProfile;
+  connected: boolean;
   onOpenSettings: () => void;
   settingsOpen?: boolean;
   onCloseSettings?: () => void;
@@ -84,10 +88,6 @@ export function MoreServices({
   onNavigate: (target: MoreNavigationTarget) => void;
 }) {
   const [sheet, setSheet] = useState<MoreSheet | null>(null);
-  const [theme, setTheme] = useState<ThemeId>(() => {
-    const saved = localStorage.getItem('meluni-theme');
-    return saved === 'lavender' || saved === 'dark' ? saved : 'default';
-  });
   const [appIcon, setAppIcon] = useState<AppIconId>(() => normalizeRouteAppIcon(localStorage.getItem('route-app-icon')));
   const nativeAppIconSupported = supportsNativeRouteAppIcon();
   const [appIconStateLoading, setAppIconStateLoading] = useState(nativeAppIconSupported);
@@ -136,12 +136,6 @@ export function MoreServices({
     setSheet(next);
   };
 
-  const chooseTheme = (next: ThemeId) => {
-    setTheme(next);
-    localStorage.setItem('meluni-theme', next);
-    document.documentElement.setAttribute('data-meluni-theme', next);
-    setNotice('테마를 바로 적용했어요.');
-  };
 
   const chooseIcon = async (next: AppIconId) => {
     if (appIconChanging) return;
@@ -248,7 +242,7 @@ export function MoreServices({
     onNavigate({ area: 'home', profileEditor: true });
   };
 
-  const themeLabel = theme === 'lavender' ? '라벤더' : theme === 'dark' ? '다크' : '기본';
+  const themeLabel = 'Modern Violet';
 
   if (settingsOpen) return <div className="more-settings-route" role="region" aria-label="설정">
     <header className="more-settings-screen-header">
@@ -353,30 +347,24 @@ export function MoreServices({
   </div>;
 
   return <div className="route-more-services">
-    <section className="more-service-intro">
-      <div><small>나너 CUSTOM</small><h1>더보기</h1><p>나너를 우리 취향에 맞게 꾸미고 확장해요.</p></div>
-      <span className={`more-app-icon-preview ${appIcon} ${activeIcon.className} !grid place-items-center`} aria-label={`현재 앱 아이콘 ${activeIcon.label}`}><AppIconGlyph id={appIcon} /></span>
-    </section>
-
+    <button type="button" className="naner-more-profile" onClick={openProfileEditor}><span className="naner-more-avatar">{profile.photoDataUrl ? <img src={profile.photoDataUrl} alt="" /> : (profile.name?.trim().slice(0, 1) || '나')}</span><span className="naner-more-profile-copy"><b>{profile.name || '내 프로필'}</b><small>{connected ? '커플 연결됨' : '커플 연결 전'}</small></span><ChevronRight size={18} /></button>
     <section className="more-feature-section more-customize-section" aria-labelledby="route-more-customize-title">
-      <div className="more-section-title"><small>CUSTOMIZE</small><h2 id="route-more-customize-title">나너 꾸미기</h2><p>다른 탭과 겹치지 않는 꾸미기 기능만 모았어요.</p></div>
+      <div className="more-section-title"><h2 id="route-more-customize-title">나/너 꾸미기</h2></div>
       <div className="more-customize-grid" aria-label="나너 꾸미기">
-        <button type="button" onClick={() => openSheet('theme')}><span className="more-customize-icon theme"><Palette /></span><b>테마</b><small>앱 전체 색상</small></button>
-        <button type="button" onClick={() => openSheet('app-icon')}><span className="more-customize-icon icon"><Smartphone /></span><b>앱 아이콘</b><small>4가지 아이콘</small></button>
-        <button type="button" onClick={() => openSheet('emoticon')}><span className="more-customize-icon emoticon"><Sticker /></span><b>이모티콘</b><small>보관함 · 팩</small></button>
-        <button type="button" onClick={() => openSheet('chat-style')}><span className="more-customize-icon chat"><MessageCircle /></span><b>채팅 꾸미기</b><small>배경 · 글자 크기</small></button>
-        <button type="button" onClick={openProfileEditor}><span className="more-customize-icon profile"><UserRound /></span><b>프로필 꾸미기</b><small>사진 · 배경 편집</small></button>
-        <button type="button" onClick={() => openSheet('store')}><span className="more-customize-icon store"><ShoppingBag /></span><b>나너 스토어</b><small>꾸미기 모아보기</small></button>
+        <button type="button" onClick={() => openSheet('theme')}><span className="more-customize-icon theme"><Palette /></span><b>테마</b><small>Modern Violet</small><ChevronRight className="naner-more-chevron" /></button>
+        <button type="button" onClick={() => openSheet('app-icon')}><span className="more-customize-icon icon"><Smartphone /></span><b>앱 아이콘</b><small>4가지 아이콘</small><ChevronRight className="naner-more-chevron" /></button>
+        <button type="button" onClick={() => openSheet('emoticon')}><span className="more-customize-icon emoticon"><Sticker /></span><b>이모티콘</b><small>보관함 · 팩</small><ChevronRight className="naner-more-chevron" /></button>
+        <button type="button" onClick={() => openSheet('chat-style')}><span className="more-customize-icon chat"><MessageCircle /></span><b>채팅 꾸미기</b><small>배경 · 글자 크기</small><ChevronRight className="naner-more-chevron" /></button>
+        <button type="button" onClick={openProfileEditor}><span className="more-customize-icon profile"><UserRound /></span><b>프로필 · 배경</b><small>사진 · 배경 편집</small><ChevronRight className="naner-more-chevron" /></button>
+        <button type="button" onClick={() => openSheet('store')}><span className="more-customize-icon store"><ShoppingBag /></span><b>나너 스토어</b><small>꾸미기 모아보기</small><ChevronRight className="naner-more-chevron" /></button>
       </div>
     </section>
 
-    <section className="more-couple-strip"><span>♥</span><div><b>우리 둘만의 나너</b><small>둘만의 취향으로 나너를 완성해보세요.</small></div></section>
+    <section className="more-feature-section"><div className="more-section-title"><h2>서비스 관리</h2></div><div className="more-customize-grid"><button type="button" onClick={onOpenSettings}><span className="more-customize-icon"><UserRound /></span><b>계정 및 보안</b><small>계정 관리</small><ChevronRight className="naner-more-chevron" /></button><button type="button" onClick={onOpenNotifications}><span className="more-customize-icon"><Bell /></span><b>알림</b><small>최근 활동</small><ChevronRight className="naner-more-chevron" /></button><button type="button" onClick={() => window.alert('나너 2.0 · 서비스 정보')}><span className="more-customize-icon"><Info /></span><b>앱 정보</b><small>나너 2.0</small><ChevronRight className="naner-more-chevron" /></button></div></section>
 
     {sheet && <div className="more-sheet-backdrop" role="dialog" aria-modal="true" onMouseDown={(event) => { if (event.target === event.currentTarget) setSheet(null); }}>
       <section className="more-sheet">
-        {sheet === 'theme' && <><HeaderBar title="테마" onClose={() => setSheet(null)} /><p className="more-sheet-description">앱 전체 분위기를 바로 바꿔요.</p><div className="more-theme-picker">
-          {(['default','lavender','dark'] as ThemeId[]).map((item) => <button type="button" key={item} className={theme === item ? 'active' : ''} onClick={() => chooseTheme(item)}><i className={item} /><span><b>{item === 'default' ? '기본' : item === 'lavender' ? '라벤더' : '다크'}</b><small>{item === 'default' ? '네이비 + 코랄' : item === 'lavender' ? '부드러운 보라' : '어두운 화면'}</small></span></button>)}
-        </div></>}
+        {sheet === 'theme' && <><HeaderBar title="테마" onClose={() => setSheet(null)} /><p className="more-sheet-description">현재 나너의 기본 테마예요. 새 테마는 추후 추가돼요.</p><div className="naner-single-theme"><i aria-hidden="true" /><span><b>Modern Violet</b><small>화이트 · 차콜 · 바이올렛</small></span><b>사용 중</b></div></>}
 
         {sheet === 'app-icon' && <><HeaderBar title="앱 아이콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">4가지 나너 아이콘 중 원하는 스타일을 선택해요. Android에서는 적용 결과를 확인한 뒤 알려드려요.</p>
           <div className="app-icon-current-status" role="status" aria-live="polite">

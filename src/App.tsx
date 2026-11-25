@@ -28,7 +28,7 @@ import { activityAlertEnabled, installActivityAlertClicks, openActivityFromUrl, 
 import { sendScheduledCoupleMessage } from './lib/chatRealtime';
 import { dueScheduledChatDrafts, loadScheduledChatDrafts, removeScheduledChatDraft, SCHEDULED_CHAT_CHANGED } from './lib/scheduledChat';
 import { PERSISTENT_STATE_CHANGE_EVENT } from './utils/persistenceSignal';
-import { ChevronRight, Heart, Image, MapPin, MapPinned, Plus } from 'lucide-react';
+import { ChevronRight, Heart, Image, MapPin, Plus } from 'lucide-react';
 import './home-simple.css';
 import './home-dashboard.css';
 import './home-couple-tools.css';
@@ -37,6 +37,7 @@ import './home-map-overlay.css';
 import './home-brand-polish-v5.css';
 import './home-adaptive.css';
 import './danduli-modern-v1.css';
+import './naner-phone-layout.css';
 
 const FootprintsPage = lazy(() => import('./components/footprints/FootprintsPage').then((module) => ({ default: module.FootprintsPage })));
 
@@ -748,12 +749,12 @@ function App({ user, profile, onProfileChange }: AppProps) {
 
   return <>
     <div className="app-shell"><main><Suspense fallback={<div className="page auth-loading" role="status" aria-live="polite"><div className="loading-mark" /><p>화면을 불러오는 중이에요</p></div>}>
-      {tab === 'home' && <HomePage key={user.uid} uid={user.uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} memories={memories} onNavigate={navigateTab} onOpenMemory={openMemory} onOpenFootprints={() => openFootprints()} onSaveStartDate={saveStartDate} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} profileEditorRequest={profileEditorRequest} />}
+      {tab === 'home' && <HomePage key={user.uid} uid={user.uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} memories={memories} latestMessage={messages[messages.length - 1]} onNavigate={navigateTab} onOpenMemory={openMemory} onOpenFootprints={() => openFootprints()} onSaveStartDate={saveStartDate} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} profileEditorRequest={profileEditorRequest} />}
       {tab === 'memories' && <MemoriesPage key={user.uid} requestedTab={requestedHubTab} Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={() => { setFootprintMemoryId(undefined); navigateTab('location'); }} onOpenFootprints={(memoryId) => openFootprints(memoryId)} sharedProfile={profile} sharedConnection={connection} sharedRelationshipStartDate={relationshipStartDate} />}
       {tab === 'location' && <FootprintsPage key={`${user.uid}:${footprintMemoryId ?? ''}`} uid={user.uid} connection={connection} memories={memories} initialMemoryId={footprintMemoryId} onOpenMemory={openMemory} Header={AppHeader} />}
       {tab === 'chat' && <ChatPage Header={AppHeader} messages={messages} setMessages={setMessages} connection={connection} initialMessageId={notificationMessageId} notificationRequest={notificationMessageRequest} initialToolsSection={chatToolsSection} toolsRequest={chatToolsRequest}/>}
       {tab === 'anniversary' && <AnniversaryPage key={relationshipStartDate ?? ''} connected={Boolean(connection)} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} onSaveStartDate={saveStartDate} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}
-      {tab === 'more' && <MorePage onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} onNavigate={navigateMoreTarget} />}
+      {tab === 'more' && <MorePage profile={profile} connected={Boolean(connection)} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} onNavigate={navigateMoreTarget} />}
     </Suspense></main><BottomNav tab={tab} onNavigate={navigateTab} /></div>
 
     <Suspense fallback={null}>
@@ -764,7 +765,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
   </>;
 }
 
-const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connection, relationshipStartDate, coupleDay, memories, onNavigate, onOpenMemory, onOpenFootprints, onSaveStartDate, onSettings, onNotifications, unreadCount, profileEditorRequest }: { uid: string; profile: UserProfile; onProfileChange: (profile: UserProfile) => void; connection: RealCoupleConnection | null; relationshipStartDate?: string; coupleDay: number; memories: Memory[]; onNavigate: (tab: Tab) => void; onOpenMemory: (id: number) => void; onOpenFootprints: () => void; onSaveStartDate: (date: string) => Promise<void>; onSettings: () => void; onNotifications: () => void; unreadCount: number; profileEditorRequest?: number }) {
+const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connection, relationshipStartDate, coupleDay, memories, latestMessage, onNavigate, onOpenMemory, onOpenFootprints, onSaveStartDate, onSettings, onNotifications, unreadCount, profileEditorRequest }: { uid: string; profile: UserProfile; onProfileChange: (profile: UserProfile) => void; connection: RealCoupleConnection | null; relationshipStartDate?: string; coupleDay: number; memories: Memory[]; latestMessage?: Message; onNavigate: (tab: Tab) => void; onOpenMemory: (id: number) => void; onOpenFootprints: () => void; onSaveStartDate: (date: string) => Promise<void>; onSettings: () => void; onNotifications: () => void; unreadCount: number; profileEditorRequest?: number }) {
   const [homeSettingsOpen, setHomeSettingsOpen] = useState(false);
   const [homePreferences, setHomePreferences] = useState(() => loadHomePagePreferences(uid));
   const [storageNotice, setStorageNotice] = useState('');
@@ -772,7 +773,8 @@ const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connect
     setHomePreferences(next);
     setStorageNotice(savePagePreferences(uid, 'home', next) ? '' : '기기 저장 공간을 확인해 주세요. 지금은 이 화면에만 적용돼요.');
   };
-  const previewMemories = memories.slice(0, 4);
+  const previewMemories = memories.slice(0, 2);
+  const latestMessagePreview = latestMessage?.type === 'text' ? latestMessage.text : latestMessage ? ({ image: '사진', gallery: '사진 모음', gif: '움짤', sticker: '이모티콘', file: '파일', contact: '연락처', audio: '음성 메시지', call: '통화 기록' } as Record<string, string>)[latestMessage.type] : undefined;
   const personalVisits = useMemo(() => previewLegacyFootprints(uid, loadLocationVisits(uid)), [uid]);
   const recentPlaces = personalVisits.slice(-3).reverse();
 
@@ -784,8 +786,7 @@ const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connect
         <div className="home-map-grid-lines" /><span className="home-map-road road-a" /><span className="home-map-road road-b" /><span className="home-map-river" />
         {recentPlaces.map((place, index) => <span key={place.id} className={`home-map-place ${['place-office', 'place-cafe', 'place-park'][index]}`}>{place.placeName || '방문 지점'}</span>)}
         <div className="home-location-status"><MapPin size={16} /><span><b>우리의 발자취</b><small>{personalVisits.length ? `내 이전 방문 기록 ${personalVisits.length}곳 · 전체 보기` : '방문 기록 보기'}</small></span></div>
-        <div className="home-map-person"><span className="home-map-halo" /><span className="home-map-avatar">♡</span><MapPin size={25} fill="currentColor" /></div>
-        <div className="home-map-locate"><MapPinned size={20} /></div>
+        <span className="naner-map-caption">발자취 보기 <ChevronRight size={14} /></span>
       </button>
 
       <aside className="home-dashboard-side" aria-label="홈 요약">
@@ -796,7 +797,7 @@ const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connect
         {homePreferences.memories && <section className="home-memory-card" aria-label="우리의 추억">
           <header className="home-memory-head">
             <span className="home-memory-title-icon" aria-hidden="true"><Image size={17} /></span>
-            <span className="home-memory-title-copy"><b>우리의 추억</b><small>함께한 소중한 순간들을 모아봤어요.</small></span>
+            <span className="home-memory-title-copy"><b>최근 추억</b><small>함께한 순간</small></span>
             <button type="button" onClick={() => onNavigate('memories')}>전체보기 <ChevronRight size={14} /></button>
           </header>
 
@@ -809,6 +810,7 @@ const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connect
           </div> : <button className="home-memory-empty" type="button" onClick={() => onNavigate('memories')}><Image size={22} /><span><b>첫 추억을 남겨보세요</b><small>함께한 사진과 이야기가 여기에 보여요.</small></span></button>}
         </section>}
 
+        <button type="button" className="naner-home-chat" onClick={() => onNavigate('chat')}><span className="naner-home-chat-heading">최근 대화 <ChevronRight size={15} /></span><span className="naner-home-chat-preview">{latestMessagePreview || '우리 둘만의 대화 시작하기'}</span></button>
       </aside>
     </div>
     {homeSettingsOpen && <HomeSettings preferences={homePreferences} onPreferences={updateHomePreferences} relationshipStartDate={relationshipStartDate} connected={Boolean(connection)} onSaveStartDate={onSaveStartDate} onClose={() => setHomeSettingsOpen(false)} storageNotice={storageNotice} />}
@@ -839,11 +841,11 @@ function AnniversaryPage({ connected, relationshipStartDate, coupleDay, annivers
   </div>;
 }
 
-function MorePage({ onSettings, onNotifications, unreadCount, onNavigate }: { onSettings: () => void; onNotifications: () => void; unreadCount: number; onNavigate: (target: MoreNavigationTarget) => void }) {
+function MorePage({ profile, connected, onSettings, onNotifications, unreadCount, onNavigate }: { profile: UserProfile; connected: boolean; onSettings: () => void; onNotifications: () => void; unreadCount: number; onNavigate: (target: MoreNavigationTarget) => void }) {
   const [moreSettingsOpen, setMoreSettingsOpen] = useState(false);
   return <div className="page more-page">
     <SharedAppHeader title="더보기" onSettings={() => setMoreSettingsOpen(true)} settingsLabel="더보기 설정" onNotifications={onNotifications} unreadCount={unreadCount} />
-    <div className="more-scroll"><MoreServices onOpenSettings={() => { setMoreSettingsOpen(false); onSettings(); }} settingsOpen={moreSettingsOpen} onCloseSettings={() => setMoreSettingsOpen(false)} onOpenNotifications={onNotifications} onNavigate={onNavigate} /></div>
+    <div className="more-scroll"><MoreServices profile={profile} connected={connected} onOpenSettings={() => { setMoreSettingsOpen(false); onSettings(); }} settingsOpen={moreSettingsOpen} onCloseSettings={() => setMoreSettingsOpen(false)} onOpenNotifications={onNotifications} onNavigate={onNavigate} /></div>
   </div>;
 }
 

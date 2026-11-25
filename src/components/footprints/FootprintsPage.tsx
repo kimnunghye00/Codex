@@ -157,7 +157,7 @@ export function FootprintsPage({
   Header,
 }: Props) {
   const focusMemory = memories.find((memory) => memory.id === initialMemoryId);
-  const [scope, setScope] = useState<FootprintScope>(focusMemory ? 'together' : 'partner');
+  const [scope, setScope] = useState<FootprintScope>('together');
   const [day, setDay] = useState(focusMemory?.date || todayKey());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sharing, setSharing] = useState(() => loadLocationSharing(uid).enabled);
@@ -680,10 +680,8 @@ export function FootprintsPage({
     </PageSettingsSheet>}
     <div className="footprints-heading">
       <div>
-        <small>COUPLE FOOTPRINTS</small>
-        <h1>우리의 발자취</h1>
-        <p>날짜를 선택해 상대방의 이동 또는 함께한 장소를 확인해요.</p>
-      </div>
+        <h1>발자취</h1>
+      </div><button type="button" className="naner-location-settings" onClick={() => setSettingsOpen(true)}>공유 설정</button>
     </div>
 
     <section className={'footprints-sharing ' + (sharing ? 'active' : '')}>
@@ -713,10 +711,10 @@ export function FootprintsPage({
 
     <div className="footprints-scope-tabs" role="tablist" aria-label="발자취 종류">
       <button type="button" role="tab" aria-selected={scope === 'partner'} className={scope === 'partner' ? 'active' : ''} onClick={() => changeScope('partner')}>
-        <MapPin size={16} /><span><b>{partnerName} 발자취</b><small>상대방 GPS만</small></span>
+        <MapPin size={16} /><span><b>상대방</b><small>상대방 GPS만</small></span>
       </button>
       <button type="button" role="tab" aria-selected={scope === 'together'} className={scope === 'together' ? 'active' : ''} onClick={() => changeScope('together')}>
-        <UsersRound size={16} /><span><b>우리 둘의 발자취</b><small>두 GPS 교차검증</small></span>
+        <UsersRound size={16} /><span><b>함께한 기록</b><small>두 GPS 교차검증</small></span>
       </button>
     </div>
 
