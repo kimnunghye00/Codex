@@ -23,6 +23,15 @@ const PREVIEW_RETRY_EVENT = 'route-chat-media-preview-retry';
 // have already painted once (module scope, so it survives remounts) lets a
 // returning row skip straight to "ready".
 const seenMediaSrcs = new Set<string>();
+const MAX_SEEN_MEDIA = 256;
+function rememberSeenMedia(src: string) {
+  seenMediaSrcs.delete(src);
+  seenMediaSrcs.add(src);
+  if (seenMediaSrcs.size > MAX_SEEN_MEDIA) {
+    const oldest = seenMediaSrcs.values().next().value;
+    if (oldest !== undefined) seenMediaSrcs.delete(oldest);
+  }
+}
 
 type LegacyPreviewState = 'optimizing' | 'retrying' | 'failed';
 type PreviewStatusDetail = {

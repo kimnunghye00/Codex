@@ -1,7 +1,8 @@
 import { Heart, MapPin } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import type { Memory } from '../../types';
-import { isMemoryVideo, MemoryImage } from './MemoryMedia';
+import { MemoryImage } from './MemoryMedia';
+import { isMemoryVideo } from './memoryMediaType';
 
 let activePreviewVideo: HTMLVideoElement | null = null;
 let previewVisibilityWired = false;

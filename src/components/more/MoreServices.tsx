@@ -13,8 +13,9 @@ import {
   type ChatBackground,
   type ChatFontSize,
   type ChatPreferences,
-} from '../chat/ChatToolsPanel';
-import { DanduliSticker, stickerIdFromToken } from '../chat/DanduliSticker';
+} from '../chat/chatPreferences';
+import { DanduliSticker } from '../chat/DanduliSticker';
+import { stickerIdFromToken } from '../chat/stickerCatalog';
 import type { HubTabId } from '../memories/MemoriesPage';
 
 type AppIconId = RouteAppIconId;
@@ -191,16 +192,16 @@ export function MoreServices({
   };
 
   useEffect(() => {
-    if (!settingsOpen) return;
+    if (!settingsOpen && !sheet) return;
     const handleBack = (event: Event) => {
       if (event.defaultPrevented || document.querySelector('.naner-room-open')) return;
       event.preventDefault();
-      onCloseSettings();
+      if (settingsOpen) onCloseSettings(); else setSheet(null);
     };
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape' || document.querySelector('.naner-room-open')) return;
       event.preventDefault();
-      onCloseSettings();
+      if (settingsOpen) onCloseSettings(); else setSheet(null);
     };
     window.addEventListener('route-native-back', handleBack, true);
     window.addEventListener('keydown', handleKeyDown);
@@ -208,7 +209,7 @@ export function MoreServices({
       window.removeEventListener('route-native-back', handleBack, true);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [settingsOpen, onCloseSettings]);
+  }, [settingsOpen, sheet, onCloseSettings]);
 
   const openMoreSettingSheet = (next: MoreSheet) => {
     onCloseSettings();
@@ -406,6 +407,3 @@ export function MoreServices({
   </div>;
 }
 
-export function applySavedRouteAppIcon() {
-  updateRouteFavicon(normalizeRouteAppIcon(localStorage.getItem('route-app-icon')));
-}

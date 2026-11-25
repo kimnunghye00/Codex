@@ -105,6 +105,33 @@ function toMessage(snapshotDoc: { id: string; data: () => unknown }, currentUid:
   } satisfies Message;
 }
 
+/** Bounded home-only preview; do not mutate paged history or attach scroll listeners. */
+export function subscribeCouplePreview(coupleId: string, currentUid: string, onPreview: (message: Message | undefined) => void) {
+  let disposed = false;
+  let generation = 0;
+  let cutoff = '';
+  let ready = false;
+  let unsubscribeMessages: (() => void) | undefined;
+  try { cutoff = normalizeClearIso(localStorage.getItem(chatClearLocalKey(coupleId, currentUid))); } catch { /* Firestore is authoritative. */ }
+  const unsubscribeState = onSnapshot(doc(db, 'users', currentUid), snapshot => {
+    if (disposed) return;
+    const next = latestClearIso(cutoff, normalizeClearIso((snapshot.data() as UserChatState | undefined)?.chatClearBefore?.[coupleId]));
+    if (ready && next === cutoff) return;
+    ready = true; cutoff = next;
+    onPreview(undefined);
+    unsubscribeMessages?.();
+    const ticket = ++generation;
+    const messages = collection(db, 'couples', coupleId, 'messages');
+    const q = cutoff ? query(messages, where('timestamp', '>', cutoff), orderBy('timestamp', 'asc'), limitToLast(20)) : query(messages, orderBy('timestamp', 'asc'), limitToLast(20));
+    unsubscribeMessages = onSnapshot(q, snapshot => {
+      if (disposed || ticket !== generation) return;
+      const latest = snapshot.docs.map(item => toMessage(item, currentUid)).filter((item): item is Message => Boolean(item)).at(-1);
+      onPreview(latest);
+    }, () => { if (!disposed && ticket === generation) onPreview(undefined); });
+  }, () => { if (!disposed) { ++generation; ready = false; unsubscribeMessages?.(); onPreview(undefined); } });
+  return () => { disposed = true; unsubscribeState(); unsubscribeMessages?.(); };
+}
+
 export function subscribeCoupleMessages(
   coupleId: string,
   currentUid: string,

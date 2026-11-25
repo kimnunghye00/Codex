@@ -207,6 +207,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
   const [tab, setTab] = useState<Tab>('home');
   const [locationSharingEnabled, setLocationSharingEnabled] = useState(() => loadLocationSharing(user.uid).enabled);
   const [messages, setMessages] = useState<Message[]>(() => loadMessages(initialMessages));
+  const [homeChatPreview, setHomeChatPreview] = useState<{ scope: string; message?: Message }>();
   const [memories, setMemories] = useState<Memory[]>(() => loadMemories(initialMemories));
   const [memoryToOpen, setMemoryToOpen] = useState<number>();
   const [memoryDraft, setMemoryDraft] = useState<MemoryDraft>();
@@ -225,6 +226,20 @@ function App({ user, profile, onProfileChange }: AppProps) {
   const roomScope = JSON.stringify([user.uid, connection?.coupleId ?? null]);
   const roomOpen = tab === 'chat';
   const baseTab = roomOpen ? chatReturnTab : tab;
+  const latestHomeMessage = connection?.coupleId ? (homeChatPreview?.scope === roomScope ? homeChatPreview.message : undefined) : messages[messages.length - 1];
+  useEffect(() => {
+    const coupleId = connection?.coupleId;
+    if (tab !== 'home' || !coupleId) return;
+    let disposed = false;
+    let unsubscribe: (() => void) | undefined;
+    void import('./lib/chatRealtime').then(({ subscribeCouplePreview }) => {
+      if (disposed) return;
+      unsubscribe = subscribeCouplePreview(coupleId, user.uid, message => {
+        if (!disposed) setHomeChatPreview({ scope: roomScope, message });
+      });
+    }).catch(cause => console.warn('[NANER home chat preview]', cause));
+    return () => { disposed = true; unsubscribe?.(); };
+  }, [tab, connection?.coupleId, user.uid, roomScope]);
   const unreadCount = useMemo(() => notifications.filter((item) => !item.read).length, [notifications]);
   const coupleDay = useMemo(() => {
     const start = parseDate(relationshipStartDate);
@@ -487,6 +502,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
           if (disposed) return;
           if (transitionCoupleCache(user.uid, next?.coupleId ?? null)) {
             chatDraftRef.current = { scope: '', text: '' };
+            setHomeChatPreview(undefined);
             previousMessages.current = [];
             previousMemories.current = [];
             memoriesRef.current = [];
@@ -814,7 +830,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
 
   return <>
     <div className={`app-shell${roomOpen ? ' naner-room-open' : ''}`}><main className="naner-base-screen" hidden={roomOpen}><Suspense fallback={<div className="page auth-loading" role="status" aria-live="polite"><div className="loading-mark" /><p>화면을 불러오는 중이에요</p></div>}>
-      {baseTab === 'home' && <HomePage key={user.uid} uid={user.uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} memories={memories} latestMessage={messages[messages.length - 1]} onNavigate={navigateTab} onOpenMemory={openMemory} onOpenFootprints={() => openFootprints()} onSaveStartDate={saveStartDate} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} profileEditorRequest={profileEditorRequest} />}
+      {baseTab === 'home' && <HomePage key={user.uid} uid={user.uid} profile={profile} onProfileChange={onProfileChange} connection={connection} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} memories={memories} latestMessage={latestHomeMessage} onNavigate={navigateTab} onOpenMemory={openMemory} onOpenFootprints={() => openFootprints()} onSaveStartDate={saveStartDate} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} profileEditorRequest={profileEditorRequest} />}
       {baseTab === 'memories' && <MemoriesPage key={user.uid} requestedTab={requestedHubTab} Header={AppHeader} memories={memories} setMemories={setMemories} initialMemoryId={memoryToOpen} initialDraft={memoryDraft} onClearInitial={() => setMemoryToOpen(undefined)} onClearInitialDraft={() => setMemoryDraft(undefined)} onOpenLocation={() => { setFootprintMemoryId(undefined); navigateTab('location'); }} onOpenFootprints={(memoryId) => openFootprints(memoryId)} sharedProfile={profile} sharedConnection={connection} sharedRelationshipStartDate={relationshipStartDate} />}
       {baseTab === 'location' && <FootprintsPage key={`${user.uid}:${footprintMemoryId ?? ''}`} uid={user.uid} connection={connection} memories={memories} initialMemoryId={footprintMemoryId} onOpenMemory={openMemory} Header={AppHeader} />}
       {baseTab === 'anniversary' && <AnniversaryPage key={relationshipStartDate ?? ''} connected={Boolean(connection)} relationshipStartDate={relationshipStartDate} coupleDay={coupleDay} anniversaries={anniversaries} onSaveStartDate={saveStartDate} onSettings={openSettings} onNotifications={openNotifications} unreadCount={unreadCount} />}

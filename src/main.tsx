@@ -1,7 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import Root from './Root';
-import { AppCrashBoundary, installGlobalCrashDiagnostics } from './AppCrashBoundary';
+import { AppCrashBoundary } from './AppCrashBoundary';
+import { installGlobalCrashDiagnostics } from './crashDiagnostics';
 import { applySavedRouteAppIcon } from './utils/appIcon';
 import { applySavedRouteProfileStyle } from './utils/profileStyle';
 import { authPersistenceReady } from './lib/firebaseAuth';

@@ -4,7 +4,8 @@ import type { Memory } from '../../types';
 import { auth } from '../../lib/firebase';
 import { loadMemories } from '../../utils/storage';
 import { loadLocationVisits } from '../../utils/location';
-import { isMemoryVideo, MemoryImage } from './MemoryMedia';
+import { MemoryImage } from './MemoryMedia';
+import { isMemoryVideo } from './memoryMediaType';
 
 function normalizePlace(value?: string) {
   return (value ?? '').trim().toLocaleLowerCase('ko-KR').replace(/[\s.,()\-_/·]+/g, '');

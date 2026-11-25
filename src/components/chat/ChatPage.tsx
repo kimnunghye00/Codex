@@ -20,8 +20,11 @@ import { PERSISTENT_STATE_CHANGE_EVENT } from '../../utils/persistenceSignal';
 import { typingTimeRemaining } from '../../utils/typingStatus';
 import { ChatBubble } from './ChatBubble';
 import { ChatComposer } from './ChatComposer';
-import { ChatToolsPanel, loadChatPreferences, saveChatPreferences, type ChatPreferences } from './ChatToolsPanel';
-import { stickerIdFromToken } from './DanduliSticker';
+import { ChatToolsPanel } from './ChatToolsPanel';
+import { loadChatPreferences, saveChatPreferences, type ChatPreferences } from './chatPreferences';
+import { recentChatPhotos, visibleScheduledDrafts } from '../../utils/chatRoomPresentation';
+import { chatMediaPreviewUrl, chatMediaOriginalUrl } from '../../lib/chatMediaReference';
+import { stickerIdFromToken } from './stickerCatalog';
 
 type ChatSchedule = { id: string; title: string; date: string; startTime: string; type: 'personal' | 'couple'; ownerId: string };
 type CallMode = 'voice' | 'video' | 'screen';
@@ -597,7 +600,7 @@ export function ChatPage({ roomScope, draftCache, onBack, messages, setMessages,
     setReplyTo(undefined);
   };
 
-  const send = () => { const text = draft; setDraft(''); sendText(text); };
+  const send = () => { if (!draft.trim() || !currentUid) return; const text = draft; setDraft(''); sendText(text); };
   const sendImages = async (files: File[]) => {
     if (!files.length || !currentUid) return;
     if (mediaSendingRef.current) {
@@ -977,7 +980,8 @@ export function ChatPage({ roomScope, draftCache, onBack, messages, setMessages,
     setActive(undefined);
   };
 
-  const recentPhotos = splitChat ? messages.slice(-120).flatMap(message => message.type === 'image' && message.imageUrl ? [message.imageUrl] : message.type === 'gallery' ? (message.imageUrls ?? []) : []).slice(-4).reverse() : [];
+  const recentPhotos = useMemo(() => splitChat ? recentChatPhotos(messages) : [], [messages, splitChat]);
+  const roomScheduledDrafts = useMemo(() => visibleScheduledDrafts(scheduledDrafts, connection?.coupleId), [scheduledDrafts, connection?.coupleId]);
   return <div ref={pageRef} className={`page full-page chat-page ${splitChat ? 'naner-chat-split' : ''} chat-bg-${preferences.background} chat-font-${preferences.fontSize} ${deleteSelection ? 'chat-delete-mode' : ''}`}>
     {deleteSelection
       ? <div className="chat-delete-toolbar">
@@ -1020,11 +1024,11 @@ export function ChatPage({ roomScope, draftCache, onBack, messages, setMessages,
         return <>{row.showDate && <div className="date-chip">{messageDateLabel(message.timestamp)}</div>}<ChatBubble message={displayedMessage} reply={message.replyTo ? byId.get(message.replyTo) : undefined} partnerName={partnerName} partnerInitial={partnerInitial} active={active === message.id} highlighted={highlighted === message.id} selectionMode={Boolean(deleteSelection)} selected={Boolean(deleteSelection?.has(message.id))} onAction={() => setActive(active === message.id ? undefined : message.id)} onReact={(emoji) => react(message.id, emoji)} onReply={() => { setReplyTo(message.id); setActive(undefined); }} onSave={() => saveMessage(displayedMessage)} onDelete={() => beginDeleteSelection(displayedMessage)} onToggleSelect={() => toggleDeleteSelection(displayedMessage)} onImage={setLightbox} onJump={jump} /></>;
       })() : row.kind === 'typing-ai' ? <TypingIndicator ai initial={partnerInitial} /> : <TypingIndicator ai={false} initial={partnerInitial} heart />}</div>;
     })}</div><div ref={bottomRef} /></div>
-    {scheduledDrafts.length > 0 && !deleteSelection && !splitChat && <details className="scheduled-chat-list danduli-scheduled-disclosure"><summary className="scheduled-strip"><CalendarClock size={14} /><span>예약 메시지 {scheduledDrafts.length}개</span><small>목록 보기</small></summary><div className="danduli-scheduled-items"><p className="danduli-scheduled-note">앱을 열어 둔 동안 전송 · 오프라인이면 재시도</p>{scheduledDrafts.map((item) => <div className="scheduled-chat-item" key={item.id}><span><b>{item.text}</b><small>{item.coupleId ? new Date(item.sendAt).toLocaleString('ko-KR') : '이전 버전 예약 · 다시 예약해 주세요'}</small></span><button type="button" onClick={() => removeScheduledChatDraft(currentUid, item.id)} aria-label="예약 메시지 취소">취소</button></div>)}</div></details>}
+    {roomScheduledDrafts.length > 0 && !deleteSelection && !splitChat && <details className="scheduled-chat-list danduli-scheduled-disclosure"><summary className="scheduled-strip"><CalendarClock size={14} /><span>예약 메시지 {roomScheduledDrafts.length}개</span><small>목록 보기</small></summary><div className="danduli-scheduled-items"><p className="danduli-scheduled-note">앱을 열어 둔 동안 전송 · 오프라인이면 재시도</p>{roomScheduledDrafts.map((item) => <div className="scheduled-chat-item" key={item.id}><span><b>{item.text}</b><small>{item.coupleId ? new Date(item.sendAt).toLocaleString('ko-KR') : '이전 버전 예약 · 다시 예약해 주세요'}</small></span><button type="button" onClick={() => removeScheduledChatDraft(currentUid, item.id)} aria-label="예약 메시지 취소">취소</button></div>)}</div></details>}
     {!deleteSelection && <ChatComposer draft={draft} reply={replyTo ? byId.get(replyTo) : undefined} partnerName={partnerName} ownedStickerPacks={preferences.ownedStickerPacks} onDraft={setDraft} onSend={send} onImages={sendImages} onGif={sendGif} onQuick={sendText} onSticker={sendStickerChoice} onSchedule={openScheduleMessage} onGift={() => setGiftOpen(true)} onFile={(file) => sendAttachment(file, 'file')} onContact={() => void openContactPicker()} onVoice={(file, duration) => sendAttachment(file, 'audio', duration)} onVoiceError={setSyncError} onStickerStore={openStickerStore} onCancelReply={() => setReplyTo(undefined)} />}
     {splitChat && <aside className="naner-chat-side" tabIndex={0} aria-label="대화 보관함"><div className="naner-chat-side-head"><h2>대화 보관함</h2><button type="button" aria-label="보관함 닫기" onClick={() => setSideOpen(false)}><X size={19} /></button></div>
-      <section><h3>주고받은 사진</h3>{recentPhotos.length ? <div className="naner-chat-media-grid">{recentPhotos.map((url, index) => <button type="button" key={url + index} onClick={() => setLightbox(url)} aria-label="채팅 사진 확대"><img src={url} alt="" loading="lazy" decoding="async" /></button>)}</div> : <p>아직 주고받은 사진이 없어요.</p>}<button type="button" className="naner-side-item" onClick={() => { setToolsInitialSection('media'); setToolsOpen(true); }}>사진 모아보기 ›</button></section>
-      <section><h3>예약 메시지</h3>{scheduledDrafts.filter(item => !item.coupleId || item.coupleId === connection?.coupleId).map(item => <div className="naner-side-item" key={item.id}><small>{item.coupleId ? new Date(item.sendAt).toLocaleString('ko-KR') : '이전 버전 예약 · 다시 예약해 주세요'}</small><b>{item.text}</b><button type="button" onClick={() => removeScheduledChatDraft(currentUid, item.id)}>취소</button></div>)}<button type="button" className="naner-side-item" onClick={openScheduleMessage}>예약 메시지 추가</button></section>
+      <section><h3>주고받은 사진</h3>{recentPhotos.length ? <div className="naner-chat-media-grid">{recentPhotos.map((url, index) => <button type="button" key={url + index} onClick={() => setLightbox(chatMediaOriginalUrl(url))} aria-label="채팅 사진 확대"><img src={chatMediaPreviewUrl(url)} alt="" loading="lazy" decoding="async" /></button>)}</div> : <p>아직 주고받은 사진이 없어요.</p>}<button type="button" className="naner-side-item" onClick={() => { setToolsInitialSection('media'); setToolsOpen(true); }}>사진 모아보기 ›</button></section>
+      <section><h3>예약 메시지</h3>{roomScheduledDrafts.map(item => <div className="naner-side-item" key={item.id}><small>{item.coupleId ? new Date(item.sendAt).toLocaleString('ko-KR') : '이전 버전 예약 · 다시 예약해 주세요'}</small><b>{item.text}</b><button type="button" onClick={() => removeScheduledChatDraft(currentUid, item.id)}>취소</button></div>)}<button type="button" className="naner-side-item" onClick={openScheduleMessage}>예약 메시지 추가</button></section>
       <section><h3>빠른 신호</h3>{['보고 싶어','사랑해'].map(signal => <button type="button" key={signal} className="naner-quick-signal" onClick={() => sendText(signal)}>{signal}</button>)}</section>
     </aside>}
     {toolsOpen && <ChatToolsPanel key={toolsInitialSection} initialSection={toolsInitialSection} messages={messages} partnerName={partnerName} preferences={preferences} onPreferences={setPreferences} onJump={jump} onImage={setLightbox} onImport={(imported) => setMessages(imported)} onSticker={sendStickerChoice} onClose={() => setToolsOpen(false)} />}
