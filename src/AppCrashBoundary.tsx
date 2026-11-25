@@ -91,7 +91,7 @@ export class AppCrashBoundary extends Component<Props, State> {
         <main className="route-crash-screen" role="alert">
           <section className="route-crash-card">
             <div className="route-crash-mark">단</div>
-            <small>단둘이 RECOVERY</small>
+            <small>나너 RECOVERY</small>
             <h1>{repeated ? '앱을 안전하게 다시 시작할게요' : '화면을 다시 불러올게요'}</h1>
             <p>{repeated
               ? '같은 화면 오류가 반복되어 현재 데이터를 지우지 않고 앱 화면만 새로 시작하는 것이 안전해요.'

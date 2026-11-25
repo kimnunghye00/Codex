@@ -178,9 +178,9 @@ export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps
   const shareCode = async () => {
     if (!inviteCode) return;
     setError('');
-    const text = `단둘이에서 나와 연결해요. 초대 코드: ${inviteCode}`;
+    const text = `나너에서 나와 연결해요. 초대 코드: ${inviteCode}`;
     if (navigator.share) {
-      try { await navigator.share({ title: '단둘이 커플 초대', text }); return; }
+      try { await navigator.share({ title: '나너 커플 초대', text }); return; }
       catch (cause) { if (cause instanceof DOMException && cause.name === 'AbortError') return; }
     }
     try { await copyText(text); }
@@ -204,7 +204,7 @@ export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps
   };
 
   return <div className="app-shell couple-connect-shell">
-    <header className="couple-connect-brand"><strong>단둘이</strong><small>COUPLE CONNECT</small></header>
+    <header className="couple-connect-brand"><strong className="naner-wordmark">나<em className="naner-slash">/</em>너</strong><small>COUPLE CONNECT</small></header>
 
     <main className="couple-connect-card">
       <div className="couple-connect-symbol"><HeartHandshake size={30} /></div>
@@ -212,9 +212,9 @@ export function CoupleConnect({ user, profile, onConnected }: CoupleConnectProps
       <h1>{mode === 'choose' ? '상대방과 연결할까요?' : mode === 'invite' ? '상대방을 초대해요' : mode === 'join' ? '초대 코드를 입력해요' : '연결을 마무리하고 있어요'}</h1>
       <p className="couple-connect-copy">
         {mode === 'choose' && '두 계정을 연결하면 채팅, 추억, 기념일과 위치 기록을 둘만의 공간에서 함께 사용할 수 있어요.'}
-        {mode === 'invite' && '상대방이 단둘이에 가입한 뒤 아래 코드를 입력하면 두 계정이 연결돼요.'}
-        {mode === 'join' && '상대방에게 받은 단둘이 초대 코드를 입력해 주세요.'}
-        {mode === 'waiting' && '상대방의 단둘이 화면에서 연결 요청을 확인하고 있어요. 앱을 닫아도 이 상태를 기억해요.'}
+        {mode === 'invite' && '상대방이 나너에 가입한 뒤 아래 코드를 입력하면 두 계정이 연결돼요.'}
+        {mode === 'join' && '상대방에게 받은 나너 초대 코드를 입력해 주세요.'}
+        {mode === 'waiting' && '상대방의 나너 화면에서 연결 요청을 확인하고 있어요. 앱을 닫아도 이 상태를 기억해요.'}
       </p>
 
       {mode === 'choose' && <div className="couple-connect-options">

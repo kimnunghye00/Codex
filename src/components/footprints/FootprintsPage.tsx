@@ -643,7 +643,7 @@ export function FootprintsPage({
       if (enabled) {
         const allowed = await ensureLocationPermission();
         if (!allowed) {
-          setTrackingStatus('위치 권한이 필요해요. 휴대폰 설정에서 단둘이의 위치 권한을 허용해 주세요.');
+          setTrackingStatus('위치 권한이 필요해요. 휴대폰 설정에서 나너의 위치 권한을 허용해 주세요.');
           return;
         }
       }

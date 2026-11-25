@@ -1,8 +1,30 @@
 /*
  * ROUTE theme contrast safety layer.
- * Loaded after every feature stylesheet so all ten palettes remain readable.
+ * Loaded after every feature stylesheet so all supported palettes remain readable.
  * Keep semantic colors here instead of letting legacy/hard-coded colors win.
  */
+
+:root[data-route-theme='modern-violet'] {
+  --primary:#635BEB !important;
+  --primary-light:#756EF0 !important;
+  --primary-soft:#EEECFF !important;
+  --background:#FFFFFF !important;
+  --surface:#FFFFFF !important;
+  --surface-elevated:#FFFFFF !important;
+  --surface-soft:#F5F5F7 !important;
+  --text-primary:#19191B !important;
+  --text-secondary:#707078 !important;
+  --border:#EBEBEF !important;
+  --emotion:#635BEB !important;
+  --route-accent:#635BEB !important;
+  --route-accent-soft:#EEECFF !important;
+  --accent-text:#5149CE !important;
+  --on-primary:#FFFFFF !important;
+  --on-accent:#FFFFFF !important;
+  --control-bg:#F5F5F7 !important;
+  --placeholder:#707078 !important;
+  color-scheme:light;
+}
 
 :root[data-route-theme='sunset-route'] {
   --primary:#66515B !important; --primary-light:#A65365 !important; --primary-soft:#F3E6E8 !important; --background:#FAF7F6 !important; --surface:#FFFFFF !important; --surface-elevated:#FFFFFF !important; --surface-soft:#F3E6E8 !important; --text-primary:#39333A !important; --text-secondary:#70636B !important; --border:#E6DCDF !important; --emotion:#A65365 !important; --route-accent:#A65365 !important; --route-accent-soft:#F3E6E8 !important; --accent-text:#A65365 !important; --on-primary:#FFFFFF !important; --on-accent:#FFFFFF !important; --control-bg:#F3E6E8 !important; --placeholder:#70636B !important;

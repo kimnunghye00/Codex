@@ -75,7 +75,7 @@ public class BackgroundLocationService extends Service implements LocationListen
 
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_menu_mylocation)
-                .setContentTitle("단둘이 발자취 기록 중")
+                .setContentTitle("나너 발자취 기록 중")
                 .setContentText("위치 공유를 켠 동안 이동 경로를 기록하고 있어요.")
                 .setContentIntent(contentIntent)
                 .setOngoing(true)

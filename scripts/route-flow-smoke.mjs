@@ -132,7 +132,7 @@ check('CoupleConnect consumes realtime invite snapshots', coupleConnect.includes
 check('pending couple connection is restart-persisted', coupleConnect.includes('persistSession') && coupleConnect.includes('loadPersistedSession') && coupleSession.includes('route.coupleConnect.pending:'));
 
 check('More keeps typed navigation contract', more.includes('onNavigate: (target: MoreNavigationTarget) => void'));
-check('More is a customization hub', more.includes('단둘이 꾸미기') && more.includes("'chat-style'") && more.includes("'store'") && more.includes("profileEditor: true") && more.includes('사진 · 배경 편집'));
+check('More is a customization hub', more.includes('나너 꾸미기') && more.includes("'chat-style'") && more.includes("'store'") && more.includes("profileEditor: true") && more.includes('사진 · 배경 편집'));
 check('More removes duplicate quick-settings section', !more.includes('more-quick-settings'));
 check('More removes duplicated service navigation and settings', !more.includes("id: 'settings', label: '설정'") && !more.includes("id: 'date', label: '약속'") && !more.includes("id: 'footprint', label: '발자취'"));
 check('More exposes theme icon emoticon customization', more.includes("openSheet('theme')") && more.includes("openSheet('app-icon')") && more.includes("openSheet('emoticon')"));
@@ -289,6 +289,13 @@ check('runtime recovery is explicitly initialized', main.includes("import { init
 check('account isolation blocks React mount', main.indexOf('await initializeRuntimeRecovery()') > -1 && main.indexOf('await initializeRuntimeRecovery()') < main.indexOf('createRoot('));
 check('account isolation policy is used', recovery.includes('decideAccountIsolation') && accountPolicy.includes("'reset-orphan'") && accountPolicy.includes("'reset-switch'"));
 check('runtime recovery keeps Firestore cache isolation', firestoreCacheReset.includes('clearNativeFirestorePersistence'));
+
+// NANER Phase 2: preserve existing theme IDs and the adaptive geometry owner.
+const nanerSystem = read('src/naner-design-system.css');
+const nanerThemes = read('src/route-themes.ts');
+const nanerPalette = read('src/route-theme-accessibility.css');
+check('NANER default is Modern Violet with all legacy themes retained', nanerThemes.includes("const DEFAULT_THEME = 'modern-violet'") && ['sunset-route','midnight-walk','forest-trail','spring-blossom','ocean-drive','lavender-fog','autumn-breeze','champagne-day','mono-track','neon-night'].every(id => nanerThemes.includes("id: '" + id + "'")) && nanerThemes.includes("const STORAGE_KEY = 'route-theme-v2'"));
+check('NANER palette and minimal navigation primitives are wired', nanerPalette.includes("data-route-theme='modern-violet'") && nanerPalette.includes('--primary:#635BEB') && nanerSystem.includes('background: transparent !important;') && nanerSystem.includes('.nav-icon') && read('src/main.tsx').includes("import './naner-design-system.css';") && read('src/styles.css').includes('Pretendard Variable'));
 
 console.log(`\nROUTE flow smoke gate: ${passes.length} checks passed.`);
 for (const pass of passes) console.log(`  ✓ ${pass}`);
