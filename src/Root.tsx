@@ -17,7 +17,7 @@ const initialUser = auth.currentUser;
 const initialProfile = initialUser ? loadProfile(initialUser.uid) : null;
 
 function RouteLoading() {
-  return <div className="app-shell auth-loading !mx-auto !grid !min-h-dvh !w-full !max-w-none place-items-center" role="status" aria-live="polite"><div className="wordmark"><strong>단둘이</strong></div><div className="loading-mark" /><p>단둘이를 불러오는 중이에요</p></div>;
+  return <div className="app-shell auth-loading !mx-auto !grid !min-h-dvh !w-full !max-w-none place-items-center" role="status" aria-live="polite"><div className="wordmark"><strong className="naner-wordmark">나<em className="naner-slash">/</em>너</strong></div><div className="loading-mark" /><p>나너를 불러오는 중이에요</p></div>;
 }
 
 function readSignupPending() {
@@ -36,7 +36,7 @@ function RouteProfileRecovery({ onRetry, onSignOut, signOutError }: {
   signOutError: string;
 }) {
   return <main className="app-shell profile-recovery" role="alert">
-    <div className="wordmark"><strong>단둘이</strong></div>
+    <div className="wordmark"><strong className="naner-wordmark">나<em className="naner-slash">/</em>너</strong></div>
     <section className="profile-recovery-card">
       <h1>프로필을 불러오지 못했어요</h1>
       <p>연결을 확인한 뒤 다시 시도해 주세요. 기존 프로필과 기록은 삭제되지 않았어요.</p>

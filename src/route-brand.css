@@ -1,3 +1,14 @@
 .wordmark span {
   display: none !important;
 }
+
+/* Phase 1: approved NANER wordmark, independent of legacy tagline spans. */
+.wordmark strong.naner-wordmark, .couple-connect-brand strong.naner-wordmark {
+  color: var(--text-primary, #19191B);
+  white-space: nowrap;
+}
+.naner-wordmark .naner-slash {
+  color: #635BEB;
+  font-style: normal;
+  font-weight: inherit;
+}
