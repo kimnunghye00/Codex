@@ -32,14 +32,14 @@ type AppIconOption = {
 };
 
 const APP_ICONS: AppIconOption[] = [
-  { id: 'route', label: '단둘이 기본', className: 'danduli-image-icon' },
+  { id: 'route', label: '나너 기본', className: 'danduli-image-icon' },
   { id: 'heart-chat', label: '둘이 톡', className: 'danduli-image-icon' },
   { id: 'couple-love', label: '꼬옥 커플', className: 'danduli-image-icon' },
   { id: 'couple-date', label: '데이트 커플', className: 'danduli-image-icon' },
 ];
 
 const CHAT_BACKGROUNDS: Array<{ id: ChatBackground; label: string }> = [
-  { id: 'route', label: '단둘이' },
+  { id: 'route', label: '나너' },
   { id: 'cream', label: '크림' },
   { id: 'rose', label: '로즈' },
   { id: 'sage', label: '세이지' },
@@ -276,7 +276,7 @@ export function MoreServices({
         <h2 id="more-settings-alerts">알림</h2>
         <div className="more-settings-group">
           <button type="button" onClick={() => { onCloseSettings(); onOpenNotifications(); }}>
-            <Bell /><span><b>알림 및 최근 활동</b><small>단둘이 알림 확인과 읽음 관리</small></span><ChevronRight />
+            <Bell /><span><b>알림 및 최근 활동</b><small>나너 알림 확인과 읽음 관리</small></span><ChevronRight />
           </button>
           <div className="more-settings-toggle-row">
             <Cake /><span><b>기념일 알림</b><small>다가오는 기념일과 약속 알림 받기</small></span>
@@ -329,7 +329,7 @@ export function MoreServices({
         <h2 id="more-settings-security">개인 / 보안</h2>
         <div className="more-settings-group">
           <div className="more-settings-toggle-row">
-            <LockKeyhole /><span><b>앱 잠금</b><small>단둘이 실행 시 잠금 사용</small></span>
+            <LockKeyhole /><span><b>앱 잠금</b><small>나너 실행 시 잠금 사용</small></span>
             <button type="button" className={appLock ? 'more-settings-switch on' : 'more-settings-switch'} role="switch" aria-checked={appLock} aria-label="앱 잠금" onClick={() => updateBooleanSetting('route-setting-app-lock', !appLock, setAppLock)}><i /></button>
           </div>
           <button type="button" onClick={openFootprintSettings}>
@@ -341,10 +341,10 @@ export function MoreServices({
       <section className="more-settings-section" aria-labelledby="more-settings-info">
         <h2 id="more-settings-info">앱 정보</h2>
         <div className="more-settings-group">
-          <button type="button" onClick={() => window.alert('단둘이 멀티플랫폼 테스트 버전\nAndroid는 APK, iOS는 iOS 빌드, Windows는 EXE 설치 파일로 업데이트할 수 있어요.')}>
-            <Info /><span><b>단둘이 정보</b><small>지원 플랫폼과 앱 정보 확인</small></span><ChevronRight />
+          <button type="button" onClick={() => window.alert('나너 멀티플랫폼 테스트 버전\nAndroid는 APK, iOS는 iOS 빌드, Windows는 EXE 설치 파일로 업데이트할 수 있어요.')}>
+            <Info /><span><b>나너 정보</b><small>지원 플랫폼과 앱 정보 확인</small></span><ChevronRight />
           </button>
-          <button type="button" onClick={() => window.alert('문제가 생기면 오류 화면과 함께 알려주세요. 단둘이 기능별로 확인할 수 있어요.')}>
+          <button type="button" onClick={() => window.alert('문제가 생기면 오류 화면과 함께 알려주세요. 나너 기능별로 확인할 수 있어요.')}>
             <CircleHelp /><span><b>도움말</b><small>자주 묻는 질문과 문제 해결</small></span><ChevronRight />
           </button>
         </div>
@@ -354,23 +354,23 @@ export function MoreServices({
 
   return <div className="route-more-services">
     <section className="more-service-intro">
-      <div><small>단둘이 CUSTOM</small><h1>더보기</h1><p>단둘이를 우리 취향에 맞게 꾸미고 확장해요.</p></div>
+      <div><small>나너 CUSTOM</small><h1>더보기</h1><p>나너를 우리 취향에 맞게 꾸미고 확장해요.</p></div>
       <span className={`more-app-icon-preview ${appIcon} ${activeIcon.className} !grid place-items-center`} aria-label={`현재 앱 아이콘 ${activeIcon.label}`}><AppIconGlyph id={appIcon} /></span>
     </section>
 
     <section className="more-feature-section more-customize-section" aria-labelledby="route-more-customize-title">
-      <div className="more-section-title"><small>CUSTOMIZE</small><h2 id="route-more-customize-title">단둘이 꾸미기</h2><p>다른 탭과 겹치지 않는 꾸미기 기능만 모았어요.</p></div>
-      <div className="more-customize-grid" aria-label="단둘이 꾸미기">
+      <div className="more-section-title"><small>CUSTOMIZE</small><h2 id="route-more-customize-title">나너 꾸미기</h2><p>다른 탭과 겹치지 않는 꾸미기 기능만 모았어요.</p></div>
+      <div className="more-customize-grid" aria-label="나너 꾸미기">
         <button type="button" onClick={() => openSheet('theme')}><span className="more-customize-icon theme"><Palette /></span><b>테마</b><small>앱 전체 색상</small></button>
         <button type="button" onClick={() => openSheet('app-icon')}><span className="more-customize-icon icon"><Smartphone /></span><b>앱 아이콘</b><small>4가지 아이콘</small></button>
         <button type="button" onClick={() => openSheet('emoticon')}><span className="more-customize-icon emoticon"><Sticker /></span><b>이모티콘</b><small>보관함 · 팩</small></button>
         <button type="button" onClick={() => openSheet('chat-style')}><span className="more-customize-icon chat"><MessageCircle /></span><b>채팅 꾸미기</b><small>배경 · 글자 크기</small></button>
         <button type="button" onClick={openProfileEditor}><span className="more-customize-icon profile"><UserRound /></span><b>프로필 꾸미기</b><small>사진 · 배경 편집</small></button>
-        <button type="button" onClick={() => openSheet('store')}><span className="more-customize-icon store"><ShoppingBag /></span><b>단둘이 스토어</b><small>꾸미기 모아보기</small></button>
+        <button type="button" onClick={() => openSheet('store')}><span className="more-customize-icon store"><ShoppingBag /></span><b>나너 스토어</b><small>꾸미기 모아보기</small></button>
       </div>
     </section>
 
-    <section className="more-couple-strip"><span>♥</span><div><b>우리 둘만의 단둘이</b><small>둘만의 취향으로 단둘이를 완성해보세요.</small></div></section>
+    <section className="more-couple-strip"><span>♥</span><div><b>우리 둘만의 나너</b><small>둘만의 취향으로 나너를 완성해보세요.</small></div></section>
 
     {sheet && <div className="more-sheet-backdrop" role="dialog" aria-modal="true" onMouseDown={(event) => { if (event.target === event.currentTarget) setSheet(null); }}>
       <section className="more-sheet">
@@ -378,7 +378,7 @@ export function MoreServices({
           {(['default','lavender','dark'] as ThemeId[]).map((item) => <button type="button" key={item} className={theme === item ? 'active' : ''} onClick={() => chooseTheme(item)}><i className={item} /><span><b>{item === 'default' ? '기본' : item === 'lavender' ? '라벤더' : '다크'}</b><small>{item === 'default' ? '네이비 + 코랄' : item === 'lavender' ? '부드러운 보라' : '어두운 화면'}</small></span></button>)}
         </div></>}
 
-        {sheet === 'app-icon' && <><HeaderBar title="앱 아이콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">4가지 단둘이 아이콘 중 원하는 스타일을 선택해요. Android에서는 적용 결과를 확인한 뒤 알려드려요.</p>
+        {sheet === 'app-icon' && <><HeaderBar title="앱 아이콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">4가지 나너 아이콘 중 원하는 스타일을 선택해요. Android에서는 적용 결과를 확인한 뒤 알려드려요.</p>
           <div className="app-icon-current-status" role="status" aria-live="polite">
             <span className={`more-app-icon-preview ${appIcon} ${activeIcon.className} !grid place-items-center`}><AppIconGlyph id={appIcon} /></span>
             <span><small>{nativeAppIconSupported ? '현재 선택된 홈 화면 아이콘' : '현재 웹 미리보기'}</small><b>{appIconStateLoading ? '아이콘 확인 중…' : activeIcon.label}</b><em>{nativeAppIconSupported ? 'Android 런처 구성요소 기준 · 홈 화면 표시는 기기 런처가 갱신해요' : '홈 화면 변경은 Android 앱에서 가능'}</em></span>
@@ -387,7 +387,7 @@ export function MoreServices({
           {APP_ICONS.map((item) => <button data-icon-id={item.id} type="button" key={item.id} aria-pressed={appIcon === item.id} disabled={appIconChanging} className={`${appIcon === item.id ? 'active' : ''} !min-w-0`} onClick={() => void chooseIcon(item.id)}><span className={`more-app-icon-preview ${item.id} ${item.className} !grid place-items-center`}><AppIconGlyph id={item.id} /></span><b className="!w-full !truncate !text-center">{item.label}</b>{appIcon === item.id && !appIconStateLoading && <small>✓ 현재 사용 중</small>}</button>)}
         </div></>}
 
-        {sheet === 'emoticon' && <><HeaderBar title="이모티콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">대화에서 사용할 단둘이 이모티콘을 모아보세요.</p><div className="emoticon-store">
+        {sheet === 'emoticon' && <><HeaderBar title="이모티콘" onClose={() => setSheet(null)} /><p className="more-sheet-description">대화에서 사용할 나너 이모티콘을 모아보세요.</p><div className="emoticon-store">
           {STICKER_PACKS.map((pack) => <article key={pack.id}><div className="emoticon-preview">{pack.stickers.slice(0, 4).map((sticker) => { const id = stickerIdFromToken(sticker); return id ? <DanduliSticker key={sticker} id={id} /> : <span key={sticker}>{sticker}</span>; })}</div><div className="emoticon-copy"><b>{pack.name}</b><small>{pack.priceLabel === '기본' ? '기본 제공' : '무료'}</small></div><button type="button" disabled={chatPreferences.ownedStickerPacks.includes(pack.id)} onClick={() => addPack(pack.id)}>{chatPreferences.ownedStickerPacks.includes(pack.id) ? '사용 중' : '받기'}</button></article>)}
         </div></>}
 
@@ -396,7 +396,7 @@ export function MoreServices({
           <div className="more-chat-style-block"><strong>메시지 글자 크기</strong><div className="more-chat-fonts">{CHAT_FONT_SIZES.map((item) => <button type="button" key={item.id} className={chatPreferences.fontSize === item.id ? 'active' : ''} onClick={() => updateChatStyle({ fontSize: item.id })}>{item.label}</button>)}</div></div>
         </>}
 
-        {sheet === 'store' && <><HeaderBar title="단둘이 스토어" onClose={() => setSheet(null)} /><p className="more-sheet-description">단둘이의 꾸미기 콘텐츠를 한곳에서 둘러봐요.</p><div className="more-store-hub">
+        {sheet === 'store' && <><HeaderBar title="나너 스토어" onClose={() => setSheet(null)} /><p className="more-sheet-description">나너의 꾸미기 콘텐츠를 한곳에서 둘러봐요.</p><div className="more-store-hub">
           <button type="button" onClick={() => openSheet('emoticon')}><Sticker /><span><b>이모티콘 팩</b><small>대화에서 쓰는 감정 표현</small></span><em>보기</em></button>
           <button type="button" onClick={() => openSheet('app-icon')}><Smartphone /><span><b>앱 아이콘</b><small>홈 화면을 우리 스타일로</small></span><em>보기</em></button>
           <button type="button" onClick={() => openSheet('theme')}><Sparkles /><span><b>테마 컬렉션</b><small>앱 전체 분위기 바꾸기</small></span><em>보기</em></button>

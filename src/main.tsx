@@ -79,7 +79,11 @@ function mountBootstrapShell() {
   ].join(';');
 
   const brand = document.createElement('strong');
-  brand.textContent = '단둘이';
+  brand.append('나');
+  const slash = document.createElement('em');
+  slash.textContent = '/';
+  slash.style.cssText = 'color:#635BEB;font-style:normal';
+  brand.append(slash, '너');
   brand.style.cssText = 'font-size:26px;letter-spacing:-1px;font-weight:900';
 
   const message = document.createElement('span');
@@ -117,7 +121,11 @@ function mountBootstrapFailure() {
   ].join(';');
 
   const brand = document.createElement('strong');
-  brand.textContent = '단둘이';
+  brand.append('나');
+  const slash = document.createElement('em');
+  slash.textContent = '/';
+  slash.style.cssText = 'color:#635BEB;font-style:normal';
+  brand.append(slash, '너');
   brand.style.cssText = 'font-size:26px;letter-spacing:-1px;font-weight:900';
 
   const message = document.createElement('span');

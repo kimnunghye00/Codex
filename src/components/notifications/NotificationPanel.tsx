@@ -31,10 +31,10 @@ export function NotificationPanel({ items, onClose, onReadAll, onClear, onSelect
   onEnableAlerts: () => void;
   alertStatus: string;
 }) {
-  return <div className="notification-backdrop" role="dialog" aria-modal="true" aria-label="단둘이 알림">
+  return <div className="notification-backdrop" role="dialog" aria-modal="true" aria-label="나너 알림">
     <section className="notification-panel">
       <header>
-        <div><small>ACTIVITY</small><h2>알림</h2><p>두 사람이 단둘이에서 한 활동과 수신 통화를 보여줘요.</p></div>
+        <div><small>ACTIVITY</small><h2>알림</h2><p>두 사람이 나너에서 한 활동과 수신 통화를 보여줘요.</p></div>
         <button className="notification-close" onClick={onClose} aria-label="닫기"><X /></button>
       </header>
       <div className="notification-actions">
@@ -50,7 +50,7 @@ export function NotificationPanel({ items, onClose, onReadAll, onClear, onSelect
             aria-label={item.title + ' · 해당 화면 열기'}>
             <span><strong>{item.title}</strong><time>{timeLabel(item.createdAt)}</time></span>
             {item.detail && <p>{item.detail}</p>}
-            <small>{item.actor === 'me' ? '나' : item.actor === 'partner' ? '상대방' : '단둘이'} · 눌러서 보기 →</small>
+            <small>{item.actor === 'me' ? '나' : item.actor === 'partner' ? '상대방' : '나너'} · 눌러서 보기 →</small>
           </button>
         </article>)}
       </div>

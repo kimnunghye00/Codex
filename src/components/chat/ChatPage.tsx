@@ -71,7 +71,7 @@ function aiReplyFor(text: string) {
   const value = text.trim();
   const lower = value.toLowerCase();
   if (!value) return '응, 듣고 있어.';
-  if (/안녕|하이|hello|hi/.test(lower)) return '안녕! 이제 단둘이 안에서도 대화 테스트를 할 수 있어 😊';
+  if (/안녕|하이|hello|hi/.test(lower)) return '안녕! 이제 나너 안에서도 대화 테스트를 할 수 있어 😊';
   if (/별명/.test(value)) return '별명 기능도 같이 확인해보자.';
   if (/오류|에러|버그|안돼|안 돼|문제/.test(value)) return '어디에서 문제가 생겼는지 알려줘.';
   if (/테스트/.test(value)) return '좋아. 메시지 전송부터 확인해보자.';

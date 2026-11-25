@@ -24,7 +24,7 @@ function ConnectedCoupleGate({ user, profile, children }: { user: User; profile:
     return () => { cancelled = true; };
   }, [user.uid]);
 
-  if (checking) return <div className="app-shell couple-gate-loading"><strong>단둘이</strong><span>커플 연결 정보를 확인하고 있어요…</span></div>;
+  if (checking) return <div className="app-shell couple-gate-loading"><strong className="naner-wordmark">나<em className="naner-slash">/</em>너</strong><span>커플 연결 정보를 확인하고 있어요…</span></div>;
   if (!connection) {
     return <CoupleConnect
       user={user}
