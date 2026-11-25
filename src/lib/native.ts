@@ -1,4 +1,5 @@
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
+import { nativeNetworkRetryDelay } from '../utils/androidInteraction';
 
 export const isNativePlatform = () => Capacitor.isNativePlatform();
 export const nativePlatform = () => Capacitor.getPlatform();
@@ -69,6 +70,8 @@ export type RouteLocationWatch = {
 let nativeFirestoreDesiredState = true;
 let nativeFirestoreAppliedState: boolean | undefined;
 let nativeFirestoreWorker: Promise<void> | null = null;
+let nativeFirestoreRetryTimer: number | undefined;
+let nativeFirestoreFailures = 0;
 let nativeFirestoreApi: Promise<{
   enableNetwork: (database: import('firebase/firestore').Firestore) => Promise<void>;
   disableNetwork: (database: import('firebase/firestore').Firestore) => Promise<void>;
@@ -84,13 +87,25 @@ function loadNativeFirestoreApi() {
       enableNetwork: firestore.enableNetwork,
       disableNetwork: firestore.disableNetwork,
       db: firebase.db,
-    }));
+    })).catch((error) => {
+      nativeFirestoreApi = null;
+      throw error;
+    });
   }
   return nativeFirestoreApi;
 }
 
 function setNativeFirestoreNetwork(enabled: boolean) {
   nativeFirestoreDesiredState = enabled;
+  nativeFirestoreFailures = 0;
+  if (nativeFirestoreRetryTimer !== undefined) {
+    window.clearTimeout(nativeFirestoreRetryTimer);
+    nativeFirestoreRetryTimer = undefined;
+  }
+  return reconcileNativeFirestoreNetwork();
+}
+
+function reconcileNativeFirestoreNetwork() {
   if (nativeFirestoreWorker) return nativeFirestoreWorker;
 
   nativeFirestoreWorker = (async () => {
@@ -99,21 +114,25 @@ function setNativeFirestoreNetwork(enabled: boolean) {
 
       while (nativeFirestoreAppliedState !== nativeFirestoreDesiredState) {
         const target = nativeFirestoreDesiredState;
-        try {
-          if (target) await enableNetwork(db);
-          else await disableNetwork(db);
-          nativeFirestoreAppliedState = target;
-        } catch {
-          // Lifecycle network hints are best-effort and must never block the UI.
-          break;
-        }
+        if (target) await enableNetwork(db);
+        else await disableNetwork(db);
+        nativeFirestoreAppliedState = target;
+        nativeFirestoreFailures = 0;
       }
+    } catch {
+      // Lifecycle hints are best effort. Avoid unhandled rejections and
+      // immediate recursive retries on persistent plugin/network failures.
+      nativeFirestoreFailures += 1;
     } finally {
       nativeFirestoreWorker = null;
-      // The desired state may have changed between the last loop check and
-      // worker teardown. Start exactly one follow-up worker if needed.
       if (nativeFirestoreAppliedState !== nativeFirestoreDesiredState) {
-        void setNativeFirestoreNetwork(nativeFirestoreDesiredState);
+        const delay = nativeNetworkRetryDelay(nativeFirestoreFailures);
+        if (delay !== null) {
+          nativeFirestoreRetryTimer = window.setTimeout(() => {
+            nativeFirestoreRetryTimer = undefined;
+            void reconcileNativeFirestoreNetwork();
+          }, delay);
+        }
       }
     }
   })();
@@ -140,8 +159,11 @@ export async function initializeNativeApp() {
     root.dataset.routeKeyboardWired = '1';
 
     const showKeyboard = (height: number) => {
+      const value = `${Math.max(0, height)}px`;
       root.classList.add('route-keyboard-open');
-      root.style.setProperty('--route-keyboard-height', `${Math.max(0, height)}px`);
+      if (root.style.getPropertyValue('--route-keyboard-height') !== value) {
+        root.style.setProperty('--route-keyboard-height', value);
+      }
     };
     const hideKeyboard = () => {
       root.classList.remove('route-keyboard-open');

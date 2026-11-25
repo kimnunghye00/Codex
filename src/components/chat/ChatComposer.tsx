@@ -1,3 +1,4 @@
+import { shouldSendChatOnEnter } from '../../utils/androidInteraction';
 import { preloadStickerPreviews } from './stickerPreviews';
 import { CalendarClock, ContactRound, FileUp, Gift, ImagePlus, Mic, Plus, Send, ShoppingBag, SmilePlus, Square, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -260,7 +261,7 @@ export function ChatComposer({
           onCompositionEnd={(event) => { composingRef.current = false; onDraft(event.currentTarget.value); }}
           onKeyDown={(event) => {
             const nativeEvent = event.nativeEvent as KeyboardEvent;
-            if (event.key === 'Enter' && !event.shiftKey && !composingRef.current && !nativeEvent.isComposing) {
+            if (shouldSendChatOnEnter({ key: event.key, shiftKey: event.shiftKey, composing: composingRef.current, isComposing: nativeEvent.isComposing, keyCode: nativeEvent.keyCode })) {
               event.preventDefault();
               onSend();
             }

@@ -84,6 +84,10 @@ check('mobile input font guards exist', stabilityCss.includes('font-size: 16px')
 
 check('Android app disables backup', manifest.includes('android:allowBackup="false"'));
 check('Android keyboard uses adjustResize', manifest.includes('android:windowSoftInputMode="adjustResize"'));
+const adaptiveCss = read('src/adaptive-window.css');
+check('Android compact keyboard hides navigation without changing the expanded rail', adaptiveCss.includes('html.route-native-android.route-keyboard-open') && adaptiveCss.includes('visibility:hidden !important') && adaptiveCss.includes('@media (max-width:599px)'));
+check('native network failures use bounded retries', native.includes('nativeNetworkRetryDelay(nativeFirestoreFailures)') && native.includes('nativeFirestoreRetryTimer') && native.includes('nativeFirestoreApi = null'));
+check('chat composer protects Android IME enter', read('src/components/chat/ChatComposer.tsx').includes('shouldSendChatOnEnter'));
 check('Android internet permission exists', manifest.includes('android.permission.INTERNET'));
 check('Android camera permission exists', manifest.includes('android.permission.CAMERA'));
 check('Android microphone permission exists', manifest.includes('android.permission.RECORD_AUDIO'));

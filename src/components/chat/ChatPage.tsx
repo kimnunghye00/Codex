@@ -280,6 +280,7 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
     const nav = document.querySelector<HTMLElement>('[data-route-nav]');
     const composer = page.querySelector<HTMLElement>(':scope > .composer-area');
     let frame = 0;
+    let lastDockGeometry = '';
     const resize = () => {
       frame = 0;
       const visibleBottom = Math.min(window.innerHeight, (viewport?.height ?? window.innerHeight) + (viewport?.offsetTop ?? 0));
@@ -294,6 +295,9 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
       const bottom = bottomNavVisible ? Math.min(visibleBottom, navBounds.top) : visibleBottom;
       const bounds = page.getBoundingClientRect();
       const height = `${Math.max(0, bottom - bounds.top)}px`;
+      const dockGeometry = [bottom, bounds.left, bounds.top, bounds.width, composer?.getBoundingClientRect().height ?? 0].join(':');
+      if (dockGeometry === lastDockGeometry) return;
+      lastDockGeometry = dockGeometry;
       // Inline priority also wins over responsive Tailwind !h-dvh utilities.
       page.style.setProperty('height', height, 'important');
       page.style.setProperty('max-height', height, 'important');
@@ -326,6 +330,7 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
     const keyboardObserver = new MutationObserver(scheduleResize);
     keyboardObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     window.addEventListener('resize', scheduleResize);
+    window.addEventListener('route-app-resume', scheduleResize);
     viewport?.addEventListener('resize', scheduleResize);
     viewport?.addEventListener('scroll', scheduleResize);
     resize();
@@ -334,6 +339,7 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
       observer.disconnect();
       keyboardObserver.disconnect();
       window.removeEventListener('resize', scheduleResize);
+      window.removeEventListener('route-app-resume', scheduleResize);
       viewport?.removeEventListener('resize', scheduleResize);
       viewport?.removeEventListener('scroll', scheduleResize);
     };

@@ -226,3 +226,32 @@ html body #root .route-responsive-root[data-route-desktop="true"] .app-shell > m
     min-height:430px !important; flex:none;
   }
 }
+
+/* Android WebView: keep the bottom dock within the actual compact window.
+ * A resized keyboard viewport must never display a competing bottom bar.
+ * Avoid expensive live background blur on the persistent native dock.
+ */
+html.route-native-android body #root .app-shell > .bottom-nav[data-route-nav] {
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+  background:var(--surface) !important;
+  touch-action:manipulation;
+}
+html.route-native-android body #root .app-shell > .bottom-nav[data-route-nav] > button {
+  touch-action:manipulation;
+}
+@media (max-width:599px) {
+  html.route-native-android body #root .app-shell > .bottom-nav[data-route-nav] {
+    inset:auto 0 0 0 !important;
+    width:100% !important; max-width:none !important;
+    height:var(--route-bottom-nav-height,82px) !important;
+    margin:0 !important; transform:none !important; translate:none !important;
+    border-radius:0 !important;
+  }
+  html.route-native-android.route-keyboard-open body #root .app-shell > .bottom-nav[data-route-nav] {
+    visibility:hidden !important; pointer-events:none !important;
+  }
+  html.route-native-android.route-keyboard-open body #root .app-shell > main {
+    padding-bottom:0 !important;
+  }
+}
