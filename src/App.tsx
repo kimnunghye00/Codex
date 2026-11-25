@@ -217,11 +217,11 @@ function App({ user, profile, onProfileChange }: AppProps) {
   const chatClearAllActivityRef = useRef(false);
   const knownActivityIds = useRef<Set<string> | null>(null);
   const tabHistory = useRef<Tab[]>(['home']);
-  const chatReturnTab = useRef<Exclude<Tab, 'chat'>>('home');
+  const [chatReturnTab, setChatReturnTab] = useState<Exclude<Tab, 'chat'>>('home');
   const chatDraftRef = useRef<RoomDraft>({ scope: '', text: '' });
   const roomScope = JSON.stringify([user.uid, connection?.coupleId ?? null]);
   const roomOpen = tab === 'chat';
-  const baseTab = roomOpen ? chatReturnTab.current : tab;
+  const baseTab = roomOpen ? chatReturnTab : tab;
   const unreadCount = useMemo(() => notifications.filter((item) => !item.read).length, [notifications]);
   const coupleDay = useMemo(() => {
     const start = parseDate(relationshipStartDate);
@@ -233,8 +233,8 @@ function App({ user, profile, onProfileChange }: AppProps) {
     if (tabHistory.current.at(-1) === 'chat') tabHistory.current.pop();
     setNotificationMessageId(undefined);
     setChatToolsSection(undefined);
-    setTab(chatReturnTab.current);
-  }, []);
+    setTab(chatReturnTab);
+  }, [chatReturnTab]);
   const exitChatRoom = useCallback(() => {
     if (!isNativePlatform() && window.history.state?.nanerChatRoom === true) {
       window.history.back();
@@ -244,14 +244,15 @@ function App({ user, profile, onProfileChange }: AppProps) {
     if (next === tab) return;
     if (next === 'location') setFootprintMemoryId(undefined);
     if (next === 'chat') {
-      chatReturnTab.current = tab === 'chat' ? chatReturnTab.current : tab;
+      setChatReturnTab(tab);
       if (!isNativePlatform() && window.history.state?.nanerChatRoom !== true) {
         window.history.pushState({ ...(window.history.state ?? {}), nanerChatRoom: true }, '');
       }
     } else if (tab === 'chat') {
       if (tabHistory.current.at(-1) === 'chat') tabHistory.current.pop();
       if (!isNativePlatform() && window.history.state?.nanerChatRoom === true) {
-        const { nanerChatRoom: _room, ...state } = window.history.state;
+        const state = { ...window.history.state };
+        delete state.nanerChatRoom;
         window.history.replaceState(state, '');
       }
       setNotificationMessageId(undefined);
@@ -264,7 +265,8 @@ function App({ user, profile, onProfileChange }: AppProps) {
     if (isNativePlatform()) return;
     // Clear an orphan marker after reload; a room belongs to this app session.
     if (window.history.state?.nanerChatRoom === true) {
-      const { nanerChatRoom: _room, ...state } = window.history.state;
+      const state = { ...window.history.state };
+      delete state.nanerChatRoom;
       window.history.replaceState(state, '');
     }
   }, []);
@@ -273,7 +275,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
     const onPopState = () => {
       if (tab === 'chat' && window.history.state?.nanerChatRoom !== true) restoreChatReturn();
       else if (tab !== 'chat' && window.history.state?.nanerChatRoom === true) {
-        chatReturnTab.current = tab;
+        setChatReturnTab(tab);
         if (tabHistory.current.at(-1) !== 'chat') tabHistory.current.push('chat');
         setTab('chat');
       }
@@ -634,7 +636,8 @@ function App({ user, profile, onProfileChange }: AppProps) {
   useEffect(() => {
     const handleHomeRequest = () => {
       if (!isNativePlatform() && window.history.state?.nanerChatRoom === true) {
-        const { nanerChatRoom: _room, ...state } = window.history.state;
+        const state = { ...window.history.state };
+        delete state.nanerChatRoom;
         window.history.replaceState(state, '');
       }
       tabHistory.current = ['home'];
