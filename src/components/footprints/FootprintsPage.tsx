@@ -49,6 +49,7 @@ import {
 } from '../../utils/location';
 import { PageSettingsSheet, PageSettingToggle } from '../navigation/PageSettingsSheet';
 import './FootprintsPage.css';
+import '../../danduli-modern-footprints.css';
 
 const MAP_ORIGIN = typeof window !== 'undefined' && window.location.hostname === 'danduli.web.app'
   ? 'https://danduli.web.app' : 'https://meluni-f4e00.web.app';

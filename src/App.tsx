@@ -36,6 +36,7 @@ import './home-couple-layout.css';
 import './home-map-overlay.css';
 import './home-brand-polish-v5.css';
 import './home-adaptive.css';
+import './danduli-modern-v1.css';
 
 const FootprintsPage = lazy(() => import('./components/footprints/FootprintsPage').then((module) => ({ default: module.FootprintsPage })));
 
@@ -782,7 +783,7 @@ const HomePage = memo(function HomePage({ uid, profile, onProfileChange, connect
       <button className="home-map-card" type="button" aria-label="우리의 발자취 열기" onClick={onOpenFootprints}>
         <div className="home-map-grid-lines" /><span className="home-map-road road-a" /><span className="home-map-road road-b" /><span className="home-map-river" />
         {recentPlaces.map((place, index) => <span key={place.id} className={`home-map-place ${['place-office', 'place-cafe', 'place-park'][index]}`}>{place.placeName || '방문 지점'}</span>)}
-        <div className="home-location-status"><MapPin size={16} /><span><b>우리의 발자취 ♡</b><small>{personalVisits.length ? `내 이전 방문 기록 ${personalVisits.length}곳 · 전체 보기` : '새로운 추억을 남길 준비 중이에요'}</small></span></div>
+        <div className="home-location-status"><MapPin size={16} /><span><b>우리의 발자취</b><small>{personalVisits.length ? `내 이전 방문 기록 ${personalVisits.length}곳 · 전체 보기` : '방문 기록 보기'}</small></span></div>
         <div className="home-map-person"><span className="home-map-halo" /><span className="home-map-avatar">♡</span><MapPin size={25} fill="currentColor" /></div>
         <div className="home-map-locate"><MapPinned size={20} /></div>
       </button>

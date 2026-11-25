@@ -1,0 +1,81 @@
+/* Conversations — protect composer and media geometry, only style controls. */
+html body .app-shell .chat-page .message-wrap > .bubble:not(.sticker-bubble):not(.media-bubble):not(.gallery-bubble):not(.utility-bubble) {
+  border-radius: 18px 18px 18px 6px !important;
+  /* Preserve the user-selected chat font size. */
+  box-shadow: none !important;
+}
+html body .app-shell .chat-page .bubble-row.mine .message-wrap > .bubble:not(.sticker-bubble):not(.media-bubble):not(.gallery-bubble):not(.utility-bubble) {
+  border-radius: 18px 18px 6px 18px !important;
+}
+html body .app-shell .chat-page .composer-area .composer {
+  background: var(--surface) !important;
+  border-color: var(--danduli-card-line) !important;
+  box-shadow: none !important;
+}
+html body .app-shell .chat-page .composer textarea {
+  background: var(--danduli-fill) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--danduli-card-line) !important;
+  border-radius: 22px !important;
+}
+html body .app-shell .chat-page .composer textarea:focus {
+  border-color: var(--accent-text, var(--primary)) !important;
+}
+html body .app-shell .chat-page .composer textarea::placeholder {
+  color: var(--placeholder, var(--text-secondary)) !important;
+}
+html body .app-shell .chat-page .composer > button:not(.send) {
+  color: var(--text-secondary) !important;
+  box-shadow: none !important;
+}
+html body .app-shell .chat-page .composer .send.ready {
+  color: var(--on-primary, #fff) !important;
+  background: var(--primary) !important;
+  box-shadow: none !important;
+}
+html body .app-shell .chat-page .message-meta {
+  color: var(--text-secondary) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+html body .app-shell .chat-page .danduli-scheduled-disclosure {
+  flex: 0 0 auto;
+  min-height: 0;
+  max-height: min(22dvh,180px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+html body .app-shell .chat-page .danduli-scheduled-disclosure > summary {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  cursor: pointer;
+  list-style: none;
+}
+.danduli-scheduled-disclosure > summary::-webkit-details-marker { display:none; }
+.danduli-scheduled-disclosure > summary::after {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  margin-inline-start: auto;
+  flex-shrink: 0;
+}
+.danduli-scheduled-disclosure[open] > summary::after { transform: rotate(225deg); }
+.danduli-scheduled-note { color:var(--text-secondary);font-size:11px;padding:4px 8px;margin:0; }
+
+/* V3: make contextual information quieter without altering the message list. */
+html body .app-shell .chat-page .date-chip {
+  background: var(--danduli-fill) !important;
+  color: var(--text-secondary) !important;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--danduli-card-line);
+}
+html body .app-shell .chat-page .chat-next-schedule {
+  background: var(--surface) !important;
+  border-color: var(--danduli-card-line) !important;
+  border-radius: var(--danduli-radius-control) !important;
+  box-shadow: none !important;
+}

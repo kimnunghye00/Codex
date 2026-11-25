@@ -48,7 +48,6 @@ import './route-mobile-bugfix-v29.css';
 import './route-popup-system-v31.css';
 import './app-header-alignment.css';
 import './adaptive-window.css';
-import './danduli-modern-v1.css';
 
 const NATIVE_SPLASH_FAILSAFE_MS = 2500;
 const DEFERRED_RUNTIME_FALLBACK_MS = 900;

@@ -7,3 +7,5 @@ import '../../route-chat-media-recovery-v28.css';
 import '../../route-chat-scroll-v30.css';
 
 import '../../route-chat-composer-visible-v37.css';
+
+import '../../danduli-modern-chat.css';

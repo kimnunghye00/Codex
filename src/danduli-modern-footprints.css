@@ -1,0 +1,36 @@
+/* Footprints — map-first, compact timeline, no changes to provider tiles or data. */
+html body .app-shell .footprints-page :is(.footprints-map,.footprints-list,.footprints-session-card,.footprints-sharing) {
+  border-radius: var(--danduli-radius-card) !important;
+  border-color: var(--danduli-card-line) !important;
+  box-shadow: none !important;
+}
+html body .app-shell .footprints-page :is(.footprints-scope-tabs,.footprints-tabs) > button {
+  border-radius: var(--danduli-radius-control) !important;
+}
+html body .app-shell .footprints-page .footprints-visit {
+  border-color: var(--danduli-card-line);
+  box-shadow: none !important;
+}
+html body .app-shell .footprints-page .footprints-visit-text b {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+html body .app-shell .footprints-page .footprints-heading > div > small { display:none; }
+html body .app-shell .footprints-page .footprints-heading h1 { letter-spacing:-.035em; }
+
+/* V3: visually connect the existing chronological visit rows. */
+html body .app-shell .footprints-page .footprints-visit {position:relative;isolation:isolate;}
+html body .app-shell .footprints-page .footprints-visit:not(:last-child)::before {
+  content:'';position:absolute;left:15px;top:43px;bottom:-13px;width:1px;
+  background:var(--border);z-index:-1;pointer-events:none;
+}
+html body .app-shell .footprints-page .footprints-pin {
+  color:var(--accent-text,var(--primary));
+  background:var(--primary-soft);
+}
+html body .app-shell .footprints-page .footprints-visit-text strong {font-size:14px;line-height:1.4;}
+html body .app-shell .footprints-page .footprints-visit-text > small {font-variant-numeric:tabular-nums;}
+html body .app-shell .footprints-page .footprints-datebar > button {min-width:44px;min-height:44px;}
+html body .app-shell .footprints-page .footprints-datebar label {min-height:44px;}
+html body .app-shell .footprints-page .footprints-map-badge {max-width:calc(100% - 24px);overflow-wrap:anywhere;}

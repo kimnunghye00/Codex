@@ -75,16 +75,17 @@ function MemoryCardComponent({ memory, onOpen }: { memory: Memory; onOpen: (id: 
     };
   }, [cover, mediaActive]);
 
-  return <article ref={cardRef} className="memory-card" onClick={() => onOpen(memory.id)}>
+  return <article ref={cardRef} className="memory-card" role="button" tabIndex={0} aria-label={`${memory.title} 추억 보기`} onClick={() => onOpen(memory.id)} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onOpen(memory.id); } }}>
     <div className="memory-cover">
       {!mediaActive
         ? <span className="memory-media-fallback" aria-hidden="true" />
         : isMemoryVideo(cover)
           ? <video ref={videoRef} src={cover} muted loop playsInline preload="metadata" />
           : <MemoryImage src={cover} alt={memory.title} loading="eager" />}
+      {memory.images.length > 1 && <span className="danduli-memory-count" aria-label={`사진 및 영상 ${memory.images.length}개`}>{memory.images.length}개</span>}
       <span className={memory.favorite ? 'memory-favorite-badge active' : 'memory-favorite-badge'}><Heart size={17} fill={memory.favorite ? 'currentColor' : 'none'} /></span>
     </div>
-    <div className="memory-card-copy"><span>{date.getMonth() + 1}월 {date.getDate()}일</span><h3>{memory.title}</h3>{memory.location && <p><MapPin size={12} />{memory.location}</p>}</div>
+    <div className="memory-card-copy"><span>{date.getFullYear()}년 {date.getMonth() + 1}월 {date.getDate()}일</span><h3>{memory.title}</h3>{memory.location && <p><MapPin size={12} />{memory.location}</p>}</div>
   </article>;
 }
 
