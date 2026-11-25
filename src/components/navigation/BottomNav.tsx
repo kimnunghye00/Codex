@@ -6,7 +6,7 @@ const ITEMS: [AppTab, string, typeof Home][] = [
   ['home', '홈', Home],
   ['memories', '추억', Image],
   ['chat', '대화', MessageCircle],
-  ['location', '지도', MapPinned],
+  ['location', '발자취', MapPinned],
   ['more', '더보기', Ellipsis],
 ];
 

@@ -672,7 +672,7 @@ export function FootprintsPage({
   const selectedDate = DISPLAY_DATE.format(new Date(day + 'T12:00:00+09:00'));
 
   return <div className="page footprints-page">
-    <Header title="지도" onSettings={() => setSettingsOpen(true)} settingsLabel="발자취 설정" />
+    <Header title="발자취" onSettings={() => setSettingsOpen(true)} settingsLabel="발자취 설정" />
     {settingsOpen && <PageSettingsSheet title="발자취 설정" onClose={() => setSettingsOpen(false)}>
       <PageSettingToggle label="내 GPS 공유" description="상대방 발자취는 상대방 GPS로, 함께한 발자취는 두 사람의 GPS를 교차 확인해요." checked={sharing} onChange={() => { if (connection && !sharingBusy) void setLocationSharing(!sharing); }} />
       <p>위치 공유를 켠 동안의 기록으로 발자취를 만들어요. 공유할 영상에서는 민감한 위치를 숨길 수 있어요.</p>
@@ -680,8 +680,8 @@ export function FootprintsPage({
     <div className="footprints-heading">
       <div>
         <small>COUPLE FOOTPRINTS</small>
-        <h1>우리의 발자취 ♡</h1>
-        <p>상대방의 이동과 둘이 실제로 함께 있었던 시간을 구분해서 확인해요.</p>
+        <h1>우리의 발자취</h1>
+        <p>날짜를 선택해 상대방의 이동 또는 함께한 장소를 확인해요.</p>
       </div>
     </div>
 
