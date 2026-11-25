@@ -29,10 +29,18 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/naner-security-update.mjs
-          npm install --package-lock-only --ignore-scripts --no-audit
+          # npm Arborist may fail to reconcile old nested overrides in an
+          # existing lock. Preserve exact direct pins and resolve a clean lock
+          # only when the incremental attempt fails.
+          if ! npm install --package-lock-only --ignore-scripts --no-audit; then
+            echo "::warning::Incremental lock resolution failed; rebuilding from exact manifest pins."
+            rm -f package-lock.json
+            npm install --package-lock-only --ignore-scripts --no-audit
+          fi
           # Only non-forced compatible fixes. A remaining advisory is handled
           # by the gate, not by downgrading Firebase or suppressing reports.
           npm audit fix --package-lock-only --ignore-scripts || true
+          test -s package-lock.json
           node scripts/pin-dependencies.mjs
           node scripts/route-dependency-smoke.mjs
       - name: Record exact updated source on QA branch only
