@@ -1,0 +1,240 @@
+/* Danduli Modern v1 — presentation only.
+ * Reuse the ten semantic palettes; leave viewport sizing, navigation, keyboard
+ * handling, media layout and all application state to their existing owners.
+ */
+:root {
+  --danduli-radius-card: 20px;
+  --danduli-radius-control: 14px;
+  --danduli-card-line: color-mix(in srgb, var(--border) 78%, var(--surface));
+  --danduli-fill: color-mix(in srgb, var(--text-primary) 4%, var(--surface));
+  --danduli-muted: var(--text-secondary);
+  --danduli-ease: 160ms ease-out;
+}
+
+/* Shared navigation — no geometry changes. */
+html body .app-shell .app-global-header.topbar {
+  border-bottom: 1px solid var(--danduli-card-line) !important;
+  background: var(--background) !important;
+  box-shadow: none !important;
+}
+html body .app-shell .app-global-header.topbar::after {
+  content: none !important;
+}
+html body .app-shell .app-global-header .wordmark strong {
+  color: var(--text-primary) !important;
+  font-weight: 800;
+  letter-spacing: -.055em;
+}
+html body .app-shell .app-global-header .page-title {
+  color: var(--text-secondary) !important;
+  font-weight: 650;
+  border-left-color: var(--border);
+}
+html body .app-shell .app-global-header .header-actions button {
+  color: var(--text-primary) !important;
+  border-radius: var(--danduli-radius-control);
+  box-shadow: none;
+}
+html body .app-shell .bottom-nav[data-route-nav] {
+  background: var(--surface) !important;
+  border-color: var(--danduli-card-line) !important;
+  box-shadow: 0 3px 18px #00000008 !important;
+}
+html body .app-shell .bottom-nav[data-route-nav] > button {
+  color: var(--text-secondary) !important;
+  font-size: 11px !important;
+  font-weight: 550 !important;
+}
+html body .app-shell .bottom-nav[data-route-nav] > button.active {
+  color: var(--text-primary) !important;
+  font-weight: 750 !important;
+}
+html body .app-shell .bottom-nav[data-route-nav] > button.active .nav-icon {
+  color: var(--on-accent, #fff) !important;
+  background: var(--route-accent, var(--primary)) !important;
+  border-radius: 12px !important;
+}
+html body .app-shell .bottom-nav[data-route-nav] > button:not(.active) .nav-icon {
+  color: var(--text-secondary) !important;
+  background: transparent !important;
+}
+
+/* Home — map and relationship time are the anchors, not decorative gradients. */
+html body .app-shell .home-dashboard :is(.home-couple-profile-card,.home-time-card,.home-schedule-card,.home-chat-card,.home-photo-card,.home-map-card) {
+  border: 1px solid var(--danduli-card-line) !important;
+  border-radius: var(--danduli-radius-card) !important;
+  box-shadow: none !important;
+}
+html body .app-shell .home-dashboard :is(.home-couple-profile-card,.home-schedule-card,.home-chat-card) {
+  background: var(--surface) !important;
+}
+html body .app-shell .home-dashboard .home-time-card {
+  background: linear-gradient(135deg, var(--surface), var(--primary-soft)) !important;
+}
+html body .app-shell .home-dashboard :is(.home-time-card,.home-schedule-card)::before,
+html body .app-shell .home-dashboard .home-chat-card::after,
+html body .app-shell .home-dashboard .home-card-title span::before {
+  content: none !important;
+}
+html body .app-shell .home-dashboard .home-couple-profile-card::after {
+  box-shadow: none !important;
+}
+html body .app-shell .home-dashboard .home-map-card::before {
+  content: none !important;
+}
+html body .app-shell .home-dashboard .home-time-block strong {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800 !important;
+  letter-spacing: -.045em !important;
+}
+html body .app-shell .home-dashboard .home-schedule-add {
+  background: var(--danduli-fill) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--danduli-card-line) !important;
+  box-shadow: none !important;
+}
+
+/* Conversations — protect composer and media geometry, only style controls. */
+html body .app-shell .chat-page .message-wrap > .bubble:not(.sticker-bubble):not(.media-bubble):not(.gallery-bubble):not(.utility-bubble) {
+  border-radius: 18px 18px 18px 6px !important;
+  font-size: 14px;
+  line-height: 1.5;
+  box-shadow: none !important;
+}
+html body .app-shell .chat-page .bubble-row.mine .message-wrap > .bubble:not(.sticker-bubble):not(.media-bubble):not(.gallery-bubble):not(.utility-bubble) {
+  border-radius: 18px 18px 6px 18px !important;
+}
+html body .app-shell .chat-page .composer-area .composer {
+  background: var(--surface) !important;
+  border-color: var(--danduli-card-line) !important;
+  box-shadow: none !important;
+}
+html body .app-shell .chat-page .composer textarea {
+  background: var(--danduli-fill) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--danduli-card-line) !important;
+  border-radius: 22px !important;
+}
+html body .app-shell .chat-page .composer textarea:focus {
+  border-color: var(--accent-text, var(--primary)) !important;
+}
+html body .app-shell .chat-page .composer textarea::placeholder {
+  color: var(--placeholder, var(--text-secondary)) !important;
+}
+html body .app-shell .chat-page .composer > button:not(.send) {
+  color: var(--text-secondary) !important;
+  box-shadow: none !important;
+}
+html body .app-shell .chat-page .composer .send.ready {
+  color: var(--on-primary, #fff) !important;
+  background: var(--primary) !important;
+  box-shadow: none !important;
+}
+html body .app-shell .chat-page .message-meta {
+  color: var(--text-secondary) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Memories — photo-first hierarchy and consistent filters. */
+html body .app-shell .memories-page .hub-head h1 {
+  font-size: 26px;
+  letter-spacing: -.045em;
+  font-weight: 800;
+}
+html body .app-shell .memories-page .hub-head small {
+  display: none;
+}
+html body .app-shell .memories-page :is(.hub-tabs,.memory-filters) > button {
+  font-size: 12px !important;
+  border-radius: 12px !important;
+  box-shadow: none !important;
+}
+html body .app-shell .memories-page :is(.hub-tabs,.memory-filters) > button:not(.active) {
+  background: var(--surface) !important;
+  color: var(--text-secondary) !important;
+  border-color: var(--danduli-card-line) !important;
+}
+html body .app-shell .memories-page :is(.hub-tabs,.memory-filters) > button.active {
+  background: var(--primary) !important;
+  color: var(--on-primary, #fff) !important;
+  border-color: var(--primary) !important;
+}
+html body .app-shell .memories-page :is(.memory-card,.last-year-card,.hub-hero,.anniversary-row,.tier-card,.record-grid article) {
+  border: 1px solid var(--danduli-card-line) !important;
+  border-radius: var(--danduli-radius-card) !important;
+  box-shadow: none !important;
+  background: var(--surface) !important;
+}
+html body .app-shell .memories-page .memory-card-copy h3 {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+html body .app-shell .memories-page .memory-card-copy > span {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+html body .app-shell .memories-page .memory-card-copy p {
+  font-size: 11px;
+}
+
+/* Footprints — map-first, compact timeline, no changes to provider tiles or data. */
+html body .app-shell .footprints-page :is(.footprints-map,.footprints-list,.footprints-session-card,.footprints-sharing) {
+  border-radius: var(--danduli-radius-card) !important;
+  border-color: var(--danduli-card-line) !important;
+  box-shadow: none !important;
+}
+html body .app-shell .footprints-page :is(.footprints-scope-tabs,.footprints-tabs) > button {
+  border-radius: var(--danduli-radius-control) !important;
+}
+html body .app-shell .footprints-page .footprints-visit {
+  border-color: var(--danduli-card-line);
+  box-shadow: none !important;
+}
+html body .app-shell .footprints-page .footprints-visit-text b {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+/* More and settings — neutral utility grid. */
+html body .app-shell :is(.more-service-intro,.more-feature-section,.more-couple-strip,.more-settings-group,.route-settings-list) {
+  background: var(--surface) !important;
+  border-color: var(--danduli-card-line) !important;
+  border-radius: var(--danduli-radius-card) !important;
+  box-shadow: none !important;
+}
+html body .app-shell .more-section-title > small {
+  display: none;
+}
+html body .app-shell .more-customize-grid > button {
+  background: var(--surface) !important;
+  border-color: var(--danduli-card-line) !important;
+  box-shadow: none !important;
+  border-radius: 16px !important;
+}
+html body .app-shell .more-customize-grid .more-customize-icon {
+  background: var(--primary-soft) !important;
+  color: var(--accent-text, var(--primary)) !important;
+  box-shadow: none !important;
+}
+html body .app-shell .more-customize-grid > button > b {
+  color: var(--text-primary) !important;
+}
+html body .app-shell .more-customize-grid > button > small {
+  color: var(--text-secondary) !important;
+}
+
+/* Small, non-layout feedback; keyboard focus and reduced motion are respected. */
+html body .app-shell :is(.header-actions button,.bottom-nav button,.hub-tabs button,.memory-filters button,.more-customize-grid button) {
+  transition: color var(--danduli-ease), background-color var(--danduli-ease), opacity var(--danduli-ease);
+}
+html body .app-shell :is(button,a,textarea,[role="button"]):focus-visible {
+  outline: 2px solid var(--accent-text, var(--primary));
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  html body .app-shell :is(.header-actions button,.bottom-nav button,.hub-tabs button,.memory-filters button,.more-customize-grid button) {
+    transition: none !important;
+  }
+}
