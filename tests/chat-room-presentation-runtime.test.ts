@@ -10,7 +10,7 @@ test('recent photos include older images and galleries, deduplicate and cap', ()
   assert.deepEqual(recentChatPhotos([]), []);
 });
 test('scheduled drafts from another couple are excluded in either room layout', () => {
-  const items = [{id:'a',coupleId:'old'},{id:'b',coupleId:'new'},{id:'legacy'}] as ScheduledChatDraft[];
-  assert.deepEqual(visibleScheduledDrafts(items,'new').map(item=>item.id), ['b','legacy']);
-  assert.deepEqual(visibleScheduledDrafts(items).map(item=>item.id), ['legacy']);
+  const items = [{id:1,text:'old',sendAt:100,coupleId:'old'},{id:2,text:'new',sendAt:100,coupleId:'new'},{id:3,text:'legacy',sendAt:100}] satisfies ScheduledChatDraft[];
+  assert.deepEqual(visibleScheduledDrafts(items,'new').map(item=>item.id), [2,3]);
+  assert.deepEqual(visibleScheduledDrafts(items).map(item=>item.id), [3]);
 });

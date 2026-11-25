@@ -270,7 +270,7 @@ function DeferredMediaImageSource({ src, alt, className, onClick, eager = false 
     alt={alt}
     loading={eager ? 'eager' : 'lazy'}
     decoding="async"
-    onLoad={() => seenMediaSrcs.add(src)}
+    onLoad={() => rememberSeenMedia(src)}
     onError={() => setPreviewFailed(true)}
     onClick={onClick}
   />;

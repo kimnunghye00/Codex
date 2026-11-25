@@ -12,7 +12,7 @@ export type ChatPreferences = {
   ownedStickerPacks: string[];
 };
 
-type StickerPack = { id: string; name: string; description: string; stickers: string[]; priceLabel: string };
+export type StickerPack = { id: string; name: string; description: string; stickers: string[]; priceLabel: string };
 
 export const STICKER_PACKS: StickerPack[] = [
   { id: 'danduli-couple', name: '나너 커플', description: '고양이와 토끼 커플의 16가지 마음 표현', stickers: DANDULI_STICKERS.map((sticker) => stickerToken(sticker.id)), priceLabel: '기본' },
