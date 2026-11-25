@@ -9,27 +9,89 @@ concurrency:
   group: naner-qa-only
   cancel-in-progress: true
 jobs:
-  web-preview:
+  prepare-dependencies:
     if: github.ref == 'refs/heads/design/naner-phase8-qa'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: write
+    outputs:
+      source-sha: ${{ steps.source.outputs.sha }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-      - name: Install locked dependencies
+      - name: Apply audited security updates
+        run: |
+          set -euo pipefail
+          node scripts/naner-security-update.mjs
+          npm install --package-lock-only --ignore-scripts --no-audit
+          # Only non-forced compatible fixes. A remaining advisory is handled
+          # by the gate, not by downgrading Firebase or suppressing reports.
+          npm audit fix --package-lock-only --ignore-scripts || true
+          node scripts/pin-dependencies.mjs
+          node scripts/route-dependency-smoke.mjs
+      - name: Record exact updated source on QA branch only
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/design/naner-phase8-qa
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git add package.json package-lock.json
+          if ! git diff --cached --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m "QA: pin verified dependency security updates"
+            git push origin HEAD:refs/heads/design/naner-phase8-qa
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "Security candidate: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload exact dependency manifests
+        uses: actions/upload-artifact@v4
+        with:
+          name: NANER-security-manifests
+          path: |
+            package.json
+            package-lock.json
+          if-no-files-found: error
+          retention-days: 14
+  security-stability:
+    needs: prepare-dependencies
+    if: github.ref == 'refs/heads/design/naner-phase8-qa'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      QA_SOURCE_SHA: ${{ needs.prepare-dependencies.outputs.source-sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.QA_SOURCE_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install exact candidate dependencies
         run: npm ci
-      - name: Audit dependencies separately
+      - name: Audit both dependency trees
         id: audit
+        continue-on-error: true
         shell: bash
         run: |
           mkdir -p qa-reports
           npm audit --json > qa-reports/full-audit.json || true
-          npm audit --omit=dev --audit-level=high --json > qa-reports/production-audit.json
-        continue-on-error: true
-      - name: Upload dependency audit
+          npm audit --omit=dev --json > qa-reports/production-audit.json || true
+          node scripts/naner-security-gate.mjs
+      - name: Upload actual audit results
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -37,6 +99,51 @@ jobs:
           path: qa-reports/
           if-no-files-found: error
           retention-days: 14
+      - name: Code quality
+        run: npm run lint
+      - name: Verify location upload and Cloud Functions
+        run: |
+          npm install --prefix functions-location --no-audit --no-fund
+          node --check functions-location/index.js
+          node --test functions-location/location-upload.test.js
+          node --check functions/index.js
+      - name: Firebase permission and two-account tests
+        run: npm run test:security
+      - name: Full production build and stability suite
+        run: npm run stability
+      - name: Critical release guardrails
+        run: |
+          test -f ROUTE_RELEASE_GUARDRAILS.md
+          test -f src/AppCrashBoundary.tsx
+          test -f src/lib/persistentBackup.ts
+          test -f public/naver-map-host.html
+          test -f firestore.rules
+          test -f storage.rules
+          test -f firebase.json
+          test -f public/sw.js
+          grep -q 'initializeRuntimeRecovery' src/main.tsx
+          grep -q 'backupMedia' storage.rules
+      - name: Require security pass before either QA build
+        if: always()
+        run: test '${{ steps.audit.outcome }}' = success
+  web-preview:
+    needs: [prepare-dependencies, security-stability]
+    env:
+      QA_SOURCE_SHA: ${{ needs.prepare-dependencies.outputs.source-sha }}
+    if: github.ref == 'refs/heads/design/naner-phase8-qa'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.QA_SOURCE_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
       - name: Build verified web source
         run: |
           npm run build
@@ -45,7 +152,7 @@ jobs:
           npm run stability:flow
           test -f dist/manifest.webmanifest
           test -f dist/sw.js
-          printf '%s\n' "$GITHUB_SHA" > dist/qa-build.txt
+          printf '%s\n' "$QA_SOURCE_SHA" > dist/qa-build.txt
       - name: Upload test web bundle
         uses: actions/upload-artifact@v4
         with:
@@ -54,7 +161,6 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Publish expiring test channel only
-        if: steps.audit.outcome == 'success'
         shell: bash
         env:
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.ROUTE_FIREBASE_SERVICE_ACCOUNT }}
@@ -97,29 +203,29 @@ jobs:
           fs.writeFileSync('qa-preview-url.txt', url.replace(/\/$/,'')+'\n');
           NODE
           URL="$(cat qa-preview-url.txt)"
-          curl --fail --silent --show-error --retry 5 --retry-delay 4 "$URL/qa-build.txt" | grep -Fx "$GITHUB_SHA"
+          curl --fail --silent --show-error --retry 5 --retry-delay 4 "$URL/qa-build.txt" | grep -Fx "$QA_SOURCE_SHA"
           echo "Preview URL: $URL"
           echo "### Test preview (7 days)" >> "$GITHUB_STEP_SUMMARY"
           echo "$URL" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload verified preview URL
-        if: steps.audit.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: NANER-preview-url
           path: qa-preview-url.txt
           if-no-files-found: error
-      - name: Report unresolved production dependency risk
-        if: steps.audit.outcome != 'success'
-        run: |
-          echo "::error::Production dependency audit did not pass. Public preview withheld; test artifacts and audit report are available."
-          exit 1
   build-apk:
+    needs: [prepare-dependencies, security-stability]
+    env:
+      QA_SOURCE_SHA: ${{ needs.prepare-dependencies.outputs.source-sha }}
     if: github.ref == 'refs/heads/design/naner-phase8-qa'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: ${{ env.QA_SOURCE_SHA }}
+          persist-credentials: false
 
       - name: Setup Node
         uses: actions/setup-node@v5
