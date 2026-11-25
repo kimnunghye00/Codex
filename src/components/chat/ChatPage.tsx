@@ -322,11 +322,11 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
     const scheduleResize = () => {
       if (!frame) frame = window.requestAnimationFrame(resize);
     };
-    const observer = new ResizeObserver(scheduleResize);
-    if (nav) observer.observe(nav);
-    if (composer) observer.observe(composer);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(scheduleResize);
+    if (nav) observer?.observe(nav);
+    if (composer) observer?.observe(composer);
     // Fold transitions and multi-window can change the page before a window event.
-    observer.observe(page);
+    observer?.observe(page);
     const keyboardObserver = new MutationObserver(scheduleResize);
     keyboardObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     window.addEventListener('resize', scheduleResize);
@@ -336,7 +336,7 @@ export function ChatPage({ Header, messages, setMessages, connection, initialMes
     resize();
     return () => {
       window.cancelAnimationFrame(frame);
-      observer.disconnect();
+      observer?.disconnect();
       keyboardObserver.disconnect();
       window.removeEventListener('resize', scheduleResize);
       window.removeEventListener('route-app-resume', scheduleResize);

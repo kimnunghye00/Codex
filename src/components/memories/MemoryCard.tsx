@@ -6,6 +6,31 @@ import { isMemoryVideo, MemoryImage } from './MemoryMedia';
 let activePreviewVideo: HTMLVideoElement | null = null;
 let previewVisibilityWired = false;
 
+// All album covers use the same viewport and prefetch margin. One observer
+// avoids allocating an observer per record while preserving offscreen release.
+let coverObserver: IntersectionObserver | null = null;
+const coverListeners = new Map<Element, (active: boolean) => void>();
+
+function observeCover(element: Element, listener: (active: boolean) => void) {
+  if (typeof IntersectionObserver === 'undefined') {
+    listener(true);
+    return () => {};
+  }
+  coverObserver ??= new IntersectionObserver((entries) => {
+    for (const entry of entries) coverListeners.get(entry.target)?.(entry.isIntersecting);
+  }, { rootMargin: '520px 0px', threshold: 0.01 });
+  coverListeners.set(element, listener);
+  coverObserver.observe(element);
+  return () => {
+    coverObserver?.unobserve(element);
+    coverListeners.delete(element);
+    if (!coverListeners.size) {
+      coverObserver?.disconnect();
+      coverObserver = null;
+    }
+  };
+}
+
 function wirePreviewVisibilityGuard() {
   if (previewVisibilityWired || typeof document === 'undefined') return;
   previewVisibilityWired = true;
@@ -33,17 +58,12 @@ function MemoryCardComponent({ memory, onOpen }: { memory: Memory; onOpen: (id: 
       return;
     }
 
-    const observer = new IntersectionObserver(([entry]) => {
-      setMediaActive(entry.isIntersecting);
-    }, { rootMargin: '520px 0px', threshold: 0.01 });
-
-    observer.observe(card);
-    return () => observer.disconnect();
+    return observeCover(card, setMediaActive);
   }, []);
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !mediaActive || !isMemoryVideo(cover)) return;
+    if (!video || !mediaActive || !isMemoryVideo(cover) || typeof IntersectionObserver === 'undefined') return;
     wirePreviewVisibilityGuard();
 
     const observer = new IntersectionObserver(([entry]) => {

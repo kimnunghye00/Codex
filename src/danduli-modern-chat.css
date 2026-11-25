@@ -99,3 +99,20 @@ html body .app-shell .chat-page .danduli-scheduled-disclosure[open] .danduli-sch
   }
   html body .app-shell .chat-page .danduli-scheduled-disclosure > summary::after {transition:none !important;}
 }
+
+/* V5: the textarea takes the remaining width on narrow cover screens.
+ * Keep the existing measured fixed dock, IME handling and message virtualization. */
+@media(max-width:399px) {
+  html body .app-shell .chat-page .composer textarea {
+    width:0 !important;min-width:0 !important;flex:1 1 0% !important;
+    padding-inline:10px !important;
+  }
+  html body .app-shell .chat-page .composer {gap:4px !important;}
+}
+html.route-keyboard-open body .app-shell .chat-page .danduli-scheduled-disclosure {
+  max-height:min(16dvh,96px);
+}
+html body .app-shell .chat-page .composer-area {
+  padding-inline-start:max(7px,env(safe-area-inset-left,0px));
+  padding-inline-end:max(7px,env(safe-area-inset-right,0px));
+}

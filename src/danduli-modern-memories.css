@@ -67,7 +67,7 @@ html body .app-shell .memories-page .danduli-memory-empty {
 }
 .danduli-album-summary strong {color:var(--text-primary);font-size:13px;font-variant-numeric:tabular-nums;}
 html body .app-shell .memories-page .memory-list {
-  grid-template-columns:repeat(auto-fit,minmax(min(100%,155px),1fr)) !important;
+  grid-template-columns:repeat(auto-fill,minmax(min(100%,155px),1fr)) !important;
   gap:12px;
 }
 @media(min-width:600px) {
@@ -105,4 +105,14 @@ html body .app-shell .memories-page .memory-card .memory-cover img.danduli-media
   html body .app-shell .memories-page .memory-card .memory-cover img {
     animation:none !important;transition:none !important;transform:none !important;
   }
+}
+
+/* V5: stable card columns when filtering down to a single memory. */
+@media(max-width:359px) {
+  html body #root .app-shell > main > .route-hub .memory-list {
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    gap:8px !important;
+  }
+  html body .app-shell .memories-page .memory-card-copy {padding:8px;}
+  html body .app-shell .memories-page .memory-card-copy h3 {font-size:13px;}
 }
