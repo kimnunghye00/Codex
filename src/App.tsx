@@ -244,7 +244,7 @@ function App({ user, profile, onProfileChange }: AppProps) {
     if (next === tab) return;
     if (next === 'location') setFootprintMemoryId(undefined);
     if (next === 'chat') {
-      setChatReturnTab(tab);
+      if (tab !== 'chat') setChatReturnTab(tab);
       if (!isNativePlatform() && window.history.state?.nanerChatRoom !== true) {
         window.history.pushState({ ...(window.history.state ?? {}), nanerChatRoom: true }, '');
       }
