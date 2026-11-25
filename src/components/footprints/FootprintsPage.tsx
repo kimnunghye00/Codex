@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
+import { useExpandedMobile } from '../../utils/useExpandedMobile';
 import {
   CalendarDays,
   ChevronRight,
@@ -157,6 +158,8 @@ export function FootprintsPage({
   Header,
 }: Props) {
   const focusMemory = memories.find((memory) => memory.id === initialMemoryId);
+  const expanded = useExpandedMobile();
+  const [focusedVisitId, setFocusedVisitId] = useState<string>();
   const [scope, setScope] = useState<FootprintScope>('together');
   const [day, setDay] = useState(focusMemory?.date || todayKey());
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -458,6 +461,8 @@ export function FootprintsPage({
     sessionPlaybackRequest.current = undefined;
     setSelectedSessionAnchorId(undefined);
     setVideoExportOpen(false);
+    setFocusedVisitId(undefined);
+    frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'clear-focus' }, MAP_ORIGIN);
     setScope(nextScope);
   };
 
@@ -467,6 +472,8 @@ export function FootprintsPage({
     sessionPlaybackRequest.current = undefined;
     setSelectedSessionAnchorId(undefined);
     setVideoExportOpen(false);
+    setFocusedVisitId(undefined);
+    frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'clear-focus' }, MAP_ORIGIN);
     setDay(nextDay);
   };
 
@@ -830,7 +837,7 @@ export function FootprintsPage({
             <div className={'footprints-pin ' + (verified ? 'verified' : '')}>{verified ? <UsersRound size={16} /> : <MapPin size={17} />}</div>
             <div className="footprints-visit-text">
               <small>{timeLabel(visit.arrivedAt)}{leftAt ? ' ~ ' + timeLabel(leftAt) : ' ~ 현재'}</small>
-              <strong>{visit.placeName || (verified ? '함께 있었던 위치' : '위치 기록')}</strong>
+              {expanded ? <button type="button" className="naner-visit-focus" aria-pressed={focusedVisitId === visit.id} disabled={!mapReady} onClick={() => { stopPlayback(); setFocusedVisitId(visit.id); frame.current?.contentWindow?.postMessage({ source: 'route-map-parent', type: 'focus', visit, showPopup: true }, MAP_ORIGIN); }}>{visit.placeName || (verified ? '함께 있었던 위치' : '위치 기록')} <ChevronRight size={13} /></button> : <strong>{visit.placeName || (verified ? '함께 있었던 위치' : '위치 기록')}</strong>}
               {joint
                 ? <span className="footprints-verified-text"><ShieldCheck size={12} /> GPS 교차검증 · 두 기기 약 {joint.separationMeters}m · 함께 {joint.overlapMinutes}분</span>
                 : <span>GPS 오차 약 {Math.round(visit.accuracy)}m · {scope === 'mine' ? '내' : partnerName} GPS 기록</span>}

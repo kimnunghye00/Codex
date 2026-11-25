@@ -73,6 +73,7 @@ export function MemoryDetail({ memory, onBack, onFavorite, onEdit, onDelete, onO
 
   useEffect(() => {
     const handleBack = (event: Event) => {
+      if (event.defaultPrevented || document.querySelector('.naner-room-open')) return;
       if (relatedPreview) { event.preventDefault(); setRelatedPreview(undefined); return; }
       if (confirm) { event.preventDefault(); setConfirm(false); return; }
       if (menu) { event.preventDefault(); setMenu(false); return; }

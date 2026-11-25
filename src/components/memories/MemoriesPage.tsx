@@ -2,6 +2,7 @@ import type { PageHeaderProps } from '../navigation/AppHeader';
 import { CalendarDays, ChevronRight, Crown, GripVertical, Heart, MapPin, Pencil, Plus, Sparkles, Trash2, Trophy, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
+import { useExpandedMobile } from '../../utils/useExpandedMobile';
 import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
 import type { Memory, MemoryDraft } from '../../types';
 import { auth, db } from '../../lib/firebase';
@@ -133,6 +134,7 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
   });
   const draggingTabRef = useRef<HubTabId | null>(null);
   const [draggingTab, setDraggingTab] = useState<HubTabId | null>(null);
+  const expanded = useExpandedMobile();
   const [filter, setFilter] = useState<Filter>('all');
   const [selected, setSelected] = useState<number | undefined>(initialDraft ? undefined : initialMemoryId);
   const [editing, setEditing] = useState<Memory | null | undefined>(initialDraft ? null : undefined);
@@ -189,7 +191,7 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
 
   useEffect(() => {
     const handleBack = (event: Event) => {
-      if (event.defaultPrevented) return;
+      if (event.defaultPrevented || document.querySelector('.naner-room-open')) return;
       if (editing !== undefined) { event.preventDefault(); setEditing(undefined); if (initialDraft) onClearInitialDraft(); return; }
       if (scheduleOpen) { event.preventDefault(); setScheduleOpen(false); setEditingScheduleId(undefined); return; }
       if (dateOpen) { event.preventDefault(); setDateOpen(false); setEditingDatePlanId(undefined); setEditingLegacyPromiseId(undefined); setDateSourceKey(undefined); return; }
@@ -660,17 +662,20 @@ export function MemoriesPage({ requestedTab, Header, memories, setMemories, init
     }
   };
 
-  if (selectedMemory) return <><MemoryDetail key={selectedMemory.id} memory={selectedMemory} onBack={() => { setSelected(undefined); onClearInitial(); }} onFavorite={() => favorite(selectedMemory.id)} onEdit={() => setEditing(selectedMemory)} onDelete={() => { setMemories((items) => items.filter((item) => item.id !== selectedMemory.id)); setSelected(undefined); }} onOpenPlaceTimeline={(place) => { setSelected(undefined); onClearInitial(); setActiveTab('record'); setPlaceTimelineFocus(place); }} onOpenFootprints={onOpenFootprints ? () => onOpenFootprints(selectedMemory.id) : undefined} onOpenLocation={onOpenLocation} />{editing && <MemoryForm memory={editing} onClose={() => setEditing(undefined)} onSave={(memory) => { update(memory); setEditing(undefined); }} />}</>;
+  const detail = selectedMemory ? <MemoryDetail key={selectedMemory.id} memory={selectedMemory} onBack={() => { setSelected(undefined); onClearInitial(); }} onFavorite={() => favorite(selectedMemory.id)} onEdit={() => setEditing(selectedMemory)} onDelete={() => { setMemories((items) => items.filter((item) => item.id !== selectedMemory.id)); setSelected(undefined); }} onOpenPlaceTimeline={(place) => { setSelected(undefined); onClearInitial(); setActiveTab('record'); setPlaceTimelineFocus(place); }} onOpenFootprints={onOpenFootprints ? () => onOpenFootprints(selectedMemory.id) : undefined} onOpenLocation={onOpenLocation} /> : null;
+  if (selectedMemory && (!expanded || activeTab !== 'album')) return <>{detail}{editing && <MemoryForm memory={editing} onClose={() => setEditing(undefined)} onSave={(memory) => { update(memory); setEditing(undefined); }} />}</>;
 
   return <div className="page memories-page route-hub"><Header title="추억" onSettings={() => setOrderOpen(true)} settingsLabel="추억 설정" />
     <div className="hub-head"><h1>{activeTab === 'album' ? '추억' : TAB_LABEL[activeTab]}</h1>{activeTab === 'album' && <button type="button" className="naner-memory-add" onClick={() => { onClearInitialDraft(); setEditing(null); }}><Plus size={16} />추가</button>}</div>
     <div className="hub-tabs">{tabOrder.map((tab) => <button key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>{TAB_LABEL[tab]}</button>)}</div>
 
     {activeTab === 'album' && <>
+      <div className={expanded ? 'naner-album-workspace' : undefined}><div className={expanded ? 'naner-album-list' : undefined}>
       {sameDayMemories.length > 0 && <section className={`last-year-card naner-feature ${sameDayMemories[0].images[0] && !isMemoryVideo(sameDayMemories[0].images[0]) ? 'has-photo' : ''}`}>{sameDayMemories[0].images[0] && !isMemoryVideo(sameDayMemories[0].images[0]) && <span className="naner-feature-photo"><MemoryImage src={sameDayMemories[0].images[0]} alt="" loading="lazy" /></span>}<div><Sparkles size={16} /><span><b>작년 우리</b><small>같은 날짜의 추억을 다시 만나보세요</small></span></div><button onClick={() => setSelected(sameDayMemories[0].id)}>바로 보기 <ChevronRight size={15} /></button></section>}
       <div className="danduli-album-summary"><span>{filter === 'all' ? '전체 추억' : filter === 'favorite' ? '즐겨찾기' : filter === 'video' ? '영상' : `${filter}년 추억`}</span><strong>{shown.length}개</strong></div>
       <div className="memory-filters"><button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>전체</button><button className={filter === 'favorite' ? 'active' : ''} onClick={() => setFilter('favorite')}>즐겨찾기</button><button className={filter === 'video' ? 'active' : ''} onClick={() => setFilter('video')}>영상</button>{years.map((year) => <button key={year} className={filter === year ? 'active' : ''} onClick={() => setFilter(year)}>{year}</button>)}</div>
       <div className="memory-list">{shown.map((memory) => <MemoryCard key={memory.id} memory={memory} onOpen={openMemory} />)}{!shown.length && <div className="memory-empty danduli-memory-empty"><b>{filter === 'favorite' ? '즐겨찾기한 추억이 없어요' : filter === 'video' ? '저장된 영상이 없어요' : filter !== 'all' ? '이 기간의 추억이 없어요' : '아직 남긴 추억이 없어요'}</b><span>{filter === 'all' ? '함께한 순간을 사진과 영상으로 남겨보세요.' : '전체 앨범에서 다른 추억을 확인할 수 있어요.'}</span><button type="button" className="primary" onClick={() => { if (filter !== 'all') setFilter('all'); else { onClearInitialDraft(); setEditing(null); } }}>{filter === 'all' ? '첫 추억 추가' : '전체 추억 보기'}</button></div>}</div>
+      </div>{expanded && <aside className="naner-album-detail" aria-label="추억 상세">{detail ?? <div className="naner-panel-empty"><b>추억 상세</b><span>왼쪽에서 추억을 선택해 주세요.</span></div>}</aside>}</div>
       {editing !== undefined && <MemoryForm memory={editing ?? undefined} draft={editing === null ? initialDraft : undefined} onClose={() => { setEditing(undefined); if (initialDraft) onClearInitialDraft(); }} onSave={(memory) => { update(memory); setEditing(undefined); onClearInitialDraft(); setSelected(memory.id); }} />}
     </>}
 

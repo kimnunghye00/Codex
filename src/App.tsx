@@ -40,6 +40,7 @@ import './home-brand-polish-v5.css';
 import './home-adaptive.css';
 import './danduli-modern-v1.css';
 import './naner-phone-layout.css';
+import './naner-foldable.css';
 
 const FootprintsPage = lazy(() => import('./components/footprints/FootprintsPage').then((module) => ({ default: module.FootprintsPage })));
 
