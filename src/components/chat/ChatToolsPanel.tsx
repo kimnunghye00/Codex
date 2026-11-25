@@ -18,7 +18,7 @@ export type ChatPreferences = {
 type StickerPack = { id: string; name: string; description: string; stickers: string[]; priceLabel: string };
 
 export const STICKER_PACKS: StickerPack[] = [
-  { id: 'danduli-couple', name: '단둘이 커플', description: '고양이와 토끼 커플의 16가지 마음 표현', stickers: DANDULI_STICKERS.map((sticker) => stickerToken(sticker.id)), priceLabel: '기본' },
+  { id: 'danduli-couple', name: '나너 커플', description: '고양이와 토끼 커플의 16가지 마음 표현', stickers: DANDULI_STICKERS.map((sticker) => stickerToken(sticker.id)), priceLabel: '기본' },
   ...DANDULI_NEW_STICKER_PACKS.map((pack) => ({ id: pack.id, name: pack.name, description: pack.description, stickers: pack.stickers.map((sticker) => stickerToken(sticker.id)), priceLabel: '기본' })),
   { id: 'daily-mood', name: '오늘의 기분', description: '매일 쓰기 좋은 표정 모음', stickers: ['🥰', '😊', '🥹', '😴', '😤', '🤭'], priceLabel: '무료' },
   { id: 'tiny-love', name: '쪼꼬미 러브', description: '짧게 마음을 전하는 팩', stickers: ['🐰💗', '🐻🫶', '🐶💕', '🐱💖', '🐹❤️', '🐥💘'], priceLabel: '무료' },
@@ -153,7 +153,7 @@ export function ChatToolsPanel({
         onImport(valid);
         setFeedback(`${valid.length}개의 대화를 불러왔어요.`);
       } catch {
-        setFeedback('단둘이에서 내보낸 올바른 대화 백업 파일이 아니에요.');
+        setFeedback('나너(구 단둘이)에서 내보낸 올바른 대화 백업 파일이 아니에요.');
       }
     };
     reader.readAsText(file);

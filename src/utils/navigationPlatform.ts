@@ -18,3 +18,8 @@ export function isDesktopNavigation(info: NavigationPlatformInfo): boolean {
   if (/Mac/i.test(platform + ' ' + ua) && (info.maxTouchPoints ?? 0) > 1) return false;
   return /Windows|Win32|Win64|Mac|Linux|X11|CrOS|Chrome OS|FreeBSD|OpenBSD|NetBSD/i.test(platform + ' ' + ua);
 }
+
+/** A spacious tablet-class window is based on usable width, not a model name. */
+export function supportsTabletWorkspace(width: number, desktop: boolean): boolean {
+  return !desktop && width >= 840;
+}

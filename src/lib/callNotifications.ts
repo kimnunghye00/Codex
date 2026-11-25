@@ -12,7 +12,7 @@ function notificationId(callId: string) {
 function notificationCopy(partnerName: string, kind: CoupleCallKind) {
   return {
     title: kind === 'video' ? `${partnerName}님의 영상통화` : `${partnerName}님의 전화`,
-    body: kind === 'video' ? '단둘이 영상통화가 왔어요.' : '단둘이 전화가 왔어요.',
+    body: kind === 'video' ? '나너 영상통화가 왔어요.' : '나너 전화가 왔어요.',
   };
 }
 

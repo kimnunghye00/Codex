@@ -154,7 +154,7 @@ export function AccountSettings({ user, profile, onProfileChange, onClose }: {
     const next = setPartnerNickname(profile, chosen);
     if (!await syncProfile(next, setAiFeedback)) return;
     setNickname(chosen);
-    setAiFeedback(`단둘이가 "${chosen}"라고 별명을 지어줬어요.`);
+    setAiFeedback(`나너가 "${chosen}"라고 별명을 지어줬어요.`);
   };
 
   const nicknameSource = profile.nicknameSetBy === 'partner' ? '상대방이 지어준 별명' : profile.nicknameSetBy === 'self' ? '내가 바꾼 별명' : '아직 상대방이 지어준 별명이 없어요';
