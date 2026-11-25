@@ -577,10 +577,10 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
         </button>
 
         <button type="button" className="home-couple-time-center" onClick={onOpenAnniversary}>
-          <small>우리의 시간</small>
-          <strong>{relationshipStartDate ? `D+${coupleDay}` : '설정하기'}</strong>
+          <small>우리가 함께한 시간</small>
+          <strong>{relationshipStartDate ? `${coupleDay}일` : '설정하기'}</strong>
           <em>{relationshipStartDate ? relationshipStartDate.replaceAll('-', '.') : '기념일 설정 필요'}</em>
-          <span>{relationshipStartDate ? '사귀는 날' : '우리의 시작일'}</span>
+          <span>{relationshipStartDate ? '부터 함께' : '우리의 시작일'}</span>
         </button>
       </section>
 
@@ -588,14 +588,14 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
         <header className="home-romantic-anniversary-head">
           <span className="home-romantic-anniversary-icon" aria-hidden="true"><Heart size={16} fill="currentColor" /></span>
           <span className="home-romantic-anniversary-title">
-            <b>다가오는 기념일</b>
+            <b>다음 기념일</b>
             <small>우리 둘이 함께한 날만 보여드려요.</small>
           </span>
           <span className="home-romantic-anniversary-more">전체보기 <ChevronRight size={14} /></span>
         </header>
 
         {relationshipStartDate && upcomingAnniversaries.length ? <span className="home-romantic-anniversary-list">
-          {upcomingAnniversaries.map((item) => <span className="home-romantic-anniversary-row" key={item.id}>
+          {upcomingAnniversaries.slice(0, 1).map((item) => <span className="home-romantic-anniversary-row" key={item.id}>
             <span className="home-romantic-anniversary-badge"><b>{item.title}</b><small>{anniversaryCountdown(item.date)}</small></span>
             <span className="home-romantic-anniversary-copy"><strong>{item.title} 기념일</strong><small>{anniversaryDateLabel(item.date)}</small></span>
             <Heart size={14} fill="currentColor" aria-hidden="true" />
@@ -610,7 +610,7 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
         <header className="home-schedule-head">
           <span className="home-schedule-title-icon" aria-hidden="true"><CalendarDays size={16} /></span>
           <span className="home-schedule-title-copy">
-            <b>우리 일정</b>
+            <b>가까운 일정</b>
             <small>함께 기억할 일정을 한곳에 모아봐요.</small>
           </span>
           <button type="button" onClick={() => setAllOpen(true)}>전체보기 <ChevronRight size={14} /></button>
@@ -619,7 +619,7 @@ export function CoupleHomeTools({ uid, profile, onProfileChange, connection, rel
         {notice && <p className="schedule-help route-home-save-notice">{notice}</p>}
 
         <div className="home-schedule-list">
-          {upcoming.length ? upcoming.slice(0, 2).map((item) => {
+          {upcoming.length ? upcoming.slice(0, 1).map((item) => {
             const mine = item.ownerId === uid;
             const label = item.type === 'couple' ? '약속' : mine ? '나' : partnerName;
             return <article className="home-schedule-row" key={item.id}>

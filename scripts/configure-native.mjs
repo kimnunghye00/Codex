@@ -62,7 +62,7 @@ if (fs.existsSync(iosPlist)) {
     ['NSCameraUsageDescription', '사진과 영상통화를 위해 카메라를 사용합니다.'],
     ['NSMicrophoneUsageDescription', '음성 메시지와 통화를 위해 마이크를 사용합니다.'],
     ['NSPhotoLibraryUsageDescription', '앨범과 채팅에서 사진과 영상을 선택하기 위해 사진 보관함을 사용합니다.'],
-    ['NSPhotoLibraryAddUsageDescription', '단둘이의 사진과 영상을 기기에 저장하기 위해 사용합니다.'],
+    ['NSPhotoLibraryAddUsageDescription', '나너의 사진과 영상을 기기에 저장하기 위해 사용합니다.'],
     ['NSLocationWhenInUseUsageDescription', '지도와 발자취에서 현재 위치를 기록하고 공유하기 위해 사용합니다.'],
   ];
   for (const [key, value] of entries) {

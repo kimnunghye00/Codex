@@ -70,7 +70,7 @@ const KOREAN_DATE = new Intl.DateTimeFormat('en-US', {
 const EMPTY_VISITS: LocationVisit[] = [];
 const EMPTY_SAMPLES: LocationSample[] = [];
 
-type FootprintScope = 'partner' | 'together';
+type FootprintScope = 'partner' | 'together' | 'mine';
 type SnapshotState = { key: string; visits: LocationVisit[]; error?: string };
 type SampleSnapshotState = { key: string; samples: LocationSample[]; error?: string };
 
@@ -157,7 +157,7 @@ export function FootprintsPage({
   Header,
 }: Props) {
   const focusMemory = memories.find((memory) => memory.id === initialMemoryId);
-  const [scope, setScope] = useState<FootprintScope>(focusMemory ? 'together' : 'partner');
+  const [scope, setScope] = useState<FootprintScope>('together');
   const [day, setDay] = useState(focusMemory?.date || todayKey());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sharing, setSharing] = useState(() => loadLocationSharing(uid).enabled);
@@ -302,7 +302,7 @@ export function FootprintsPage({
     () => new Map(jointVisits.map((visit) => [visit.id, visit])),
     [jointVisits],
   );
-  const visible = scope === 'partner' ? partnerVisits : jointVisits;
+  const visible = scope === 'partner' ? partnerVisits : scope === 'mine' ? myVisits : jointVisits;
   const linked = useMemo(
     () => suggestLegacyMemoryLinks(jointVisits, memories),
     [jointVisits, memories],
@@ -312,9 +312,10 @@ export function FootprintsPage({
     [linked],
   );
   const mapVisits = useMemo(() => {
-    if (scope === 'partner' && partnerSamples.length) {
-      return partnerSamples.map((sample) => ({
-        id: 'partner-sample-' + sample.id,
+    const ownOrPartnerSamples = scope === 'mine' ? mySamples : partnerSamples;
+    if (scope !== 'together' && ownOrPartnerSamples.length) {
+      return ownOrPartnerSamples.map((sample) => ({
+        id: scope + '-sample-' + sample.id,
         latitude: sample.latitude,
         longitude: sample.longitude,
         accuracy: sample.accuracy,
@@ -331,7 +332,7 @@ export function FootprintsPage({
       arrivedAt: visit.arrivedAt,
       leftAt: 'leftAt' in visit ? visit.leftAt : undefined,
     }));
-  }, [partnerSamples, scope, selectedSessionRoutePoints, visible]);
+  }, [mySamples, partnerSamples, scope, selectedSessionRoutePoints, visible]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setMapFailed(true), 12_000);
@@ -643,7 +644,7 @@ export function FootprintsPage({
       if (enabled) {
         const allowed = await ensureLocationPermission();
         if (!allowed) {
-          setTrackingStatus('위치 권한이 필요해요. 휴대폰 설정에서 단둘이의 위치 권한을 허용해 주세요.');
+          setTrackingStatus('위치 권한이 필요해요. 휴대폰 설정에서 나너의 위치 권한을 허용해 주세요.');
           return;
         }
       }
@@ -680,10 +681,8 @@ export function FootprintsPage({
     </PageSettingsSheet>}
     <div className="footprints-heading">
       <div>
-        <small>COUPLE FOOTPRINTS</small>
-        <h1>우리의 발자취</h1>
-        <p>날짜를 선택해 상대방의 이동 또는 함께한 장소를 확인해요.</p>
-      </div>
+        <h1>발자취</h1>
+      </div><button type="button" className="naner-location-settings" onClick={() => setSettingsOpen(true)}>공유 설정</button>
     </div>
 
     <section className={'footprints-sharing ' + (sharing ? 'active' : '')}>
@@ -712,11 +711,14 @@ export function FootprintsPage({
     </div>
 
     <div className="footprints-scope-tabs" role="tablist" aria-label="발자취 종류">
-      <button type="button" role="tab" aria-selected={scope === 'partner'} className={scope === 'partner' ? 'active' : ''} onClick={() => changeScope('partner')}>
-        <MapPin size={16} /><span><b>{partnerName} 발자취</b><small>상대방 GPS만</small></span>
-      </button>
       <button type="button" role="tab" aria-selected={scope === 'together'} className={scope === 'together' ? 'active' : ''} onClick={() => changeScope('together')}>
-        <UsersRound size={16} /><span><b>우리 둘의 발자취</b><small>두 GPS 교차검증</small></span>
+        <UsersRound size={16} /><span><b>함께한 기록</b><small>두 GPS 교차검증</small></span>
+      </button>
+      <button type="button" role="tab" aria-selected={scope === 'partner'} className={scope === 'partner' ? 'active' : ''} onClick={() => changeScope('partner')}>
+        <MapPin size={16} /><span><b>상대방</b><small>상대방 GPS만</small></span>
+      </button>
+      <button type="button" role="tab" aria-selected={scope === 'mine'} className={scope === 'mine' ? 'active' : ''} onClick={() => changeScope('mine')}>
+        <MapPin size={16} /><span><b>나</b><small>내 GPS만</small></span>
       </button>
     </div>
 
@@ -742,7 +744,7 @@ export function FootprintsPage({
             : <><Play size={15} fill="currentColor" />{selectedSession ? '선택 데이트 재생' : '발자취 재생'}</>}
         </button>
         <div className="footprints-map-badge">
-          {scope === 'partner'
+          {scope === 'mine' ? '내 GPS 경로만 표시' : scope === 'partner'
             ? partnerSamples.length
               ? partnerName + ' GPS · 서버 실시간 샘플 ' + partnerSamples.length + '개'
               : partnerName + '의 GPS 경로만 표시'
@@ -757,8 +759,8 @@ export function FootprintsPage({
       <section className="footprints-list">
         <div className="footprints-list-header">
           <div>
-            <small>{scope === 'partner' ? 'PARTNER GPS' : 'CROSS-CHECKED'}</small>
-            <h2>{scope === 'partner' ? partnerName + '의 발자취' : '함께 있었던 장소'}</h2>
+            <small>{scope === 'mine' ? 'MY GPS' : scope === 'partner' ? 'PARTNER GPS' : 'CROSS-CHECKED'}</small>
+            <h2>{scope === 'mine' ? '나의 발자취' : scope === 'partner' ? partnerName + '의 발자취' : '함께 있었던 장소'}</h2>
           </div>
           <span>{scope === 'together' && selectedSession
             ? '데이트 ' + (selectedSessionIndex + 1) + ' 선택'
@@ -806,22 +808,22 @@ export function FootprintsPage({
           })}
         </div>}
 
-        {!connection ? <div className="footprints-empty">
+        {!connection && scope !== 'mine' ? <div className="footprints-empty">
           <MapPin size={26} />
           <strong>상대방 연결이 필요해요</strong>
           <p>커플 연결을 완료하면 서로 동의해 공유한 GPS 발자취를 확인할 수 있어요.</p>
-        </div> : (partnerError || partnerSampleError || (scope === 'together' && (myError || mySampleError))) ? <div className="footprints-empty">
+        </div> : (scope === 'mine' ? myError || mySampleError : partnerError || partnerSampleError || (scope === 'together' && (myError || mySampleError))) ? <div className="footprints-empty">
           <ShieldCheck size={26} />
           <strong>GPS 기록을 불러오지 못했어요</strong>
-          <p>{partnerError || partnerSampleError || myError || mySampleError}</p>
+          <p>{scope === 'mine' ? myError || mySampleError : partnerError || partnerSampleError || myError || mySampleError}</p>
         </div> : !shown.length && !(scope === 'together' && dateSessions.length) ? <div className="footprints-empty">
-          {scope === 'partner' ? <MapPin size={26} /> : <UsersRound size={26} />}
-          <strong>{scope === 'partner' ? '이 날짜의 상대방 발자취가 없어요' : '함께 있었던 것으로 확인된 기록이 없어요'}</strong>
-          <p>{scope === 'partner'
+          {scope !== 'together' ? <MapPin size={26} /> : <UsersRound size={26} />}
+          <strong>{scope === 'mine' ? '이 날짜의 내 발자취가 없어요' : scope === 'partner' ? '이 날짜의 상대방 발자취가 없어요' : '함께 있었던 것으로 확인된 기록이 없어요'}</strong>
+          <p>{scope === 'mine' ? '내 기기에 저장되거나 내 계정으로 공유한 위치 기록이 여기에 표시돼요.' : scope === 'partner'
             ? partnerName + '이 위치 공유를 켠 상태에서 기록된 GPS가 있으면 여기에 표시돼요.'
             : '한 사람의 GPS만으로는 기록하지 않아요. 두 기기의 시간·거리·정확도 기준이 모두 맞아야 표시돼요.'}</p>
         </div> : shown.map((visit) => {
-          const joint = jointById.get(visit.id) as JointFootprint | undefined;
+          const joint = scope === 'together' ? jointById.get(visit.id) as JointFootprint | undefined : undefined;
           const verified = Boolean(joint);
           const leftAt = visit.leftAt;
           return <article className="footprints-visit" key={visit.id}>
@@ -831,7 +833,7 @@ export function FootprintsPage({
               <strong>{visit.placeName || (verified ? '함께 있었던 위치' : '위치 기록')}</strong>
               {joint
                 ? <span className="footprints-verified-text"><ShieldCheck size={12} /> GPS 교차검증 · 두 기기 약 {joint.separationMeters}m · 함께 {joint.overlapMinutes}분</span>
-                : <span>GPS 오차 약 {Math.round(visit.accuracy)}m · {partnerName} GPS 기록</span>}
+                : <span>GPS 오차 약 {Math.round(visit.accuracy)}m · {scope === 'mine' ? '내' : partnerName} GPS 기록</span>}
               {joint && Boolean(suggested.get(visit.id)?.length) && <div className="footprints-related">
                 {suggested.get(visit.id)?.map((memoryId) => {
                   const memory = memories.find((item) => item.id === memoryId);
